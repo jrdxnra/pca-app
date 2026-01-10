@@ -1,0 +1,51 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getTokensFromCode } from '@/lib/google-calendar/auth';
+import { storeTokens } from '@/lib/google-calendar/token-storage';
+
+/**
+ * GET /api/auth/google/callback
+ * Handles OAuth callback from Google, exchanges code for tokens, and stores them
+ */
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const code = searchParams.get('code');
+  const error = searchParams.get('error');
+
+  if (error) {
+    console.error('OAuth error:', error);
+    return NextResponse.redirect(
+      new URL(`/configure?error=${encodeURIComponent(error)}`, request.url)
+    );
+  }
+
+  if (!code) {
+    return NextResponse.redirect(
+      new URL('/configure?error=no_code', request.url)
+    );
+  }
+
+  try {
+    // Exchange code for tokens
+    const tokens = await getTokensFromCode(code);
+
+    // Store tokens in Firestore
+    await storeTokens({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiryDate: tokens.expiry_date,
+      // TODO: Add userId when authentication is implemented
+    });
+
+    // Redirect to configure page with success
+    return NextResponse.redirect(
+      new URL('/configure?connected=true', request.url)
+    );
+  } catch (error) {
+    console.error('Error exchanging code for tokens:', error);
+    return NextResponse.redirect(
+      new URL(`/configure?error=${encodeURIComponent('token_exchange_failed')}`, request.url)
+    );
+  }
+}
+
+

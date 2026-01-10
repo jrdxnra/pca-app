@@ -1,10 +1,19 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useTransition } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import React, { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   ChevronLeft,
   ChevronRight,
@@ -20,8 +29,8 @@ import {
 import { Client, Program, ScheduledWorkout, ClientProgramPeriod, WorkoutStructureTemplate, ClientWorkoutRound, ClientWorkout } from '@/lib/types';
 import { ModernCalendarView } from '@/components/programs/ModernCalendarView';
 import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
-import { AssignProgramTemplateDialog } from '@/components/programs/AssignProgramTemplateDialog';
-import { WorkoutEditor } from '@/components/workouts/WorkoutEditor';
+import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBuilderDialog';
+import { WorkoutEditor, WorkoutEditorHandle } from '@/components/workouts/WorkoutEditor';
 import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
 import { CategoryFilter } from '@/components/workouts/CategoryFilter';
 import { Timestamp } from 'firebase/firestore';
@@ -32,13 +41,36 @@ import { useClientStore } from '@/lib/stores/useClientStore';
 import { useProgramStore } from '@/lib/stores/useProgramStore';
 import { useClientPrograms } from '@/hooks/useClientPrograms';
 import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
+import { toastSuccess, toastError } from '@/components/ui/toaster';
 
 export default function BuilderPage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
 
+  // Use Next.js useSearchParams for reactive URL param reading
+  // This properly updates when navigating to this page with new params
+  const searchParams = useSearchParams();
+  
+  // Extract URL params - these update reactively when URL changes
+  const urlClientId = searchParams.get('client');
+  const dateParam = searchParams.get('date');
+  const workoutId = searchParams.get('workoutId');
+  const eventId = searchParams.get('eventId');
+  const structureId = searchParams.get('structure');
+  const categoryParam = searchParams.get('category');
+  
+  // Log URL params for debugging
+  useEffect(() => {
+    console.log('[Builder] ========================================');
+    console.log('[Builder] URL params (from useSearchParams):');
+    console.log('[Builder] client:', urlClientId);
+    console.log('[Builder] date:', dateParam);
+    console.log('[Builder] workoutId:', workoutId);
+    console.log('[Builder] eventId:', eventId);
+    console.log('[Builder] ========================================');
+  }, [urlClientId, dateParam, workoutId, eventId]);
+
   // Calendar store for linking events to workouts
-  const { linkToWorkout, events: calendarEvents } = useCalendarStore();
+  const { linkToWorkout, updateEvent, deleteEvent, events: calendarEvents } = useCalendarStore();
 
   // Configuration store - shared periods, templates, categories
   const { 
@@ -54,16 +86,10 @@ export default function BuilderPage() {
   const { clients: storeClients, fetchClients } = useClientStore();
   const { programs: storePrograms, scheduledWorkouts: storeScheduledWorkouts, fetchPrograms, fetchAllScheduledWorkouts } = useProgramStore();
 
-  // Get URL params once (used for initial load and deep links)
-  const urlClientId = searchParams.get('client');
-  const dateParam = searchParams.get('date');
-  const workoutId = searchParams.get('workoutId');
-  const eventId = searchParams.get('eventId');
-  const structureId = searchParams.get('structure');
 
   // Client selection state - initialized from URL or localStorage
   // This is the PRIMARY source of truth for client selection (not the URL)
-  const [clientId, setClientId] = useState<string | null>(() => {
+  const [clientIdImmediate, setClientIdImmediate] = useState<string | null>(() => {
     // First check URL, then localStorage
     if (urlClientId) return urlClientId;
     if (typeof window !== 'undefined') {
@@ -72,15 +98,16 @@ export default function BuilderPage() {
     return null;
   });
   
-  // Use transition to make client switches non-blocking (keeps UI responsive)
-  const [isPending, startTransition] = useTransition();
+  // Use deferred value to keep old UI visible while new data loads
+  // This prevents the schedule from "flashing" during client switches
+  const clientId = useDeferredValue(clientIdImmediate);
+  
 
   // Client programs hook - uses local client state (not URL) to avoid reloads
   const {
     clientPrograms,
     isLoading: clientProgramsLoading,
     assignPeriod: hookAssignPeriod,
-    assignProgramTemplate: hookAssignProgramTemplate,
     fetchClientPrograms
   } = useClientPrograms(clientId);
 
@@ -108,6 +135,15 @@ export default function BuilderPage() {
     appliedTemplateId?: string;
   }>>({});
   const [openDates, setOpenDates] = useState<Set<string>>(new Set());
+  
+  // Refs to workout editors for triggering save from header buttons
+  const editorRefs = useRef<Record<string, WorkoutEditorHandle | null>>({});
+  
+  // Track which workoutIds we've already opened (to prevent re-opening after close)
+  const processedWorkoutIds = useRef<Set<string>>(new Set());
+  
+  // Track which editors are currently saving (for button state)
+  const [savingEditors, setSavingEditors] = useState<Set<string>>(new Set());
 
   // Track if we should auto-open workout editor when navigating to day view
   const [autoOpenWorkout, setAutoOpenWorkout] = useState<{ date: Date, workout?: any, categoryInfo?: { category: string, color: string } } | null>(null);
@@ -128,6 +164,17 @@ export default function BuilderPage() {
     rpe?: boolean;
     percentage?: boolean;
   }>({});
+
+  // Delete confirmation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteDialogData, setDeleteDialogData] = useState<{
+    workoutId: string;
+    dateKey: string;
+    linkedEventId?: string;
+    currentCategory?: string;
+  } | null>(null);
+  const [deleteDialogNewCategory, setDeleteDialogNewCategory] = useState<string>('');
+  const [showCategorySelector, setShowCategorySelector] = useState(false);
 
   // Category filter for multi-day editing
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -152,16 +199,6 @@ export default function BuilderPage() {
     return new Date();
   });
 
-  // Sync URL when client changes (for bookmarking/sharing only)
-  useEffect(() => {
-    if (clientId && typeof window !== 'undefined') {
-      const currentUrl = new URL(window.location.href);
-      if (currentUrl.searchParams.get('client') !== clientId) {
-        const newUrl = `/workouts/builder?client=${clientId}`;
-        window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
-      }
-    }
-  }, [clientId]);
 
   // Always reset to current/next week on mount (client-side only)
   // If it's Saturday or Sunday, show next week instead
@@ -195,37 +232,28 @@ export default function BuilderPage() {
   // Auto-open disabled for day view - users can manually select multiple workouts to edit and compare
   // This allows for multi-workout editing and comparison functionality
 
-  // Use store data directly - only fetch if stores are empty
+  // Use store data directly - fetch in parallel, stores handle caching
   useEffect(() => {
     const loadData = async () => {
       try {
         // Check if stores already have data
         const hasClients = storeClients.length > 0;
         const hasPrograms = storePrograms.length > 0;
-        const hasScheduledWorkouts = storeScheduledWorkouts.length > 0;
 
-        // Only set loading if we need to fetch
+        // Only set loading if we need to fetch core data
         const needsFetch = !hasClients || !hasPrograms;
         
         if (needsFetch) {
           setLoading(true);
         }
 
-        // Fetch config if needed (it's lightweight and cached)
-        await fetchAllConfig();
-
-        // Fetch only if store is empty
-        if (!hasClients) {
-          await fetchClients();
-        }
-
-        if (!hasPrograms) {
-          await fetchPrograms();
-        }
-
-        if (!hasScheduledWorkouts) {
-          await fetchAllScheduledWorkouts();
-        }
+        // Fetch everything in parallel - stores handle deduplication/caching
+        await Promise.all([
+          fetchAllConfig(),
+          fetchClients(),
+          fetchPrograms(),
+          fetchAllScheduledWorkouts()
+        ]);
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -234,24 +262,47 @@ export default function BuilderPage() {
     };
 
     loadData();
-  }, [fetchAllConfig, fetchClients, fetchPrograms, fetchAllScheduledWorkouts, storeClients.length, storePrograms.length, storeScheduledWorkouts.length]);
+  }, [fetchAllConfig, fetchClients, fetchPrograms, fetchAllScheduledWorkouts]);
 
   // Load and open workout when workoutId is provided in URL
   useEffect(() => {
     const loadWorkoutById = async () => {
-      console.log('[Builder] loadWorkoutById effect:', { workoutId, loading, clientId });
+      console.log('[Builder] ========================================');
+      console.log('[Builder] loadWorkoutById effect running');
+      console.log('[Builder] workoutId:', workoutId);
+      console.log('[Builder] loading:', loading);
+      console.log('[Builder] clientId:', clientId);
+      console.log('[Builder] ========================================');
       
-      if (!workoutId || loading) {
-        console.log('[Builder] Skipping workout load - no workoutId or still loading');
+      if (!workoutId) {
+        console.log('[Builder] SKIP - no workoutId in URL');
+        return;
+      }
+      
+      // Check if we've already processed this workoutId (prevents re-opening after close)
+      if (processedWorkoutIds.current.has(workoutId)) {
+        console.log('[Builder] SKIP - workoutId already processed (was closed by user)');
+        return;
+      }
+      
+      if (loading) {
+        console.log('[Builder] SKIP - still loading initial data');
         return;
       }
 
       try {
-        console.log('[Builder] Fetching workout:', workoutId);
+        console.log('[Builder] Fetching workout from Firebase:', workoutId);
         const workout = await getClientWorkout(workoutId);
-        console.log('[Builder] Got workout:', workout);
+        console.log('[Builder] Got workout result:', workout ? 'SUCCESS' : 'NULL');
         
         if (workout) {
+          console.log('[Builder] Workout details:', {
+            id: workout.id,
+            clientId: workout.clientId,
+            date: workout.date,
+            categoryName: workout.categoryName
+          });
+          
           // Set the workout in the workouts array if not already there
           setWorkouts(prev => {
             const exists = prev.find(w => w.id === workout.id);
@@ -273,16 +324,25 @@ export default function BuilderPage() {
             router.replace(`/workouts/builder?client=${workout.clientId}&date=${dateParam}&workoutId=${workoutId}`, { scroll: false });
           }
 
-          // Switch to day view and auto-open the workout
-          console.log('[Builder] Setting autoOpenWorkout');
+          // Switch to day view and directly open the editor (bypass autoOpenWorkout to avoid race conditions)
+          console.log('[Builder] Setting viewMode to day and opening editor directly');
           setViewMode('day');
-          setAutoOpenWorkout({
-            date: normalizedDate,
-            workout: workout
-          });
+          
+          // Get dateKey for this workout
+          const dateKey = `${normalizedDate.getFullYear()}-${String(normalizedDate.getMonth() + 1).padStart(2, '0')}-${String(normalizedDate.getDate()).padStart(2, '0')}`;
+          
+          // Directly set editing state - this ensures the workout opens in EDIT mode (red X, delete works)
+          setEditingWorkouts(prev => ({
+            ...prev,
+            [dateKey]: workout
+          }));
+          setOpenDates(prev => new Set([...prev, dateKey]));
+          console.log('[Builder] ✅ Workout opened in EDIT mode for dateKey:', dateKey);
+        } else {
+          console.error('[Builder] ERROR - Workout not found for ID:', workoutId);
         }
       } catch (error) {
-        console.error('Error loading workout:', error);
+        console.error('[Builder] ERROR loading workout:', error);
       }
     };
 
@@ -507,7 +567,7 @@ export default function BuilderPage() {
   }
 
   // Auto-detect period and set up week view when client and date are provided
-  // Auto-detect period and set up week view when client and date are provided
+  // IMPORTANT: Don't change viewMode if we're loading a specific workout (workoutId is present)
   useEffect(() => {
     if (clientId && dateParam && clientPrograms.length > 0) {
       console.log('Auto-detecting period for client:', clientId, 'date:', dateParam);
@@ -537,8 +597,15 @@ export default function BuilderPage() {
           const end = safeToDate(period.endDate);
           const calculatedWeeks = calculateWeeks(start, end, period.periodName);
           setWeeks(calculatedWeeks);
-          setViewMode('week');
-          console.log('Set period and switched to week view');
+          
+          // Only switch to week view if NOT loading a specific workout
+          // When workoutId is present, let loadWorkoutById effect control the view
+          if (!workoutId) {
+            setViewMode('week');
+            console.log('Set period and switched to week view');
+          } else {
+            console.log('Set period but keeping day view for workout editing');
+          }
 
           // Load workouts for this period (we'll load them separately)
           // const periodWorkouts = workouts.filter(w => {
@@ -553,7 +620,7 @@ export default function BuilderPage() {
         console.log('No client program found for client:', clientId);
       }
     }
-  }, [clientId, dateParam, clientPrograms]);
+  }, [clientId, dateParam, clientPrograms, workoutId]);
 
 
   // Recalculate weeks when additionalWeeks changes and fetch workouts
@@ -604,20 +671,14 @@ export default function BuilderPage() {
   const handleClientChange = (newClientId: string) => {
     console.log('Client changed to:', newClientId);
     
-    // Save to localStorage immediately
+    // Save to localStorage for persistence
     if (typeof window !== 'undefined') {
       localStorage.setItem('selectedClient', newClientId);
-      
-      // Update URL without triggering Next.js navigation (just for bookmarking/sharing)
-      const newUrl = `/workouts/builder?client=${newClientId}`;
-      window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
     }
     
-    // Use startTransition to make this a non-blocking update
-    // This keeps the current UI visible while the new client data loads
-    startTransition(() => {
-      setClientId(newClientId);
-    });
+    // Just update state - don't touch URL at all
+    // useDeferredValue will keep old UI visible while new data loads
+    setClientIdImmediate(newClientId);
   };
 
   // Auto-detect and set selectedPeriod when client changes or clientPrograms loads
@@ -779,22 +840,6 @@ export default function BuilderPage() {
     }
   }, [hookAssignPeriod]);
 
-  // Handler for assigning program templates - uses shared hook for consistent behavior
-  const handleAssignProgramTemplate = useCallback(async (assignment: {
-    programId: string;
-    clientId: string;
-    startDate: Date;
-    endDate: Date;
-    notes?: string;
-  }) => {
-    try {
-      await hookAssignProgramTemplate(assignment);
-      console.log('Program template assigned successfully via shared hook');
-    } catch (error) {
-      console.error('Error assigning program template:', error);
-    }
-  }, [hookAssignProgramTemplate]);
-
   // Workout management functions
   const handleCreateWorkout = (date: Date, category: string, color: string, structureId?: string) => {
     const dateKey = getDateKey(date);
@@ -907,7 +952,7 @@ export default function BuilderPage() {
     }
   };
 
-  // Auto-open workout editor when navigating to day view from week view
+  // Auto-open workout editor when navigating to day view with a workout to edit
   useEffect(() => {
     console.log('[Builder] Auto-open effect:', { viewMode, autoOpenWorkout, hasAutoOpen: !!autoOpenWorkout });
     
@@ -916,30 +961,34 @@ export default function BuilderPage() {
       const dateKey = getDateKey(date);
       console.log('[Builder] Processing auto-open for dateKey:', dateKey, 'workout:', workout?.id);
 
-      // Don't auto-open if editor is already open or was just closed
+      // Don't auto-open if editor is already open
       if (openDates.has(dateKey)) {
         console.log('[Builder] Editor already open for this date, skipping');
         setAutoOpenWorkout(null);
         return;
       }
 
-      // Small delay to ensure the view has rendered
+      // Small delay to ensure the view has rendered, then open the editor
       const timer = setTimeout(() => {
-        console.log('[Builder] Timer fired, opening editor');
-        // Double-check it's still not open (user might have closed it)
-        // Use a function to get the latest state
-        setOpenDates(currentOpenDates => {
-          if (!currentOpenDates.has(dateKey)) {
-            if (workout) {
-              console.log('[Builder] Calling handleEditWorkout');
-              handleEditWorkout(workout);
-            } else if (categoryInfo) {
-              console.log('[Builder] Calling handleCreateWorkout');
-              handleCreateWorkout(date, categoryInfo.category, categoryInfo.color);
-            }
-          }
-          return currentOpenDates;
-        });
+        console.log('[Builder] Timer fired, opening editor directly');
+        
+        if (workout) {
+          // Directly set state to open the editor (avoid calling handleEditWorkout which has toggle logic)
+          console.log('[Builder] Opening editor for workout:', workout.id);
+          setEditingWorkouts(prev => ({
+            ...prev,
+            [dateKey]: workout
+          }));
+          setOpenDates(prev => new Set([...prev, dateKey]));
+        } else if (categoryInfo) {
+          // For creating new workout
+          console.log('[Builder] Opening creator for category:', categoryInfo.category);
+          setCreatingWorkouts(prev => ({
+            ...prev,
+            [dateKey]: { date, category: categoryInfo.category, color: categoryInfo.color }
+          }));
+          setOpenDates(prev => new Set([...prev, dateKey]));
+        }
 
         // Clear the auto-open flag
         setAutoOpenWorkout(null);
@@ -947,59 +996,109 @@ export default function BuilderPage() {
 
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, autoOpenWorkout]);
+    // eslint-disable-next-line react-hooks-exhaustive-deps
+  }, [viewMode, autoOpenWorkout, openDates]);
 
-  // Auto-open create workout dialog when eventId is in URL
+  // State for Quick Workout dialog when coming from calendar event
+  const [quickWorkoutDialogOpen, setQuickWorkoutDialogOpen] = useState(false);
+  const [quickWorkoutInitialData, setQuickWorkoutInitialData] = useState<{
+    date?: string;
+    category?: string;
+    time?: string;
+    eventId?: string;
+  }>({});
+  
+  // Open workout editor when coming from a calendar event (eventId in URL)
+  // Track if we've already processed this eventId
+  const processedEventIdRef = useRef<string | null>(null);
+  
   useEffect(() => {
-    if (eventId && !loading && calendarEvents.length > 0) {
-      const event = calendarEvents.find(e => e.id === eventId);
-      if (event && !event.linkedWorkoutId) {
-        // Event exists and doesn't have a linked workout yet
-        const eventDate = new Date(event.start.dateTime);
-        const dateKey = getDateKey(eventDate);
-
-        // Get client from event metadata or preConfiguredClient
-        const eventClientId = event.preConfiguredClient ||
-          (event.description?.match(/\[Metadata:.*client=([^,}]+)/)?.[1]?.trim());
-
-        // Set client if available and not already set
-        if (eventClientId && eventClientId !== 'none' && !clientId) {
-          handleClientChange(eventClientId);
-        }
-
-        // Only proceed if we have a client (either from event or already selected)
-        if (clientId || eventClientId) {
-          // Check if we already have this date open
-          if (!openDates.has(dateKey)) {
-            // Get category from event or use default
-            const eventCategory = event.preConfiguredCategory;
-            const category = workoutCategories.find((c: any) => c.name === eventCategory);
-            const categoryName = category?.name || 'General';
-            const categoryColor = category?.color || '#6b7280';
-
-            // Get structure template if event has one
-            const structureId = event.preConfiguredStructure;
-
-            // Set calendar date and switch to day view
-            setCalendarDate(eventDate);
-            setViewMode('day');
-
-            // Small delay to ensure view has rendered and client is set
-            const timer = setTimeout(() => {
-              const finalClientId = clientId || eventClientId;
-              if (finalClientId) {
-                handleCreateWorkout(eventDate, categoryName, categoryColor, structureId);
-              }
-            }, 300);
-
-            return () => clearTimeout(timer);
-          }
-        }
-      }
+    if (!eventId || loading) return;
+    
+    // Wait for calendar events to load
+    if (calendarEvents.length === 0) return;
+    
+    // Don't process the same eventId twice
+    if (processedEventIdRef.current === eventId) return;
+    
+    const event = calendarEvents.find(e => e.id === eventId);
+    if (!event) return;
+    
+    // If event already has a linked workout, let the workoutId effect handle it
+    if (event.linkedWorkoutId) {
+      console.log('[Builder] Event has linked workout, skipping');
+      processedEventIdRef.current = eventId;
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, loading, calendarEvents, clientId, openDates, workoutCategories]);
+    
+    // Get client from event
+    const eventClientId = event.preConfiguredClient ||
+      (event.description?.match(/\[Metadata:.*client=([^,}]+)/)?.[1]?.trim());
+
+    if (eventClientId && eventClientId !== 'none' && !clientId) {
+      handleClientChange(eventClientId);
+    }
+    
+    // Get event details
+    const eventDate = new Date(event.start.dateTime);
+    
+    // Set calendar date
+    setCalendarDate(eventDate);
+    
+    // Get the category from URL or event
+    const category = categoryParam || event.preConfiguredCategory || 
+      (event.description?.match(/category=([^,\s}\]]+)/)?.[1]);
+    
+    // If event is already assigned to a client, open inline editor directly instead of Quick Workout dialog
+    const hasAssignedClient = eventClientId && eventClientId !== 'none';
+    const effectiveClientId = clientId || eventClientId;
+    
+    if (hasAssignedClient && effectiveClientId) {
+      console.log('[Builder] Event is assigned, opening inline editor directly');
+      processedEventIdRef.current = eventId;
+      
+      const dateKey = getDateKey(eventDate);
+      
+      // Check if there's a draft or if we should create new
+      const draftKey = `${dateKey}-${effectiveClientId}-new`;
+      const hasDraft = localStorage.getItem(`pca-workout-draft-${draftKey}`);
+      
+      // Open the inline editor for this date
+      setCreatingWorkouts(prev => ({
+        ...prev,
+        [dateKey]: {
+          date: eventDate,
+          category: category || '',
+          color: workoutCategories.find(c => c.name === category)?.color || '#3B82F6'
+        }
+      }));
+      setOpenDates(prev => new Set(prev).add(dateKey));
+      
+      console.log('[Builder] Opened inline editor for', dateKey, 'with category:', category, 'hasDraft:', !!hasDraft);
+      return;
+    }
+    
+    // No assigned client - open Quick Workout dialog
+    const eventTime = event.start.dateTime ? 
+      new Date(event.start.dateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+    
+    console.log('[Builder] No client assigned, opening Quick Workout dialog with:', { 
+      date: dateParam, 
+      category: categoryParam, 
+      eventId 
+    });
+    
+    processedEventIdRef.current = eventId;
+    
+    setQuickWorkoutInitialData({
+      date: dateParam || undefined,
+      category: category || undefined,
+      time: eventTime || undefined,
+      eventId: eventId
+    });
+    setQuickWorkoutDialogOpen(true);
+    
+  }, [eventId, loading, calendarEvents.length, clientId, categoryParam, dateParam, workoutCategories]);
 
   const handleSaveWorkout = async (workoutData: any, dateKey: string) => {
     try {
@@ -1020,11 +1119,13 @@ export default function BuilderPage() {
         const createdWorkout = await createClientWorkout(newWorkout);
         setWorkouts(prev => [...prev, createdWorkout]);
 
-        // Link to calendar event if eventId is provided
-        if (eventId && createdWorkout.id) {
+        // Link to calendar event if eventId is provided (from URL or found for this workout)
+        const workoutEventId = eventId || getEventIdForWorkout(null, dateKey);
+        console.log('[handleSaveWorkout] Creating workout, eventId:', workoutEventId, 'workoutId:', createdWorkout.id);
+        if (workoutEventId && createdWorkout.id) {
           try {
-            await linkToWorkout(eventId, createdWorkout.id);
-            console.log('Successfully linked workout to calendar event:', eventId);
+            await linkToWorkout(workoutEventId, createdWorkout.id);
+            console.log('Successfully linked workout to calendar event:', workoutEventId);
           } catch (error) {
             console.error('Failed to link workout to calendar event:', error);
           }
@@ -1046,6 +1147,18 @@ export default function BuilderPage() {
         await updateClientWorkout(editingWorkout.id, workoutData);
         setWorkouts(prev => prev.map(w => w.id === editingWorkout.id ? updatedWorkout : w));
 
+        // If editing and workout has an event linked, update the event description with links
+        const workoutEventId = getEventIdForWorkout(editingWorkout, dateKey);
+        console.log('[handleSaveWorkout] Updating workout, eventId:', workoutEventId, 'workoutId:', editingWorkout.id);
+        if (workoutEventId && editingWorkout.id) {
+          try {
+            await linkToWorkout(workoutEventId, editingWorkout.id);
+            console.log('Successfully updated workout links on calendar event:', workoutEventId);
+          } catch (error) {
+            console.error('Failed to update workout links on calendar event:', error);
+          }
+        }
+
         // Remove from editing state
         setEditingWorkouts(prev => {
           const newState = { ...prev };
@@ -1065,18 +1178,32 @@ export default function BuilderPage() {
     }
   };
 
-  const handleCloseEditor = useCallback((dateKey: string) => {
-    // Use React.startTransition to ensure state updates are processed together
-    // Always create new objects/sets to ensure React detects the change
+  const handleCloseEditor = useCallback((dateKey: string, closedWorkoutId?: string) => {
+    // Mark the workoutId as processed to prevent re-opening from URL
+    if (closedWorkoutId) {
+      processedWorkoutIds.current.add(closedWorkoutId);
+    }
+    
+    // Also check for workoutId in URL and mark it as processed
+    const currentUrl = new URL(window.location.href);
+    const urlWorkoutId = currentUrl.searchParams.get('workoutId');
+    if (urlWorkoutId) {
+      processedWorkoutIds.current.add(urlWorkoutId);
+    }
+    
+    // Always update all three states to ensure editor closes
+    // Use functional updates and always create new objects/sets
     setCreatingWorkouts(prev => {
-      if (!prev[dateKey]) return prev;
       const newState = { ...prev };
       delete newState[dateKey];
       return newState;
     });
 
     setEditingWorkouts(prev => {
-      if (!prev[dateKey]) return prev;
+      // Also mark any workout being closed as processed
+      if (prev[dateKey]?.id) {
+        processedWorkoutIds.current.add(prev[dateKey].id);
+      }
       const newState = { ...prev };
       delete newState[dateKey];
       return newState;
@@ -1084,12 +1211,18 @@ export default function BuilderPage() {
 
     // Close this specific date - always create a new Set
     setOpenDates(prev => {
-      if (!prev.has(dateKey)) return prev;
       const newSet = new Set(prev);
       newSet.delete(dateKey);
       return newSet;
     });
-  }, []);
+    
+    // Clear workoutId from URL to prevent useEffect from re-opening the editor
+    if (currentUrl.searchParams.has('workoutId')) {
+      currentUrl.searchParams.delete('workoutId');
+      currentUrl.searchParams.delete('eventId');
+      router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
+    }
+  }, [router]);
 
   const handleCloseAllEditors = useCallback((dateKeys: string[]) => {
     console.log('=== CLOSE ALL CALLED ===');
@@ -1129,9 +1262,9 @@ export default function BuilderPage() {
     console.log('=== STATE UPDATES CALLED ===');
   }, [creatingWorkouts, editingWorkouts, openDates]);
 
-  // Delete handler
-  const handleDeleteWorkout = async (workoutId: string | undefined, dateKey: string) => {
-    console.log('handleDeleteWorkout called', { workoutId, dateKey });
+  // Show delete confirmation dialog
+  const showDeleteConfirmation = (workoutId: string | undefined, dateKey: string) => {
+    console.log('showDeleteConfirmation called', { workoutId, dateKey });
 
     if (!workoutId) {
       console.log('No workoutId, just closing editor');
@@ -1140,6 +1273,166 @@ export default function BuilderPage() {
       return;
     }
 
+    // Find if there's a linked calendar event
+    const linkedEvent = calendarEvents.find(e => e.linkedWorkoutId === workoutId);
+    
+    setDeleteDialogData({
+      workoutId,
+      dateKey,
+      linkedEventId: linkedEvent?.id,
+      currentCategory: linkedEvent?.workoutCategory
+    });
+    setDeleteDialogNewCategory('');
+    setShowCategorySelector(false);
+    setDeleteDialogOpen(true);
+  };
+
+  // Delete workout only (unlink from event but keep event)
+  const handleDeleteWorkoutKeepEvent = async () => {
+    if (!deleteDialogData) return;
+    const { workoutId, dateKey, linkedEventId } = deleteDialogData;
+
+    try {
+      setLoading(true);
+      console.log('Deleting workout and keeping event...', { workoutId, linkedEventId });
+
+      // First unlink the event if there is one
+      if (linkedEventId) {
+        await updateEvent(linkedEventId, { linkedWorkoutId: undefined });
+        console.log('Unlinked event from workout');
+      }
+
+      // Delete the workout
+      await deleteClientWorkout(workoutId);
+      console.log('Workout deleted');
+
+      // Remove from local state
+      setWorkouts(prev => prev.filter(w => w.id !== workoutId));
+
+      // Close editor and dialog
+      handleCloseEditor(dateKey, workoutId);
+      setDeleteDialogOpen(false);
+      setDeleteDialogData(null);
+      setShowCategorySelector(false);
+
+      // Refresh scheduled workouts
+      const updatedScheduledWorkouts = await getAllScheduledWorkouts();
+      setScheduledWorkouts(updatedScheduledWorkouts);
+
+      console.log('Workout deleted, event kept');
+    } catch (error) {
+      console.error('Error deleting workout:', error);
+      toastError('Failed to delete workout. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete workout and change event category
+  const handleDeleteWorkoutChangeCategory = async () => {
+    if (!deleteDialogData || !deleteDialogNewCategory) return;
+    const { workoutId, dateKey, linkedEventId } = deleteDialogData;
+
+    try {
+      setLoading(true);
+      console.log('Deleting workout and changing event category...', { workoutId, linkedEventId, newCategory: deleteDialogNewCategory });
+
+      // Update event with new category and unlink workout
+      if (linkedEventId) {
+        await updateEvent(linkedEventId, { 
+          linkedWorkoutId: undefined,
+          workoutCategory: deleteDialogNewCategory 
+        });
+        console.log('Updated event category and unlinked workout');
+      }
+
+      // Delete the workout
+      await deleteClientWorkout(workoutId);
+      console.log('Workout deleted');
+
+      // Remove from local state
+      setWorkouts(prev => prev.filter(w => w.id !== workoutId));
+
+      // Close editor and dialog
+      handleCloseEditor(dateKey, workoutId);
+      setDeleteDialogOpen(false);
+      setDeleteDialogData(null);
+      setDeleteDialogNewCategory('');
+      setShowCategorySelector(false);
+
+      // Refresh scheduled workouts
+      const updatedScheduledWorkouts = await getAllScheduledWorkouts();
+      setScheduledWorkouts(updatedScheduledWorkouts);
+
+      console.log('Workout deleted, event category changed');
+    } catch (error) {
+      console.error('Error deleting workout:', error);
+      toastError('Failed to delete workout. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete both workout and linked event
+  const handleDeleteWorkoutAndEvent = async () => {
+    if (!deleteDialogData) return;
+    const { workoutId, dateKey, linkedEventId } = deleteDialogData;
+
+    try {
+      setLoading(true);
+      console.log('Deleting workout and event...', { workoutId, linkedEventId });
+
+      // Delete the event first if there is one
+      if (linkedEventId) {
+        await deleteEvent(linkedEventId);
+        console.log('Event deleted');
+      }
+
+      // Delete the workout
+      await deleteClientWorkout(workoutId);
+      console.log('Workout deleted');
+
+      // Remove from local state
+      setWorkouts(prev => prev.filter(w => w.id !== workoutId));
+
+      // Close editor and dialog
+      handleCloseEditor(dateKey, workoutId);
+      setDeleteDialogOpen(false);
+      setDeleteDialogData(null);
+
+      // Refresh scheduled workouts
+      const updatedScheduledWorkouts = await getAllScheduledWorkouts();
+      setScheduledWorkouts(updatedScheduledWorkouts);
+
+      console.log('Both workout and event deleted');
+    } catch (error) {
+      console.error('Error deleting workout and event:', error);
+      toastError('Failed to delete. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Legacy handler for simple delete (no event linked)
+  const handleDeleteWorkout = async (workoutId: string | undefined, dateKey: string) => {
+    console.log('handleDeleteWorkout called', { workoutId, dateKey });
+
+    if (!workoutId) {
+      console.log('No workoutId, just closing editor');
+      handleCloseEditor(dateKey);
+      return;
+    }
+
+    // Check if there's a linked event
+    const linkedEvent = calendarEvents.find(e => e.linkedWorkoutId === workoutId);
+    
+    if (linkedEvent) {
+      // If there's a linked event, show the dialog instead
+      showDeleteConfirmation(workoutId, dateKey);
+      return;
+    }
+
+    // No linked event, just delete the workout directly
     try {
       setLoading(true);
       console.log('Calling deleteClientWorkout...');
@@ -1154,7 +1447,7 @@ export default function BuilderPage() {
       });
 
       // Close editor
-      handleCloseEditor(dateKey);
+      handleCloseEditor(dateKey, workoutId);
 
       // Also refresh scheduled workouts to keep data in sync
       console.log('Refreshing scheduled workouts...');
@@ -1164,7 +1457,7 @@ export default function BuilderPage() {
       console.log('Workout deleted successfully and state updated');
     } catch (error) {
       console.error('Error deleting workout:', error);
-      alert('Failed to delete workout. Please try again.');
+      toastError('Failed to delete workout. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -1181,7 +1474,7 @@ export default function BuilderPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="w-full px-1 py-4 space-y-2">
+      <div className="w-full px-1 pt-1 pb-4 space-y-2">
         {/* Filters and Controls */}
           <Card className="py-2">
             <CardContent className="py-1 px-2">
@@ -1190,22 +1483,31 @@ export default function BuilderPage() {
                 {/* Left aligned - Client Selector */}
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <Users className="h-4 w-4 icon-clients" />
                     <label className="text-sm font-medium">Client:</label>
                   </div>
-                  <select
-                    className="w-[200px] px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value={clientId || ''}
-                    onChange={(e) => handleClientChange(e.target.value)}
-                    disabled={loading}
-                  >
-                    <option value="" disabled>Select a client...</option>
-                    {clients.map((client) => (
-                      <option key={client.id} value={client.id}>
-                        {client.name}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={clientIdImmediate || ''} onValueChange={handleClientChange} disabled={loading}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Select client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {clientId && (
+                    <QuickWorkoutBuilderDialog
+                      clientId={clientId}
+                      clientName={clients.find(c => c.id === clientId)?.name || 'Unknown Client'}
+                      onWorkoutCreated={() => {
+                        // Force re-fetch by updating calendarDate (triggers useEffect)
+                        setCalendarDate(new Date(calendarDate));
+                      }}
+                    />
+                  )}
                   <PeriodAssignmentDialog
                     clientId={clientId || ''}
                     clientName={clientId ? (clients.find(c => c.id === clientId)?.name || 'Unknown Client') : ''}
@@ -1215,30 +1517,32 @@ export default function BuilderPage() {
                     onAssignPeriod={handleAssignPeriod}
                     existingAssignments={clientId ? (clientPrograms.find(cp => cp.clientId === clientId)?.periods || []) : []}
                   />
-                  <AssignProgramTemplateDialog
-                    programs={programs}
-                    clients={clients}
-                    onAssignProgram={handleAssignProgramTemplate}
-                  />
                 </div>
 
-                {/* Right aligned - Week Order */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center space-x-2">
-                    <label htmlFor="weekOrder" className="text-sm font-medium">Week order:</label>
-                    <select
-                      id="weekOrder"
-                      className="px-2 py-1 border rounded text-sm"
-                      value={weekSettings.weekOrder}
-                      onChange={(e) => setWeekSettings(prev => ({
-                        ...prev,
-                        weekOrder: e.target.value as 'ascending' | 'descending'
-                      }))}
-                    >
-                      <option value="ascending">Ascending</option>
-                      <option value="descending">Descending</option>
-                    </select>
+                {/* Right aligned - Week Selector (matches Schedule page) */}
+                <div className="flex items-center gap-1 md:gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleNavigate('today')} className="text-xs md:text-sm px-2">
+                    Today
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleNavigate('prev')}
+                    className="p-1 md:p-2"
+                  >
+                    <ChevronLeft className="h-3 w-3 md:h-4 md:w-4 icon-builder" />
+                  </Button>
+                  <div className="min-w-[110px] md:min-w-[140px] text-center font-medium text-sm">
+                    {getNavigationLabel()}
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleNavigate('next')}
+                    className="p-1 md:p-2"
+                  >
+                    <ChevronRight className="h-3 w-3 md:h-4 md:w-4 icon-builder" />
+                  </Button>
                 </div>
               </div>
 
@@ -1249,8 +1553,8 @@ export default function BuilderPage() {
                 </div>
               )}
 
-              {/* Navigation */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Second Row - Column Toggle, Category Filter, Week Order */}
+              <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
                 {/* Left side - Column Toggle and Category Filter */}
                 <div className="flex items-center gap-2">
                   <ColumnVisibilityToggle
@@ -1272,33 +1576,24 @@ export default function BuilderPage() {
                   )}
                 </div>
 
-                {/* Right side navigation group */}
-                <div className="flex items-center gap-3">
-                  {/* Navigation */}
-                  <div className="flex items-center gap-1 md:gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleNavigate('today')} className="text-xs md:text-sm px-2">
-                      Today
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleNavigate('prev')}
-                      className="p-1 md:p-2"
-                    >
-                      <ChevronLeft className="h-3 w-3 md:h-4 md:w-4" />
-                    </Button>
-                    <div className="min-w-[110px] md:min-w-[140px] text-center font-medium text-sm">
-                      {getNavigationLabel()}
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleNavigate('next')}
-                      className="p-1 md:p-2"
-                    >
-                      <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
-                    </Button>
-                  </div>
+                {/* Right side - Week Order */}
+                <div className="flex items-center gap-2">
+                  <label htmlFor="weekOrder" className="text-sm font-medium">Week order:</label>
+                  <Select 
+                    value={weekSettings.weekOrder} 
+                    onValueChange={(value) => setWeekSettings(prev => ({
+                      ...prev,
+                      weekOrder: value as 'ascending' | 'descending'
+                    }))}
+                  >
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ascending">Ascending</SelectItem>
+                      <SelectItem value="descending">Descending</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardContent>
@@ -1328,8 +1623,8 @@ export default function BuilderPage() {
 
                 const calculatedWeeks = calculateWeeks(start, end, selectedPeriod?.periodName);
 
-                // Find the week that contains calendarDate
-                const targetWeek = calculatedWeeks.find(week => {
+                // Find the week index that contains calendarDate
+                const targetWeekIndex = calculatedWeeks.findIndex(week => {
                   const weekStart = new Date(week[0]);
                   weekStart.setHours(0, 0, 0, 0);
                   const weekEnd = new Date(week[6]);
@@ -1339,25 +1634,33 @@ export default function BuilderPage() {
                   return normalizedCalendarDate >= weekStart && normalizedCalendarDate <= weekEnd;
                 });
 
-                // If we found a matching week, show only that week; otherwise generate a week for calendarDate
+                // Show 1 week before, current week, and 2 weeks after (4 weeks total)
                 let weeksToDisplay: Date[][];
-                if (targetWeek) {
-                  weeksToDisplay = [targetWeek];
+                if (targetWeekIndex >= 0) {
+                  // Get range: 1 week before to 2 weeks after
+                  const startIdx = Math.max(0, targetWeekIndex - 1);
+                  const endIdx = Math.min(calculatedWeeks.length, targetWeekIndex + 3);
+                  weeksToDisplay = calculatedWeeks.slice(startIdx, endIdx);
                 } else {
-                  // Generate a week for the calendarDate if it's not in the calculated weeks
+                  // Generate weeks around calendarDate if not in calculated weeks
                   const weekStart = new Date(calendarDate);
                   const dayOfWeek = weekStart.getDay();
                   const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
                   weekStart.setDate(weekStart.getDate() + diff);
                   weekStart.setHours(12, 0, 0, 0);
 
-                  const generatedWeek: Date[] = [];
-                  for (let i = 0; i < 7; i++) {
-                    const day = new Date(weekStart);
-                    day.setDate(weekStart.getDate() + i);
-                    generatedWeek.push(day);
+                  // Generate 4 weeks: 1 before, current, 2 after
+                  const generatedWeeks: Date[][] = [];
+                  for (let w = -1; w <= 2; w++) {
+                    const week: Date[] = [];
+                    for (let i = 0; i < 7; i++) {
+                      const day = new Date(weekStart);
+                      day.setDate(weekStart.getDate() + (w * 7) + i);
+                      week.push(day);
+                    }
+                    generatedWeeks.push(week);
                   }
-                  weeksToDisplay = [generatedWeek];
+                  weeksToDisplay = generatedWeeks;
                 }
 
                 const orderedWeeks = weekSettings.weekOrder === 'descending'
@@ -1375,6 +1678,47 @@ export default function BuilderPage() {
                       ? calculatedWeeks.length - originalIndex
                       : originalIndex + 1)
                     : 1; // Default to 1 for generated weeks
+
+                  // Determine if this is the current week (contains TODAY, not calendarDate)
+                  const weekStart = new Date(week[0]);
+                  weekStart.setHours(0, 0, 0, 0);
+                  const weekEnd = new Date(week[6]);
+                  weekEnd.setHours(23, 59, 59, 999);
+                  const today = new Date();
+                  today.setHours(12, 0, 0, 0);
+                  const isCurrentWeek = today >= weekStart && today <= weekEnd;
+                  const isPastWeek = weekEnd < today;
+                  
+                  // Determine if this is the viewed week (contains calendarDate - the week user navigated to)
+                  const viewedDate = new Date(calendarDate);
+                  viewedDate.setHours(12, 0, 0, 0);
+                  const isViewedWeek = viewedDate >= weekStart && viewedDate <= weekEnd;
+                  // Only show viewed indicator if it's different from current week
+                  const showViewedIndicator = isViewedWeek && !isCurrentWeek;
+                  
+                  // Calculate weeks offset from TODAY's week (not the viewed week)
+                  // Get the start of the week containing TODAY
+                  const todayWeekStart = new Date();
+                  const dayOfWeek = todayWeekStart.getDay();
+                  // Adjust to Monday (day 1), treating Sunday (0) as end of week
+                  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                  todayWeekStart.setDate(todayWeekStart.getDate() - daysFromMonday);
+                  todayWeekStart.setHours(0, 0, 0, 0);
+                  
+                  // Calculate difference in weeks from TODAY
+                  const msPerDay = 24 * 60 * 60 * 1000;
+                  const daysDiff = Math.round((weekStart.getTime() - todayWeekStart.getTime()) / msPerDay);
+                  const weekDiff = Math.round(daysDiff / 7);
+                  
+                  // Get week label based on offset
+                  const getWeekLabel = () => {
+                    if (isCurrentWeek) return 'Current Week';
+                    if (weekDiff === -1) return 'Last Week';
+                    if (weekDiff === 1) return '1 Week Out';
+                    if (weekDiff === 2) return '2 Weeks Out';
+                    if (weekDiff < 0) return `${Math.abs(weekDiff)} Weeks Ago`;
+                    return `${weekDiff} Weeks Out`;
+                  };
 
                   // Check if this week has any active editors
                   // Convert to arrays to ensure we get fresh data on each render
@@ -1406,16 +1750,51 @@ export default function BuilderPage() {
                   return (
                     <div
                       key={`week-${weekIndex}-${Object.keys(editingWorkouts).length}-${Object.keys(creatingWorkouts).length}-${openDates.size}`}
-                      className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+                      className={`bg-white rounded-lg shadow-sm border overflow-hidden ${
+                        isCurrentWeek 
+                          ? 'border-blue-400 ring-2 ring-blue-100' 
+                          : showViewedIndicator
+                            ? 'border-purple-400 ring-2 ring-purple-100'
+                            : isPastWeek 
+                              ? 'border-gray-200 opacity-75' 
+                              : 'border-gray-200'
+                      }`}
                     >
                       {/* Week Header */}
-                      <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-4 py-3">
+                      <div className={`border-b border-gray-200 px-4 py-2 ${
+                        isCurrentWeek 
+                          ? 'bg-gradient-to-r from-blue-50 to-blue-100' 
+                          : showViewedIndicator
+                            ? 'bg-gradient-to-r from-purple-50 to-purple-100'
+                            : isPastWeek
+                              ? 'bg-gradient-to-r from-gray-100 to-gray-150'
+                              : 'bg-gradient-to-r from-gray-50 to-gray-100'
+                      }`}>
                         <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-semibold text-gray-800">Week {displayWeekNumber}</h3>
-                          <div className="flex items-center gap-3">
-                            <div className="text-xs text-gray-500">
+                          <div className="flex items-center gap-2">
+                            <h3 className={`text-sm ${
+                              isCurrentWeek 
+                                ? 'font-bold text-blue-800' 
+                                : showViewedIndicator 
+                                  ? 'font-bold text-purple-800'
+                                  : 'font-semibold text-gray-800'
+                            }`}>
                               {week[0]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {week[week.length - 1]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </div>
+                            </h3>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              isCurrentWeek 
+                                ? 'bg-blue-500 text-white font-bold' 
+                                : showViewedIndicator
+                                  ? 'bg-purple-500 text-white font-bold'
+                                  : isPastWeek
+                                    ? 'bg-gray-400 text-white font-medium'
+                                    : 'bg-gray-200 text-gray-600 font-medium'
+                            }`}>
+                              {getWeekLabel()}
+                              {showViewedIndicator && ' • Viewing'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
                             {hasActiveEditors && (
                               <div className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-medium">
                                 {weekEditingWorkouts.length + weekCreatingWorkouts.length} editing
@@ -1482,7 +1861,9 @@ export default function BuilderPage() {
                                     {date.getDate()}
                                   </div>
                                   {isEditingThisDate && (
-                                    <div className="text-xs text-gray-600 font-medium">✏️ Editing</div>
+                                    <div className="text-xs text-gray-600 font-medium">
+                                      ✏️ Editing {editingWorkout?.categoryName || createWorkoutData?.category || ''}
+                                    </div>
                                   )}
                                 </div>
 
@@ -1503,7 +1884,17 @@ export default function BuilderPage() {
                                           {workoutStructureTemplates.find(t => t.id === workout.appliedTemplateId)?.name}
                                         </div>
                                       )}
-                                      {categoryInfo ? (
+                                      {/* Show workout's actual category (prioritize over period's category) */}
+                                      {workout.categoryName ? (
+                                        <div
+                                          className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5"
+                                          style={{ 
+                                            backgroundColor: workoutCategories.find((wc: any) => wc.name === workout.categoryName)?.color || categoryInfo?.color || '#6b7280'
+                                          }}
+                                        >
+                                          {workout.categoryName}
+                                        </div>
+                                      ) : categoryInfo ? (
                                         <div
                                           className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5"
                                           style={{ backgroundColor: categoryInfo.color }}
@@ -1536,7 +1927,7 @@ export default function BuilderPage() {
                                         )}
                                       </div>
                                       <div className="flex items-center justify-center text-gray-400 mt-0.5">
-                                        <Plus className="w-3 h-3" />
+                                        <Plus className="w-3 h-3 icon-add" />
                                       </div>
                                     </button>
                                   </div>
@@ -1565,29 +1956,8 @@ export default function BuilderPage() {
                       {/* Expandable Editors Section - Only show if this week has active editors */}
                       {hasActiveEditors && (
                         <div className="border-t border-gray-200 bg-gray-50">
-                          <div className="px-4 py-3 border-b border-gray-200 bg-gray-100">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-semibold text-gray-800">
-                                Editing Week {displayWeekNumber} ({weekEditingWorkouts.length + weekCreatingWorkouts.length} workouts)
-                              </h4>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  const allEditors = [...weekEditingWorkouts, ...weekCreatingWorkouts];
-                                  const dateKeys = allEditors.map(([dateKey]) => dateKey);
-                                  handleCloseAllEditors(dateKeys);
-                                }}
-                                className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 hover:bg-gray-200 rounded cursor-pointer"
-                              >
-                                Close All
-                              </button>
-                            </div>
-                          </div>
-
                           {/* Editors Horizontal Scroll - Optimized for 2 workouts side-by-side */}
-                          <div className="p-4 overflow-x-auto">
+                          <div className="p-2 overflow-x-auto">
                             <div className="flex gap-4 min-w-max border border-gray-200" style={{ maxWidth: 'calc(2 * 560px + 1rem)' }}>
                               {/* All Editors in Chronological Order - Show max 2 at a time */}
                               {[...weekEditingWorkouts, ...weekCreatingWorkouts]
@@ -1602,10 +1972,10 @@ export default function BuilderPage() {
                                   return (
                                     <div
                                       key={isEditing ? `editing-${dateKey}` : `creating-${dateKey}`}
-                                      className={`flex-shrink-0 w-[560px] bg-white shadow-lg overflow-hidden ${!isLast ? 'border-r border-gray-200' : ''
+                                      className={`flex-shrink-0 w-[560px] bg-white shadow-lg overflow-visible ${!isLast ? 'border-r border-gray-200' : ''
                                         }`}
                                     >
-                                      <div className="border-b px-3 py-2 flex items-center justify-between bg-gray-50 border-gray-200">
+                                      <div className="border-b px-3 py-1.5 flex items-center justify-between bg-gray-50 border-gray-200 sticky top-0 z-20">
                                         <h3 className="text-sm font-semibold text-gray-900">
                                           {isEditing ? '📝 Edit' : '➕ Create'} - {(() => {
                                             // Parse dateKey (YYYY-MM-DD) as local date to avoid timezone issues
@@ -1618,41 +1988,83 @@ export default function BuilderPage() {
                                             });
                                           })()}
                                         </h3>
-                                        <button
-                                          type="button"
-                                          onClick={async (e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            // Delete button - only show for existing workouts
-                                            if (isEditing && workout?.id) {
-                                              if (confirm('Are you sure you want to delete this workout? This cannot be undone.')) {
-                                                await handleDeleteWorkout(workout.id, dateKey);
+                                        <div className="flex items-center gap-1 relative z-30">
+                                          {/* Cancel button */}
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              handleCloseEditor(dateKey, workout?.id);
+                                            }}
+                                            className="h-6 text-xs px-2 relative z-30"
+                                          >
+                                            Cancel
+                                          </Button>
+                                          {/* Save button */}
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={async (e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              const editor = editorRefs.current[dateKey];
+                                              if (editor) {
+                                                setSavingEditors(prev => new Set(prev).add(dateKey));
+                                                try {
+                                                  await editor.save();
+                                                } finally {
+                                                  setSavingEditors(prev => {
+                                                    const next = new Set(prev);
+                                                    next.delete(dateKey);
+                                                    return next;
+                                                  });
+                                                }
                                               }
-                                            } else {
-                                              // For new workouts, just close (discard)
-                                              handleCloseEditor(dateKey);
-                                            }
-                                          }}
-                                          className={`p-1 rounded cursor-pointer ${isEditing ? 'text-red-500 hover:text-red-700 hover:bg-red-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'}`}
-                                          title={isEditing ? 'Delete workout' : 'Discard'}
-                                        >
-                                          ✕
-                                        </button>
+                                            }}
+                                            disabled={savingEditors.has(dateKey)}
+                                            className="h-6 text-xs px-2 relative z-30"
+                                          >
+                                            {savingEditors.has(dateKey) ? 'Saving...' : 'Save'}
+                                          </Button>
+                                          {/* Delete/Discard button */}
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              if (isEditing && workout?.id) {
+                                                showDeleteConfirmation(workout.id, dateKey);
+                                              } else {
+                                                handleCloseEditor(dateKey, workout?.id);
+                                              }
+                                            }}
+                                            className={`p-1 rounded cursor-pointer relative z-30 ${isEditing ? 'text-red-500 hover:text-red-700 hover:bg-red-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'}`}
+                                            title={isEditing ? 'Delete workout' : 'Discard'}
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
                                       </div>
-                                      <div className="p-0">
+                                      <div className="p-0 relative z-10">
                                         <WorkoutEditor
+                                          ref={(el) => { editorRefs.current[dateKey] = el; }}
                                           workout={workout}
                                           isOpen={true}
-                                          onClose={() => handleCloseEditor(dateKey)}
+                                          onClose={() => handleCloseEditor(dateKey, workout?.id)}
                                           onSave={(workoutData) => handleSaveWorkout(workoutData, dateKey)}
                                           onDelete={() => handleDeleteWorkout(workout?.id, dateKey)}
                                           isCreating={!isEditing}
                                           expandedInline={true}
+                                          hideTopActionBar={true}
                                           initialRounds={createData ? generateInitialRounds(createData?.appliedTemplateId) : undefined}
                                           appliedTemplateId={createData?.appliedTemplateId}
                                           eventId={getEventIdForWorkout(workout, dateKey)}
                                           externalVisibleColumns={visibleColumns}
                                           onExternalColumnVisibilityChange={handleColumnVisibilityChange}
+                                          draftKey={clientId ? `${dateKey}-${clientId}${workout?.id ? `-${workout.id}` : '-new'}` : undefined}
                                         />
                                       </div>
                                     </div>
@@ -1670,6 +2082,169 @@ export default function BuilderPage() {
           </>
 
       </div>
+
+      {/* Delete Workout Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+        setDeleteDialogOpen(open);
+        if (!open) {
+          setShowCategorySelector(false);
+          setDeleteDialogNewCategory('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Workout</DialogTitle>
+            <DialogDescription>
+              {deleteDialogData?.linkedEventId 
+                ? 'This workout is linked to a calendar event. What would you like to do?'
+                : 'Are you sure you want to delete this workout? This cannot be undone.'
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-4">
+            {deleteDialogData?.linkedEventId ? (
+              <>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-left h-auto py-3"
+                  onClick={handleDeleteWorkoutKeepEvent}
+                  disabled={loading}
+                >
+                  <div>
+                    <div className="font-medium">Delete workout only</div>
+                    <div className="text-xs text-gray-500">Keep the calendar event with current category - you can link a new workout later</div>
+                  </div>
+                </Button>
+
+                {/* Change category option */}
+                {!showCategorySelector ? (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left h-auto py-3"
+                    onClick={() => setShowCategorySelector(true)}
+                    disabled={loading}
+                  >
+                    <div>
+                      <div className="font-medium">Delete workout and change event category</div>
+                      <div className="text-xs text-gray-500">
+                        Keep the event but assign a different workout category
+                        {deleteDialogData.currentCategory && (
+                          <span className="block mt-1">Current: <strong>{deleteDialogData.currentCategory}</strong></span>
+                        )}
+                      </div>
+                    </div>
+                  </Button>
+                ) : (
+                  <div className="border rounded-lg p-3 space-y-3">
+                    <div className="text-sm font-medium">Select new category:</div>
+                    <Select 
+                      value={deleteDialogNewCategory} 
+                      onValueChange={setDeleteDialogNewCategory}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Choose a category..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {workoutCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.name}>
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: cat.color }}
+                              />
+                              {cat.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowCategorySelector(false);
+                          setDeleteDialogNewCategory('');
+                        }}
+                        disabled={loading}
+                      >
+                        Back
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleDeleteWorkoutChangeCategory}
+                        disabled={loading || !deleteDialogNewCategory}
+                      >
+                        {loading ? 'Saving...' : 'Confirm'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-left h-auto py-3 border-red-200 hover:bg-red-50"
+                  onClick={handleDeleteWorkoutAndEvent}
+                  disabled={loading}
+                >
+                  <div>
+                    <div className="font-medium text-red-600">Delete workout and event</div>
+                    <div className="text-xs text-gray-500">Remove both the workout and the linked calendar event</div>
+                  </div>
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="destructive"
+                className="w-full"
+                onClick={handleDeleteWorkoutKeepEvent}
+                disabled={loading}
+              >
+                {loading ? 'Deleting...' : 'Delete Workout'}
+              </Button>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="ghost" 
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setDeleteDialogData(null);
+                setShowCategorySelector(false);
+                setDeleteDialogNewCategory('');
+              }}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Workout Dialog - opens when coming from calendar event */}
+      {clientId && quickWorkoutDialogOpen && (
+        <QuickWorkoutBuilderDialog
+          clientId={clientId}
+          clientName={clients.find(c => c.id === clientId)?.name || 'Unknown Client'}
+          initialOpen={quickWorkoutDialogOpen}
+          initialDate={quickWorkoutInitialData.date}
+          initialCategory={quickWorkoutInitialData.category}
+          initialTime={quickWorkoutInitialData.time}
+          eventId={quickWorkoutInitialData.eventId}
+          onWorkoutCreated={() => {
+            setQuickWorkoutDialogOpen(false);
+            setQuickWorkoutInitialData({});
+            // Force re-fetch by updating calendarDate (triggers useEffect)
+            setCalendarDate(new Date(calendarDate));
+          }}
+          onClose={() => {
+            setQuickWorkoutDialogOpen(false);
+            setQuickWorkoutInitialData({});
+          }}
+        />
+      )}
     </div>
   );
 }

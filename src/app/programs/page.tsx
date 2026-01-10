@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { safeToDate } from '@/lib/utils/dateHelpers';
 import { useClientPrograms } from '@/hooks/useClientPrograms';
 import { Button } from '@/components/ui/button';
@@ -25,8 +25,6 @@ import {
   Grid3X3,
   List,
   Settings,
-  Dumbbell,
-  Save
 } from 'lucide-react';
 import { useProgramStore } from '@/lib/stores/useProgramStore';
 import { useClientStore } from '@/lib/stores/useClientStore';
@@ -41,15 +39,13 @@ import { AddAssignmentDropdown } from '@/components/programs/AddAssignmentDropdo
 import { CreateScheduleEventDialog } from '@/components/programs/CreateScheduleEventDialog';
 import { PeriodListDialog } from '@/components/programs/PeriodListDialog';
 import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
-import { AssignProgramTemplateDialog } from '@/components/programs/AssignProgramTemplateDialog';
 import { ScheduleEventEditDialog } from '@/components/programs/ScheduleEventEditDialog';
+import { EventActionDialog } from '@/components/programs/EventActionDialog';
+import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBuilderDialog';
 import { ClientProgram, ClientProgramPeriod } from '@/lib/types';
 import { Timestamp } from 'firebase/firestore';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { createClientWorkout, fetchWorkoutsByDateRange, fetchClientWorkouts, updateClientWorkout, deleteClientWorkout } from '@/lib/firebase/services/clientWorkouts';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { fetchWorkoutsByDateRange, fetchClientWorkouts, deleteClientWorkout } from '@/lib/firebase/services/clientWorkouts';
 import { format } from 'date-fns';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import {
@@ -60,6 +56,8 @@ import {
   deleteAllPeriodsFromClientProgram,
   addPeriodToClientProgram
 } from '@/lib/firebase/services/clientPrograms';
+import { getAppTimezone, setAppTimezone, getBrowserTimezone, hasTimezoneChanged, formatTimezoneLabel } from '@/lib/utils/timezone';
+import { toastSuccess } from '@/components/ui/toaster';
 
 export default function ProgramsPage() {
   const router = useRouter();
@@ -97,7 +95,53 @@ export default function ProgramsPage() {
   const { events: calendarEvents, createTestEvent, fetchEvents, updateEvent, deleteEvent, clearAllTestEvents, linkToWorkout } = useCalendarStore();
 
   // Selected date for mini calendar (defaults to calendarDate)
-  const [selectedDate, setSelectedDate] = useState(calendarDate);
+  // Initialize with null to avoid hydration mismatch, then set on client
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  
+  // Track mounted state to avoid hydration mismatch with date-dependent UI
+  const [mounted, setMounted] = useState(false);
+  
+  // Timezone notification state
+  const [appTimezone, setAppTimezoneState] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return getAppTimezone();
+    }
+    return 'America/Los_Angeles';
+  });
+  const [showTimezonePrompt, setShowTimezonePrompt] = useState(false);
+  const TIMEZONE_DISMISS_KEY = 'pca-timezone-prompt-dismissed';
+  
+  useEffect(() => {
+    setMounted(true);
+    
+    // Check if timezone prompt was dismissed
+    const wasDismissed = typeof window !== 'undefined' 
+      ? localStorage.getItem(TIMEZONE_DISMISS_KEY) === 'true'
+      : false;
+    
+    // Check if browser timezone differs from app timezone
+    if (!wasDismissed && hasTimezoneChanged()) {
+      const savedTimezone = getAppTimezone();
+      const browserTimezone = getBrowserTimezone();
+      // Only show prompt if timezone was previously set (not default)
+      if (savedTimezone !== 'America/Los_Angeles' || browserTimezone !== 'America/Los_Angeles') {
+        setShowTimezonePrompt(true);
+      }
+    }
+  }, []);
+
+  // Sync selectedDate with calendarDate when it changes (e.g., from dashboard)
+  // Only set on client side to avoid hydration mismatch
+  useEffect(() => {
+    setSelectedDate(calendarDate);
+  }, [calendarDate]);
+  
+  // Initialize on mount (client-side only)
+  useEffect(() => {
+    if (selectedDate === null && calendarDate) {
+      setSelectedDate(calendarDate);
+    }
+  }, []);
 
   const [includeWeekends, setIncludeWeekends] = useState(false);
 
@@ -106,7 +150,6 @@ export default function ProgramsPage() {
     clientPrograms,
     isLoading: clientProgramsLoading,
     assignPeriod: hookAssignPeriod,
-    assignProgramTemplate: hookAssignProgramTemplate,
     deletePeriod: hookDeletePeriod,
     clearAllPeriods: hookClearAllPeriods,
     fetchClientPrograms
@@ -125,47 +168,22 @@ export default function ProgramsPage() {
   const [dialogPeriods, setDialogPeriods] = useState<ClientProgramPeriod[]>([]);
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
-
-  // Quick Workout Builder state
-  const [workoutDate, setWorkoutDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [workoutTime, setWorkoutTime] = useState<string>('');
-  const [workoutTitle, setWorkoutTitle] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
-  const [isSavingWorkout, setIsSavingWorkout] = useState(false);
-  const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
-  const [existingWorkout, setExistingWorkout] = useState<any>(null);
-  const [pendingWorkoutData, setPendingWorkoutData] = useState<any>(null);
-  const [moveToDate, setMoveToDate] = useState<string>('');
-
-  const { findPeriodForDate } = useClientPrograms(selectedClient);
+  const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
+  const [selectedEventForAction, setSelectedEventForAction] = useState<GoogleCalendarEvent | null>(null);
 
 
+
+  // Parallel initial data fetch for better performance
   useEffect(() => {
-    fetchPrograms();
-    fetchClients();
-    fetchAllConfig();
+    Promise.all([
+      fetchPrograms(),
+      fetchClients(),
+      fetchAllConfig()
+    ]);
   }, [fetchPrograms, fetchClients, fetchAllConfig]);
 
-  // Always reset to current/next week on mount (client-side only)
-  // If it's Saturday or Sunday, show next week instead
-  useEffect(() => {
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 = Sunday, 6 = Saturday
-    
-    let targetDate = today;
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      // It's weekend - advance to Monday of next week
-      const daysUntilMonday = dayOfWeek === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
-      targetDate = new Date(today);
-      targetDate.setDate(today.getDate() + daysUntilMonday);
-      console.log('[Programs] Weekend detected, advancing to next week Monday:', targetDate.toISOString());
-    } else {
-      console.log('[Programs] Setting calendar to today:', today.toISOString());
-    }
-    
-    setCalendarDate(targetDate);
-  }, [setCalendarDate]);
+  // Calendar date is now managed by the store with localStorage persistence
+  // No need to reset on mount - it preserves state between dashboard and programs pages
 
   // Initialize selected client from localStorage after hydration
   useEffect(() => {
@@ -173,42 +191,86 @@ export default function ProgramsPage() {
   }, [initializeSelectedClient]);
 
   // Fetch program data when client changes - hook auto-fetches clientPrograms
+  // Using parallel fetching for better performance
   useEffect(() => {
     if (selectedClient) {
-      fetchProgramsByClient(selectedClient);
-      fetchScheduledWorkoutsByClient(selectedClient);
+      Promise.all([
+        fetchProgramsByClient(selectedClient),
+        fetchScheduledWorkoutsByClient(selectedClient)
+      ]);
     } else {
-      fetchPrograms();
-      fetchAllScheduledWorkouts();
+      Promise.all([
+        fetchPrograms(),
+        fetchAllScheduledWorkouts()
+      ]);
     }
-  }, [selectedClient, fetchProgramsByClient, fetchScheduledWorkoutsByClient, fetchAllScheduledWorkouts]);
+  }, [selectedClient, fetchProgramsByClient, fetchScheduledWorkoutsByClient, fetchPrograms, fetchAllScheduledWorkouts]);
 
-  // Fetch calendar events when calendar date changes
+// Track navigation to force refresh when returning to this page
+  const pathname = usePathname();
+  const [lastFetchTime, setLastFetchTime] = useState(0);
+  
+  // Fetch calendar events when calendar date changes or when navigating to this page
   useEffect(() => {
     if (!calendarDate) return;
-    
+
     // Get week range for the calendar view
     const startDate = new Date(calendarDate);
     startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
     const endDate = new Date(startDate);
     endDate.setDate(startDate.getDate() + 6);
-    
+
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
-    
+
     fetchEvents({ start: startDate, end: endDate });
+    setLastFetchTime(Date.now());
   }, [calendarDate, fetchEvents]);
+  
+  // Force refresh when page becomes visible or receives focus (user navigates back)
+  useEffect(() => {
+    const refreshEvents = () => {
+      if (!calendarDate) return;
+      
+      // Only refresh if it's been more than 1 second since last fetch (debounce)
+      if (Date.now() - lastFetchTime < 1000) return;
+      
+      const startDate = new Date(calendarDate);
+      startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+
+      fetchEvents({ start: startDate, end: endDate });
+      setLastFetchTime(Date.now());
+    };
+    
+    // Refresh on visibility change (tab switch) and focus (window focus)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshEvents();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', refreshEvents);
+    
+    // Also refresh immediately on mount (handles Next.js navigation)
+    refreshEvents();
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', refreshEvents);
+    };
+  }, [pathname, calendarDate, fetchEvents, lastFetchTime]);
 
   // Update dialog periods when clientPrograms state changes
   useEffect(() => {
     if (selectedClient && periodListDialogOpen) {
       const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
       const periods = clientProgram?.periods || [];
-      console.log('Updating dialog periods from state change:', {
-        clientId: selectedClient,
-        periodsCount: periods.length,
-        periodIds: periods.map(p => p.id)
-      });
       setDialogPeriods(periods);
     }
   }, [clientPrograms, selectedClient, periodListDialogOpen]);
@@ -236,6 +298,9 @@ export default function ProgramsPage() {
 
 
   const getNavigationLabel = () => {
+    // Return placeholder during SSR to avoid hydration mismatch
+    if (!mounted) return 'Loading...';
+    
     // Only week view is supported
     const weekStart = new Date(calendarDate);
     weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -261,25 +326,6 @@ export default function ProgramsPage() {
     router.push(`/programs/builder/${programId}`);
   };
 
-  // Handler for assigning program templates - uses shared hook for consistent behavior
-  const handleAssignProgramTemplate = async (assignment: {
-    programId: string;
-    clientId: string;
-    startDate: Date;
-    endDate: Date;
-    notes?: string;
-  }) => {
-    try {
-      // Use the shared hook for program template assignment
-      // This handles creating/updating programs and removing overlapping periods
-      await hookAssignProgramTemplate(assignment);
-      console.log('Program template assigned successfully via shared hook:', assignment);
-    } catch (error) {
-      console.error('Error assigning program template:', error);
-      throw error; // Re-throw so the dialog can handle the error
-    }
-  };
-
   // Handler for assigning periods - uses shared hook for consistent behavior with builder tab
   const handleAssignPeriod = async (assignment: {
     clientId: string;
@@ -291,21 +337,10 @@ export default function ProgramsPage() {
     isAllDay?: boolean;
     dayTimes?: Array<{ time?: string; isAllDay: boolean; category?: string; deleted?: boolean }>;
   }) => {
-    console.log('handleAssignPeriod called with:', {
-      clientId: assignment.clientId,
-      periodId: assignment.periodId,
-      startDate: assignment.startDate.toISOString(),
-      endDate: assignment.endDate.toISOString(),
-      weekTemplateId: assignment.weekTemplateId,
-      dayTimesCount: assignment.dayTimes?.length || 0
-    });
-
     try {
       // Use the shared hook for period assignment
       // This handles creating periods, calendar events, and workouts consistently
       await hookAssignPeriod(assignment);
-      
-      console.log('Period assigned successfully via shared hook');
 
       // Page-specific refresh: Force calendar view to refresh
       if (selectedClient) {
@@ -392,8 +427,6 @@ export default function ProgramsPage() {
     }
 
     try {
-      console.log('Deleting period:', { periodId, selectedClient });
-
       // Fetch fresh data first to ensure we have the latest
       const freshPrograms = await getClientProgramsByClient(selectedClient);
       const clientProgram = freshPrograms.find(cp => cp.clientId === selectedClient);
@@ -409,22 +442,11 @@ export default function ProgramsPage() {
         throw new Error('Period not found');
       }
 
-      console.log('Found client program:', {
-        clientProgramId: clientProgram.id,
-        periodsBeforeDelete: clientProgram.periods.length,
-        periodToDelete: periodToDelete.periodName
-      });
-
       // Fetch ALL events for the period's date range (not just visible week)
       const periodStart = safeToDate(periodToDelete.startDate);
       const periodEnd = safeToDate(periodToDelete.endDate);
       periodStart.setHours(0, 0, 0, 0);
       periodEnd.setHours(23, 59, 59, 999);
-
-      console.log('Fetching all events for period date range:', {
-        start: periodStart.toISOString(),
-        end: periodEnd.toISOString()
-      });
 
       // Fetch events for the entire period range
       await fetchEvents({ start: periodStart, end: periodEnd });
@@ -434,12 +456,10 @@ export default function ProgramsPage() {
 
       // Now find events for this period from the freshly fetched events
       const eventsToDelete = findEventsForPeriod(periodToDelete, selectedClient);
-      console.log(`Found ${eventsToDelete.length} calendar events to delete for period ${periodId}`);
 
       for (const event of eventsToDelete) {
         try {
           await deleteEvent(event.id);
-          console.log(`Deleted calendar event ${event.id}`);
         } catch (eventError) {
           console.error(`Error deleting calendar event ${event.id}:`, eventError);
           // Continue with other events even if one fails
@@ -449,18 +469,15 @@ export default function ProgramsPage() {
       // NEW: Also delete all Firebase workouts associated with this period
       // Strategy: Delete by date range to catch any workouts that might have missed the periodId link
       // This is more robust for "wiping the slate clean"
-      console.log('Fetching and deleting associated Firebase workouts by date range...');
       try {
         const startTimestamp = Timestamp.fromDate(periodStart);
         const endTimestamp = Timestamp.fromDate(periodEnd);
 
         // Fetch by date range to ensure we catch everything in this period's timeframe
         const rangeWorkouts = await fetchWorkoutsByDateRange(selectedClient, startTimestamp, endTimestamp);
-        console.log(`Found ${rangeWorkouts.length} Firebase workouts to delete in date range ${periodStart.toISOString()} - ${periodEnd.toISOString()}`);
 
         for (const workout of rangeWorkouts) {
           await deleteClientWorkout(workout.id);
-          console.log(`Deleted Firebase workout ${workout.id}`);
         }
       } catch (workoutError) {
         console.error('Error deleting associated workouts:', workoutError);
@@ -468,7 +485,6 @@ export default function ProgramsPage() {
 
       // Delete the period from Firebase
       await deletePeriodFromClientProgram(clientProgram.id, periodId);
-      console.log('Period deleted from Firebase');
 
       // Refresh client programs from Firebase - multiple times to ensure sync
       await fetchClientPrograms(selectedClient);
@@ -492,11 +508,117 @@ export default function ProgramsPage() {
 
       // Force calendar refresh
       setCalendarKey(prev => prev + 1);
-
-      console.log('Period deletion complete and state refreshed');
     } catch (error) {
       console.error('Error deleting period:', error);
       throw error; // Re-throw so the dialog can handle it
+    }
+  };
+
+  // Handler to delete multiple periods at once (batch delete)
+  const handleDeletePeriods = async (periodIds: string[]) => {
+    if (!selectedClient || periodIds.length === 0) {
+      console.error('No client selected or no periods to delete');
+      return;
+    }
+
+    try {
+      // Fetch fresh data first
+      const freshPrograms = await getClientProgramsByClient(selectedClient);
+      const clientProgram = freshPrograms.find(cp => cp.clientId === selectedClient);
+
+      if (!clientProgram) {
+        throw new Error('Client program not found');
+      }
+
+      // Find all periods to delete
+      const periodsToDelete = clientProgram.periods.filter(p => periodIds.includes(p.id));
+      
+      if (periodsToDelete.length === 0) {
+        return;
+      }
+
+      // Calculate the overall date range covering all periods
+      let overallStart = new Date();
+      let overallEnd = new Date();
+      let initialized = false;
+
+      for (const period of periodsToDelete) {
+        const periodStart = safeToDate(period.startDate);
+        const periodEnd = safeToDate(period.endDate);
+        
+        if (!initialized) {
+          overallStart = periodStart;
+          overallEnd = periodEnd;
+          initialized = true;
+        } else {
+          if (periodStart < overallStart) overallStart = periodStart;
+          if (periodEnd > overallEnd) overallEnd = periodEnd;
+        }
+      }
+
+      overallStart.setHours(0, 0, 0, 0);
+      overallEnd.setHours(23, 59, 59, 999);
+
+      // Fetch all events in the overall date range
+      await fetchEvents({ start: overallStart, end: overallEnd });
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Delete events for all periods
+      for (const period of periodsToDelete) {
+        const eventsToDelete = findEventsForPeriod(period, selectedClient);
+        
+        for (const event of eventsToDelete) {
+          try {
+            await deleteEvent(event.id);
+          } catch (eventError) {
+            console.error(`Error deleting event ${event.id}:`, eventError);
+          }
+        }
+      }
+
+      // Delete all workouts in the overall date range
+      const startTimestamp = Timestamp.fromDate(overallStart);
+      const endTimestamp = Timestamp.fromDate(overallEnd);
+      const rangeWorkouts = await fetchWorkoutsByDateRange(selectedClient, startTimestamp, endTimestamp);
+      
+      for (const workout of rangeWorkouts) {
+        try {
+          await deleteClientWorkout(workout.id);
+        } catch (workoutError) {
+          console.error(`Error deleting workout ${workout.id}:`, workoutError);
+        }
+      }
+
+      // Delete all periods from Firebase
+      for (const periodId of periodIds) {
+        try {
+          await deletePeriodFromClientProgram(clientProgram.id, periodId);
+        } catch (periodError) {
+          console.error(`Error deleting period ${periodId}:`, periodError);
+        }
+      }
+
+      // Refresh everything
+      await fetchClientPrograms(selectedClient);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const updatedPrograms = await getClientProgramsByClient(selectedClient);
+      const updatedProgram = updatedPrograms.find(cp => cp.clientId === selectedClient);
+      if (updatedProgram) {
+        setDialogPeriods(updatedProgram.periods || []);
+      }
+
+      await fetchScheduledWorkoutsByClient(selectedClient);
+      const weekStart = new Date(calendarDate);
+      weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      await fetchEvents({ start: weekStart, end: weekEnd });
+
+      setCalendarKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Error in batch deletion:', error);
+      throw error;
     }
   };
 
@@ -527,11 +649,6 @@ export default function ProgramsPage() {
       }
 
       // Fetch ALL events for the date range
-      console.log('Fetching all events for client date range:', {
-        start: dateRangeStart.toISOString(),
-        end: dateRangeEnd.toISOString()
-      });
-
       // Fetch events first
       await fetchEvents({ start: dateRangeStart, end: dateRangeEnd });
 
@@ -560,12 +677,9 @@ export default function ProgramsPage() {
         return false;
       });
 
-      console.log(`Found ${allClientEvents.length} calendar events to delete for client ${selectedClient} (${clientName})`);
-
       for (const event of allClientEvents) {
         try {
           await deleteEvent(event.id);
-          console.log(`Deleted calendar event ${event.id}`);
         } catch (eventError) {
           console.error(`Error deleting calendar event ${event.id}:`, eventError);
         }
@@ -581,14 +695,11 @@ export default function ProgramsPage() {
       // Force calendar refresh
       setCalendarKey(prev => prev + 1);
 
-      console.log(`Successfully cleared ${allClientEvents.length} calendar events`);
-
       // -----------------------------------------------------------------------
       // DELETE FIREBASE WORKOUTS (including Quick Workouts)
       // This includes all workouts: period-based workouts AND quick workouts (no periodId)
       // Use fetchClientWorkouts to get ALL workouts regardless of date to ensure we catch everything
       // -----------------------------------------------------------------------
-      console.log('Fetching all workouts (including quick workouts) for deletion...');
       const allWorkouts = await fetchClientWorkouts(selectedClient);
       
       // Filter by date range to match the calendar events we're deleting
@@ -599,19 +710,9 @@ export default function ProgramsPage() {
         return workoutDate >= dateRangeStart && workoutDate <= dateRangeEnd;
       });
 
-      // Log breakdown of workouts being deleted
-      const periodWorkouts = workoutsToDelete.filter(w => w.periodId);
-      const quickWorkouts = workoutsToDelete.filter(w => !w.periodId);
-      console.log(`Found ${workoutsToDelete.length} total workouts to delete for client ${selectedClient}:`, {
-        periodWorkouts: periodWorkouts.length,
-        quickWorkouts: quickWorkouts.length,
-        quickWorkoutIds: quickWorkouts.map(w => w.id)
-      });
-
       for (const workout of workoutsToDelete) {
         try {
           await deleteClientWorkout(workout.id);
-          console.log(`Deleted workout ${workout.id} (${workout.periodId ? 'period-based' : 'quick workout'})`);
         } catch (workoutError) {
           console.error(`Error deleting workout ${workout.id}:`, workoutError);
         }
@@ -619,9 +720,6 @@ export default function ProgramsPage() {
 
       // Update the implementation to refresh workouts as well
       await fetchAllScheduledWorkouts();
-      
-      console.log(`Successfully cleared ${workoutsToDelete.length} workouts (${periodWorkouts.length} period-based, ${quickWorkouts.length} quick workouts)`);
-
     } catch (error) {
       console.error('Error clearing events/workouts:', error);
       throw error;
@@ -637,31 +735,16 @@ export default function ProgramsPage() {
       const clientProgram = freshClientPrograms.find(cp => cp.clientId === selectedClient);
 
       if (!clientProgram) {
-        console.warn('No client program found for client:', selectedClient);
         // Even if no client program, we should still try to clear calendar events
         await handleClearAllCalendarEvents();
         return;
       }
 
       if (clientProgram.periods.length === 0) {
-        console.log('No periods to clear, but clearing calendar events anyway');
         // Clear calendar events even if no periods
         await handleClearAllCalendarEvents();
         return;
       }
-
-      console.log('Clearing all periods:', {
-        clientId: selectedClient,
-        clientProgramId: clientProgram.id,
-        periodsCount: clientProgram.periods.length,
-        periods: clientProgram.periods.map(p => ({
-          id: p.id,
-          name: p.periodName,
-          startDate: format(safeToDate(p.startDate), 'yyyy-MM-dd'),
-          endDate: format(safeToDate(p.endDate), 'yyyy-MM-dd'),
-          daysCount: p.days?.length || 0
-        }))
-      });
 
       // First, collect all workouts to delete across all periods
       const allWorkoutsToDelete: Array<{ id: string; periodId: string }> = [];
@@ -689,8 +772,6 @@ export default function ProgramsPage() {
         }
       }
 
-      console.log(`Found ${allWorkoutsToDelete.length} total workouts to delete`);
-
       // Find the overall date range covering all periods
       let overallStart = new Date();
       let overallEnd = new Date();
@@ -714,10 +795,6 @@ export default function ProgramsPage() {
 
       // Fetch ALL events for the entire date range covering all periods
       if (hasPeriods) {
-        console.log('Fetching all events for overall period date range:', {
-          start: overallStart.toISOString(),
-          end: overallEnd.toISOString()
-        });
         await fetchEvents({ start: overallStart, end: overallEnd });
         // Wait for store to update
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -729,7 +806,6 @@ export default function ProgramsPage() {
       for (const period of clientProgram.periods) {
         const periodEvents = findEventsForPeriod(period, selectedClient);
         allEventsToDelete.push(...periodEvents);
-        console.log(`Found ${periodEvents.length} calendar events for period ${period.id} (${period.periodName})`);
       }
 
       // Also find ALL events for this client (in case some aren't associated with periods)
@@ -742,13 +818,11 @@ export default function ProgramsPage() {
       allClientEvents.forEach(event => uniqueEvents.set(event.id, event));
 
       const finalEventsToDelete = Array.from(uniqueEvents.values());
-      console.log(`Found ${finalEventsToDelete.length} total calendar events to delete for client ${selectedClient}`);
 
       // Delete all calendar events
       for (const event of finalEventsToDelete) {
         try {
           await deleteEvent(event.id);
-          console.log(`Deleted calendar event ${event.id}`);
         } catch (eventError) {
           console.error(`Error deleting calendar event ${event.id}:`, eventError);
           // Continue with other events even if one fails
@@ -759,7 +833,6 @@ export default function ProgramsPage() {
       for (const workout of allWorkoutsToDelete) {
         try {
           await deleteClientWorkout(workout.id);
-          console.log(`Deleted workout ${workout.id}`);
         } catch (workoutError) {
           console.error(`Error deleting workout ${workout.id}:`, workoutError);
           // Continue with other workouts even if one fails
@@ -768,7 +841,6 @@ export default function ProgramsPage() {
 
       // Delete all periods in a single batch operation
       await deleteAllPeriodsFromClientProgram(clientProgram.id);
-      console.log('Successfully deleted all periods from client program');
 
       // Clear dialog periods immediately
       setDialogPeriods([]);
@@ -786,14 +858,6 @@ export default function ProgramsPage() {
       await new Promise(resolve => setTimeout(resolve, 300));
       await fetchClientPrograms(selectedClient);
 
-      // Verify the deletion
-      const verifyPrograms = await getClientProgramsByClient(selectedClient);
-      const verifyProgram = verifyPrograms.find(cp => cp.clientId === selectedClient);
-      console.log('Verification after clear all:', {
-        periodsRemaining: verifyProgram?.periods?.length || 0,
-        periods: verifyProgram?.periods || []
-      });
-
       // Refresh calendar events and workouts
       const weekStart = new Date(calendarDate);
       weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -803,8 +867,6 @@ export default function ProgramsPage() {
 
       // Force calendar refresh
       setCalendarKey(prev => prev + 1);
-
-      console.log('Successfully cleared all periods and refreshed state');
     } catch (error) {
       console.error('Error clearing all periods:', error);
       throw error;
@@ -940,8 +1002,6 @@ export default function ProgramsPage() {
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
       await fetchEvents({ start: weekStart, end: weekEnd });
-
-      console.log('Schedule event updated successfully');
     } catch (error) {
       console.error('Error updating schedule event:', error);
       throw error;
@@ -1026,33 +1086,10 @@ export default function ProgramsPage() {
     }
   };
 
-  // Handler for when schedule event cards are clicked - open scheduling manager
+  // Handler for when schedule event cards are clicked - show action dialog
   const handleScheduleEventClick = (event: GoogleCalendarEvent) => {
-    if (!selectedClient) return;
-
-    const eventDate = new Date(event.start.dateTime);
-    const eventTime = new Date(event.start.dateTime);
-
-    // Find the period for this event's date
-    const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
-    if (!clientProgram) return;
-
-    // Find period that contains this date
-    const period = clientProgram.periods.find(p => {
-      const periodStart = safeToDate(p.startDate);
-      const periodEnd = safeToDate(p.endDate);
-      return eventDate >= periodStart && eventDate <= periodEnd;
-    });
-
-    if (period) {
-      setSelectedPeriod(period);
-      setSelectedTimeSlot(eventTime);
-      setWeekScheduleManagerOpen(true);
-    } else {
-      // If no period found, open event edit dialog instead
-      setSelectedEventForEdit(event);
-      setScheduleEventEditDialogOpen(true);
-    }
+    setSelectedEventForAction(event);
+    setEventActionDialogOpen(true);
   };
 
   const handleMoveWorkoutCategory = async (fromDate: Date, toDate: Date, category: string) => {
@@ -1066,7 +1103,6 @@ export default function ProgramsPage() {
     try {
       // Handle remove action
       if (category === '__REMOVE__') {
-        console.log('Removing event from', fromDate.toDateString());
         await handleRemoveEvent(fromDate);
         return;
       }
@@ -1081,7 +1117,6 @@ export default function ProgramsPage() {
           let quickWorkoutsTemplate = allPrograms.find(p => p.name === 'Quick Workouts' && p.isTemplate);
 
           if (!quickWorkoutsTemplate) {
-            console.log('Creating Quick Workouts program template...');
             const templateId = await createProgram({
               name: 'Quick Workouts',
               description: 'Template for unplanned workouts and one-off sessions',
@@ -1477,80 +1512,9 @@ export default function ProgramsPage() {
     return categoryColors[category] || '#6b7280';
   };
 
-  // Quick Workout Builder functions
-  const checkForConflict = async (date: Date): Promise<any | null> => {
-    if (!selectedClient) return null;
-    
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-    
-    const workouts = await fetchWorkoutsByDateRange(
-      selectedClient,
-      Timestamp.fromDate(startOfDay),
-      Timestamp.fromDate(endOfDay)
-    );
-    
-    const workoutForDate = workouts.find(w => {
-      const workoutDate = safeToDate(w.date);
-      return workoutDate.getDate() === date.getDate() &&
-             workoutDate.getMonth() === date.getMonth() &&
-             workoutDate.getFullYear() === date.getFullYear();
-    });
-    
-    return workoutForDate || null;
-  };
-
-  const createQuickWorkout = async (workoutData: any) => {
-    const createdWorkout = await createClientWorkout(workoutData);
-    
-    // Create calendar event for the workout if it has a time
-    if (workoutData.time && workoutData.time.trim() !== '') {
-      try {
-        const client = clients.find(c => c.id === workoutData.clientId);
-        const clientName = client?.name || 'Unknown Client';
-        const date = workoutData.date instanceof Timestamp 
-          ? workoutData.date.toDate() 
-          : new Date(workoutData.date);
-        const dateStr = format(date, 'yyyy-MM-dd');
-        const timeStr = workoutData.time;
-        
-        // Calculate end time (default 1 hour)
-        const endTime = new Date(date);
-        const [hours, minutes] = timeStr.split(':').map(Number);
-        endTime.setHours(hours, minutes || 0, 0, 0);
-        endTime.setHours(endTime.getHours() + 1);
-        
-        const event = await createTestEvent({
-          summary: workoutData.title || `${workoutData.categoryName || 'Workout'} with ${clientName}`,
-          date: dateStr,
-          startTime: timeStr,
-          endTime: format(endTime, 'HH:mm'),
-          description: `Workout Category: ${workoutData.categoryName || 'Workout'}\n[Metadata: client=${workoutData.clientId}, category=${workoutData.categoryName || 'Workout'}, workoutId=${createdWorkout.id}, periodId=${workoutData.periodId || 'none'}]`,
-        });
-
-        // Link event to workout
-        await linkToWorkout(event.id, createdWorkout.id);
-        
-        console.log('✅ Created calendar event for workout:', createdWorkout.id, event.id);
-      } catch (error) {
-        console.error('❌ Error creating calendar event for workout:', error);
-        // Don't fail the workout creation if event creation fails
-      }
-    }
-    
-    // Reset form
-    setWorkoutTitle('');
-    setWorkoutTime('');
-    setSelectedCategory('');
-    setSelectedTemplate('');
-    setWorkoutDate(format(new Date(), 'yyyy-MM-dd'));
-    
-    // Refresh calendar
+  // Callback for refreshing calendar after workout creation
+  const handleWorkoutCreated = async () => {
     setCalendarKey(prev => prev + 1);
-    
-    // Refresh events
     const startDate = new Date(calendarDate);
     startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
     const endDate = new Date(startDate);
@@ -1560,147 +1524,79 @@ export default function ProgramsPage() {
     await fetchEvents({ start: startDate, end: endDate });
   };
 
-  const handleQuickWorkoutSave = async () => {
-    if (!selectedClient || !workoutTitle) {
-      alert('Please fill in all required fields');
-      return;
-    }
-
-    setIsSavingWorkout(true);
-    try {
-      // Parse date string as local date to avoid timezone issues
-      // workoutDate is in format 'YYYY-MM-DD', parse it as local date
-      const [year, month, day] = workoutDate.split('-').map(Number);
-      const date = new Date(year, month - 1, day); // month is 0-indexed
-      const period = findPeriodForDate(date, selectedClient);
-      const category = workoutCategories.find(cat => cat.name === selectedCategory);
-      
-      // Use selected template if provided, otherwise use category's linked template
-      const linkedTemplateId = category?.linkedWorkoutStructureTemplateId;
-      const templateIdToUse = selectedTemplate || linkedTemplateId;
-      const appliedTemplateId = templateIdToUse && workoutStructureTemplates.find(t => t.id === templateIdToUse) 
-        ? templateIdToUse 
-        : undefined;
-
-      const workoutData = {
-        clientId: selectedClient,
-        periodId: period?.id || null,
-        date: Timestamp.fromDate(date),
-        title: workoutTitle,
-        notes: '',
-        time: workoutTime || '',
-        categoryName: selectedCategory || '',
-        appliedTemplateId,
-        rounds: [],
-        warmups: []
-      };
-      
-      const existing = await checkForConflict(date);
-      if (existing) {
-        setExistingWorkout(existing);
-        setPendingWorkoutData(workoutData);
-        setConflictDialogOpen(true);
-        setIsSavingWorkout(false);
-        return;
-      }
-      
-      await createQuickWorkout(workoutData);
-    } catch (error) {
-      console.error('Error creating workout:', error);
-      alert('Failed to create workout. Please try again.');
-    } finally {
-      setIsSavingWorkout(false);
-    }
-  };
-
-  const handleConflictResolution = async (action: 'keep' | 'replace' | 'move' | 'cancel') => {
-    if (action === 'cancel') {
-      setConflictDialogOpen(false);
-      setExistingWorkout(null);
-      setPendingWorkoutData(null);
-      setMoveToDate('');
-      return;
-    }
-
-    if (!pendingWorkoutData) return;
-    
-    setIsSavingWorkout(true);
-    setConflictDialogOpen(false);
-    
-    try {
-      if (action === 'keep') {
-        // Parse date string as local date to avoid timezone issues
-        const [year, month, day] = workoutDate.split('-').map(Number);
-        const dateForParam = new Date(year, month - 1, day);
-        const dateParam = format(dateForParam, 'yyyy-MM-dd');
-        router.push(`/workouts/builder?client=${selectedClient}&date=${dateParam}&workoutId=${existingWorkout.id}`);
-      } else if (action === 'replace') {
-        if (existingWorkout.id) {
-          // Delete existing workout's calendar event if it exists
-          const existingEvent = calendarEvents.find(e => e.linkedWorkoutId === existingWorkout.id);
-          if (existingEvent) {
-            try {
-              await deleteEvent(existingEvent.id);
-            } catch (error) {
-              console.error('Error deleting existing event:', error);
-            }
-          }
-          await deleteClientWorkout(existingWorkout.id);
-        }
-        await createQuickWorkout(pendingWorkoutData);
-      } else if (action === 'move') {
-        if (!moveToDate) {
-          alert('Please select a date to move the existing workout to');
-          setIsSavingWorkout(false);
-          setConflictDialogOpen(true);
-          return;
-        }
-        const newDate = new Date(moveToDate);
-        const period = findPeriodForDate(newDate, selectedClient);
-        await updateClientWorkout(existingWorkout.id, {
-          date: Timestamp.fromDate(newDate),
-          periodId: period?.id || null
-        });
-        // Update calendar event date if it exists
-        const existingEvent = calendarEvents.find(e => e.linkedWorkoutId === existingWorkout.id);
-        if (existingEvent && existingWorkout.time) {
-          try {
-            const dateStr = format(newDate, 'yyyy-MM-dd');
-            const timeStr = existingWorkout.time;
-            const endTime = new Date(newDate);
-            const [hours, minutes] = timeStr.split(':').map(Number);
-            endTime.setHours(hours, minutes || 0, 0, 0);
-            endTime.setHours(endTime.getHours() + 1);
-            
-            await updateEvent(existingEvent.id, {
-              start: {
-                dateTime: `${dateStr}T${timeStr}:00`,
-                timeZone: 'America/Los_Angeles',
-              },
-              end: {
-                dateTime: `${dateStr}T${format(endTime, 'HH:mm')}:00`,
-                timeZone: 'America/Los_Angeles',
-              },
-            });
-          } catch (error) {
-            console.error('Error updating event date:', error);
-          }
-        }
-        await createQuickWorkout(pendingWorkoutData);
-      }
-    } catch (error) {
-      console.error('Error resolving conflict:', error);
-      alert('Failed to resolve conflict. Please try again.');
-    } finally {
-      setIsSavingWorkout(false);
-      setExistingWorkout(null);
-      setPendingWorkoutData(null);
-      setMoveToDate('');
-    }
-  };
-
   return (
-    <div className="w-full px-1 py-4 space-y-2">
+    <div className="w-full px-1 pt-1 pb-4 space-y-2">
+      {/* Timezone Change Notification */}
+      {showTimezonePrompt && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="pt-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                  Timezone Change Detected
+                </h3>
+                <p className="text-sm text-amber-700 mb-3">
+                  Your browser timezone ({formatTimezoneLabel(getBrowserTimezone())}) differs from 
+                  the app timezone ({formatTimezoneLabel(appTimezone)}). 
+                  Would you like to update the app timezone to match your current location?
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const browserTz = getBrowserTimezone();
+                      setAppTimezone(browserTz);
+                      setAppTimezoneState(browserTz);
+                      setShowTimezonePrompt(false);
+                      localStorage.setItem(TIMEZONE_DISMISS_KEY, 'true');
+                      toastSuccess(`Timezone updated to ${formatTimezoneLabel(browserTz)}`);
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 500);
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700"
+                  >
+                    Update to {formatTimezoneLabel(getBrowserTimezone())}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowTimezonePrompt(false);
+                      localStorage.setItem(TIMEZONE_DISMISS_KEY, 'true');
+                    }}
+                    className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                  >
+                    Keep Current ({formatTimezoneLabel(appTimezone)})
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      router.push('/configure?tab=app');
+                    }}
+                    className="text-amber-700 hover:bg-amber-100"
+                  >
+                    Change in Settings
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowTimezonePrompt(false);
+                      localStorage.setItem(TIMEZONE_DISMISS_KEY, 'true');
+                    }}
+                    className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Filters and Controls */}
       <Card className="py-2">
         <CardContent className="py-1 px-2">
@@ -1709,7 +1605,7 @@ export default function ProgramsPage() {
             {/* Left aligned - Client Selector */}
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
+                <Users className="h-4 w-4 icon-clients" />
                 <label className="text-sm font-medium">Client:</label>
               </div>
               <Select value={selectedClient || 'all'} onValueChange={handleClientChange}>
@@ -1718,15 +1614,22 @@ export default function ProgramsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Clients</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
+                  {clients
+                    .filter(client => !client.isDeleted)
+                    .map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               {selectedClient && (
                 <>
+                  <QuickWorkoutBuilderDialog
+                    clientId={selectedClient}
+                    clientName={selectedClientData?.name || 'Unknown Client'}
+                    onWorkoutCreated={handleWorkoutCreated}
+                  />
                   <PeriodAssignmentDialog
                     clientId={selectedClient}
                     clientName={selectedClientData?.name || 'Unknown Client'}
@@ -1735,11 +1638,6 @@ export default function ProgramsPage() {
                     weekTemplates={weekTemplates || []}
                     onAssignPeriod={handleAssignPeriod}
                     existingAssignments={clientPrograms.find(cp => cp.clientId === selectedClient)?.periods || []}
-                  />
-                  <AssignProgramTemplateDialog
-                    programs={programs || []}
-                    clients={clients || []}
-                    onAssignProgram={handleAssignProgramTemplate}
                   />
                   <Button
                     variant="outline"
@@ -1771,7 +1669,7 @@ export default function ProgramsPage() {
                     }}
                     className="gap-2"
                   >
-                    <Calendar className="h-4 w-4" />
+                    <Calendar className="h-4 w-4 icon-schedule" />
                     Manage Periods
                     {clientPrograms.find(cp => cp.clientId === selectedClient)?.periods.length ? (
                       <span className="ml-1 bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-xs">
@@ -1807,7 +1705,7 @@ export default function ProgramsPage() {
                   onClick={() => handleNavigate(-1)}
                   className="p-1 md:p-2"
                 >
-                  <ChevronLeft className="h-3 w-3 md:h-4 md:w-4" />
+                  <ChevronLeft className="h-3 w-3 md:h-4 md:w-4 icon-schedule" />
                 </Button>
                 <div className="min-w-[110px] md:min-w-[140px] text-center font-medium text-sm">
                   {getNavigationLabel()}
@@ -1818,116 +1716,20 @@ export default function ProgramsPage() {
                   onClick={() => handleNavigate(1)}
                   className="p-1 md:p-2"
                 >
-                  <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
+                  <ChevronRight className="h-3 w-3 md:h-4 md:w-4 icon-schedule" />
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Quick Workout Builder - Inline with filters */}
-          {selectedClient && (
-            <div className="border-t mt-3 pt-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Dumbbell className="h-4 w-4 text-muted-foreground" />
-                <label className="text-sm font-medium">Quick Workout Builder:</label>
-              </div>
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="flex-1 min-w-[120px]">
-                  <Label htmlFor="quick-workout-date" className="text-xs">Date *</Label>
-                  <Input
-                    id="quick-workout-date"
-                    type="date"
-                    value={workoutDate}
-                    onChange={(e) => setWorkoutDate(e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="flex-1 min-w-[100px]">
-                  <Label htmlFor="quick-workout-time" className="text-xs">Time</Label>
-                  <Input
-                    id="quick-workout-time"
-                    type="time"
-                    value={workoutTime}
-                    onChange={(e) => setWorkoutTime(e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="flex-1 min-w-[150px]">
-                  <Label htmlFor="quick-workout-title" className="text-xs">Title *</Label>
-                  <Input
-                    id="quick-workout-title"
-                    placeholder="e.g., Upper Body"
-                    value={workoutTitle}
-                    onChange={(e) => setWorkoutTitle(e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="flex-1 min-w-[140px]">
-                  <Label htmlFor="quick-workout-category" className="text-xs">Category</Label>
-                  <select
-                    id="quick-workout-category"
-                    value={selectedCategory}
-                    onChange={(e) => {
-                      setSelectedCategory(e.target.value);
-                      // Auto-select linked template when category changes
-                      const category = workoutCategories.find(cat => cat.name === e.target.value);
-                      setSelectedTemplate(category?.linkedWorkoutStructureTemplateId || '');
-                    }}
-                    className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="">No category</option>
-                    {workoutCategories.map((category) => (
-                      <option key={category.id} value={category.name}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {selectedCategory && (
-                  <div className="flex-1 min-w-[160px]">
-                    <Label htmlFor="quick-workout-template" className="text-xs">Template</Label>
-                    <select
-                      id="quick-workout-template"
-                      value={selectedTemplate}
-                      onChange={(e) => setSelectedTemplate(e.target.value)}
-                      className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <option value="">No template</option>
-                      {workoutStructureTemplates.map((template) => {
-                        const category = workoutCategories.find(cat => cat.name === selectedCategory);
-                        const isLinked = category?.linkedWorkoutStructureTemplateId === template.id;
-                        return (
-                          <option key={template.id} value={template.id}>
-                            {template.name}{isLinked ? ' (default)' : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                )}
-                <Button 
-                  onClick={handleQuickWorkoutSave} 
-                  disabled={isSavingWorkout || !workoutTitle}
-                  size="sm"
-                  className="h-8"
-                >
-                  <Save className="h-3 w-3 mr-1.5" />
-                  {isSavingWorkout ? 'Creating...' : 'Create'}
-                </Button>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* Calendar View and Current Day Schedule Sidebar */}
-      {!loading && !clientProgramsLoading && (
+      {/* Calendar View and Current Day Schedule Sidebar - Always rendered to prevent flashing */}
         <div className="flex gap-1 mt-1">
           {/* Week View - Scrollable, constrained to leave space for sidebar */}
           <div className="flex-1 min-w-0 overflow-x-auto" style={{ maxWidth: 'calc(100% - 272px)' }}>
-            {selectedClient ? (
               <ModernCalendarView
-                key={`calendar-${calendarKey}`}
                 viewMode="week"
                 calendarDate={calendarDate}
                 scheduledWorkouts={scheduledWorkouts}
@@ -1950,29 +1752,22 @@ export default function ProgramsPage() {
                   window.location.href = buildWorkoutUrl;
                 }}
                 onMoveWorkoutCategory={handleMoveWorkoutCategory}
+                onEventClick={handleScheduleEventClick}
               />
-            ) : (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-center text-muted-foreground">
-                    Select a client to view their schedule
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
 
           {/* Current Day Schedule - Side view - Always visible, fixed width */}
+          {/* Note: selectedClientId is null to show ALL events for the day, regardless of client selection */}
           <div className="w-64 flex-shrink-0 sticky top-2 self-start">
             <DayEventList
-              selectedDate={selectedDate}
+              selectedDate={selectedDate || calendarDate}
               events={calendarEvents}
               clients={clients}
-              selectedClientId={selectedClient}
+              selectedClientId={null}
               headerActions={
                 <MiniCalendarTooltip
                   currentDate={calendarDate}
-                  selectedDate={selectedDate}
+                  selectedDate={selectedDate || calendarDate}
                   onDateSelect={handleMiniCalendarDateSelect}
                 />
               }
@@ -1980,7 +1775,6 @@ export default function ProgramsPage() {
             />
           </div>
         </div>
-      )}
 
       {/* Error Display */}
       {error && (
@@ -1996,17 +1790,8 @@ export default function ProgramsPage() {
         </Card>
       )}
 
-      {/* Loading State */}
-      {(loading || clientProgramsLoading) && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <span className="ml-2">Loading programs...</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Loading State - Only show on initial load, not on client switches */}
+      {/* Removed to prevent schedule from disappearing during client changes */}
 
       {/* Period Management Panel */}
       <PeriodManagementPanel
@@ -2104,6 +1889,7 @@ export default function ProgramsPage() {
           }, [selectedClient, clientPrograms, dialogPeriods, periodListDialogOpen])}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
+          onDeletePeriods={handleDeletePeriods}
           onClearAll={handleClearAllPeriods}
           onClearAllCalendarEvents={handleClearAllCalendarEvents}
           onForceClearLocalEvents={handleForceClearLocalEvents}
@@ -2139,75 +1925,32 @@ export default function ProgramsPage() {
         />
       )}
 
-      {/* Conflict Resolution Dialog */}
-      <Dialog open={conflictDialogOpen} onOpenChange={setConflictDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Workout Already Exists</DialogTitle>
-            <DialogDescription>
-              There's already a workout scheduled for {existingWorkout?.date ? format(safeToDate(existingWorkout.date), 'EEEE, MMMM d, yyyy') : (() => {
-                const [year, month, day] = workoutDate.split('-').map(Number);
-                return format(new Date(year, month - 1, day), 'EEEE, MMMM d, yyyy');
-              })()}.
-              <br />
-              <strong>Existing:</strong> {existingWorkout?.title || existingWorkout?.categoryName || 'Untitled Workout'}
-              <br />
-              <strong>New:</strong> {workoutTitle}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>What would you like to do?</Label>
-              <div className="space-y-2">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleConflictResolution('keep')}
-                  disabled={isSavingWorkout}
-                >
-                  Keep existing workout
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleConflictResolution('replace')}
-                  disabled={isSavingWorkout}
-                >
-                  Replace with new workout
-                </Button>
-                <div className="space-y-2">
-                  <Label htmlFor="move-to-date">Move existing workout to:</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="move-to-date"
-                      type="date"
-                      value={moveToDate}
-                      onChange={(e) => setMoveToDate(e.target.value)}
-                      className="flex-1"
-                    />
-                    <Button
-                      variant="outline"
-                      onClick={() => handleConflictResolution('move')}
-                      disabled={isSavingWorkout || !moveToDate}
-                    >
-                      Move
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => handleConflictResolution('cancel')}
-              disabled={isSavingWorkout}
-            >
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {selectedEventForAction && (
+        <EventActionDialog
+          open={eventActionDialogOpen}
+          onOpenChange={setEventActionDialogOpen}
+          event={selectedEventForAction}
+          clientId={selectedClient}
+          allEvents={calendarEvents}
+          clients={clients}
+          clientPrograms={clientPrograms}
+          onClientAssigned={async () => {
+            // Clear the selected event so it gets fresh data when clicked again
+            setSelectedEventForAction(null);
+            
+            // Refresh calendar events after client assignment/unassignment
+            const weekStart = new Date(calendarDate);
+            weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            await fetchEvents({ start: weekStart, end: weekEnd });
+            
+            // Force calendar view to refresh
+            setCalendarKey(prev => prev + 1);
+          }}
+        />
+      )}
+
     </div>
   );
 }

@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Users, Trash2, RotateCcw } from 'lucide-react';
+import { Plus, Search, Users, Trash2, RotateCcw, Layers, X, Cake } from 'lucide-react';
 import { useClientStore } from '@/lib/stores/useClientStore';
+import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
+import { useClientPrograms } from '@/hooks/useClientPrograms';
 import { AddClientDialog } from '@/components/clients/AddClientDialog';
+import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
 import { Client } from '@/lib/types';
 
 export default function ClientsPage() {
@@ -26,13 +29,22 @@ export default function ClientsPage() {
     clearError,
   } = useClientStore();
 
+  const { periods, weekTemplates, workoutCategories, fetchAll: fetchAllConfig } = useConfigurationStore();
+  const { clientPrograms, assignPeriod, fetchClientPrograms } = useClientPrograms();
+
   const [localSearchTerm, setLocalSearchTerm] = useState('');
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  
+  // Period assignment dialog state
+  const [periodDialogClient, setPeriodDialogClient] = useState<Client | null>(null);
+  const [periodDialogOpen, setPeriodDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchClients();
-  }, [fetchClients]);
+    fetchAllConfig();
+    fetchClientPrograms(); // Fetch all client programs like schedule page does
+  }, [fetchClients, fetchAllConfig, fetchClientPrograms]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,56 +87,75 @@ export default function ClientsPage() {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
-          <p className="text-muted-foreground">
-            Manage your clients and track their progress
-          </p>
-        </div>
-        <AddClientDialog />
-      </div>
+  // Handle period assignment - matches schedule page logic exactly
+  const handleAssignPeriod = async (assignment: {
+    clientId: string;
+    periodId: string;
+    startDate: Date;
+    endDate: Date;
+    weekTemplateId?: string;
+    defaultTime?: string;
+    isAllDay?: boolean;
+    dayTimes?: Array<{ time?: string; isAllDay: boolean; category?: string; deleted?: boolean }>;
+  }) => {
+    try {
+      // Use the shared hook for period assignment
+      // This handles creating periods, calendar events, and workouts consistently
+      await assignPeriod(assignment);
+      
+      // Refresh client programs after assignment
+      await fetchClientPrograms(assignment.clientId);
+      
+      setPeriodDialogOpen(false);
+      setPeriodDialogClient(null);
+    } catch (error) {
+      console.error('Error assigning period:', error);
+    }
+  };
 
-      {/* Search and Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Search Clients</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name or email..."
-                value={localSearchTerm}
-                onChange={(e) => setLocalSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Button type="submit" disabled={loading}>
-              Search
-            </Button>
-            {searchTerm && (
-              <Button type="button" variant="outline" onClick={handleClearSearch}>
-                Clear
+  return (
+    <div className="w-full px-1 pt-1 pb-4 space-y-2">
+      {/* Toolbar */}
+      <Card className="py-2">
+        <CardContent className="py-1 px-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Left - Search */}
+            <form onSubmit={handleSearch} className="flex items-center gap-2">
+              <div className="relative w-56">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 icon-clients" />
+                <Input
+                  placeholder="Search clients..."
+                  value={localSearchTerm}
+                  onChange={(e) => setLocalSearchTerm(e.target.value)}
+                  className="pl-10 h-9"
+                />
+              </div>
+              <Button type="submit" size="sm" disabled={loading}>
+                Search
               </Button>
-            )}
-          </form>
-          
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="includeDeleted"
-              checked={includeDeleted}
-              onChange={(e) => setIncludeDeleted(e.target.checked)}
-              className="rounded"
-            />
-            <label htmlFor="includeDeleted" className="text-sm">
-              Show deleted clients
-            </label>
+              {searchTerm && (
+                <Button type="button" variant="outline" size="sm" onClick={handleClearSearch}>
+                  Clear
+                </Button>
+              )}
+            </form>
+
+            {/* Right - Actions */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="includeDeleted"
+                  checked={includeDeleted}
+                  onChange={(e) => setIncludeDeleted(e.target.checked)}
+                  className="rounded"
+                />
+                <label htmlFor="includeDeleted" className="text-sm text-muted-foreground">
+                  Show deleted
+                </label>
+              </div>
+              <AddClientDialog />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -161,7 +192,7 @@ export default function ClientsPage() {
           {/* Results Count */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {searchTerm ? `Found ${clients.length} clients for "${searchTerm}"` : `${clients.length} clients total`}
+              {searchTerm ? `Found ${clients.length} clients for "${searchTerm}"` : ''}
               {includeDeleted && ` (including deleted)`}
             </p>
           </div>
@@ -171,20 +202,14 @@ export default function ClientsPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center py-12">
-                  <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <Users className="h-12 w-12 icon-clients mx-auto mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No clients found</h3>
-                  <p className="text-muted-foreground mb-4">
+                  <p className="text-muted-foreground">
                     {searchTerm 
                       ? "Try adjusting your search terms or clear the search to see all clients."
                       : "Get started by adding your first client."
                     }
                   </p>
-                  <AddClientDialog trigger={
-                    <Button>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Your First Client
-                    </Button>
-                  } />
                 </div>
               </CardContent>
             </Card>
@@ -196,12 +221,12 @@ export default function ClientsPage() {
               {clients.map((client) => (
                 <Card 
                   key={client.id} 
-                  className={`hover:shadow-md transition-shadow ${
+                  className={`hover:shadow-md transition-shadow flex flex-col ${
                     client.isDeleted ? 'opacity-60 border-dashed' : ''
                   }`}
                 >
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center justify-between">
+                  <CardHeader className="relative">
+                    <CardTitle className="text-lg flex items-center justify-between pr-6">
                       <span>{client.name}</span>
                       {client.isDeleted && (
                         <span className="text-xs bg-muted px-2 py-1 rounded">
@@ -212,9 +237,18 @@ export default function ClientsPage() {
                     {client.email && (
                       <CardDescription>{client.email}</CardDescription>
                     )}
+                    {!client.isDeleted && (
+                      <button
+                        onClick={() => handleDeleteClient(client.id, client.name)}
+                        className="absolute top-3 right-3 text-destructive hover:text-destructive/80 transition-colors"
+                        title="Delete client"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
+                  <CardContent className="flex-1 flex flex-col">
+                    <div className="space-y-2 flex-1">
                       {client.phone && (
                         <div>
                           <p className="text-sm font-medium">Phone:</p>
@@ -236,6 +270,16 @@ export default function ClientsPage() {
                           <p className="text-sm font-medium">Notes:</p>
                           <p className="text-sm text-muted-foreground line-clamp-2">
                             {client.notes}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Birthday */}
+                      {client.birthday && (
+                        <div className="flex items-center gap-2">
+                          <Cake className="h-4 w-4 icon-birthday" />
+                          <p className="text-sm text-pink-600">
+                            {new Date(client.birthday + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
                           </p>
                         </div>
                       )}
@@ -263,13 +307,16 @@ export default function ClientsPage() {
                           >
                             Edit
                           </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => handleDeleteClient(client.id, client.name)}
-                            className="text-destructive hover:text-destructive"
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setPeriodDialogClient(client);
+                              setPeriodDialogOpen(true);
+                            }}
+                            title="Assign Period"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Layers className="h-4 w-4 icon-clients" />
                           </Button>
                         </>
                       ) : (
@@ -280,7 +327,7 @@ export default function ClientsPage() {
                             onClick={() => handleRestoreClient(client.id, client.name)}
                             className="flex-1"
                           >
-                            <RotateCcw className="h-4 w-4 mr-2" />
+                            <RotateCcw className="h-4 w-4 mr-2 icon-clients" />
                             Restore
                           </Button>
                           <Button 
@@ -314,6 +361,26 @@ export default function ClientsPage() {
           }
         }}
       />
+
+      {/* Period Assignment Dialog - matches schedule page props exactly */}
+      {periodDialogClient && (
+        <PeriodAssignmentDialog
+          clientId={periodDialogClient.id}
+          clientName={periodDialogClient.name}
+          periods={periods || []}
+          workoutCategories={workoutCategories || []}
+          weekTemplates={weekTemplates || []}
+          onAssignPeriod={handleAssignPeriod}
+          existingAssignments={clientPrograms.find(cp => cp.clientId === periodDialogClient.id)?.periods || []}
+          open={periodDialogOpen}
+          onOpenChange={(open) => {
+            setPeriodDialogOpen(open);
+            if (!open) {
+              setPeriodDialogClient(null);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

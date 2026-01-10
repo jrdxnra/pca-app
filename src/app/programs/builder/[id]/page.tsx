@@ -130,7 +130,7 @@ export default function ProgramBuilderPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <p>Program not found</p>
-          <Button onClick={() => router.back()} className="mt-4">
+          <Button variant="outline" onClick={() => router.back()} className="mt-4">
             Go Back
           </Button>
         </div>
