@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import { ClientProgram } from '@/lib/types';
-import { ExternalLink, Dumbbell, Plus, Calendar, UserPlus, Users, ArrowRight, Tag, UserMinus, Trash2 } from 'lucide-react';
+import { ExternalLink, Dumbbell, Plus, Calendar, UserPlus, Users, ArrowRight, Tag, UserMinus, Trash2, Repeat, Search, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { getAppTimezone } from '@/lib/utils/timezone';
@@ -80,6 +82,13 @@ export function EventActionDialog({
   const [isDeleting, setIsDeleting] = useState(false);
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [navigateAfterAssign, setNavigateAfterAssign] = useState(false);
+  
+  // State for repeat/pattern detection
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set());
+  const [detectedEvents, setDetectedEvents] = useState<GoogleCalendarEvent[]>([]);
+  const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
+  const [hasDetected, setHasDetected] = useState(false);
 
   // Check if event already has a client
   const existingClientId = clientId || getEventClientId(event);
@@ -354,8 +363,136 @@ export function EventActionDialog({
       setPatternResults([]);
       setAssignmentError(null);
       setNavigateAfterAssign(false);
+      // Reset repeat/pattern state
+      setRepeatEnabled(false);
+      setSelectedDays(new Set());
+      setDetectedEvents([]);
+      setSelectedEventIds(new Set());
+      setHasDetected(false);
     }
     onOpenChange(newOpen);
+  };
+
+  // Toggle day selection
+  const toggleDay = (day: number) => {
+    setSelectedDays(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(day)) {
+        newSet.delete(day);
+      } else {
+        newSet.add(day);
+      }
+      return newSet;
+    });
+    // Reset detection when days change
+    setHasDetected(false);
+    setDetectedEvents([]);
+    setSelectedEventIds(new Set());
+  };
+
+  // Detect matching events based on selected days and time
+  const handleDetectEvents = () => {
+    if (!event.start?.dateTime || selectedDays.size === 0) return;
+    
+    const eventTime = new Date(event.start.dateTime);
+    const eventHours = eventTime.getHours();
+    const eventMinutes = eventTime.getMinutes();
+    const timeString = `${String(eventHours).padStart(2, '0')}:${String(eventMinutes).padStart(2, '0')}`;
+    
+    // Filter events matching the selected days and same time
+    const matching = allEvents.filter(e => {
+      // Skip if already has a client assigned
+      if (getEventClientId(e)) return false;
+      
+      if (!e.start?.dateTime) return false;
+      
+      const eDate = new Date(e.start.dateTime);
+      const eDayOfWeek = eDate.getDay();
+      const eHours = eDate.getHours();
+      const eMinutes = eDate.getMinutes();
+      const eTimeString = `${String(eHours).padStart(2, '0')}:${String(eMinutes).padStart(2, '0')}`;
+      
+      // Check if day matches and time matches
+      return selectedDays.has(eDayOfWeek) && eTimeString === timeString;
+    });
+    
+    // Sort by date
+    matching.sort((a, b) => {
+      const dateA = new Date(a.start.dateTime);
+      const dateB = new Date(b.start.dateTime);
+      return dateA.getTime() - dateB.getTime();
+    });
+    
+    setDetectedEvents(matching);
+    // Select all by default
+    setSelectedEventIds(new Set(matching.map(e => e.id)));
+    setHasDetected(true);
+  };
+
+  // Toggle individual event selection
+  const toggleEventSelection = (eventId: string) => {
+    setSelectedEventIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(eventId)) {
+        newSet.delete(eventId);
+      } else {
+        newSet.add(eventId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select/deselect all detected events
+  const toggleAllEvents = () => {
+    if (selectedEventIds.size === detectedEvents.length) {
+      setSelectedEventIds(new Set());
+    } else {
+      setSelectedEventIds(new Set(detectedEvents.map(e => e.id)));
+    }
+  };
+
+  // Handle bulk assign from detected events
+  const handleBulkAssignDetected = async () => {
+    if (!selectedClientId || selectedEventIds.size === 0) return;
+    
+    setIsAssigning(true);
+    setAssignmentError(null);
+    
+    try {
+      // Get only the selected events
+      const eventsToAssign = detectedEvents.filter(e => selectedEventIds.has(e.id));
+      
+      const clientName = getClientName(selectedClientId);
+      
+      console.log('[handleBulkAssignDetected] Assigning', eventsToAssign.length, 'events to', clientName);
+      
+      // Perform bulk assignment
+      const result = await assignClientToEvents(
+        eventsToAssign,
+        selectedClientId,
+        clientPrograms,
+        clientName,
+        selectedCategory || undefined
+      );
+      
+      console.log('[handleBulkAssignDetected] Assignment result:', result);
+      
+      // Notify parent to refresh
+      onClientAssigned?.();
+      
+      // Navigate to workout builder for the original clicked event
+      const clickedEventResult = result.results.find(r => r.eventId === event.id);
+      if (clickedEventResult?.workoutId) {
+        navigateToWorkoutBuilder(selectedClientId, clickedEventResult.workoutId);
+      } else {
+        onOpenChange(false);
+      }
+    } catch (error) {
+      console.error('Bulk assignment failed:', error);
+      setAssignmentError(error instanceof Error ? error.message : 'Assignment failed');
+    } finally {
+      setIsAssigning(false);
+    }
   };
 
   return (
@@ -439,23 +576,162 @@ export function EventActionDialog({
                     </Select>
                   </div>
                   
-                  {/* Assign & Go Button */}
-                  <Button 
-                    onClick={handleAssignAndGo}
-                    disabled={!selectedClientId || isAssigning}
-                    className="w-full"
-                    size="lg"
-                  >
-                    {isAssigning ? (
-                      'Assigning...'
-                    ) : (
-                      <>
-                        <Users className="mr-2 h-4 w-4 icon-clients" />
-                        Assign & Go to Workout
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
+                  {/* Repeat Toggle */}
+                  {selectedClientId && (
+                    <div className="space-y-3 pt-2 border-t">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="repeat-toggle" className="text-sm flex items-center gap-2 cursor-pointer">
+                          <Repeat className="h-4 w-4" />
+                          Does this repeat?
+                        </Label>
+                        <Switch
+                          id="repeat-toggle"
+                          checked={repeatEnabled}
+                          onCheckedChange={(checked) => {
+                            setRepeatEnabled(checked);
+                            if (!checked) {
+                              setSelectedDays(new Set());
+                              setDetectedEvents([]);
+                              setSelectedEventIds(new Set());
+                              setHasDetected(false);
+                            } else {
+                              // Auto-select the day of the clicked event
+                              const eventDay = new Date(event.start.dateTime).getDay();
+                              setSelectedDays(new Set([eventDay]));
+                            }
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Day Selector */}
+                      {repeatEnabled && (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap gap-2">
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+                              <button
+                                key={day}
+                                type="button"
+                                onClick={() => toggleDay(index)}
+                                className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
+                                  selectedDays.has(index)
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'bg-background hover:bg-muted border-input'
+                                }`}
+                              >
+                                {day}
+                              </button>
+                            ))}
+                          </div>
+                          
+                          {/* Detect Button */}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleDetectEvents}
+                            disabled={selectedDays.size === 0}
+                            className="w-full"
+                          >
+                            <Search className="mr-2 h-4 w-4" />
+                            Detect Matching Sessions
+                          </Button>
+                          
+                          {/* Detected Events List */}
+                          {hasDetected && (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">
+                                  Found {detectedEvents.length} sessions
+                                </span>
+                                {detectedEvents.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={toggleAllEvents}
+                                    className="text-xs text-primary hover:underline"
+                                  >
+                                    {selectedEventIds.size === detectedEvents.length ? 'Deselect All' : 'Select All'}
+                                  </button>
+                                )}
+                              </div>
+                              
+                              {detectedEvents.length === 0 ? (
+                                <p className="text-sm text-muted-foreground text-center py-2">
+                                  No matching unassigned sessions found
+                                </p>
+                              ) : (
+                                <div className="max-h-48 overflow-y-auto space-y-1 border rounded-md p-2">
+                                  {detectedEvents.map(e => {
+                                    const eDate = new Date(e.start.dateTime);
+                                    return (
+                                      <label
+                                        key={e.id}
+                                        className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                                          selectedEventIds.has(e.id) ? 'bg-primary/10' : 'hover:bg-muted'
+                                        }`}
+                                      >
+                                        <Checkbox
+                                          checked={selectedEventIds.has(e.id)}
+                                          onCheckedChange={() => toggleEventSelection(e.id)}
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium truncate">
+                                            {format(eDate, 'EEE, MMM d')} @ {format(eDate, 'h:mm a')}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground truncate">
+                                            {e.summary}
+                                          </p>
+                                        </div>
+                                        {selectedEventIds.has(e.id) && (
+                                          <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                                        )}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Assign Button(s) */}
+                  {repeatEnabled && hasDetected && selectedEventIds.size > 0 ? (
+                    <Button 
+                      onClick={handleBulkAssignDetected}
+                      disabled={!selectedClientId || isAssigning || selectedEventIds.size === 0}
+                      className="w-full"
+                      size="lg"
+                    >
+                      {isAssigning ? (
+                        'Assigning...'
+                      ) : (
+                        <>
+                          <Users className="mr-2 h-4 w-4 icon-clients" />
+                          Assign {selectedEventIds.size} Session{selectedEventIds.size !== 1 ? 's' : ''} & Go to Workout
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button 
+                      onClick={handleAssignAndGo}
+                      disabled={!selectedClientId || isAssigning}
+                      className="w-full"
+                      size="lg"
+                    >
+                      {isAssigning ? (
+                        'Assigning...'
+                      ) : (
+                        <>
+                          <Users className="mr-2 h-4 w-4 icon-clients" />
+                          Assign & Go to Workout
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  )}
                   
                   {assignmentError && (
                     <p className="text-sm text-destructive">{assignmentError}</p>

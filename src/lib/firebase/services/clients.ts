@@ -13,7 +13,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { db } from '../config';
-import { Client, PersonalRecord } from '@/lib/types';
+import { Client, PersonalRecord, SessionCounts } from '@/lib/types';
 
 const COLLECTION_NAME = 'clients';
 
@@ -243,6 +243,193 @@ export async function searchClients(searchTerm: string, includeDeleted = false):
     );
   } catch (error) {
     console.error('Error searching clients:', error);
+    throw error;
+  }
+}
+
+/**
+ * Session Counting Functions
+ */
+
+// Helper to get period boundaries
+function getPeriodBoundaries() {
+  const now = new Date();
+  
+  // Week start (Sunday)
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+  
+  // Month start
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  monthStart.setHours(0, 0, 0, 0);
+  
+  // Quarter start
+  const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+  const quarterStart = new Date(now.getFullYear(), quarterMonth, 1);
+  quarterStart.setHours(0, 0, 0, 0);
+  
+  // Year start
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  yearStart.setHours(0, 0, 0, 0);
+  
+  return {
+    weekStart: Timestamp.fromDate(weekStart),
+    monthStart: Timestamp.fromDate(monthStart),
+    quarterStart: Timestamp.fromDate(quarterStart),
+    yearStart: Timestamp.fromDate(yearStart),
+  };
+}
+
+// Check if session counts need to be reset (new period started)
+function checkAndResetCounts(existingCounts: SessionCounts | undefined): SessionCounts {
+  const boundaries = getPeriodBoundaries();
+  const now = Timestamp.now();
+  
+  // Default counts
+  const defaultCounts: SessionCounts = {
+    thisWeek: 0,
+    thisMonth: 0,
+    thisQuarter: 0,
+    thisYear: 0,
+    total: 0,
+    lastUpdated: now,
+    weekStart: boundaries.weekStart,
+    monthStart: boundaries.monthStart,
+    quarterStart: boundaries.quarterStart,
+    yearStart: boundaries.yearStart,
+  };
+  
+  if (!existingCounts) {
+    return defaultCounts;
+  }
+  
+  // Check if we need to reset any periods
+  const counts = { ...existingCounts };
+  
+  // Reset week if new week started
+  if (!existingCounts.weekStart || existingCounts.weekStart.toMillis() < boundaries.weekStart.toMillis()) {
+    counts.thisWeek = 0;
+    counts.weekStart = boundaries.weekStart;
+  }
+  
+  // Reset month if new month started
+  if (!existingCounts.monthStart || existingCounts.monthStart.toMillis() < boundaries.monthStart.toMillis()) {
+    counts.thisMonth = 0;
+    counts.monthStart = boundaries.monthStart;
+  }
+  
+  // Reset quarter if new quarter started
+  if (!existingCounts.quarterStart || existingCounts.quarterStart.toMillis() < boundaries.quarterStart.toMillis()) {
+    counts.thisQuarter = 0;
+    counts.quarterStart = boundaries.quarterStart;
+  }
+  
+  // Reset year if new year started
+  if (!existingCounts.yearStart || existingCounts.yearStart.toMillis() < boundaries.yearStart.toMillis()) {
+    counts.thisYear = 0;
+    counts.yearStart = boundaries.yearStart;
+  }
+  
+  counts.lastUpdated = now;
+  
+  return counts;
+}
+
+/**
+ * Increment session count for a client
+ * Called when a session is assigned/created
+ */
+export async function incrementSessionCount(clientId: string, count: number = 1): Promise<SessionCounts> {
+  try {
+    const client = await getClient(clientId);
+    if (!client) throw new Error('Client not found');
+    
+    // Check and reset periods if needed
+    const counts = checkAndResetCounts(client.sessionCounts);
+    
+    // Increment all counts
+    counts.thisWeek += count;
+    counts.thisMonth += count;
+    counts.thisQuarter += count;
+    counts.thisYear += count;
+    counts.total += count;
+    counts.lastUpdated = Timestamp.now();
+    
+    // Update client
+    await updateClient(clientId, { sessionCounts: counts });
+    
+    return counts;
+  } catch (error) {
+    console.error('Error incrementing session count:', error);
+    throw error;
+  }
+}
+
+/**
+ * Decrement session count for a client
+ * Called when a session is unassigned/deleted
+ */
+export async function decrementSessionCount(clientId: string, count: number = 1): Promise<SessionCounts> {
+  try {
+    const client = await getClient(clientId);
+    if (!client) throw new Error('Client not found');
+    
+    // Check and reset periods if needed
+    const counts = checkAndResetCounts(client.sessionCounts);
+    
+    // Decrement counts (don't go below 0)
+    counts.thisWeek = Math.max(0, counts.thisWeek - count);
+    counts.thisMonth = Math.max(0, counts.thisMonth - count);
+    counts.thisQuarter = Math.max(0, counts.thisQuarter - count);
+    counts.thisYear = Math.max(0, counts.thisYear - count);
+    counts.total = Math.max(0, counts.total - count);
+    counts.lastUpdated = Timestamp.now();
+    
+    // Update client
+    await updateClient(clientId, { sessionCounts: counts });
+    
+    return counts;
+  } catch (error) {
+    console.error('Error decrementing session count:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get session counts for a client (with period reset check)
+ */
+export async function getSessionCounts(clientId: string): Promise<SessionCounts> {
+  try {
+    const client = await getClient(clientId);
+    if (!client) throw new Error('Client not found');
+    
+    // Check and reset periods if needed
+    const counts = checkAndResetCounts(client.sessionCounts);
+    
+    // If counts were reset, update the client
+    if (client.sessionCounts?.weekStart?.toMillis() !== counts.weekStart?.toMillis() ||
+        client.sessionCounts?.monthStart?.toMillis() !== counts.monthStart?.toMillis() ||
+        client.sessionCounts?.quarterStart?.toMillis() !== counts.quarterStart?.toMillis() ||
+        client.sessionCounts?.yearStart?.toMillis() !== counts.yearStart?.toMillis()) {
+      await updateClient(clientId, { sessionCounts: counts });
+    }
+    
+    return counts;
+  } catch (error) {
+    console.error('Error getting session counts:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update target sessions per week for a client
+ */
+export async function updateTargetSessions(clientId: string, targetPerWeek: number): Promise<void> {
+  try {
+    await updateClient(clientId, { targetSessionsPerWeek: targetPerWeek });
+  } catch (error) {
+    console.error('Error updating target sessions:', error);
     throw error;
   }
 }

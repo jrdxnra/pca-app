@@ -14,6 +14,30 @@ export interface Client {
   isDeleted: boolean;
   deletedAt?: Timestamp;
   personalRecords: Record<string, PersonalRecord>;
+  
+  // Session tracking
+  targetSessionsPerWeek?: number; // How many sessions client should do per week (baseline for billing)
+  sessionCounts?: SessionCounts; // Actual session counts
+}
+
+export interface SessionCounts {
+  // Current period counts (reset periodically)
+  thisWeek: number;
+  thisMonth: number;
+  thisQuarter: number;
+  thisYear: number;
+  
+  // All-time total
+  total: number;
+  
+  // Last updated timestamp for recalculation
+  lastUpdated?: Timestamp;
+  
+  // Period boundaries for accurate counting
+  weekStart?: Timestamp; // Start of current week (for reset detection)
+  monthStart?: Timestamp; // Start of current month
+  quarterStart?: Timestamp; // Start of current quarter
+  yearStart?: Timestamp; // Start of current year
 }
 
 export interface PersonalRecord {

@@ -37,6 +37,7 @@ const clientSchema = z.object({
   birthday: z.string().optional(),
   goals: z.string().optional(),
   notes: z.string().optional(),
+  targetSessionsPerWeek: z.coerce.number().min(0).max(14).optional(),
 });
 
 type ClientFormData = z.infer<typeof clientSchema>;
@@ -67,6 +68,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
       birthday: client?.birthday || '',
       goals: client?.goals || '',
       notes: client?.notes || '',
+      targetSessionsPerWeek: client?.targetSessionsPerWeek || undefined,
     },
   });
 
@@ -80,6 +82,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
         birthday: client.birthday || '',
         goals: client.goals || '',
         notes: client.notes || '',
+        targetSessionsPerWeek: client.targetSessionsPerWeek || undefined,
       });
     } else if (open && !client) {
       // Reset to empty for add mode
@@ -90,6 +93,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
         birthday: '',
         goals: '',
         notes: '',
+        targetSessionsPerWeek: undefined,
       });
     }
   }, [open, client, form]);
@@ -104,6 +108,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
           birthday: data.birthday || undefined,
           goals: data.goals || undefined,
           notes: data.notes || undefined,
+          targetSessionsPerWeek: data.targetSessionsPerWeek || undefined,
         });
       } else {
         await addClient({
@@ -113,6 +118,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
           birthday: data.birthday || undefined,
           goals: data.goals || undefined,
           notes: data.notes || undefined,
+          targetSessionsPerWeek: data.targetSessionsPerWeek || undefined,
         });
       }
 
@@ -188,7 +194,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Phone */}
               <FormField
                 control={form.control}
@@ -214,6 +220,31 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Target Sessions Per Week */}
+              <FormField
+                control={form.control}
+                name="targetSessionsPerWeek"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sessions/Week</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min={0}
+                        max={14}
+                        placeholder="e.g., 3"
+                        {...field}
+                        value={field.value ?? ''}
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      Target sessions
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

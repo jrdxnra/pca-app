@@ -3,6 +3,7 @@ import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import { ClientProgram, ClientProgramPeriod } from '@/lib/types';
 import { updateCalendarEvent as updateFirestoreCalendarEvent } from './calendarEvents';
 import { createClientWorkout, deleteClientWorkout } from './clientWorkouts';
+import { incrementSessionCount, decrementSessionCount } from './clients';
 import { safeToDate, isDateInRange } from '@/lib/utils/dateHelpers';
 import { getEventCategory, hasLinkedWorkout, getLinkedWorkoutId } from '@/lib/utils/event-patterns';
 import { updateCalendarEvent as updateGoogleCalendarEvent, checkGoogleCalendarAuth } from '@/lib/google-calendar/api-client';
@@ -251,6 +252,17 @@ export async function assignClientToEvents(
   const successful = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
   
+  // Increment session count for successful assignments
+  if (successful > 0) {
+    try {
+      await incrementSessionCount(clientId, successful);
+      console.log(`✅ Incremented session count for client ${clientId} by ${successful}`);
+    } catch (countError) {
+      console.error('Failed to increment session count:', countError);
+      // Don't fail the whole operation if count update fails
+    }
+  }
+  
   return {
     successful,
     failed,
@@ -283,9 +295,16 @@ function removeAssignmentFromDescription(description: string): string {
  */
 export async function unassignClientFromEvent(
   event: GoogleCalendarEvent,
-  shouldDeleteWorkout: boolean = true
+  shouldDeleteWorkout: boolean = true,
+  clientId?: string
 ): Promise<{ success: boolean; error?: string }> {
   console.log('🔄 [unassignClientFromEvent] Starting unassign for event:', event.id, event.summary);
+  
+  // Try to get client ID from event if not provided
+  const eventClientId = clientId || 
+    event.preConfiguredClient ||
+    (event as any).extendedProperties?.private?.pcaClientId ||
+    event.description?.match(/client=([^,\s}\]]+)/)?.[1];
   
   try {
     // Get the linked workout ID before we clear the metadata
@@ -367,6 +386,17 @@ export async function unassignClientFromEvent(
       }
     } else {
       console.log('🔄 [unassignClientFromEvent] No workout to delete (shouldDeleteWorkout:', shouldDeleteWorkout, ', linkedWorkoutId:', linkedWorkoutId, ')');
+    }
+    
+    // Decrement session count if we have a client ID
+    if (eventClientId) {
+      try {
+        await decrementSessionCount(eventClientId, 1);
+        console.log(`✅ [unassignClientFromEvent] Decremented session count for client ${eventClientId}`);
+      } catch (countError) {
+        console.error('Failed to decrement session count:', countError);
+        // Don't fail the whole operation if count update fails
+      }
     }
     
     console.log('✅ [unassignClientFromEvent] Unassign completed successfully');

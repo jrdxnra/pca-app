@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Users, Trash2, RotateCcw, Layers, X, Cake } from 'lucide-react';
+import { Plus, Search, Users, Trash2, RotateCcw, Layers, X, Cake, Calendar, Target, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useClientStore } from '@/lib/stores/useClientStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useClientPrograms } from '@/hooks/useClientPrograms';
@@ -290,6 +290,55 @@ export default function ClientsPage() {
                         <p className="text-sm text-muted-foreground">
                           {Object.keys(client.personalRecords || {}).length} movements tracked
                         </p>
+                      </div>
+
+                      {/* Session Counts */}
+                      <div className="mt-3 pt-3 border-t">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5 icon-schedule" />
+                            Sessions
+                          </p>
+                          {client.targetSessionsPerWeek && (
+                            <span className="text-xs flex items-center gap-1 text-muted-foreground">
+                              <Target className="h-3 w-3" />
+                              {client.targetSessionsPerWeek}/week
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-4 gap-1 text-center">
+                          <div className="bg-muted/50 rounded p-1.5">
+                            <p className="text-xs text-muted-foreground">Week</p>
+                            <p className="text-sm font-semibold flex items-center justify-center gap-0.5">
+                              {client.sessionCounts?.thisWeek || 0}
+                              {client.targetSessionsPerWeek && (
+                                <>
+                                  {(client.sessionCounts?.thisWeek || 0) > client.targetSessionsPerWeek && (
+                                    <TrendingUp className="h-3 w-3 text-green-500" />
+                                  )}
+                                  {(client.sessionCounts?.thisWeek || 0) < client.targetSessionsPerWeek && (
+                                    <TrendingDown className="h-3 w-3 text-amber-500" />
+                                  )}
+                                  {(client.sessionCounts?.thisWeek || 0) === client.targetSessionsPerWeek && (
+                                    <Minus className="h-3 w-3 text-blue-500" />
+                                  )}
+                                </>
+                              )}
+                            </p>
+                          </div>
+                          <div className="bg-muted/50 rounded p-1.5">
+                            <p className="text-xs text-muted-foreground">Month</p>
+                            <p className="text-sm font-semibold">{client.sessionCounts?.thisMonth || 0}</p>
+                          </div>
+                          <div className="bg-muted/50 rounded p-1.5">
+                            <p className="text-xs text-muted-foreground">Qtr</p>
+                            <p className="text-sm font-semibold">{client.sessionCounts?.thisQuarter || 0}</p>
+                          </div>
+                          <div className="bg-muted/50 rounded p-1.5">
+                            <p className="text-xs text-muted-foreground">Year</p>
+                            <p className="text-sm font-semibold">{client.sessionCounts?.thisYear || 0}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                     
