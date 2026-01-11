@@ -36,10 +36,16 @@ Port 3000 is automatically forwarded. You can:
 
 ## Environment Variables
 
-Make sure to set up your `.env.local` file in Codespaces with:
-- Firebase configuration
-- Google Calendar OAuth credentials
-- Any other required environment variables
+✅ **Automatically configured!** The `.env.local` file is created automatically when the codespace is set up.
+
+⚠️ **Important:** After starting the dev server (`npm run dev`), you'll need to:
+1. Check the "Ports" tab for your Codespaces forwarded URL (e.g., `https://xxxxx-3000.preview.app.github.dev`)
+2. Update `GOOGLE_REDIRECT_URI` in `.env.local` to use your Codespaces URL:
+   ```
+   GOOGLE_REDIRECT_URI=https://xxxxx-3000.preview.app.github.dev/api/auth/google/callback
+   ```
+3. Add the same URL to [Google Cloud Console](https://console.cloud.google.com) > APIs & Services > Credentials > Your OAuth Client > Authorized redirect URIs
+4. Restart the dev server after updating
 
 ## Stopping the Server
 

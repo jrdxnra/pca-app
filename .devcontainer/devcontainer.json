@@ -27,7 +27,7 @@
     }
   },
 
-  "postCreateCommand": "npm install",
+  "postCreateCommand": "npm install && chmod +x .devcontainer/setup-env.sh && .devcontainer/setup-env.sh",
   
   "remoteUser": "node",
   
