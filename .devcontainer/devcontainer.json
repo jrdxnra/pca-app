@@ -23,7 +23,8 @@
   "portsAttributes": {
     "3000": {
       "label": "Next.js Dev Server",
-      "onAutoForward": "notify"
+      "onAutoForward": "openPreview",
+      "protocol": "http"
     }
   },
 
