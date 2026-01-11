@@ -105,7 +105,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     }
   }, [allCalendarEvents, selectedClient]);
   
-  const { workoutCategories: configWorkoutCategories } = useConfigurationStore();
+  const { workoutCategories: configWorkoutCategories, businessHours } = useConfigurationStore();
   const router = useRouter();
   const [allDayCollapsed, setAllDayCollapsed] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -250,22 +250,46 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   };
 
   // Memoize time slots to prevent unnecessary recalculations
+  // Use app timezone to ensure consistent hour calculation
   const timeSlots = useMemo(() => {
     const slots: Date[] = [];
-    for (let hour = 7; hour <= 20; hour++) {
-      // Add top of hour
+    
+    // Get min/max hours across all selected days
+    let minHour = 24;
+    let maxHour = 0;
+    
+    if (businessHours?.daysOfWeek && businessHours.daysOfWeek.length > 0) {
+      businessHours.daysOfWeek.forEach(dayIndex => {
+        const dayHour = businessHours.dayHours?.[dayIndex];
+        if (dayHour) {
+          minHour = Math.min(minHour, dayHour.startHour);
+          maxHour = Math.max(maxHour, dayHour.endHour);
+        }
+      });
+    }
+    
+    // Fallback to defaults if no valid hours
+    if (minHour === 24 || maxHour === 0) {
+      minHour = 7;
+      maxHour = 20;
+    }
+    
+    // Create time slots in app timezone
+    for (let hour = minHour; hour < maxHour; hour++) {
+      // Create date in app timezone - use a reference date and set hours
       const timeSlot1 = new Date();
+      // Set hours in local time (will be converted to app timezone when displayed)
       timeSlot1.setHours(hour, 0, 0, 0);
       slots.push(timeSlot1);
-      // Add half hour (except for 8 PM)
-      if (hour < 20) {
+      // Add half hour (except for last hour)
+      if (hour < maxHour - 1) {
         const timeSlot2 = new Date();
         timeSlot2.setHours(hour, 30, 0, 0);
         slots.push(timeSlot2);
       }
     }
     return slots;
-  }, []);
+  }, [businessHours]);
 
 
   // Get app timezone (defaults to Pacific)

@@ -413,6 +413,7 @@ export function ModernCalendarView({
   const {
     workoutCategories: configWorkoutCategories,
     workoutStructureTemplates,
+    businessHours,
     fetchWorkoutCategories,
     fetchWorkoutStructureTemplates
   } = useConfigurationStore();
@@ -1298,10 +1299,28 @@ export function ModernCalendarView({
       return getHourInAppTimezone(eventStart);
     };
 
-    // Generate time slots (7 AM to 8 PM) - store as hour numbers for app timezone
-    // We'll use these hour numbers for comparison, and format them for display
+    // Generate time slots based on business hours - find min/max across all selected days
+    let minHour = 24;
+    let maxHour = 0;
+    
+    if (businessHours?.daysOfWeek && businessHours.daysOfWeek.length > 0) {
+      businessHours.daysOfWeek.forEach(dayIndex => {
+        const dayHour = businessHours.dayHours?.[dayIndex];
+        if (dayHour) {
+          minHour = Math.min(minHour, dayHour.startHour);
+          maxHour = Math.max(maxHour, dayHour.endHour);
+        }
+      });
+    }
+    
+    // Fallback to defaults if no valid hours
+    if (minHour === 24 || maxHour === 0) {
+      minHour = 7;
+      maxHour = 20;
+    }
+    
     const timeSlotHours: number[] = [];
-    for (let hour = 7; hour <= 20; hour++) {
+    for (let hour = minHour; hour < maxHour; hour++) {
       timeSlotHours.push(hour);
     }
 

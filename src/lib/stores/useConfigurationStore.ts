@@ -33,6 +33,11 @@ import {
   updateWorkoutStructureTemplate, 
   deleteWorkoutStructureTemplate
 } from '@/lib/firebase/services/workoutStructureTemplates';
+import { 
+  getBusinessHours, 
+  updateBusinessHoursInFirebase,
+  BusinessHours
+} from '@/lib/firebase/services/businessHours';
 import { WorkoutStructureTemplate } from '@/lib/types';
 
 interface ConfigurationState {
@@ -42,6 +47,7 @@ interface ConfigurationState {
   workoutCategories: WorkoutCategory[];
   workoutTypes: WorkoutType[];
   workoutStructureTemplates: WorkoutStructureTemplate[];
+  businessHours: BusinessHours | null;
   
   // Loading states
   loading: boolean;
@@ -76,6 +82,10 @@ interface ConfigurationState {
   updateWorkoutStructureTemplate: (id: string, updates: Partial<Omit<WorkoutStructureTemplate, 'id' | 'createdAt' | 'createdBy'>>) => Promise<void>;
   deleteWorkoutStructureTemplate: (id: string) => Promise<void>;
   
+  // Business hours actions
+  fetchBusinessHours: () => Promise<void>;
+  updateBusinessHours: (hours: BusinessHours) => Promise<void>;
+  
   // Bulk fetch
   fetchAll: () => Promise<void>;
 }
@@ -87,6 +97,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
   workoutCategories: [],
   workoutTypes: [],
   workoutStructureTemplates: [],
+  businessHours: null,
   loading: false,
 
   // Period actions
@@ -404,15 +415,49 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
     }
   },
 
+  // Business hours actions
+  fetchBusinessHours: async () => {
+    try {
+      const hours = await getBusinessHours();
+      set({ businessHours: hours });
+    } catch (error) {
+      console.error('Error fetching business hours:', error);
+      // Use defaults if fetch fails
+      set({ 
+        businessHours: { 
+          daysOfWeek: [1, 2, 3, 4, 5],
+          dayHours: {
+            1: { startHour: 7, endHour: 20 },
+            2: { startHour: 7, endHour: 20 },
+            3: { startHour: 7, endHour: 20 },
+            4: { startHour: 7, endHour: 20 },
+            5: { startHour: 7, endHour: 20 }
+          }
+        } 
+      });
+    }
+  },
+
+  updateBusinessHours: async (hours) => {
+    try {
+      await updateBusinessHoursInFirebase(hours);
+      set({ businessHours: hours });
+    } catch (error) {
+      console.error('Error updating business hours:', error);
+      throw error;
+    }
+  },
+
   // Bulk fetch
   fetchAll: async () => {
-    const { fetchPeriods, fetchWeekTemplates, fetchWorkoutCategories, fetchWorkoutTypes, fetchWorkoutStructureTemplates } = get();
+    const { fetchPeriods, fetchWeekTemplates, fetchWorkoutCategories, fetchWorkoutTypes, fetchWorkoutStructureTemplates, fetchBusinessHours } = get();
     await Promise.all([
       fetchPeriods(),
       fetchWeekTemplates(),
       fetchWorkoutCategories(),
       fetchWorkoutTypes(),
-      fetchWorkoutStructureTemplates()
+      fetchWorkoutStructureTemplates(),
+      fetchBusinessHours()
     ]);
   }
 }));

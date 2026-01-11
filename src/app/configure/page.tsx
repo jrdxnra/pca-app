@@ -228,6 +228,7 @@ export default function ConfigurePage() {
     workoutCategories,
     workoutTypes,
     workoutStructureTemplates,
+    businessHours,
     loading: configLoading,
     fetchAll: fetchAllConfig,
     addPeriod,
@@ -244,7 +245,9 @@ export default function ConfigurePage() {
     deleteWorkoutType,
     addWorkoutStructureTemplate,
     updateWorkoutStructureTemplate,
-    deleteWorkoutStructureTemplate
+    deleteWorkoutStructureTemplate,
+    fetchBusinessHours,
+    updateBusinessHours
   } = useConfigurationStore();
 
   const {
@@ -310,6 +313,7 @@ export default function ConfigurePage() {
     fetchAllConfig();
     fetchCalendars();
     fetchClients();
+    fetchBusinessHours();
     
     // Check Google Calendar auth status
     checkGoogleCalendarAuth().then(connected => {
@@ -326,7 +330,7 @@ export default function ConfigurePage() {
         setShowTimezonePrompt(true);
       }
     }
-  }, [fetchAllConfig, fetchCalendars, fetchClients]);
+  }, [fetchAllConfig, fetchCalendars, fetchClients, fetchBusinessHours]);
 
   // Fetch unique locations from calendar events
   useEffect(() => {
@@ -1544,94 +1548,287 @@ export default function ConfigurePage() {
             </CardContent>
           </Card>
 
-          {/* Timezone Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  <span>Timezone</span>
-                </div>
-                <Badge variant="outline" className="font-normal">
-                  {formatTimezoneLabel(appTimezone)}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Timezone Status */}
-              {getBrowserTimezone() !== appTimezone ? (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex flex-col gap-2">
-                    <p className="text-sm text-blue-800">
-                      <span className="font-medium">🔒 Locked to {formatTimezoneLabel(appTimezone)}</span>
-                    </p>
-                    <p className="text-xs text-blue-700">
-                      Your device shows {formatTimezoneLabel(getBrowserTimezone())} but all times will display in {formatTimezoneLabel(appTimezone)}
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        const browserTz = getBrowserTimezone();
-                        setAppTimezone(browserTz);
-                        setAppTimezoneState(browserTz);
-                        toastSuccess(`Timezone updated to ${formatTimezoneLabel(browserTz)}`);
+        </div>
+      </div>
+
+          {/* App Calendar Settings Section */}
+          <div className="mt-12 border-t pt-8">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+                <CalendarIcon className="h-6 w-6" />
+                App Calendar Settings
+              </h2>
+              <p className="text-gray-600">Configure how the calendar displays in the app.</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Timezone Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      <span>Timezone</span>
+                    </div>
+                    <Badge variant="outline" className="font-normal">
+                      {formatTimezoneLabel(appTimezone)}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Timezone Status */}
+                  {getBrowserTimezone() !== appTimezone ? (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex flex-col gap-2">
+                        <p className="text-sm text-blue-800">
+                          <span className="font-medium">🔒 Locked to {formatTimezoneLabel(appTimezone)}</span>
+                        </p>
+                        <p className="text-xs text-blue-700">
+                          Your device shows {formatTimezoneLabel(getBrowserTimezone())} but all times will display in {formatTimezoneLabel(appTimezone)}
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const browserTz = getBrowserTimezone();
+                            setAppTimezone(browserTz);
+                            setAppTimezoneState(browserTz);
+                            toastSuccess(`Timezone updated to ${formatTimezoneLabel(browserTz)}`);
+                            setTimeout(() => {
+                              window.location.reload();
+                            }, 500);
+                          }}
+                          className="w-fit text-xs"
+                        >
+                          Switch to {formatTimezoneLabel(getBrowserTimezone())}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm text-green-700">
+                        ✓ Matches your current location ({formatTimezoneLabel(appTimezone)})
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Timezone Selector */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Display Timezone
+                    </label>
+                    <Select
+                      value={appTimezone}
+                      onValueChange={(value) => {
+                        setAppTimezone(value);
+                        setAppTimezoneState(value);
+                        toastSuccess(`Timezone updated to ${formatTimezoneLabel(value)}`);
                         setTimeout(() => {
                           window.location.reload();
                         }, 500);
                       }}
-                      className="w-fit text-xs"
                     >
-                      Switch to {formatTimezoneLabel(getBrowserTimezone())}
-                    </Button>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COMMON_TIMEZONES.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                </div>
-              ) : (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-sm text-green-700">
-                    ✓ Matches your current location ({formatTimezoneLabel(appTimezone)})
+
+                  {/* Note */}
+                  <p className="text-xs text-gray-500">
+                    All times will display in this timezone, even when traveling. This keeps your schedule consistent regardless of your current location.
                   </p>
-                </div>
-              )}
+                </CardContent>
+              </Card>
 
-              {/* Timezone Selector */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Display Timezone
-                </label>
-                <Select
-                  value={appTimezone}
-                  onValueChange={(value) => {
-                    setAppTimezone(value);
-                    setAppTimezoneState(value);
-                    toastSuccess(`Timezone updated to ${formatTimezoneLabel(value)}`);
-                    setTimeout(() => {
-                      window.location.reload();
-                    }, 500);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COMMON_TIMEZONES.map((tz) => (
-                      <SelectItem key={tz.value} value={tz.value}>
-                        {tz.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Note */}
-              <p className="text-xs text-gray-500">
-                All times will display in this timezone, even when traveling. This keeps your schedule consistent regardless of your current location.
-              </p>
-            </CardContent>
-          </Card>
-
-        </div>
-      </div>
+              {/* Business Hours Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    <span>Business Hours</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-medium text-gray-600 pb-0.5 border-b">
+                    <span className="w-24">Day</span>
+                    <div className="flex gap-2">
+                      <span className="w-20 text-center">Start</span>
+                      <span className="w-20 text-center">End</span>
+                    </div>
+                  </div>
+                  
+                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, index) => {
+                    const isSelected = (businessHours?.daysOfWeek ?? [1, 2, 3, 4, 5]).includes(index);
+                    const dayHour = businessHours?.dayHours?.[index] ?? { startHour: 7, endHour: 20 };
+                    
+                    return (
+                      <div 
+                        key={day}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2 w-24">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const currentDays = businessHours?.daysOfWeek ?? [1, 2, 3, 4, 5];
+                              const currentDayHours = businessHours?.dayHours ?? {};
+                              const newDays = currentDays.includes(index)
+                                ? currentDays.filter(d => d !== index).sort()
+                                : [...currentDays, index].sort();
+                              
+                              // If adding day, initialize with default hours
+                              if (!currentDays.includes(index) && !currentDayHours[index]) {
+                                currentDayHours[index] = { startHour: 7, endHour: 20 };
+                              }
+                              
+                              try {
+                                await updateBusinessHours({
+                                  daysOfWeek: newDays,
+                                  dayHours: currentDayHours
+                                });
+                                toastSuccess('Business hours updated');
+                              } catch (error) {
+                                console.error('Error updating business hours:', error);
+                              }
+                            }}
+                            className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? 'bg-primary border-primary'
+                                : 'bg-background border-input hover:border-primary/50'
+                            }`}
+                          >
+                            {isSelected && (
+                              <svg className="w-2.5 h-2.5 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </button>
+                          <label 
+                            className="text-xs cursor-pointer"
+                            onClick={async () => {
+                              const currentDays = businessHours?.daysOfWeek ?? [1, 2, 3, 4, 5];
+                              const currentDayHours = businessHours?.dayHours ?? {};
+                              const newDays = currentDays.includes(index)
+                                ? currentDays.filter(d => d !== index).sort()
+                                : [...currentDays, index].sort();
+                              
+                              if (!currentDays.includes(index) && !currentDayHours[index]) {
+                                currentDayHours[index] = { startHour: 7, endHour: 20 };
+                              }
+                              
+                              try {
+                                await updateBusinessHours({
+                                  daysOfWeek: newDays,
+                                  dayHours: currentDayHours
+                                });
+                                toastSuccess('Business hours updated');
+                              } catch (error) {
+                                console.error('Error updating business hours:', error);
+                              }
+                            }}
+                          >
+                            {day}
+                          </label>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={dayHour.startHour.toString()}
+                            onValueChange={async (value) => {
+                              try {
+                                const currentDayHours = { ...(businessHours?.dayHours ?? {}) };
+                                currentDayHours[index] = {
+                                  startHour: parseInt(value),
+                                  endHour: currentDayHours[index]?.endHour ?? 20
+                                };
+                                await updateBusinessHours({
+                                  daysOfWeek: businessHours?.daysOfWeek ?? [1, 2, 3, 4, 5],
+                                  dayHours: currentDayHours
+                                });
+                                toastSuccess('Business hours updated');
+                              } catch (error) {
+                                console.error('Error updating business hours:', error);
+                              }
+                            }}
+                            disabled={!isSelected}
+                          >
+                            <SelectTrigger className="w-20 h-7 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent 
+                              className="max-h-[200px] [&>*]:scroll-smooth"
+                              style={{ scrollBehavior: 'smooth' }}
+                            >
+                              {Array.from({ length: 24 }, (_, i) => (
+                                <SelectItem key={i} value={i.toString()}>
+                                  {new Date(2000, 0, 1, i).toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    hour12: true,
+                                    timeZone: getAppTimezone()
+                                  })}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          
+                          <Select
+                            value={dayHour.endHour.toString()}
+                            onValueChange={async (value) => {
+                              try {
+                                const currentDayHours = { ...(businessHours?.dayHours ?? {}) };
+                                currentDayHours[index] = {
+                                  startHour: currentDayHours[index]?.startHour ?? 7,
+                                  endHour: parseInt(value)
+                                };
+                                await updateBusinessHours({
+                                  daysOfWeek: businessHours?.daysOfWeek ?? [1, 2, 3, 4, 5],
+                                  dayHours: currentDayHours
+                                });
+                                toastSuccess('Business hours updated');
+                              } catch (error) {
+                                console.error('Error updating business hours:', error);
+                              }
+                            }}
+                            disabled={!isSelected}
+                          >
+                            <SelectTrigger className="w-20 h-7 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent 
+                              className="max-h-[200px] [&>*]:scroll-smooth"
+                              style={{ scrollBehavior: 'smooth' }}
+                            >
+                              {Array.from({ length: 24 }, (_, i) => (
+                                <SelectItem key={i} value={i.toString()}>
+                                  {new Date(2000, 0, 1, i).toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    hour12: true,
+                                    timeZone: getAppTimezone()
+                                  })}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  <p className="text-xs text-gray-500 pt-1 mt-1">
+                    Only these hours will be displayed on the calendar view.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
           {/* Location Management Section */}
           <div className="mt-12 border-t pt-8">
