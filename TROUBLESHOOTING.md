@@ -184,6 +184,4 @@ curl http://localhost:3000/api/calendar/auth/status
 4. **Make sure Google Calendar API is enabled** in Google Cloud Console
 5. **Ensure your email is in the test users list** (for testing mode apps)
 
----
-
-*Last Updated: January 10, 2026*
+---*Last Updated: January 10, 2026*

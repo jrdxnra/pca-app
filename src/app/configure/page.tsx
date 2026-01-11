@@ -1558,17 +1558,19 @@ export default function ConfigurePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Timezone Mismatch Alert */}
+              {/* Timezone Status */}
               {getBrowserTimezone() !== appTimezone ? (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-amber-800">
-                        Browser timezone differs: <span className="font-medium">{formatTimezoneLabel(getBrowserTimezone())}</span>
-                      </p>
-                    </div>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm text-blue-800">
+                      <span className="font-medium">🔒 Locked to {formatTimezoneLabel(appTimezone)}</span>
+                    </p>
+                    <p className="text-xs text-blue-700">
+                      Your device shows {formatTimezoneLabel(getBrowserTimezone())} but all times will display in {formatTimezoneLabel(appTimezone)}
+                    </p>
                     <Button
                       size="sm"
+                      variant="outline"
                       onClick={() => {
                         const browserTz = getBrowserTimezone();
                         setAppTimezone(browserTz);
@@ -1578,16 +1580,16 @@ export default function ConfigurePage() {
                           window.location.reload();
                         }, 500);
                       }}
-                      className="bg-amber-600 hover:bg-amber-700 shrink-0"
+                      className="w-fit text-xs"
                     >
-                      Update
+                      Switch to {formatTimezoneLabel(getBrowserTimezone())}
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-green-700">
-                    ✓ Matches your browser timezone
+                    ✓ Matches your current location ({formatTimezoneLabel(appTimezone)})
                   </p>
                 </div>
               )}
@@ -1623,7 +1625,7 @@ export default function ConfigurePage() {
 
               {/* Note */}
               <p className="text-xs text-gray-500">
-                Google Calendar events use their own timezone. This setting controls how workout times are displayed.
+                All times will display in this timezone, even when traveling. This keeps your schedule consistent regardless of your current location.
               </p>
             </CardContent>
           </Card>

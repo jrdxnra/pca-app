@@ -504,7 +504,14 @@ export function EventActionDialog({
             <DialogDescription>
               {event.start?.dateTime && (
                 <span>
-                  {format(new Date(event.start.dateTime), 'EEEE, MMMM d, yyyy')}
+                  {/* Use app timezone for date display */}
+                  {new Date(event.start.dateTime).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    timeZone: getAppTimezone()
+                  })}
                   {event.start.dateTime && event.end?.dateTime && (
                     <span className="text-muted-foreground">
                       {' • '}
@@ -513,7 +520,7 @@ export function EventActionDialog({
                         timeZone: getAppTimezone()
                       })} - {new Date(event.end.dateTime).toLocaleTimeString('en-US', { 
                         hour: 'numeric', minute: '2-digit', hour12: true,
-                        timeZone: event.end.timeZone || getAppTimezone()
+                        timeZone: getAppTimezone()
                       })}
                     </span>
                   )}
@@ -551,32 +558,7 @@ export function EventActionDialog({
                     </Select>
                   </div>
                   
-                  {/* Category Selection */}
-                  <div className="space-y-2">
-                    <Label htmlFor="category-select" className="text-sm text-muted-foreground">
-                      Workout Category
-                    </Label>
-                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger id="category-select">
-                        <SelectValue placeholder="Select category..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {workoutCategories.map(category => (
-                          <SelectItem key={category.id} value={category.name}>
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
-                                style={{ backgroundColor: category.color }}
-                              />
-                              {category.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {/* Repeat Toggle */}
+                  {/* Repeat Toggle - right after client selection */}
                   {selectedClientId && (
                     <div className="space-y-3 pt-2 border-t">
                       <div className="flex items-center justify-between">
@@ -662,6 +644,19 @@ export function EventActionDialog({
                                 <div className="max-h-48 overflow-y-auto space-y-1 border rounded-md p-2">
                                   {detectedEvents.map(e => {
                                     const eDate = new Date(e.start.dateTime);
+                                    const appTz = getAppTimezone();
+                                    const dateStr = eDate.toLocaleDateString('en-US', {
+                                      weekday: 'short',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      timeZone: appTz
+                                    });
+                                    const timeStr = eDate.toLocaleTimeString('en-US', {
+                                      hour: 'numeric',
+                                      minute: '2-digit',
+                                      hour12: true,
+                                      timeZone: appTz
+                                    });
                                     return (
                                       <label
                                         key={e.id}
@@ -675,7 +670,7 @@ export function EventActionDialog({
                                         />
                                         <div className="flex-1 min-w-0">
                                           <p className="text-sm font-medium truncate">
-                                            {format(eDate, 'EEE, MMM d')} @ {format(eDate, 'h:mm a')}
+                                            {dateStr} @ {timeStr}
                                           </p>
                                           <p className="text-xs text-muted-foreground truncate">
                                             {e.summary}
@@ -696,12 +691,38 @@ export function EventActionDialog({
                     </div>
                   )}
                   
+                  {/* Category Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="category-select" className="text-sm text-muted-foreground">
+                      Workout Category
+                    </Label>
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger id="category-select">
+                        <SelectValue placeholder="Select category..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {workoutCategories.map(category => (
+                          <SelectItem key={category.id} value={category.name}>
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: category.color }}
+                              />
+                              {category.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
                   {/* Assign Button(s) */}
                   {repeatEnabled && hasDetected && selectedEventIds.size > 0 ? (
                     <Button 
                       onClick={handleBulkAssignDetected}
                       disabled={!selectedClientId || isAssigning || selectedEventIds.size === 0}
                       className="w-full"
+                      variant="outline"
                       size="lg"
                     >
                       {isAssigning ? (
@@ -719,6 +740,7 @@ export function EventActionDialog({
                       onClick={handleAssignAndGo}
                       disabled={!selectedClientId || isAssigning}
                       className="w-full"
+                      variant="outline"
                       size="lg"
                     >
                       {isAssigning ? (
@@ -778,6 +800,7 @@ export function EventActionDialog({
                   <Button 
                     onClick={handleCreateWorkout}
                     className="w-full"
+                    variant="outline"
                     size="lg"
                   >
                     <Plus className="mr-1.5 h-4 w-4 icon-add" />

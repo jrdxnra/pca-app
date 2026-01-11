@@ -922,7 +922,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
                                   hour: 'numeric', 
                                   minute: '2-digit',
                                   hour12: true,
-                                  timeZone: event.start.timeZone || appTimezone
+                                  timeZone: appTimezone
                                 });
                                 
                                 // Calculate how many 30-minute slots this event spans
