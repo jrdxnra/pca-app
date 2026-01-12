@@ -1448,8 +1448,7 @@ export default function BuilderPage() {
 
       // Also refresh scheduled workouts to keep data in sync
       console.log('Refreshing scheduled workouts...');
-      const updatedScheduledWorkouts = await getAllScheduledWorkouts();
-      setScheduledWorkouts(updatedScheduledWorkouts);
+      await fetchAllScheduledWorkouts();
 
       console.log('Workout deleted successfully and state updated');
     } catch (error) {
