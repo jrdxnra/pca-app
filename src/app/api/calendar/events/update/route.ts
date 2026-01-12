@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createOAuth2Client, setCredentials, getValidAccessToken } from '@/lib/google-calendar/auth';
+import { createOAuth2Client, setCredentials } from '@/lib/google-calendar/auth';
 import { 
   updateSingleInstance,
   updateAllOccurrences,
   updateThisAndFollowing 
 } from '@/lib/google-calendar/calendar-service';
-import { getStoredTokens } from '@/lib/google-calendar/token-storage';
+import { getStoredTokens, getValidAccessToken } from '@/lib/google-calendar/token-storage';
 
 /**
  * POST /api/calendar/events/update

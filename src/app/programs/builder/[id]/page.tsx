@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Program, ProgramWeek } from '@/lib/types';
+import { Program, ProgramWeek, ProgramWorkout } from '@/lib/types';
 import { useProgramStore } from '@/lib/stores/useProgramStore';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { EnhancedProgramBuilder } from '@/components/programs/EnhancedProgramBuilder';
