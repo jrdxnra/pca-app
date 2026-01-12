@@ -37,7 +37,7 @@ const clientSchema = z.object({
   birthday: z.string().optional(),
   goals: z.string().optional(),
   notes: z.string().optional(),
-  targetSessionsPerWeek: z.union([z.coerce.number().min(0).max(14), z.undefined()]).optional(),
+  targetSessionsPerWeek: z.number().min(0).max(14).optional(),
 });
 
 type ClientFormData = z.infer<typeof clientSchema>;
@@ -99,26 +99,33 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
   }, [open, client, form]);
 
   const onSubmit = async (data: ClientFormData) => {
+    // Convert targetSessionsPerWeek to number if it's a string
+    const processedData = {
+      ...data,
+      targetSessionsPerWeek: data.targetSessionsPerWeek !== undefined && data.targetSessionsPerWeek !== '' 
+        ? (typeof data.targetSessionsPerWeek === 'string' ? Number(data.targetSessionsPerWeek) : data.targetSessionsPerWeek)
+        : undefined
+    };
     try {
       if (isEditMode && client) {
         await editClient(client.id, {
-          name: data.name,
-          email: data.email || undefined,
-          phone: data.phone || undefined,
-          birthday: data.birthday || undefined,
-          goals: data.goals || undefined,
-          notes: data.notes || undefined,
-          targetSessionsPerWeek: data.targetSessionsPerWeek || undefined,
+          name: processedData.name,
+          email: processedData.email || undefined,
+          phone: processedData.phone || undefined,
+          birthday: processedData.birthday || undefined,
+          goals: processedData.goals || undefined,
+          notes: processedData.notes || undefined,
+          targetSessionsPerWeek: processedData.targetSessionsPerWeek,
         });
       } else {
         await addClient({
-          name: data.name,
-          email: data.email || undefined,
-          phone: data.phone || undefined,
-          birthday: data.birthday || undefined,
-          goals: data.goals || undefined,
-          notes: data.notes || undefined,
-          targetSessionsPerWeek: data.targetSessionsPerWeek || undefined,
+          name: processedData.name,
+          email: processedData.email || undefined,
+          phone: processedData.phone || undefined,
+          birthday: processedData.birthday || undefined,
+          goals: processedData.goals || undefined,
+          notes: processedData.notes || undefined,
+          targetSessionsPerWeek: processedData.targetSessionsPerWeek,
         });
       }
 
