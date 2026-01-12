@@ -107,6 +107,10 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           });
           quickWorkoutsTemplate = { id: templateId, name: 'Quick Workouts', isTemplate: true } as any;
         }
+
+        if (!quickWorkoutsTemplate) {
+          throw new Error('Quick Workouts template not available');
+        }
         
         const now = Timestamp.now();
         const farFuture = Timestamp.fromDate(new Date(2099, 11, 31));

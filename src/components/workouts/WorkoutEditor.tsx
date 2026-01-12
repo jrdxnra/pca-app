@@ -25,6 +25,21 @@ import { RoundEditor } from './RoundEditor';
 import { MovementUsageRow } from './MovementUsageRow';
 import { ColumnVisibilityToggle } from './ColumnVisibilityToggle';
 
+const DEFAULT_TARGET_WORKLOAD: ClientWorkoutTargetWorkload = {
+  useWeight: false,
+  weightMeasure: 'lbs',
+  useReps: false,
+  useTempo: false,
+  useTime: false,
+  useDistance: false,
+  distanceMeasure: 'mi',
+  usePace: false,
+  paceMeasure: 'mi',
+  usePercentage: false,
+  useRPE: false,
+  unilateral: false,
+};
+
 interface WorkoutEditorProps {
   workout?: ClientWorkout | null;
   isOpen: boolean;
@@ -131,8 +146,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     sets: 1,
     movementUsages: [{
       ordinal: 1,
-      movementName: '',
-      targetWorkload: ''
+      movementId: '',
+      categoryId: '',
+      note: '',
+      targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
     }]
   }]);
   const [isLoading, setIsLoading] = useState(false);
@@ -237,8 +254,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
               movementUsages: [
                 {
                   ordinal: 1,
-                  movementName: '',
-                  targetWorkload: ''
+                  movementId: '',
+                  categoryId: '',
+                  note: '',
+                  targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
                 }
               ]
             }
@@ -413,12 +432,15 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
   // Warmup handlers
   const addWarmup = () => {
-    setWarmups([...warmups, { text: '' }]);
+    setWarmups([...warmups, { ordinal: warmups.length + 1, text: '' }]);
   };
 
   const removeWarmup = (index: number) => {
     if (warmups.length > 1) {
-      setWarmups(warmups.filter((_, i) => i !== index));
+      const updated = warmups
+        .filter((_, i) => i !== index)
+        .map((w, i) => ({ ...w, ordinal: i + 1 }));
+      setWarmups(updated);
     }
   };
 
@@ -435,8 +457,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
       sets: 1,
       movementUsages: [{
         ordinal: 1,
-        movementName: '',
-        targetWorkload: ''
+        movementId: '',
+        categoryId: '',
+        note: '',
+        targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
       }]
     }]);
   };
@@ -493,20 +517,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
             movementId: '',
             categoryId: '',
             note: '',
-            targetWorkload: {
-              useWeight: false,
-              weightMeasure: 'lbs',
-              useReps: false,
-              useTempo: false,
-              useTime: false,
-              useDistance: false,
-              distanceMeasure: 'mi',
-              usePace: false,
-              paceMeasure: 'mi',
-              usePercentage: false,
-              useRPE: false,
-              unilateral: false,
-            }
+            targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
           }]
         };
       }
@@ -634,20 +645,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           movementId: '',
           categoryId: '',
           note: '',
-          targetWorkload: {
-            useWeight: false,
-            weightMeasure: 'lbs',
-            useReps: false,
-            useTempo: false,
-            useTime: false,
-            useDistance: false,
-            distanceMeasure: 'mi',
-            usePace: false,
-            paceMeasure: 'mi',
-            usePercentage: false,
-            useRPE: false,
-            unilateral: false,
-          }
+          targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
         }]
       }]);
       setCurrentTemplateId(undefined);
@@ -671,20 +669,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           movementId: '',
           categoryId: '',
           note: '',
-          targetWorkload: {
-            useWeight: false,
-            weightMeasure: 'lbs',
-            useReps: false,
-            useTempo: false,
-            useTime: false,
-            useDistance: false,
-            distanceMeasure: 'mi',
-            usePace: false,
-            paceMeasure: 'mi',
-            usePercentage: false,
-            useRPE: false,
-            unilateral: false,
-          }
+          targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
         }]
       }));
 
@@ -1276,8 +1261,6 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                     workoutTypes={workoutTypes}
                     onUpdate={(updatedRound) => updateRound(index, updatedRound)}
                     onRemove={() => removeRound(index)}
-                    onMoveUp={index > 0 ? () => moveRound(index, index - 1) : undefined}
-                    onMoveDown={index < rounds.length - 1 ? () => moveRound(index, index + 1) : undefined}
                     canDelete={rounds.length > 1}
                     errors={errors}
                     visibleColumns={visibleColumns}

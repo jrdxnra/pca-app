@@ -309,7 +309,7 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
               <Trash2 className="h-12 w-12 text-destructive mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">Delete Category</h3>
               <p className="text-muted-foreground">
-                Are you sure you want to delete "{category.name}"? This will also delete all movements in this category. This action cannot be undone.
+                Are you sure you want to delete &quot;{category.name}&quot;? This will also delete all movements in this category. This action cannot be undone.
               </p>
             </div>
             

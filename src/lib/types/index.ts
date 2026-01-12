@@ -251,6 +251,7 @@ export interface ScheduledWorkout {
   programId: string;
   clientId: string;
   date: Timestamp;
+  time?: string; // Optional time in HH:MM format (for calendar display)
   weekNumber: number;
   dayNumber: number;
   workoutTemplateId?: string;
@@ -316,8 +317,10 @@ export interface ClientWorkout {
   
   // Embedded workout data (only populated if isModified = true OR no template)
   title?: string;
+  sessionType?: string; // Optional display label (kept for backward compatibility)
   notes?: string;
   time?: string; // HH:MM format
+  duration?: number; // Optional duration in minutes (for calendar layout)
   warmups?: ClientWorkoutWarmup[];
   rounds?: ClientWorkoutRound[];
   

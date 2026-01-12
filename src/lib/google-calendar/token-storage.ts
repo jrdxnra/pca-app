@@ -5,7 +5,6 @@ import {
   setDoc,
   deleteDoc 
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
 import { refreshAccessToken, createOAuth2Client } from './auth';
 
 export interface StoredTokens {
@@ -17,10 +16,30 @@ export interface StoredTokens {
 
 const TOKEN_DOC_ID = 'google-calendar-tokens'; // Single document for now
 
+function hasFirebaseConfig(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+  );
+}
+
+async function getDb() {
+  if (!hasFirebaseConfig()) return null;
+  try {
+    const { db } = await import('@/lib/firebase/config');
+    return db;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Store Google Calendar OAuth tokens in Firestore
  */
 export async function storeTokens(tokens: StoredTokens): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
   const tokensRef = doc(db, 'googleCalendarTokens', TOKEN_DOC_ID);
   await setDoc(tokensRef, {
     ...tokens,
@@ -32,6 +51,8 @@ export async function storeTokens(tokens: StoredTokens): Promise<void> {
  * Retrieve stored tokens from Firestore
  */
 export async function getStoredTokens(): Promise<StoredTokens | null> {
+  const db = await getDb();
+  if (!db) return null;
   const tokensRef = doc(db, 'googleCalendarTokens', TOKEN_DOC_ID);
   const tokensDoc = await getDoc(tokensRef);
   
@@ -94,6 +115,8 @@ export async function getValidAccessToken(): Promise<string | null> {
  * Clear stored tokens (for logout/disconnect)
  */
 export async function clearStoredTokens(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
   const tokensRef = doc(db, 'googleCalendarTokens', TOKEN_DOC_ID);
   await deleteDoc(tokensRef);
 }

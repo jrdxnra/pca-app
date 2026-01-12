@@ -33,7 +33,7 @@ interface CalendarStore {
   // Actions
   fetchCalendars: () => Promise<void>;
   fetchEvents: (dateRange: DateRange, force?: boolean) => Promise<void>;
-  createTestEvent: (eventInput: TestEventInput) => Promise<void>;
+  createTestEvent: (eventInput: TestEventInput) => Promise<GoogleCalendarEvent>;
   markAsCoachingSession: (eventId: string, isCoaching: boolean) => Promise<void>;
   linkToWorkout: (eventId: string, workoutId: string) => Promise<void>;
   updateEvent: (eventId: string, updates: Partial<GoogleCalendarEvent>) => Promise<void>;
@@ -235,8 +235,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
                           eventInput.summary.toLowerCase().includes('workout') ||
                           eventInput.summary.toLowerCase().includes('pt'),
         isClassSession: isClassEvent({ summary: eventInput.summary } as GoogleCalendarEvent, config.classKeywords || []),
-        preConfiguredClient: clientId,
-        preConfiguredCategory: categoryName,
+        preConfiguredClient: clientId || undefined,
+        preConfiguredCategory: categoryName || undefined,
       };
 
       const newEvent = await createCalendarEvent(eventData);
@@ -357,7 +357,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
       // Get clientId from event metadata
       const clientId = event.preConfiguredClient || 
-                       event.extendedProperties?.private?.pcaClientId ||
+                       (event as any).extendedProperties?.private?.pcaClientId ||
                        event.description?.match(/client=([^,\s}\]]+)/)?.[1];
       
       console.log('[linkToWorkout] clientId:', clientId);

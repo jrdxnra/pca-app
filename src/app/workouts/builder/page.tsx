@@ -996,7 +996,7 @@ export default function BuilderPage() {
 
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks-exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode, autoOpenWorkout, openDates]);
 
   // State for Quick Workout dialog when coming from calendar event

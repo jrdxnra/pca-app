@@ -38,7 +38,7 @@ const scheduleWorkoutSchema = z.object({
   programId: z.string().min(1, 'Program is required'),
   workoutTemplateId: z.string().min(1, 'Workout template is required'),
   sessionType: z.string().min(1, 'Session type is required'),
-  keepLinked: z.boolean().default(true),
+  keepLinked: z.boolean(),
 });
 
 type ScheduleWorkoutFormData = z.infer<typeof scheduleWorkoutSchema>;
@@ -48,13 +48,15 @@ interface ScheduleWorkoutDialogProps {
   clientId: string;
   programs: Program[];
   trigger: React.ReactNode;
+  onSchedule?: () => void;
 }
 
 export function ScheduleWorkoutDialog({ 
   date, 
   clientId, 
   programs,
-  trigger 
+  trigger,
+  onSchedule
 }: ScheduleWorkoutDialogProps) {
   const [open, setOpen] = useState(false);
   const { scheduleWorkout, loading } = useProgramStore();
@@ -74,12 +76,8 @@ export function ScheduleWorkoutDialog({
     fetchWorkoutTemplates();
   }, [fetchWorkoutTemplates]);
 
-  // Filter programs for the selected client
-  const clientPrograms = programs.filter(program => 
-    program.clientId === clientId &&
-    new Date(program.startDate.toDate()) <= date &&
-    new Date(program.endDate.toDate()) >= date
-  );
+  // `Program` represents a template; client/date filtering happens at scheduling time.
+  const clientPrograms = programs;
 
   const onSubmit = async (data: ScheduleWorkoutFormData) => {
     try {
@@ -95,6 +93,7 @@ export function ScheduleWorkoutDialog({
       // Reset form and close dialog
       form.reset();
       setOpen(false);
+      onSchedule?.();
     } catch (error) {
       console.error('Failed to schedule workout:', error);
     }
@@ -141,7 +140,7 @@ export function ScheduleWorkoutDialog({
                       ) : (
                         clientPrograms.map((program) => (
                           <option key={program.id} value={program.id}>
-                            {program.name} ({format(program.startDate.toDate(), 'MMM d')} - {format(program.endDate.toDate(), 'MMM d, yyyy')})
+                            {program.name}
                           </option>
                         ))
                       )}

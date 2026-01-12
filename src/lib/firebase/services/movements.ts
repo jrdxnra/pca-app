@@ -83,7 +83,7 @@ export async function getMovement(id: string, includeCategory = false): Promise<
       const movement = { id: docSnap.id, ...docSnap.data() } as Movement;
       
       if (includeCategory && movement.categoryId) {
-        movement.category = await getMovementCategory(movement.categoryId);
+        movement.category = (await getMovementCategory(movement.categoryId)) || undefined;
       }
       
       return movement;
@@ -113,7 +113,7 @@ export async function getAllMovements(includeCategory = false): Promise<Movement
       const movementsWithCategories = await Promise.all(
         movements.map(async (movement) => {
           if (movement.categoryId) {
-            movement.category = await getMovementCategory(movement.categoryId);
+            movement.category = (await getMovementCategory(movement.categoryId)) || undefined;
           }
           return movement;
         })
@@ -142,7 +142,7 @@ export async function getMovementsByCategory(
     );
     const querySnapshot = await getDocs(q);
     
-    let movements = querySnapshot.docs.map(doc => ({
+    const movements = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as Movement[];
@@ -158,7 +158,7 @@ export async function getMovementsByCategory(
     if (includeCategory) {
       const category = await getMovementCategory(categoryId);
       movements.forEach(movement => {
-        movement.category = category;
+        movement.category = category || undefined;
       });
     }
 
@@ -271,7 +271,7 @@ export function subscribeToMovementsByCategory(
   );
   
   return onSnapshot(q, (querySnapshot) => {
-    let movements = querySnapshot.docs.map(doc => ({
+    const movements = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as Movement[];

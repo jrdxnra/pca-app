@@ -96,7 +96,7 @@ export default function ImportRebrandPage() {
             <li>Use the scraper tool to extract data from Rebrand Fitness</li>
             <li>Copy the JSON output</li>
             <li>Paste it into the textarea above</li>
-            <li>Click "Import Movements"</li>
+            <li>Click &quot;Import Movements&quot;</li>
             <li>The script will automatically assign sensible configurations based on movement names</li>
             <li>You can adjust configurations later in the Movements page</li>
           </ol>

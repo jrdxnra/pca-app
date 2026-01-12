@@ -221,7 +221,7 @@ export default function HomePage() {
               <CardContent className="px-2 pt-0 pb-2" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
                 <div className="flex items-center justify-between w-full">
                   <div>
-                    <p className="text-xs text-muted-foreground">Today's Sessions</p>
+                    <p className="text-xs text-muted-foreground">Today&apos;s Sessions</p>
                     <p className="text-2xl font-bold">{todaysSessions}</p>
                   </div>
                   <Calendar className="h-5 w-5 icon-schedule" />
