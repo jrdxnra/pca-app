@@ -37,7 +37,7 @@ const clientSchema = z.object({
   birthday: z.string().optional(),
   goals: z.string().optional(),
   notes: z.string().optional(),
-  targetSessionsPerWeek: z.coerce.number().min(0).max(14).optional().or(z.undefined()),
+  targetSessionsPerWeek: z.union([z.coerce.number().min(0).max(14), z.undefined()]).optional(),
 });
 
 type ClientFormData = z.infer<typeof clientSchema>;
