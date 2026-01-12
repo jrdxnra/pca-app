@@ -214,7 +214,7 @@ export function MovementUsageEditor({
               <Badge variant="outline">RPE {usage.targetWorkload.rpe}</Badge>
             )}
             {usage.note && (
-              <span className="text-xs italic">"{usage.note}"</span>
+              <span className="text-xs italic">&quot;{usage.note}&quot;</span>
             )}
           </div>
         )}

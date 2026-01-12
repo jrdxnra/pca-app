@@ -74,7 +74,7 @@ export function addWorkoutLinksToDescription(
   baseUrl?: string
 ): string {
   // Remove existing workout links if present (both old plain text and new HTML formats)
-  let cleanedDescription = existingDescription
+  const cleanedDescription = existingDescription
     .replace(/\n\n---\n📋[\s\S]*?View Your Workout[\s\S]*?\n✏️[\s\S]*?Edit Workout[\s\S]*$/, '')
     .replace(/\n\n---\nView Your Workout:[\s\S]*?\nEdit Workout:[\s\S]*$/, '')
     .trim();

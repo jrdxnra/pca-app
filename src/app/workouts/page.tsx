@@ -138,7 +138,7 @@ export default function WorkoutsPage() {
           {searchTerm && (
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Found {workoutTemplates.length} templates for "{searchTerm}"
+                Found {workoutTemplates.length} templates for &quot;{searchTerm}&quot;
               </p>
             </div>
           )}

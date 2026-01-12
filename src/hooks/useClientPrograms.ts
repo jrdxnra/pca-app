@@ -127,7 +127,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
 
         try {
             // Find or create client program
-            let clientProgram = clientPrograms.find(cp => cp.clientId === assignment.clientId);
+            const clientProgram = clientPrograms.find(cp => cp.clientId === assignment.clientId);
             let clientProgramId: string;
 
             if (!clientProgram) {
@@ -438,7 +438,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
         setError(null);
 
         try {
-            let clientProgram = clientPrograms.find(cp => cp.clientId === assignment.clientId);
+            const clientProgram = clientPrograms.find(cp => cp.clientId === assignment.clientId);
 
             if (clientProgram) {
                 // Update existing program

@@ -142,7 +142,7 @@ export async function getMovementsByCategory(
     );
     const querySnapshot = await getDocs(q);
     
-    let movements = querySnapshot.docs.map(doc => ({
+    const movements = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as Movement[];
@@ -271,7 +271,7 @@ export function subscribeToMovementsByCategory(
   );
   
   return onSnapshot(q, (querySnapshot) => {
-    let movements = querySnapshot.docs.map(doc => ({
+    const movements = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as Movement[];

@@ -717,7 +717,7 @@ export function PeriodAssignmentDialog({
                 <div className="text-sm text-red-600 bg-red-50 p-3 rounded border border-red-200">
                   <div className="font-medium mb-1">🚫 Cannot Assign - Date Range Conflict</div>
                   <div className="text-xs">
-                    The selected dates overlap with an existing "{overlappingPeriod.periodName}" period 
+                    The selected dates overlap with an existing &quot;{overlappingPeriod.periodName}&quot; period 
                     ({overlapStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {' '}
                     {overlapEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}).
                   </div>
