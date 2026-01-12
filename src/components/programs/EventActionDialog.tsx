@@ -557,7 +557,44 @@ export function EventActionDialog({
     }
   };
 
-  // Handle bulk assign from detected events
+  // Handle bulk assign from detected events (without navigation)
+  const handleBulkAssignDetectedNoNavigate = async () => {
+    if (!selectedClientId || selectedEventIds.size === 0) return;
+    
+    setIsAssigning(true);
+    setAssignmentError(null);
+    
+    try {
+      // Get only the selected events
+      const eventsToAssign = detectedEvents.filter(e => selectedEventIds.has(e.id));
+      
+      const clientName = getClientName(selectedClientId);
+      
+      console.log('[handleBulkAssignDetectedNoNavigate] Assigning', eventsToAssign.length, 'events to', clientName);
+      
+      // Perform bulk assignment
+      await assignClientToEvents(
+        eventsToAssign,
+        selectedClientId,
+        clientPrograms,
+        clientName,
+        selectedCategory || undefined
+      );
+      
+      // Notify parent to refresh
+      onClientAssigned?.();
+      
+      // Close dialog and stay on calendar
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Bulk assignment failed:', error);
+      setAssignmentError(error instanceof Error ? error.message : 'Assignment failed');
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  // Handle bulk assign from detected events (with navigation to workout builder)
   const handleBulkAssignDetected = async () => {
     if (!selectedClientId || selectedEventIds.size === 0) return;
     
