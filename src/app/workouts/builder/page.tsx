@@ -1280,7 +1280,7 @@ export default function BuilderPage() {
       workoutId,
       dateKey,
       linkedEventId: linkedEvent?.id,
-      currentCategory: linkedEvent?.workoutCategory
+      currentCategory: linkedEvent?.preConfiguredCategory
     });
     setDeleteDialogNewCategory('');
     setShowCategorySelector(false);
@@ -1316,8 +1316,7 @@ export default function BuilderPage() {
       setShowCategorySelector(false);
 
       // Refresh scheduled workouts
-      const updatedScheduledWorkouts = await getAllScheduledWorkouts();
-      setScheduledWorkouts(updatedScheduledWorkouts);
+      await fetchAllScheduledWorkouts();
 
       console.log('Workout deleted, event kept');
     } catch (error) {
@@ -1361,8 +1360,7 @@ export default function BuilderPage() {
       setShowCategorySelector(false);
 
       // Refresh scheduled workouts
-      const updatedScheduledWorkouts = await getAllScheduledWorkouts();
-      setScheduledWorkouts(updatedScheduledWorkouts);
+      await fetchAllScheduledWorkouts();
 
       console.log('Workout deleted, event category changed');
     } catch (error) {
@@ -1401,8 +1399,7 @@ export default function BuilderPage() {
       setDeleteDialogData(null);
 
       // Refresh scheduled workouts
-      const updatedScheduledWorkouts = await getAllScheduledWorkouts();
-      setScheduledWorkouts(updatedScheduledWorkouts);
+      await fetchAllScheduledWorkouts();
 
       console.log('Both workout and event deleted');
     } catch (error) {
