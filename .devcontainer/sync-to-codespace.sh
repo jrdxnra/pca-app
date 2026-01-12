@@ -33,10 +33,10 @@ echo "✅ Changes pushed to GitHub!"
 
 # Pull in Codespace and restart dev server
 echo "⬇️  Updating Codespace code..."
-gh codespace ssh -c "$CODESPACE_NAME" -- "cd /workspaces/pca-app && git pull 2>&1" 2>/dev/null || {
-    echo "⚠️  Git pull failed (Codespaces should auto-sync when browser is open)"
-    echo "💡 If changes don't appear, manually pull in Codespace browser terminal"
-}
+echo "⚠️  Note: Git pull via SSH requires authentication"
+echo "📦 Codespaces auto-syncs when browser interface is open"
+echo "💡 To sync: Open Codespace in browser (github.com → Codespaces) OR wait ~30 seconds"
+echo "   Then changes will be available and dev server will pick them up on restart"
 
 echo "🔄 Restarting dev server..."
 gh codespace ssh -c "$CODESPACE_NAME" -- "cd /workspaces/pca-app && .devcontainer/stop-dev-server.sh && sleep 2 && .devcontainer/start-dev-server.sh" 2>/dev/null || {
