@@ -26,6 +26,7 @@ import { assignClientToEvents, BulkAssignmentResult, unassignClientFromEvent } f
 import { deleteCalendarEvent } from '@/lib/google-calendar/api-client';
 import { BulkAssignmentConfirmDialog } from './BulkAssignmentConfirmDialog';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
+import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 
 interface Client {
   id: string;
