@@ -1130,6 +1130,12 @@ export default function ProgramsPage() {
           const now = Timestamp.now();
           const farFuture = Timestamp.fromDate(new Date(2099, 11, 31));
 
+          // quickWorkoutsTemplate is guaranteed to be defined after the if block above
+          if (!quickWorkoutsTemplate) {
+            console.error('Failed to create or find Quick Workouts template');
+            return;
+          }
+
           const quickWorkoutsProgram = {
             clientId: selectedClient,
             programTemplateId: quickWorkoutsTemplate.id,
@@ -1802,7 +1808,7 @@ export default function ProgramsPage() {
         onUpdatePeriod={handleUpdatePeriod}
         onDeletePeriod={handleDeletePeriod}
         onApplyWeekTemplate={handleApplyWeekTemplate}
-        weekTemplates={weekTemplates}
+        weekTemplates={weekTemplates as any}
         workoutCategories={workoutCategories}
         position={periodPanelPosition}
       />
@@ -1930,7 +1936,7 @@ export default function ProgramsPage() {
           open={eventActionDialogOpen}
           onOpenChange={setEventActionDialogOpen}
           event={selectedEventForAction}
-          clientId={selectedClient}
+          clientId={selectedClient || undefined}
           allEvents={calendarEvents}
           clients={clients}
           clientPrograms={clientPrograms}

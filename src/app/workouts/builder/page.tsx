@@ -903,8 +903,6 @@ export default function BuilderPage() {
       return eventId;
     }
 
-    return undefined;
-
     // If no workout but we have a date, try to find an event for this date and client
     if (!workout && clientId) {
       const [year, month, day] = dateKey.split("-").map(Number);
@@ -924,6 +922,8 @@ export default function BuilderPage() {
         return eventForDate.id;
       }
     }
+
+    return undefined;
   };
 
   const handleEditWorkout = (workout: any) => {
