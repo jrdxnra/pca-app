@@ -68,7 +68,8 @@ export function EventActionDialog({
   const { workoutCategories, fetchWorkoutCategories } = useConfigurationStore();
   
   // Get fetchEvents from calendar store if not provided as prop
-  const { fetchEvents: storeFetchEvents, events: storeEvents } = useCalendarStore();
+  const storeFetchEvents = useCalendarStore(state => state.fetchEvents);
+  const storeEvents = useCalendarStore(state => state.events);
   const effectiveFetchEvents = fetchEvents || storeFetchEvents;
   
   // Use storeEvents if available (has extended range), otherwise fall back to allEvents prop
@@ -488,8 +489,9 @@ export function EventActionDialog({
       setIsFetchingExtendedEvents(true);
       try {
         await effectiveFetchEvents({ start: startDate, end: endDate });
-        // Use events from store (they'll have the extended range)
-        eventsToSearch = storeEvents;
+        // Get the latest events from the store after fetching
+        const latestStoreEvents = useCalendarStore.getState().events;
+        eventsToSearch = latestStoreEvents.length > 0 ? latestStoreEvents : eventsForDetection;
       } catch (error) {
         console.error('Error fetching extended events:', error);
         // Fall back to eventsForDetection if fetch fails
