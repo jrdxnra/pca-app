@@ -287,7 +287,7 @@ export async function assignProgramTemplateToClient(
     endDate: Date;
     notes?: string;
   }
-): Promise<string> {
+): Promise<ClientProgram> {
   try {
     // Create a new client program for this assignment
     const clientProgramData = {

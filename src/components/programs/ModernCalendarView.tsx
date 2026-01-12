@@ -20,6 +20,7 @@ import { Timestamp } from 'firebase/firestore';
 import { ClientWorkout } from '@/lib/types';
 import { format } from 'date-fns';
 import { getAppTimezone } from '@/lib/utils/timezone';
+import { safeToDate } from '@/lib/utils/dateHelpers';
 import { UnifiedDayCard } from './UnifiedDayCard';
 
 interface ModernCalendarViewProps {
@@ -136,11 +137,7 @@ export function ModernCalendarView({
               if (w.clientId !== selectedClient) return true;
               
               // Check if workout is outside the fetched date range
-              const workoutDate = w.date instanceof Timestamp
-                ? w.date.toDate()
-                : (typeof w.date === 'object' && w.date?.seconds
-                  ? new Date(w.date.seconds * 1000)
-                  : new Date(w.date));
+              const workoutDate = safeToDate(w.date);
               
               // Keep workouts outside the fetched range (they haven't been re-fetched)
               return workoutDate < expandedStart || workoutDate > expandedEnd;
@@ -164,11 +161,7 @@ export function ModernCalendarView({
           setAllWorkouts(prev => {
             // Remove old workouts in the fetched date range
             const workoutsOutsideRange = prev.filter(w => {
-              const workoutDate = w.date instanceof Timestamp
-                ? w.date.toDate()
-                : (typeof w.date === 'object' && w.date?.seconds
-                  ? new Date(w.date.seconds * 1000)
-                  : new Date(w.date));
+              const workoutDate = safeToDate(w.date);
               
               return workoutDate < expandedStart || workoutDate > expandedEnd;
             });
@@ -207,11 +200,7 @@ export function ModernCalendarView({
       // If a specific client is selected, filter by that client
       if (selectedClient && workout.clientId !== selectedClient) return false;
       
-      const workoutDate = workout.date instanceof Timestamp 
-        ? workout.date.toDate() 
-        : (typeof workout.date === 'object' && workout.date?.seconds 
-          ? new Date(workout.date.seconds * 1000) 
-          : new Date(workout.date));
+      const workoutDate = safeToDate(workout.date);
       
       return workoutDate >= start && workoutDate <= end;
     });
@@ -331,6 +320,28 @@ export function ModernCalendarView({
       const timeB = new Date(b.start.dateTime).getTime();
       return timeA - timeB;
     });
+  };
+
+  // Helper to format event time in the app timezone
+  const formatEventTimeInAppTimezone = (event: GoogleCalendarEvent): string => {
+    // All-day events
+    if (event.start?.date) return 'All day';
+    if (!event.start?.dateTime) return '';
+
+    const appTimeZone = getAppTimezone();
+    const date = new Date(event.start.dateTime);
+
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: appTimeZone
+      }).format(date);
+    } catch {
+      // Fallback if the runtime doesn't support the timezone option
+      return format(date, 'h:mm a');
+    }
   };
 
   // Helper to find period for a given date
@@ -727,13 +738,15 @@ export function ModernCalendarView({
     for (let i = 0; i < 42; i++) {
       // Create a new date object for this day to avoid mutation issues
       const dayDate = new Date(currentDate);
+      const isToday = dayDate.toDateString() === new Date().toDateString();
+      const isCurrentMonth = dayDate.getMonth() === month;
 
       // Determine which workouts to use (State ClientWorkouts or Prop ScheduledWorkouts)
       let dayWorkouts: any[] = [];
       if (selectedClient && filteredWorkouts.length > 0) {
         // Use the fetched ClientWorkouts from state (which have more data like time)
         const targetDateStr = dayDate.toDateString();
-        dayWorkouts = workouts.filter(w => safeToDate(w.date).toDateString() === targetDateStr);
+        dayWorkouts = filteredWorkouts.filter(w => safeToDate(w.date).toDateString() === targetDateStr);
       } else {
         // Fallback to the passed in scheduledWorkouts (from props)
         dayWorkouts = getWorkoutsForDate(dayDate);
@@ -1106,10 +1119,10 @@ export function ModernCalendarView({
                   if (selectedCategory?.eventId) {
                     const event = calendarEventsForDay.find(e => e.id === selectedCategory.eventId);
                     if (event) {
-                      currentCategory = event.preConfiguredCategory || workoutCategory?.category || null;
+                      currentCategory = event.preConfiguredCategory || workoutCategory?.category;
                     }
                   } else if (calendarEventsForDay.length > 0 && selectedCategory?.category !== '__ADD_NEW__') {
-                    currentCategory = selectedCategory?.category || null;
+                    currentCategory = selectedCategory?.category;
                   }
 
                   // Add all categories except the current one
@@ -1133,7 +1146,7 @@ export function ModernCalendarView({
                   } else {
                     // For workout categories
                     isExistingCategory = selectedCategory?.category !== '__ADD_NEW__' &&
-                      (workoutCategory || (calendarEventsForDay.length > 0 && selectedCategory?.category));
+                      !!(workoutCategory || (calendarEventsForDay.length > 0 && selectedCategory?.category));
                   }
 
                   if (isExistingCategory) {
@@ -1530,9 +1543,9 @@ export function ModernCalendarView({
                       const workoutCategory = getWorkoutCategoryForDate(date, selectedClient || '');
 
                       // Check if this time slot should show the workout category
-                      const timeSlotFormatted = timeSlot.toTimeString().split(' ')[0].slice(0, 5);
+                      const timeSlotFormatted = `${String(slotHour).padStart(2, '0')}:00`;
                       const workoutTimeFormatted = workoutCategory?.time;
-                      const timeSlotPadded = timeSlotFormatted.padStart(5, '0');
+                      const timeSlotPadded = timeSlotFormatted;
 
                       const shouldShowWorkoutCategory = workoutCategory && !workoutCategory.isAllDay &&
                         workoutCategory.time &&
@@ -1546,6 +1559,8 @@ export function ModernCalendarView({
                           className="min-h-[60px] border-r p-2 cursor-pointer transition-colors"
                           onClick={() => {
                             if (onWeekCellClick) {
+                              const timeSlot = new Date(date);
+                              timeSlot.setHours(slotHour, 0, 0, 0);
                               onWeekCellClick(date, timeSlot, period || undefined);
                             }
                           }}
@@ -1800,10 +1815,11 @@ export function ModernCalendarView({
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-medium">{getClientName(workout.clientId)}</h4>
-                      <p className="text-sm text-gray-600">{workout.sessionType}</p>
+                      <p className="text-sm text-gray-600">{workout.title || workout.categoryName || 'Workout'}</p>
                     </div>
                     <div className="text-sm text-gray-500">
-                      {formatTime(safeToDate(workout.date))} • {workout.duration}min
+                      {formatTime(safeToDate(workout.date))}
+                      {typeof (workout as any).duration === 'number' ? ` • ${(workout as any).duration}min` : ''}
                     </div>
                   </div>
                 </div>

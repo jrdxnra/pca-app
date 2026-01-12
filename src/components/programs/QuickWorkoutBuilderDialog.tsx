@@ -141,10 +141,11 @@ export function QuickWorkoutBuilderDialog({
   };
 
   const createQuickWorkout = async (workoutData: any) => {
-    const createdWorkout = await createClientWorkout(workoutData);
+    // Firestore returns various shapes depending on source/serialization; keep this permissive here.
+    const createdWorkout = (await createClientWorkout(workoutData)) as any;
     
     // If we have an eventId to link to (from calendar event), link it
-    if (eventIdToLink && createdWorkout.id) {
+    if (eventIdToLink && createdWorkout?.id) {
       try {
         await linkToWorkout(eventIdToLink, createdWorkout.id);
         console.log('✅ Linked workout to existing calendar event:', createdWorkout.id, eventIdToLink);
@@ -307,7 +308,7 @@ export function QuickWorkoutBuilderDialog({
         const movePeriod = findPeriodForDate(newDate, clientId);
         await updateClientWorkout(conflictWorkout.id, {
           date: Timestamp.fromDate(newDate),
-          periodId: movePeriod?.id || null
+          periodId: movePeriod?.id || conflictWorkout.periodId || 'quick-workouts'
         });
         // Update calendar event if exists
         const existingEvent = calendarEvents.find(e => e.linkedWorkoutId === conflictWorkout.id);

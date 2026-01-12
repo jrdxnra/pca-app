@@ -176,7 +176,7 @@ export function MovementUsageRow({
       {/* Workload fields - show based on movement configuration */}
       {selectedMovement && configuration && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 ml-6">
-          {configuration.useReps && (
+          {configuration.use_reps && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">Reps</label>
               <Input
@@ -189,7 +189,7 @@ export function MovementUsageRow({
             </div>
           )}
           
-          {configuration.useWeight && (
+          {configuration.use_weight && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">Weight</label>
               <div className="flex gap-1">
@@ -212,7 +212,7 @@ export function MovementUsageRow({
             </div>
           )}
           
-          {configuration.useTempo && (
+          {configuration.use_tempo && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">Tempo</label>
               <Input
@@ -225,7 +225,7 @@ export function MovementUsageRow({
             </div>
           )}
           
-          {configuration.useTime && (
+          {configuration.use_time && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">Time</label>
               <Input
@@ -238,7 +238,7 @@ export function MovementUsageRow({
             </div>
           )}
           
-          {configuration.useRPE && (
+          {configuration.use_rpe && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">RPE</label>
               <select
@@ -255,7 +255,7 @@ export function MovementUsageRow({
             </div>
           )}
           
-          {configuration.usePercentage && (
+          {configuration.use_percentage && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">Percentage</label>
               <Input

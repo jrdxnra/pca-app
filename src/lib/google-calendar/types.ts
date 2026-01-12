@@ -13,11 +13,13 @@ export interface GoogleCalendarEvent {
   summary: string; // Event title
   description?: string;
   start: {
-    dateTime: string; // ISO string
+    dateTime: string; // ISO string (timed events)
+    date?: string; // YYYY-MM-DD (all-day events)
     timeZone: string;
   };
   end: {
-    dateTime: string; // ISO string
+    dateTime: string; // ISO string (timed events)
+    date?: string; // YYYY-MM-DD (all-day events)
     timeZone: string;
   };
   location?: string;
