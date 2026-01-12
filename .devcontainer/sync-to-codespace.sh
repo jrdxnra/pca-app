@@ -31,12 +31,17 @@ git push || {
 
 echo "✅ Changes pushed to GitHub!"
 
-# Pull in Codespace and restart dev server
+# Pull in Codespace - try git fetch/merge first, fallback to auto-sync
 echo "⬇️  Updating Codespace code..."
-echo "⚠️  Note: Git pull via SSH requires authentication"
-echo "📦 Codespaces auto-syncs when browser interface is open"
-echo "💡 To sync: Open Codespace in browser (github.com → Codespaces) OR wait ~30 seconds"
-echo "   Then changes will be available and dev server will pick them up on restart"
+echo "   Attempting to sync code..."
+gh codespace ssh -c "$CODESPACE_NAME" -- "cd /workspaces/pca-app && git fetch origin 2>&1 && git merge origin/main 2>&1" 2>/dev/null && {
+    echo "✅ Code synced successfully!"
+} || {
+    echo "⚠️  Git sync via SSH failed (this is normal)"
+    echo "📦 Codespaces will auto-sync when browser interface is open"
+    echo "💡 Changes are on GitHub - they'll sync automatically or when you open Codespace browser"
+    echo "   (Auto-sync happens within ~10-30 seconds if browser was open)"
+}
 
 echo "🔄 Restarting dev server..."
 gh codespace ssh -c "$CODESPACE_NAME" -- "cd /workspaces/pca-app && .devcontainer/stop-dev-server.sh && sleep 2 && .devcontainer/start-dev-server.sh" 2>/dev/null || {
