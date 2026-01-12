@@ -17,6 +17,10 @@ import {
 // Cache duration in milliseconds (30 seconds)
 const CACHE_DURATION = 30 * 1000;
 
+function isValidDate(d: unknown): d is Date {
+  return d instanceof Date && !Number.isNaN(d.getTime());
+}
+
 interface CalendarStore {
   // State
   calendars: GoogleCalendar[];
@@ -93,6 +97,17 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
   fetchEvents: async (dateRange: DateRange, force = false) => {
     const { config, isGoogleCalendarConnected, _eventsFetchTime, _eventsFetchKey, events } = get();
+
+    // Guard against invalid date inputs (can crash via toISOString())
+    if (!isValidDate(dateRange?.start) || !isValidDate(dateRange?.end)) {
+      console.warn('Invalid dateRange passed to fetchEvents:', dateRange);
+      set({
+        error: 'Invalid date range for calendar events',
+        loading: false,
+      });
+      return;
+    }
+
     const cacheKey = `${dateRange.start.toISOString()}:${dateRange.end.toISOString()}`;
     
     // Skip if cache is fresh and for same date range (unless forced)
