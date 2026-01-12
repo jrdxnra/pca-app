@@ -114,6 +114,6 @@ Port 3000 is automatically forwarded when the dev server starts. **Important:**
 
 ## Current Codespaces URL
 
-**Development URL:** https://upgraded-barnacle-69969jj6wrvfxqqg-3000.app.github.dev/
+**Development URL:** https://stunning-rotary-phone-44vr6x459g9hjqww-3000.app.github.dev/
 
 *Note: This URL is specific to the current Codespace instance. If you create a new Codespace, you'll get a different URL.*
