@@ -212,13 +212,13 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
                     <div className="flex flex-wrap py-2 gap-1">
                       <MovementConfigurationToggle
                         name="Reps"
-                        value={form.watch('defaultConfiguration.use_reps')}
+                        value={form.watch('defaultConfiguration.use_reps') ?? false}
                         onChange={(value) => form.setValue('defaultConfiguration.use_reps', value)}
                       />
                       
                       <MovementConfigurationToggle
                         name="Weight"
-                        value={form.watch('defaultConfiguration.use_weight')}
+                        value={form.watch('defaultConfiguration.use_weight') ?? false}
                         onChange={(value) => form.setValue('defaultConfiguration.use_weight', value)}
                         measureOptions={['lbs', 'kg']}
                         measureValue={form.watch('defaultConfiguration.weight_measure')}
@@ -227,7 +227,7 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
                       
                       <MovementConfigurationToggle
                         name="Distance"
-                        value={form.watch('defaultConfiguration.use_distance')}
+                        value={form.watch('defaultConfiguration.use_distance') ?? false}
                         onChange={(value) => form.setValue('defaultConfiguration.use_distance', value)}
                         measureOptions={['mi', 'km', 'm', 'yd', 'ft']}
                         measureValue={form.watch('defaultConfiguration.distance_measure')}
@@ -236,7 +236,7 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
                       
                       <MovementConfigurationToggle
                         name="Pace"
-                        value={form.watch('defaultConfiguration.use_pace')}
+                        value={form.watch('defaultConfiguration.use_pace') ?? false}
                         onChange={(value) => form.setValue('defaultConfiguration.use_pace', value)}
                         measureOptions={['mi', 'km']}
                         measureValue={form.watch('defaultConfiguration.pace_measure')}
@@ -245,31 +245,31 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
                       
                       <MovementConfigurationToggle
                         name="Tempo"
-                        value={form.watch('defaultConfiguration.use_tempo')}
+                        value={form.watch('defaultConfiguration.use_tempo') ?? false}
                         onChange={(value) => form.setValue('defaultConfiguration.use_tempo', value)}
                       />
                       
                       <MovementConfigurationToggle
                         name="Time"
-                        value={form.watch('defaultConfiguration.use_time')}
+                        value={form.watch('defaultConfiguration.use_time') ?? false}
                         onChange={(value) => form.setValue('defaultConfiguration.use_time', value)}
                       />
                       
                       <MovementConfigurationToggle
                         name="Unilateral"
-                        value={form.watch('defaultConfiguration.unilateral')}
+                        value={form.watch('defaultConfiguration.unilateral') ?? false}
                         onChange={(value) => form.setValue('defaultConfiguration.unilateral', value)}
                       />
                       
                       <MovementConfigurationToggle
                         name="Percentage"
-                        value={form.watch('defaultConfiguration.use_percentage')}
+                        value={form.watch('defaultConfiguration.use_percentage') ?? false}
                         onChange={(value) => form.setValue('defaultConfiguration.use_percentage', value)}
                       />
                       
                       <MovementConfigurationToggle
                         name="RPE"
-                        value={form.watch('defaultConfiguration.use_rpe')}
+                        value={form.watch('defaultConfiguration.use_rpe') ?? false}
                         onChange={(value) => form.setValue('defaultConfiguration.use_rpe', value)}
                       />
                     </div>
