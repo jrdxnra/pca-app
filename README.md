@@ -77,12 +77,25 @@ src/
 
 ## Deployment
 
-This app is designed for Firebase Hosting with Next.js SSR support:
+This app is deployed on **Vercel** for automatic deployments from GitHub.
 
-```bash
-firebase init hosting
-firebase deploy
-```
+### Quick Deploy
+
+1. **Connect to Vercel:**
+   - Go to [vercel.com](https://vercel.com)
+   - Sign in with GitHub
+   - Import repository: `jrdxnra/pca-app`
+   - Vercel auto-detects Next.js
+
+2. **Set Environment Variables:**
+   - Add all variables from `.env.local` in Vercel dashboard
+   - Update `GOOGLE_REDIRECT_URI` with your Vercel URL after first deploy
+
+3. **Deploy:**
+   - Push to GitHub → Vercel automatically deploys!
+   - Or run: `vercel` (if CLI installed)
+
+See [VERCEL_SETUP.md](./VERCEL_SETUP.md) for detailed setup instructions.
 
 ## License
 
