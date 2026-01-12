@@ -48,6 +48,7 @@ interface EventActionDialogProps {
   clients?: Client[];
   clientPrograms?: ClientProgram[];
   onClientAssigned?: () => void;
+  fetchEvents?: (dateRange: { start: Date; end: Date }) => Promise<void>; // For fetching extended date range
 }
 
 export function EventActionDialog({
@@ -58,12 +59,20 @@ export function EventActionDialog({
   allEvents = [],
   clients = [],
   clientPrograms = [],
-  onClientAssigned
+  onClientAssigned,
+  fetchEvents
 }: EventActionDialogProps) {
   const router = useRouter();
   
   // Get workout categories from store
   const { workoutCategories, fetchWorkoutCategories } = useConfigurationStore();
+  
+  // Get fetchEvents from calendar store if not provided as prop
+  const { fetchEvents: storeFetchEvents, events: storeEvents } = useCalendarStore();
+  const effectiveFetchEvents = fetchEvents || storeFetchEvents;
+  
+  // Use storeEvents if available (has extended range), otherwise fall back to allEvents prop
+  const eventsForDetection = storeEvents.length > allEvents.length ? storeEvents : allEvents;
   
   // Fetch categories on mount
   useEffect(() => {
@@ -71,6 +80,31 @@ export function EventActionDialog({
       fetchWorkoutCategories();
     }
   }, [workoutCategories.length, fetchWorkoutCategories]);
+  
+  // Fetch extended events when dialog opens (up to 2 months in future)
+  useEffect(() => {
+    if (open && effectiveFetchEvents && event.start?.dateTime) {
+      const eventDate = new Date(event.start.dateTime);
+      const startDate = new Date(eventDate);
+      startDate.setHours(0, 0, 0, 0);
+      
+      // Calculate 2 months in the future
+      const endDate = new Date(eventDate);
+      endDate.setMonth(endDate.getMonth() + 2);
+      endDate.setHours(23, 59, 59, 999);
+      
+      setIsFetchingExtendedEvents(true);
+      effectiveFetchEvents({ start: startDate, end: endDate })
+        .then(() => {
+          // Events will be in store, we'll use them in handleDetectEvents
+          setIsFetchingExtendedEvents(false);
+        })
+        .catch(error => {
+          console.error('Error fetching extended events:', error);
+          setIsFetchingExtendedEvents(false);
+        });
+    }
+  }, [open, effectiveFetchEvents, event.start?.dateTime]);
   
   // State for client assignment
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -89,6 +123,8 @@ export function EventActionDialog({
   const [detectedEvents, setDetectedEvents] = useState<GoogleCalendarEvent[]>([]);
   const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
   const [hasDetected, setHasDetected] = useState(false);
+  const [extendedEvents, setExtendedEvents] = useState<GoogleCalendarEvent[]>([]); // Events fetched with extended range
+  const [isFetchingExtendedEvents, setIsFetchingExtendedEvents] = useState(false);
 
   // Check if event already has a client
   const existingClientId = clientId || getEventClientId(event);
@@ -273,6 +309,46 @@ export function EventActionDialog({
     setShowBulkConfirm(true);
   };
 
+  // Handle "Assign" button click (assigns but stays on calendar)
+  const handleAssign = async () => {
+    if (!selectedClientId) return;
+    
+    setAssignmentError(null);
+    setNavigateAfterAssign(false);
+    
+    // Find all patterns and matching events
+    const results = findAllPatternsWithEvents(
+      event,
+      allEvents,
+      selectedClientId,
+      clientPrograms
+    );
+    
+    // Count total events across all patterns
+    const totalEvents = results.reduce((sum, pr) => sum + pr.events.length, 0);
+    
+    // If only one event (the clicked event), skip bulk confirm and assign directly
+    if (totalEvents <= 1) {
+      // Create a single-event pattern result for the clicked event
+      const eventDate = new Date(event.start.dateTime);
+      const singleEventPattern: PatternMatchResult[] = [{
+        pattern: {
+          dayOfWeek: eventDate.getDay(),
+          time: eventDate.toTimeString().slice(0, 5),
+          dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][eventDate.getDay()]
+        },
+        events: [event]
+      }];
+      
+      // Directly call bulk confirm handler with navigate=false flag
+      await handleBulkConfirm(singleEventPattern, false);
+      return;
+    }
+    
+    setPatternResults(results);
+    setShowBulkConfirm(true);
+  };
+
   // Handle bulk assignment confirmation
   // shouldNavigate parameter allows direct calls to override the state-based flag
   const handleBulkConfirm = async (selectedPatterns: PatternMatchResult[], shouldNavigate?: boolean) => {
@@ -391,7 +467,7 @@ export function EventActionDialog({
   };
 
   // Detect matching events based on selected days and time
-  const handleDetectEvents = () => {
+  const handleDetectEvents = async () => {
     if (!event.start?.dateTime || selectedDays.size === 0) return;
     
     const eventTime = new Date(event.start.dateTime);
@@ -399,14 +475,42 @@ export function EventActionDialog({
     const eventMinutes = eventTime.getMinutes();
     const timeString = `${String(eventHours).padStart(2, '0')}:${String(eventMinutes).padStart(2, '0')}`;
     
-    // Filter events matching the selected days and same time
-    const matching = allEvents.filter(e => {
+    // Calculate date range: from event date to 2 months in the future
+    const startDate = new Date(eventTime);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(eventTime);
+    endDate.setMonth(endDate.getMonth() + 2);
+    endDate.setHours(23, 59, 59, 999);
+    
+    // Fetch events for extended range if fetchEvents is available
+    let eventsToSearch = eventsForDetection;
+    if (effectiveFetchEvents) {
+      setIsFetchingExtendedEvents(true);
+      try {
+        await effectiveFetchEvents({ start: startDate, end: endDate });
+        // Use events from store (they'll have the extended range)
+        eventsToSearch = storeEvents;
+      } catch (error) {
+        console.error('Error fetching extended events:', error);
+        // Fall back to eventsForDetection if fetch fails
+        eventsToSearch = eventsForDetection;
+      } finally {
+        setIsFetchingExtendedEvents(false);
+      }
+    }
+    
+    // Filter events matching the selected days and same time, within 2 months
+    const matching = eventsToSearch.filter(e => {
       // Skip if already has a client assigned
       if (getEventClientId(e)) return false;
       
       if (!e.start?.dateTime) return false;
       
       const eDate = new Date(e.start.dateTime);
+      
+      // Only include events from event date up to 2 months in the future
+      if (eDate < startDate || eDate > endDate) return false;
+      
       const eDayOfWeek = eDate.getDay();
       const eHours = eDate.getHours();
       const eMinutes = eDate.getMinutes();
@@ -611,11 +715,11 @@ export function EventActionDialog({
                             variant="outline"
                             size="sm"
                             onClick={handleDetectEvents}
-                            disabled={selectedDays.size === 0}
+                            disabled={selectedDays.size === 0 || isFetchingExtendedEvents}
                             className="w-full"
                           >
                             <Search className="mr-2 h-4 w-4" />
-                            Detect Matching Sessions
+                            {isFetchingExtendedEvents ? 'Searching...' : 'Detect Matching Sessions'}
                           </Button>
                           
                           {/* Detected Events List */}
@@ -718,41 +822,77 @@ export function EventActionDialog({
                   
                   {/* Assign Button(s) */}
                   {repeatEnabled && hasDetected && selectedEventIds.size > 0 ? (
-                    <Button 
-                      onClick={handleBulkAssignDetected}
-                      disabled={!selectedClientId || isAssigning || selectedEventIds.size === 0}
-                      className="w-full"
-                      variant="outline"
-                      size="lg"
-                    >
-                      {isAssigning ? (
-                        'Assigning...'
-                      ) : (
-                        <>
-                          <Users className="mr-2 h-4 w-4 icon-clients" />
-                          Assign {selectedEventIds.size} Session{selectedEventIds.size !== 1 ? 's' : ''} & Go to Workout
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </>
-                      )}
-                    </Button>
+                    <div className="space-y-2">
+                      <Button 
+                        onClick={handleBulkAssignDetectedNoNavigate}
+                        disabled={!selectedClientId || isAssigning || selectedEventIds.size === 0}
+                        className="w-full"
+                        variant="default"
+                        size="lg"
+                      >
+                        {isAssigning ? (
+                          'Assigning...'
+                        ) : (
+                          <>
+                            <Users className="mr-2 h-4 w-4 icon-clients" />
+                            Assign {selectedEventIds.size} Session{selectedEventIds.size !== 1 ? 's' : ''}
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        onClick={handleBulkAssignDetected}
+                        disabled={!selectedClientId || isAssigning || selectedEventIds.size === 0}
+                        className="w-full"
+                        variant="outline"
+                        size="lg"
+                      >
+                        {isAssigning ? (
+                          'Assigning...'
+                        ) : (
+                          <>
+                            <Users className="mr-2 h-4 w-4 icon-clients" />
+                            Assign {selectedEventIds.size} Session{selectedEventIds.size !== 1 ? 's' : ''} & Go to Workout
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   ) : (
-                    <Button 
-                      onClick={handleAssignAndGo}
-                      disabled={!selectedClientId || isAssigning}
-                      className="w-full"
-                      variant="outline"
-                      size="lg"
-                    >
-                      {isAssigning ? (
-                        'Assigning...'
-                      ) : (
-                        <>
-                          <Users className="mr-2 h-4 w-4 icon-clients" />
-                          Assign & Go to Workout
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </>
-                      )}
-                    </Button>
+                    <div className="space-y-2">
+                      <Button 
+                        onClick={handleAssign}
+                        disabled={!selectedClientId || isAssigning}
+                        className="w-full"
+                        variant="default"
+                        size="lg"
+                      >
+                        {isAssigning ? (
+                          'Assigning...'
+                        ) : (
+                          <>
+                            <Users className="mr-2 h-4 w-4 icon-clients" />
+                            Assign
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        onClick={handleAssignAndGo}
+                        disabled={!selectedClientId || isAssigning}
+                        className="w-full"
+                        variant="outline"
+                        size="lg"
+                      >
+                        {isAssigning ? (
+                          'Assigning...'
+                        ) : (
+                          <>
+                            <Users className="mr-2 h-4 w-4 icon-clients" />
+                            Assign & Go to Workout
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   )}
                   
                   {assignmentError && (

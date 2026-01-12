@@ -1934,6 +1934,7 @@ export default function ProgramsPage() {
           allEvents={calendarEvents}
           clients={clients}
           clientPrograms={clientPrograms}
+          fetchEvents={fetchEvents}
           onClientAssigned={async () => {
             // Clear the selected event so it gets fresh data when clicked again
             setSelectedEventForAction(null);
