@@ -55,7 +55,9 @@ This project is configured to run in GitHub Codespaces to avoid local resource c
 ## Port Forwarding
 
 Port 3000 is automatically forwarded when the dev server starts. **Important:** 
-- Right-click port 3000 in the "Ports" tab → Set visibility to **"Public"** (defaults to private)
+- ⚠️ **Port visibility resets to private after Codespace restart** (GitHub security feature)
+- Set port to public from Cursor terminal: `.devcontainer/set-port-public.sh`
+- Or manually: `gh codespace ports visibility 3000:public -c <codespace-name>`
 - Find the forwarded URL in the "Ports" tab (format: `https://xxxxx-3000.preview.app.github.dev`)
 - Copy and open the URL in any browser to view your app
 - The dev server runs on GitHub's servers (not your local machine), reducing CPU usage
