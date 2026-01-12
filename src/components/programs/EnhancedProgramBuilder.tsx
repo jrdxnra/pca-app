@@ -169,7 +169,9 @@ export function EnhancedProgramBuilder({
     if (!program.weeks) return;
     
     const updatedProgram = { ...program };
-    const weeks = [...updatedProgram.weeks];
+    // `updatedProgram.weeks` isn't narrowed by the guard above because it's a copy,
+    // so use the already-narrowed `program.weeks`.
+    const weeks = [...program.weeks];
     const weekIndex = weeks.findIndex(w => w.id === week.id);
     if (weekIndex === -1) return;
     
