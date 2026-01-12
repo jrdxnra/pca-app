@@ -1340,7 +1340,7 @@ export default function BuilderPage() {
       if (linkedEventId) {
         await updateEvent(linkedEventId, { 
           linkedWorkoutId: undefined,
-          workoutCategory: deleteDialogNewCategory 
+          preConfiguredCategory: deleteDialogNewCategory 
         });
         console.log('Updated event category and unlinked workout');
       }
