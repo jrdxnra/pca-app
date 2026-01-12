@@ -55,6 +55,35 @@ The `MiniCalendarTooltip` component (the calendar icon in the top right) is grea
 
 **Location:** Schedule/Programs page - Inside Card component, top right section
 
+### Update Left Side Panel with 30-Minute Increments
+**Date Added:** January 2026  
+**Priority:** Medium  
+**Status:** Pending
+
+The left side panel (time slot column) in the calendar view currently shows hour increments. Update it to show 30-minute increments for better granularity in scheduling.
+
+**Desired Behavior:**
+- Change time slot display from hourly (7:00 AM, 8:00 AM, etc.) to 30-minute intervals (7:00 AM, 7:30 AM, 8:00 AM, 8:30 AM, etc.)
+- Maintain the same visual layout and spacing
+- Ensure events align correctly with their 30-minute time slots
+
+**Location:** Schedule/Programs page - Left time column in calendar view (`src/components/programs/TwoColumnWeekView.tsx`)
+
+### Add "Today" Button to Header
+**Date Added:** January 2026  
+**Priority:** Medium  
+**Status:** Pending
+
+Add a "Today" button to the header that quickly navigates the calendar view back to the current week/day.
+
+**Desired Behavior:**
+- Add a "Today" button to the header/navigation
+- When clicked, scrolls/navigates the calendar to show today's date
+- Should be visible and easily accessible
+- Consider placing it near date navigation controls
+
+**Location:** Header component or Schedule/Programs page navigation (`src/components/Header.tsx` or calendar navigation component)
+
 ---
 
 ## Smart Calendar Sync
@@ -97,4 +126,4 @@ Added error recovery pages with "Try Again" buttons:
 
 Add additional notes and improvements below this line.
 
----*Last Updated: January 10, 2026*
+---*Last Updated: January 2026*

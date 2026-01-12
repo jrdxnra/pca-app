@@ -13,7 +13,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { db } from '../config';
-import { Client, PersonalRecord, SessionCounts } from '@/lib/types';
+import { Client, PersonalRecord, SessionCounts, RecentExercisePerformance, ClientRecentPerformance } from '@/lib/types';
 
 const COLLECTION_NAME = 'clients';
 
@@ -203,6 +203,64 @@ export async function getAllPersonalRecords(clientId: string): Promise<Record<st
     return client?.personalRecords || {};
   } catch (error) {
     console.error('Error getting all personal records:', error);
+    throw error;
+  }
+}
+
+/**
+ * Recent Exercise Performance Management
+ */
+
+export async function updateRecentExercisePerformance(
+  clientId: string,
+  movementId: string,
+  weight: string,
+  repRange: string
+): Promise<void> {
+  try {
+    const client = await getClient(clientId);
+    if (!client) throw new Error('Client not found');
+
+    const performance: RecentExercisePerformance = {
+      movementId,
+      weight,
+      repRange,
+      lastUsedDate: Timestamp.now(),
+    };
+
+    await updateClient(clientId, {
+      recentExercisePerformance: {
+        ...(client.recentExercisePerformance || {}),
+        [movementId]: performance,
+      },
+    });
+  } catch (error) {
+    console.error('Error updating recent exercise performance:', error);
+    throw error;
+  }
+}
+
+export async function getRecentExercisePerformance(
+  clientId: string,
+  movementId: string
+): Promise<RecentExercisePerformance | null> {
+  try {
+    const client = await getClient(clientId);
+    return client?.recentExercisePerformance?.[movementId] || null;
+  } catch (error) {
+    console.error('Error getting recent exercise performance:', error);
+    throw error;
+  }
+}
+
+export async function getAllRecentExercisePerformance(
+  clientId: string
+): Promise<ClientRecentPerformance> {
+  try {
+    const client = await getClient(clientId);
+    return client?.recentExercisePerformance || {};
+  } catch (error) {
+    console.error('Error getting all recent exercise performance:', error);
     throw error;
   }
 }

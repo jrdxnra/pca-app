@@ -11,6 +11,7 @@ import {
   Movement,
   MovementCategory 
 } from '@/lib/types';
+import { getRecentExercisePerformance } from '@/lib/firebase/services/clients';
 
 interface InlineMovementEditorProps {
   usage: ClientWorkoutMovementUsage;
@@ -18,6 +19,7 @@ interface InlineMovementEditorProps {
   usageIndex: number;
   movements: Movement[];
   categories: MovementCategory[];
+  clientId?: string; // Client ID for fetching recent performance data
   onUpdate: (usage: ClientWorkoutMovementUsage) => void;
   onRemove: () => void;
   canDelete: boolean;
@@ -44,6 +46,7 @@ export function InlineMovementEditor({
   usageIndex,
   movements,
   categories,
+  clientId,
   onUpdate,
   onRemove,
   canDelete,
@@ -65,6 +68,58 @@ export function InlineMovementEditor({
   const selectedMovement = movements.find(m => m.id === usage.movementId);
   const selectedCategory = categories.find(c => c.id === usage.categoryId);
   const filteredMovements = movements.filter(m => m.categoryId === usage.categoryId);
+
+  // Auto-populate weight/reps from recent performance when movement is selected
+  const previousMovementIdRef = useRef<string | undefined>(usage.movementId);
+  useEffect(() => {
+    // Only auto-populate when movementId changes (newly selected)
+    const movementChanged = previousMovementIdRef.current !== usage.movementId;
+    previousMovementIdRef.current = usage.movementId;
+    
+    if (clientId && usage.movementId && selectedMovement && movementChanged) {
+      // Only auto-populate if weight/reps are not already set
+      const hasWeight = usage.targetWorkload.weight && usage.targetWorkload.weight.toString().trim() !== '';
+      const hasReps = usage.targetWorkload.reps && usage.targetWorkload.reps.toString().trim() !== '';
+      
+      if (!hasWeight || !hasReps) {
+        getRecentExercisePerformance(clientId, usage.movementId)
+          .then(performance => {
+            if (performance) {
+              const updates: Partial<ClientWorkoutMovementUsage> = {
+                ...usage,
+                targetWorkload: {
+                  ...usage.targetWorkload,
+                }
+              };
+              
+              let needsUpdate = false;
+              
+              // Only update if not already set
+              if (!hasWeight && performance.weight && selectedMovement.configuration.use_weight) {
+                updates.targetWorkload!.weight = performance.weight;
+                updates.targetWorkload!.useWeight = true;
+                needsUpdate = true;
+              }
+              
+              if (!hasReps && performance.repRange && selectedMovement.configuration.use_reps) {
+                updates.targetWorkload!.reps = performance.repRange;
+                updates.targetWorkload!.useReps = true;
+                needsUpdate = true;
+              }
+              
+              // Only update if we actually changed something
+              if (needsUpdate) {
+                onUpdate(updates as ClientWorkoutMovementUsage);
+              }
+            }
+          })
+          .catch(error => {
+            console.error('Error fetching recent exercise performance:', error);
+            // Don't show error to user, just log it
+          });
+      }
+    }
+  }, [usage.movementId, clientId, selectedMovement?.id]); // Only run when movement or client changes
   
   // Debug logging
   if (usage.categoryId && filteredMovements.length === 0) {

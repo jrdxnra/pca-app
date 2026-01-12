@@ -866,6 +866,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                 movements={movements}
                 categories={categories}
                 workoutTypes={workoutTypes}
+                clientId={workout?.clientId}
                 onUpdate={(updatedRound) => updateRound(roundIndex, updatedRound)}
                 onRemove={() => removeRound(roundIndex)}
                 canDelete={rounds.length > 1}
@@ -1270,6 +1271,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                     round={round}
                     index={index}
                     movements={movements}
+                    clientId={workout?.clientId}
                     categories={categories}
                     workoutTypes={workoutTypes}
                     onUpdate={(updatedRound) => updateRound(index, updatedRound)}

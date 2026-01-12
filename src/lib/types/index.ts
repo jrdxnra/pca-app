@@ -14,6 +14,7 @@ export interface Client {
   isDeleted: boolean;
   deletedAt?: Timestamp;
   personalRecords: Record<string, PersonalRecord>;
+  recentExercisePerformance?: ClientRecentPerformance; // Recent weights and rep ranges by movement
   
   // Session tracking
   targetSessionsPerWeek?: number; // How many sessions client should do per week (baseline for billing)
@@ -49,6 +50,19 @@ export interface PersonalRecord {
     date: Timestamp;
     method: 'tested' | 'estimated';
   }>;
+}
+
+export interface RecentExercisePerformance {
+  movementId: string;
+  weight: string; // e.g., "135", "185 lbs"
+  repRange: string; // e.g., "10", "8-12", "AMRAP"
+  lastUsedDate: Timestamp;
+  // Store the most recent performance (can extend to history later if needed)
+}
+
+export interface ClientRecentPerformance {
+  // Keyed by movementId
+  [movementId: string]: RecentExercisePerformance;
 }
 
 export interface MovementCategory {

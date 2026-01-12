@@ -23,6 +23,7 @@ interface RoundEditorProps {
   movements: Movement[];
   categories: MovementCategory[];
   workoutTypes?: WorkoutType[];
+  clientId?: string; // Client ID for fetching recent performance data
   onUpdate: (round: ClientWorkoutRound) => void;
   onRemove: () => void;
   canDelete: boolean;
@@ -47,6 +48,7 @@ export function RoundEditor({
   movements,
   categories,
   workoutTypes = [],
+  clientId,
   onUpdate,
   onRemove,
   canDelete,
@@ -312,6 +314,7 @@ export function RoundEditor({
                 usageIndex={usageIndex}
                 movements={movements}
                 categories={categories}
+                clientId={clientId}
                 onUpdate={(updatedUsage) => updateMovementUsage(usageIndex, updatedUsage)}
                 onRemove={() => removeMovementUsage(usageIndex)}
                 canDelete={true}

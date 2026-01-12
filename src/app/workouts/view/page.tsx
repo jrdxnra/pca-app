@@ -12,6 +12,7 @@ import { ArrowLeft, Save, Check } from 'lucide-react';
 import { ClientWorkout, ClientWorkoutRound, ClientWorkoutMovementUsage } from '@/lib/types';
 import { getClientWorkout, updateClientWorkout } from '@/lib/firebase/services/clientWorkouts';
 import { getWorkoutLogByScheduledWorkout, upsertWorkoutLog } from '@/lib/firebase/services/workoutLogs';
+import { updateRecentExercisePerformance } from '@/lib/firebase/services/clients';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { format } from 'date-fns';
@@ -263,6 +264,35 @@ export default function WorkoutViewPage() {
         sessionRPE: sessionRPENum,
         athleteNotes: athleteNotes || undefined,
       });
+      
+      // Update recent exercise performance for each exercise
+      for (const exercise of exercises) {
+        if (exercise.actualSets.length > 0 && exercise.movementId) {
+          // Calculate average weight (handle cases where weight might vary)
+          const weights = exercise.actualSets.map(s => s.weight).filter(w => w > 0);
+          const reps = exercise.actualSets.map(s => s.reps).filter(r => r > 0);
+          
+          if (weights.length > 0 && reps.length > 0) {
+            // Use the first set's weight as the representative weight (most common pattern)
+            // Or calculate average if needed
+            const avgWeight = weights.reduce((sum, w) => sum + w, 0) / weights.length;
+            const weightStr = Math.round(avgWeight).toString();
+            
+            // Create rep range from min to max reps
+            const minReps = Math.min(...reps);
+            const maxReps = Math.max(...reps);
+            const repRange = minReps === maxReps ? minReps.toString() : `${minReps}-${maxReps}`;
+            
+            // Update client's recent performance
+            try {
+              await updateRecentExercisePerformance(clientId, exercise.movementId, weightStr, repRange);
+            } catch (error) {
+              console.error(`Error updating recent performance for movement ${exercise.movementId}:`, error);
+              // Don't fail the entire save if this fails
+            }
+          }
+        }
+      }
       
       // Show success message
       alert('Workout logged successfully!');

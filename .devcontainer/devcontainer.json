@@ -3,7 +3,10 @@
   "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bullseye",
   
   "features": {
-    "ghcr.io/devcontainers/features/git:1": {}
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
   },
 
   "customizations": {
@@ -23,12 +26,12 @@
   "portsAttributes": {
     "3000": {
       "label": "Next.js Dev Server",
-      "onAutoForward": "openPreview",
+      "onAutoForward": "notify",
       "protocol": "http"
     }
   },
 
-  "postCreateCommand": "npm install && chmod +x .devcontainer/setup-env.sh && .devcontainer/setup-env.sh",
+  "postCreateCommand": "npm install && chmod +x .devcontainer/setup-env.sh && .devcontainer/setup-env.sh && chmod +x .devcontainer/start-dev-server.sh && chmod +x .devcontainer/stop-dev-server.sh",
   
   "remoteUser": "node",
   
