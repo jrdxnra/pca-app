@@ -257,7 +257,7 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              const newLinks = (currentEditData.links || []).filter((_, i) => i !== linkIndex);
+                              const newLinks = (currentEditData.links || []).filter((_unused: any, i: number) => i !== linkIndex);
                               updateEditField(movement.id, 'links', newLinks);
                             }}
                           >

@@ -131,7 +131,7 @@ export function EditMovementDialog({ movement, open, onOpenChange }: EditMovemen
           use_percentage: data.configuration.use_percentage,
           use_rpe: data.configuration.use_rpe,
         },
-        links: data.links.filter(link => link.url.trim() !== '').map(link => link.url),
+        links: (data.links || []).filter(link => link.url?.trim() !== '').map(link => link.url!),
       };
 
       // Only include instructions if it has a value
