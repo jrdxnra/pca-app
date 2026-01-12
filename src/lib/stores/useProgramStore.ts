@@ -25,6 +25,10 @@ import {
 // Cache duration in milliseconds (30 seconds)
 const CACHE_DURATION = 30 * 1000;
 
+function isValidDate(d: unknown): d is Date {
+  return d instanceof Date && !Number.isNaN(d.getTime());
+}
+
 interface ProgramStore {
   // State
   programs: Program[];
@@ -110,9 +114,13 @@ const getInitialCalendarDate = (): Date => {
     const saved = localStorage.getItem('calendarDate');
     if (saved) {
       try {
-        return new Date(saved);
+        const parsed = new Date(saved);
+        if (isValidDate(parsed)) return parsed;
+        console.warn('Invalid saved calendarDate, resetting:', saved);
+        localStorage.removeItem('calendarDate');
       } catch (e) {
         console.warn('Failed to parse saved calendarDate:', e);
+        localStorage.removeItem('calendarDate');
       }
     }
   }
@@ -491,7 +499,12 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ calendarDate: date });
     // Persist to localStorage for true state sharing between pages
     if (typeof window !== 'undefined') {
-      localStorage.setItem('calendarDate', date.toISOString());
+      if (isValidDate(date)) {
+        localStorage.setItem('calendarDate', date.toISOString());
+      } else {
+        console.warn('Refusing to persist invalid calendarDate:', date);
+        localStorage.removeItem('calendarDate');
+      }
     }
   },
 
@@ -520,7 +533,7 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ calendarDate: newDate });
     // Persist to localStorage
     if (typeof window !== 'undefined') {
-      localStorage.setItem('calendarDate', newDate.toISOString());
+      if (isValidDate(newDate)) localStorage.setItem('calendarDate', newDate.toISOString());
     }
   },
 
@@ -531,7 +544,7 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ calendarDate: newDate });
     // Persist to localStorage
     if (typeof window !== 'undefined') {
-      localStorage.setItem('calendarDate', newDate.toISOString());
+      if (isValidDate(newDate)) localStorage.setItem('calendarDate', newDate.toISOString());
     }
   },
 
@@ -542,7 +555,7 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ calendarDate: newDate });
     // Persist to localStorage
     if (typeof window !== 'undefined') {
-      localStorage.setItem('calendarDate', newDate.toISOString());
+      if (isValidDate(newDate)) localStorage.setItem('calendarDate', newDate.toISOString());
     }
   },
 
