@@ -41,6 +41,7 @@ import { TestEventInput, LocationAbbreviation } from '@/lib/google-calendar/type
 import { initiateGoogleAuth, checkGoogleCalendarAuth, disconnectGoogleCalendar } from '@/lib/google-calendar/api-client';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MapPin } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import {
   DndContext,
   closestCenter,
@@ -1963,36 +1964,47 @@ export default function ConfigurePage() {
                       })}
                   </div>
 
-                  {/* Ignored Locations - Collapsible Section */}
-                  {/* Always show this section if there are ANY ignored locations saved */}
-                  {(calendarConfig.locationAbbreviations?.some(abbr => abbr.ignored) ?? false) && (
-                    <div className="border-t pt-4 mt-4">
-                      <button
-                        onClick={() => setShowIgnoredLocations(!showIgnoredLocations)}
-                        className="flex items-center justify-between w-full text-left mb-2 p-2 rounded hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          {showIgnoredLocations ? (
-                            <ChevronDown className="h-4 w-4 text-gray-500" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-gray-500" />
-                          )}
-                          <span className="text-sm font-medium text-gray-700">
-                            N/A Locations
-                          </span>
-                          <Badge variant="secondary" className="bg-gray-300 text-gray-700 text-xs font-medium">
-                            {calendarConfig.locationAbbreviations?.filter(abbr => abbr.ignored).length ?? 0}
-                          </Badge>
-                          <span className="text-xs text-gray-500 ml-2">
-                            (Click to {showIgnoredLocations ? 'hide' : 'review'})
-                          </span>
-                        </div>
-                      </button>
-                      
-                      {showIgnoredLocations && (
-                        <div className="space-y-2 mt-2">
-                          {/* Show ALL ignored locations from saved config, not just from current events */}
-                          {(calendarConfig.locationAbbreviations ?? [])
+                  {/* Ignored Locations - "Bluetooth style" minimized section */}
+                  <div className="border-t pt-4 mt-4">
+                    <div className="flex items-center justify-between w-full mb-2 p-2 rounded bg-gray-50">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {showIgnoredLocations ? (
+                          <ChevronDown className="h-4 w-4 text-gray-500" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-gray-500" />
+                        )}
+                        <span className="text-sm font-medium text-gray-700">
+                          N/A Locations
+                        </span>
+                        <Badge variant="secondary" className="bg-gray-300 text-gray-700 text-xs font-medium">
+                          {calendarConfig.locationAbbreviations?.filter(abbr => abbr.ignored).length ?? 0}
+                        </Badge>
+                        <span className="text-xs text-gray-500 truncate">
+                          Hidden locations (kept for later review)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">
+                          {showIgnoredLocations ? 'On' : 'Off'}
+                        </span>
+                        <Switch
+                          checked={showIgnoredLocations}
+                          onCheckedChange={(checked) => setShowIgnoredLocations(checked)}
+                          aria-label="Toggle N/A locations list"
+                        />
+                      </div>
+                    </div>
+                    
+                    {showIgnoredLocations && (
+                      <div className="space-y-2 mt-2">
+                        {/* Show ALL ignored locations from saved config, not just from current events */}
+                        {(calendarConfig.locationAbbreviations ?? []).filter(abbr => abbr.ignored).length === 0 ? (
+                          <p className="text-xs text-gray-500 px-2">
+                            No N/A locations yet. When you mark a location as N/A, it will appear here for later edits.
+                          </p>
+                        ) : (
+                          (calendarConfig.locationAbbreviations ?? [])
                             .filter(abbr => abbr.ignored)
                             .map((existingAbbr) => {
                               const location = existingAbbr.original;
@@ -2081,11 +2093,11 @@ export default function ConfigurePage() {
                                   </div>
                                 </div>
                               );
-                            })}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                            })
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             )}
