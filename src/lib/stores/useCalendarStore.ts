@@ -92,11 +92,11 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   },
 
   fetchEvents: async (dateRange: DateRange, force = false) => {
-    const { config, isGoogleCalendarConnected, _eventsFetchTime, _eventsFetchKey, events } = get();
+    const { config, isGoogleCalendarConnected, _eventsFetchTime, _eventsFetchKey, events: existingEvents } = get();
     const cacheKey = `${dateRange.start.toISOString()}:${dateRange.end.toISOString()}`;
     
     // Skip if cache is fresh and for same date range (unless forced)
-    if (!force && events.length > 0 && _eventsFetchTime && _eventsFetchKey === cacheKey && Date.now() - _eventsFetchTime < CACHE_DURATION) {
+    if (!force && existingEvents.length > 0 && _eventsFetchTime && _eventsFetchKey === cacheKey && Date.now() - _eventsFetchTime < CACHE_DURATION) {
       return;
     }
     
@@ -108,7 +108,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
     
     set({ loading: true, error: null });
     try {
-      let events: GoogleCalendarEvent[] = [];
+      let newEvents: GoogleCalendarEvent[] = [];
 
       // Try Google Calendar API first if connected
       if (isGoogleCalendarConnected) {
@@ -120,7 +120,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
           );
           
           // Convert Google Calendar API format to our format
-          events = googleEvents.map((event: any) => {
+          newEvents = googleEvents.map((event: any) => {
             const clientId = event.extendedProperties?.private?.pcaClientId;
             const category = event.extendedProperties?.private?.pcaCategory;
             
@@ -168,18 +168,44 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
       }
 
       // Fallback to Firebase if Google Calendar not connected or failed
-      if (events.length === 0) {
-        events = await getCalendarEventsByDateRange(dateRange.start, dateRange.end);
+      if (newEvents.length === 0) {
+        newEvents = await getCalendarEventsByDateRange(dateRange.start, dateRange.end);
       }
       
       // Auto-detect coaching sessions and class sessions based on keywords
-      const eventsWithDetection = events.map(event => ({
+      const eventsWithDetection = newEvents.map(event => ({
         ...event,
         isCoachingSession: event.isCoachingSession ?? isCoachingEvent(event, config.coachingKeywords),
         isClassSession: event.isClassSession ?? isClassEvent(event, config.classKeywords || []),
       }));
 
-      set({ events: eventsWithDetection, loading: false, _eventsFetchTime: Date.now(), _eventsFetchKey: cacheKey });
+      // Merge with existing events instead of replacing them
+      // Remove events that fall within the new date range (they'll be replaced with fresh data)
+      // Keep events outside the new date range
+      const eventsOutsideRange = existingEvents.filter(existingEvent => {
+        if (!existingEvent.start?.dateTime) return true; // Keep events without dates
+        
+        const eventDate = new Date(existingEvent.start.dateTime);
+        return eventDate < dateRange.start || eventDate > dateRange.end;
+      });
+      
+      // Combine: events outside range + new events from this fetch
+      // Deduplicate by event ID (in case there's overlap)
+      const eventMap = new Map<string, GoogleCalendarEvent>();
+      
+      // Add existing events outside range first
+      eventsOutsideRange.forEach(event => {
+        eventMap.set(event.id, event);
+      });
+      
+      // Add/update with new events (will overwrite if ID matches)
+      eventsWithDetection.forEach(event => {
+        eventMap.set(event.id, event);
+      });
+      
+      const mergedEvents = Array.from(eventMap.values());
+
+      set({ events: mergedEvents, loading: false, _eventsFetchTime: Date.now(), _eventsFetchKey: cacheKey });
     } catch (error) {
       set({ 
         error: error instanceof Error ? error.message : 'Failed to fetch events',
