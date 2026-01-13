@@ -30,13 +30,15 @@ export default function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased" suppressHydrationWarning>
+      <head>
         <script
           // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{
             __html: `window.__FIREBASE_CONFIG__ = ${firebasePublicConfigJson};`,
           }}
         />
+      </head>
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <Providers>
           <div className="min-h-screen bg-background">
             <Header />
