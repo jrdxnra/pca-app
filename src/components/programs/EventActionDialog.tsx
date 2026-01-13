@@ -894,7 +894,7 @@ export function EventActionDialog({
                     <div className="space-y-2">
                       <Button 
                         onClick={handleBulkAssignDetectedNoNavigate}
-                        disabled={!selectedClientId || isAssigning || selectedEventIds.size === 0}
+                        disabled={!selectedClientId || isAssigning || isAssigningAndGo || selectedEventIds.size === 0}
                         className="w-full"
                         variant="default"
                         size="lg"
@@ -904,7 +904,8 @@ export function EventActionDialog({
                         ) : (
                           <>
                             <Users className="mr-2 h-4 w-4 icon-clients" />
-                            Assign {selectedEventIds.size} Session{selectedEventIds.size !== 1 ? 's' : ''}
+                            Assign {selectedEventIds.size} Session{selectedEventIds.size !== 1 ? 's' : ''} & Go to Calendar
+                            <ArrowRight className="ml-2 h-4 w-4" />
                           </>
                         )}
                       </Button>
