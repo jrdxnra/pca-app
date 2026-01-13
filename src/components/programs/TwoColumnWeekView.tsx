@@ -110,6 +110,9 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   const [allDayCollapsed, setAllDayCollapsed] = useState(true);
   const [mounted, setMounted] = useState(false);
   
+  // Get app timezone (defaults to Pacific) - must be declared early since it's used in functions below
+  const appTimezone = getAppTimezone();
+  
   // Track when component is mounted to avoid hydration mismatch with dates
   useEffect(() => {
     setMounted(true);
@@ -290,10 +293,6 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     }
     return slots;
   }, [businessHours]);
-
-
-  // Get app timezone (defaults to Pacific)
-  const appTimezone = getAppTimezone();
 
   // Helper to get hours/minutes in app timezone for comparison
   const getAppTimezoneTime = (date: Date): { hour: number; minute: number } => {
