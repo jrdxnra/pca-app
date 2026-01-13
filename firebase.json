@@ -4,6 +4,7 @@
     "indexes": "firestore.indexes.json"
   },
   "hosting": {
+    "site": "performancecoach",
     "public": "public",
     "ignore": [
       "firebase.json",
