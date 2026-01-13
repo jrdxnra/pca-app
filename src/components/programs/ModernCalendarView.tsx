@@ -602,25 +602,6 @@ export function ModernCalendarView({
   };
 
 
-  // Helper function to safely convert dates
-  const safeToDate = (dateValue: any): Date => {
-    if (!dateValue) return new Date();
-    if (dateValue instanceof Date) {
-      return dateValue;
-    }
-    if (typeof dateValue.toDate === 'function') {
-      return dateValue.toDate();
-    }
-    if (dateValue.seconds !== undefined) {
-      return new Date(dateValue.seconds * 1000);
-    }
-    if (typeof dateValue === 'string' || typeof dateValue === 'number') {
-      return new Date(dateValue);
-    }
-    console.warn('Unknown date format in ModernCalendarView:', dateValue);
-    return new Date();
-  };
-
   const formatTime = (date: Date, timeZone?: string) => {
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
