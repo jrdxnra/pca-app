@@ -13,9 +13,14 @@ import {
   checkGoogleCalendarAuth,
   addWorkoutLinksToEvent
 } from '@/lib/google-calendar/api-client';
+import { getCalendarSyncConfig, updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
 
 // Cache duration in milliseconds (30 seconds)
 const CACHE_DURATION = 30 * 1000;
+
+function normalizeLocationKey(input: string): string {
+  return (input || '').trim().replace(/\s+/g, ' ');
+}
 
 interface CalendarStore {
   // State
@@ -520,11 +525,40 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
   updateConfig: (updates: Partial<CalendarSyncConfig>) => {
     const { config } = get();
-    const newConfig = { ...config, ...updates };
+    // Normalize location abbreviations to make matching robust across whitespace differences
+    const nextLocationAbbreviations = updates.locationAbbreviations
+      ? updates.locationAbbreviations
+          .map(a => ({
+            ...a,
+            original: normalizeLocationKey(a.original),
+            abbreviation: (a.abbreviation || '').trim() || normalizeLocationKey(a.original),
+          }))
+          .filter(a => a.original.length > 0)
+      : undefined;
+
+    const newConfig = { ...config, ...updates, ...(nextLocationAbbreviations ? { locationAbbreviations: nextLocationAbbreviations } : {}) };
     set({ config: newConfig });
     
-    // Save to localStorage for now (will be Firestore in Phase 2)
-    localStorage.setItem('calendar-config', JSON.stringify(newConfig));
+    // Save locally for fast startup, and persist to Firestore for cross-device reliability
+    try {
+      localStorage.setItem('calendar-config', JSON.stringify(newConfig));
+    } catch (e) {
+      console.warn('Failed to write calendar config to localStorage:', e);
+    }
+
+    // Fire-and-forget persistence; if it fails, surface an error but keep local changes.
+    try {
+      void updateCalendarSyncConfig({
+        ...updates,
+        ...(nextLocationAbbreviations ? { locationAbbreviations: nextLocationAbbreviations } : {}),
+      }).catch(err => {
+        console.error('Failed to persist calendar config to Firestore:', err);
+        set({ error: err instanceof Error ? err.message : 'Failed to save calendar settings' });
+      });
+    } catch (err) {
+      console.error('Failed to start Firestore calendar config save:', err);
+      set({ error: err instanceof Error ? err.message : 'Failed to save calendar settings' });
+    }
   },
 
   clearAllTestEvents: async () => {
@@ -578,8 +612,9 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   getLocationDisplay: (location: string) => {
     const { config } = get();
     if (!location) return '';
+    const key = normalizeLocationKey(location);
     const abbreviations = config.locationAbbreviations || [];
-    const abbr = abbreviations.find(a => a.original === location);
+    const abbr = abbreviations.find(a => normalizeLocationKey(a.original) === key);
     // If location is ignored, return empty string (don't display)
     if (abbr?.ignored) return '';
     return abbr ? abbr.abbreviation : location;
@@ -614,6 +649,25 @@ if (typeof window !== 'undefined') {
     } catch (error) {
       console.error('Failed to load calendar config from localStorage:', error);
     }
+  }
+
+  // Load config from Firestore (source of truth) and migrate any legacy shapes (e.g., "N/A" markers).
+  try {
+    void getCalendarSyncConfig(defaultConfig).then(remoteConfig => {
+      // Keep any local-only keys, but prefer Firestore values.
+      const current = useCalendarStore.getState().config;
+      const merged = { ...defaultConfig, ...current, ...remoteConfig };
+      useCalendarStore.setState({ config: merged });
+      try {
+        localStorage.setItem('calendar-config', JSON.stringify(merged));
+      } catch (e) {
+        console.warn('Failed to cache calendar config to localStorage:', e);
+      }
+    }).catch(error => {
+      console.error('Failed to load calendar config from Firestore:', error);
+    });
+  } catch (error) {
+    console.error('Failed to start Firestore calendar config load:', error);
   }
 
   // Check Google Calendar connection status on initialization

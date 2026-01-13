@@ -222,6 +222,8 @@ function SortableItem({
 }
 
 export default function ConfigurePage() {
+  const normalizeLocationKey = (input: string) => (input || '').trim().replace(/\\s+/g, ' ');
+
   const {
     periods,
     weekTemplates,
@@ -377,7 +379,7 @@ export default function ConfigurePage() {
         
         // Extract locations only from coaching events
         const locations = coachingEvents
-          .map(event => event.location)
+          .map(event => (event.location ? normalizeLocationKey(event.location) : ''))
           .filter((location): location is string => !!location && location.trim() !== '');
         
         // Get unique locations
@@ -711,19 +713,20 @@ export default function ConfigurePage() {
 
   // Location abbreviation handlers
   const handleAddLocationAbbreviation = (original: string) => {
+    const normalizedOriginal = normalizeLocationKey(original);
     const abbreviations = calendarConfig.locationAbbreviations || [];
-    const existing = abbreviations.find(abbr => abbr.original === original);
+    const existing = abbreviations.find(abbr => normalizeLocationKey(abbr.original) === normalizedOriginal);
     
     if (existing) {
-      setEditingLocation(existing);
+      setEditingLocation({ ...existing, original: normalizeLocationKey(existing.original) });
       setLocationAbbreviationInput(existing.abbreviation);
     } else {
       const newAbbr: LocationAbbreviation = {
-        original,
-        abbreviation: original // Default to original, user can edit
+        original: normalizedOriginal,
+        abbreviation: normalizedOriginal // Default to original, user can edit
       };
       setEditingLocation(newAbbr);
-      setLocationAbbreviationInput(original);
+      setLocationAbbreviationInput(normalizedOriginal);
     }
   };
 
@@ -731,11 +734,15 @@ export default function ConfigurePage() {
     if (!editingLocation) return;
     
     const abbreviations = calendarConfig.locationAbbreviations || [];
-    const existingIndex = abbreviations.findIndex(abbr => abbr.original === editingLocation.original);
+    const normalizedOriginal = normalizeLocationKey(editingLocation.original);
+    const existingIndex = abbreviations.findIndex(abbr => normalizeLocationKey(abbr.original) === normalizedOriginal);
+    const existing = existingIndex >= 0 ? abbreviations[existingIndex] : undefined;
     
     const updatedAbbr: LocationAbbreviation = {
-      original: editingLocation.original,
-      abbreviation: locationAbbreviationInput.trim() || editingLocation.original
+      original: normalizedOriginal,
+      abbreviation: locationAbbreviationInput.trim() || normalizedOriginal,
+      // Preserve ignored state when editing an existing / N/A entry
+      ignored: existing?.ignored ?? editingLocation.ignored
     };
     
     let updatedAbbreviations: LocationAbbreviation[];
@@ -753,21 +760,24 @@ export default function ConfigurePage() {
 
   const handleDeleteLocationAbbreviation = (original: string) => {
     const abbreviations = calendarConfig.locationAbbreviations || [];
-    const updated = abbreviations.filter(abbr => abbr.original !== original);
+    const key = normalizeLocationKey(original);
+    const updated = abbreviations.filter(abbr => normalizeLocationKey(abbr.original) !== key);
     updateCalendarConfig({ locationAbbreviations: updated });
   };
 
   const getLocationDisplay = (location: string): string => {
     const abbreviations = calendarConfig.locationAbbreviations || [];
-    const abbr = abbreviations.find(a => a.original === location);
+    const key = normalizeLocationKey(location);
+    const abbr = abbreviations.find(a => normalizeLocationKey(a.original) === key);
     // If location is ignored, return empty string (don't display)
     if (abbr?.ignored) return '';
     return abbr ? abbr.abbreviation : location;
   };
 
   const handleToggleLocationIgnored = (original: string) => {
+    const normalizedOriginal = normalizeLocationKey(original);
     const abbreviations = calendarConfig.locationAbbreviations || [];
-    const existingIndex = abbreviations.findIndex(abbr => abbr.original === original);
+    const existingIndex = abbreviations.findIndex(abbr => normalizeLocationKey(abbr.original) === normalizedOriginal);
     
     let updatedAbbreviations: LocationAbbreviation[];
     if (existingIndex >= 0) {
@@ -780,8 +790,8 @@ export default function ConfigurePage() {
     } else {
       // Create new entry marked as ignored
       updatedAbbreviations = [...abbreviations, {
-        original,
-        abbreviation: original,
+        original: normalizedOriginal,
+        abbreviation: normalizedOriginal,
         ignored: true
       }];
     }
@@ -1866,12 +1876,12 @@ export default function ConfigurePage() {
                   <div className="space-y-2 max-h-[400px] overflow-y-auto">
                     {uniqueLocations
                       .filter(location => {
-                        const existingAbbr = calendarConfig.locationAbbreviations?.find(abbr => abbr.original === location);
+                        const existingAbbr = calendarConfig.locationAbbreviations?.find(abbr => normalizeLocationKey(abbr.original) === normalizeLocationKey(location));
                         return !existingAbbr?.ignored;
                       })
                       .map((location) => {
-                        const existingAbbr = calendarConfig.locationAbbreviations?.find(abbr => abbr.original === location);
-                        const isEditing = editingLocation?.original === location;
+                        const existingAbbr = calendarConfig.locationAbbreviations?.find(abbr => normalizeLocationKey(abbr.original) === normalizeLocationKey(location));
+                        const isEditing = normalizeLocationKey(editingLocation?.original || '') === normalizeLocationKey(location);
                         
                         return (
                           <div key={location} className="p-3 border rounded-lg">
@@ -1986,7 +1996,7 @@ export default function ConfigurePage() {
                             .filter(abbr => abbr.ignored)
                             .map((existingAbbr) => {
                               const location = existingAbbr.original;
-                              const isEditing = editingLocation?.original === location;
+                              const isEditing = normalizeLocationKey(editingLocation?.original || '') === normalizeLocationKey(location);
                               
                               return (
                                 <div key={location} className="p-3 border rounded-lg bg-gray-50 opacity-75">
