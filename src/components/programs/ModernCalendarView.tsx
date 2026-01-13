@@ -1879,12 +1879,16 @@ export function ModernCalendarView({
           // Fallback: navigate to builder if event has linked workout
           const eventDate = new Date(event.start.dateTime);
           const dateParam = eventDate.toISOString().split('T')[0];
-          const clientParam = selectedClient ? `client=${selectedClient}&` : '';
+          
+          // Get client ID from event first, fall back to selectedClient
+          const eventClientId = getEventClientId(event);
+          const clientIdToUse = eventClientId || selectedClient;
+          const clientParam = clientIdToUse ? `client=${clientIdToUse}&` : '';
 
           if (event.linkedWorkoutId) {
             const workoutUrl = `/workouts/builder?${clientParam}date=${dateParam}&workoutId=${event.linkedWorkoutId}`;
             router.push(workoutUrl);
-          } else if (event.isCoachingSession && selectedClient) {
+          } else if (event.isCoachingSession && clientIdToUse) {
             const eventIdParam = `&eventId=${event.id}`;
             const buildWorkoutUrl = `/workouts/builder?${clientParam}date=${dateParam}${eventIdParam}`;
             router.push(buildWorkoutUrl);

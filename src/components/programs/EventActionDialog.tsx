@@ -104,6 +104,10 @@ export function EventActionDialog({
     }
   }, [open, effectiveFetchEvents, event.start?.dateTime]);
   
+  // Check if event already has a client
+  const existingClientId = clientId || getEventClientId(event);
+  const hasClient = !!existingClientId;
+  
   // State for client assignment
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -122,9 +126,12 @@ export function EventActionDialog({
   const [extendedEvents, setExtendedEvents] = useState<GoogleCalendarEvent[]>([]); // Events fetched with extended range
   const [isFetchingExtendedEvents, setIsFetchingExtendedEvents] = useState(false);
 
-  // Check if event already has a client
-  const existingClientId = clientId || getEventClientId(event);
-  const hasClient = !!existingClientId;
+  // Pre-populate client dropdown when dialog opens if event already has a client
+  useEffect(() => {
+    if (open && existingClientId && !selectedClientId) {
+      setSelectedClientId(existingClientId);
+    }
+  }, [open, existingClientId, selectedClientId]);
   
   // Check if event already has a category
   const existingCategory = getEventCategory(event);
@@ -162,9 +169,8 @@ export function EventActionDialog({
   const handleViewWorkout = () => {
     if (!linkedWorkoutId || !existingClientId) return;
     
-    const workoutUrl = `/workouts/view?client=${existingClientId}&date=${dateParam}&workoutId=${linkedWorkoutId}`;
-    router.push(workoutUrl);
-    onOpenChange(false);
+    // Navigate to builder (not view) so it's within the client's workout scheme
+    navigateToWorkoutBuilder(existingClientId, linkedWorkoutId);
   };
 
   const handleCreateWorkout = () => {
