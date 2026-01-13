@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.gitignore
+.env*
+*.log
+.DS_Store
+README.md
+*.md
+!.dockerignore
+Dockerfile
+.dockerignore
+firebase-debug.log
+.vercel
