@@ -11,6 +11,13 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "/clients",
+        "type": 302
+      }
+    ],
     "rewrites": [
       {
         "source": "/api/**",
