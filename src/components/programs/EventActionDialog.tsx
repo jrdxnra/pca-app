@@ -16,15 +16,11 @@ import { format } from 'date-fns';
 import { getAppTimezone } from '@/lib/utils/timezone';
 import { 
   getEventClientId, 
-  findAllPatternsWithEvents, 
-  PatternMatchResult,
-  getTotalEventCount,
   getEventCategory,
   getLinkedWorkoutId
 } from '@/lib/utils/event-patterns';
 import { assignClientToEvents, BulkAssignmentResult, unassignClientFromEvent } from '@/lib/firebase/services/eventAssignment';
 import { deleteCalendarEvent } from '@/lib/google-calendar/api-client';
-import { BulkAssignmentConfirmDialog } from './BulkAssignmentConfirmDialog';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 
@@ -111,14 +107,11 @@ export function EventActionDialog({
   // State for client assignment
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
-  const [patternResults, setPatternResults] = useState<PatternMatchResult[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isAssigningAndGo, setIsAssigningAndGo] = useState(false); // Separate loading state for "Assign & Go" button
   const [isUnassigning, setIsUnassigning] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
-  const [navigateAfterAssign, setNavigateAfterAssign] = useState(false);
   
   // State for repeat/pattern detection
   const [repeatEnabled, setRepeatEnabled] = useState(false);
@@ -277,197 +270,78 @@ export function EventActionDialog({
     if (!selectedClientId) return;
     
     setAssignmentError(null);
-    setNavigateAfterAssign(true);
     setIsAssigningAndGo(true); // Set specific loading state for this button
     
     try {
-      // Find all patterns and matching events
-      const results = findAllPatternsWithEvents(
-        event,
-        allEvents,
-        selectedClientId,
-        clientPrograms
-      );
-      
-      // Count total events across all patterns
-      const totalEvents = results.reduce((sum, pr) => sum + pr.events.length, 0);
-      
-      // If only one event (the clicked event), skip bulk confirm and assign directly
-      if (totalEvents <= 1) {
-        // Create a single-event pattern result for the clicked event
-        const eventDate = new Date(event.start.dateTime);
-        const singleEventPattern: PatternMatchResult[] = [{
-          pattern: {
-            dayOfWeek: eventDate.getDay(),
-            time: eventDate.toTimeString().slice(0, 5),
-            dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][eventDate.getDay()]
-          },
-          events: [event]
-        }];
-        
-        // Directly call bulk confirm handler with navigate=true flag
-        // Don't reset loading state here - handleBulkConfirm will handle it
-        await handleBulkConfirm(singleEventPattern, true);
-        return;
-      }
-      
-      setPatternResults(results);
-      setShowBulkConfirm(true);
-      // Don't reset loading state here - it will be reset when bulk confirm completes or dialog closes
-    } catch (error) {
-      // Only reset on error
-      setIsAssigningAndGo(false);
-      throw error;
-    }
-  };
-
-  // Handle "Assign" button click (assigns but stays on calendar)
-  const handleAssign = async () => {
-    if (!selectedClientId) return;
-    
-    setAssignmentError(null);
-    setNavigateAfterAssign(false);
-    setIsAssigning(true); // Set specific loading state for this button
-    
-    try {
-      // Find all patterns and matching events
-      const results = findAllPatternsWithEvents(
-        event,
-        allEvents,
-        selectedClientId,
-        clientPrograms
-      );
-      
-      // Count total events across all patterns
-      const totalEvents = results.reduce((sum, pr) => sum + pr.events.length, 0);
-      
-      // If only one event (the clicked event), skip bulk confirm and assign directly
-      if (totalEvents <= 1) {
-        // Create a single-event pattern result for the clicked event
-        const eventDate = new Date(event.start.dateTime);
-        const singleEventPattern: PatternMatchResult[] = [{
-          pattern: {
-            dayOfWeek: eventDate.getDay(),
-            time: eventDate.toTimeString().slice(0, 5),
-            dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][eventDate.getDay()]
-          },
-          events: [event]
-        }];
-        
-        // Directly call bulk confirm handler with navigate=false flag
-        // Don't reset loading state here - handleBulkConfirm will handle it
-        await handleBulkConfirm(singleEventPattern, false);
-        return;
-      }
-      
-      setPatternResults(results);
-      setShowBulkConfirm(true);
-      // Don't reset loading state here - it will be reset when bulk confirm completes or dialog closes
-    } catch (error) {
-      // Only reset on error
-      setIsAssigning(false);
-      throw error;
-    }
-  };
-
-  // Handle bulk assignment confirmation
-  // shouldNavigate parameter allows direct calls to override the state-based flag
-  const handleBulkConfirm = async (selectedPatterns: PatternMatchResult[], shouldNavigate?: boolean) => {
-    if (!selectedClientId) return;
-    
-    // Use parameter if provided, otherwise use state
-    const doNavigate = shouldNavigate !== undefined ? shouldNavigate : navigateAfterAssign;
-    
-    // Only set loading state if not already set (prevents race condition when called from handleAssign/handleAssignAndGo)
-    // The calling function should have already set the appropriate loading state
-    if (doNavigate && !isAssigningAndGo) {
-      setIsAssigningAndGo(true);
-    } else if (!doNavigate && !isAssigning) {
-      setIsAssigning(true);
-    }
-    setAssignmentError(null);
-    
-    try {
-      // Collect all events from selected patterns
-      const allSelectedEvents = selectedPatterns.flatMap(pr => pr.events);
-      
-      // Deduplicate by event ID
-      const uniqueEvents = Array.from(
-        new Map(allSelectedEvents.map(e => [e.id, e])).values()
-      );
-      
       const clientName = getClientName(selectedClientId);
       
-      console.log('[handleBulkConfirm] Assigning', uniqueEvents.length, 'events to', clientName, 'with category:', selectedCategory);
-      
-      // Perform bulk assignment
-      const result: BulkAssignmentResult = await assignClientToEvents(
-        uniqueEvents,
+      // Assign the single clicked event directly
+      const result = await assignClientToEvents(
+        [event],
         selectedClientId,
         clientPrograms,
         clientName,
         selectedCategory || undefined
       );
       
-      console.log('[handleBulkConfirm] Assignment result:', result);
+      // Notify parent to refresh
+      onClientAssigned?.();
       
-      // Close bulk confirm dialog
-      setShowBulkConfirm(false);
+      // Navigate to workout builder for the clicked event
+      const clickedEventResult = result.results.find(r => r.eventId === event.id);
+      if (clickedEventResult?.workoutId) {
+        navigateToWorkoutBuilder(selectedClientId, clickedEventResult.workoutId);
+      } else {
+        // No workout created - navigate without workoutId (will create new)
+        navigateToWorkoutBuilder(selectedClientId);
+      }
+    } catch (error) {
+      console.error('Assignment failed:', error);
+      setAssignmentError(error instanceof Error ? error.message : 'Assignment failed');
+    } finally {
+      setIsAssigningAndGo(false);
+    }
+  };
+
+  // Handle "Assign & Go to Calendar" button click (assigns but stays on calendar)
+  const handleAssign = async () => {
+    if (!selectedClientId) return;
+    
+    setAssignmentError(null);
+    setIsAssigning(true); // Set specific loading state for this button
+    
+    try {
+      const clientName = getClientName(selectedClientId);
+      
+      // Assign the single clicked event directly
+      await assignClientToEvents(
+        [event],
+        selectedClientId,
+        clientPrograms,
+        clientName,
+        selectedCategory || undefined
+      );
       
       // Notify parent to refresh
       onClientAssigned?.();
       
-      // Show result message
-      if (result.failed > 0) {
-        console.warn(`Bulk assignment partial success: ${result.successful}/${result.total} events assigned`);
-      } else {
-        console.log(`Successfully assigned ${result.successful} events to ${clientName}`);
-      }
-      
-      // Navigate to workout builder if requested
-      if (doNavigate) {
-        // Find the workout ID for the clicked event from the results
-        const clickedEventResult = result.results.find(r => r.eventId === event.id);
-        
-        if (clickedEventResult?.workoutId) {
-          // Found the workout for the clicked event - navigate directly to it
-          console.log('✅ Found workout for clicked event:', clickedEventResult.workoutId);
-          navigateToWorkoutBuilder(selectedClientId, clickedEventResult.workoutId);
-        } else {
-          // Fallback: Find any successful result (the clicked event should always be first)
-          const firstSuccessful = result.results.find(r => r.success && r.workoutId);
-          if (firstSuccessful?.workoutId) {
-            console.log('⚠️ Using fallback workout:', firstSuccessful.workoutId);
-            navigateToWorkoutBuilder(selectedClientId, firstSuccessful.workoutId);
-          } else {
-            // No workouts created - navigate without workoutId (will create new)
-            console.error('❌ No workouts created during assignment');
-            navigateToWorkoutBuilder(selectedClientId);
-          }
-        }
-      } else {
-        onOpenChange(false);
-      }
+      // Close dialog and stay on calendar
+      onOpenChange(false);
     } catch (error) {
-      console.error('Bulk assignment failed:', error);
+      console.error('Assignment failed:', error);
       setAssignmentError(error instanceof Error ? error.message : 'Assignment failed');
     } finally {
-      // Reset both loading states (only one should be active, but reset both to be safe)
       setIsAssigning(false);
-      setIsAssigningAndGo(false);
-      setNavigateAfterAssign(false);
     }
   };
+
 
   // Reset state when dialog closes
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       setSelectedClientId('');
       setSelectedCategory('');
-      setShowBulkConfirm(false);
-      setPatternResults([]);
       setAssignmentError(null);
-      setNavigateAfterAssign(false);
       setIsAssigning(false);
       setIsAssigningAndGo(false);
       // Reset repeat/pattern state
@@ -497,14 +371,14 @@ export function EventActionDialog({
     setSelectedEventIds(new Set());
   };
 
-  // Detect matching events based on selected days and time
+  // Detect matching events based on selected days and time (within 30 minutes)
   const handleDetectEvents = async () => {
     if (!event.start?.dateTime || selectedDays.size === 0) return;
     
     const eventTime = new Date(event.start.dateTime);
     const eventHours = eventTime.getHours();
     const eventMinutes = eventTime.getMinutes();
-    const timeString = `${String(eventHours).padStart(2, '0')}:${String(eventMinutes).padStart(2, '0')}`;
+    const eventTimeInMinutes = eventHours * 60 + eventMinutes; // Convert to minutes for easier comparison
     
     // Calculate date range: from event date to 2 months in the future
     const startDate = new Date(eventTime);
@@ -531,7 +405,7 @@ export function EventActionDialog({
       }
     }
     
-    // Filter events matching the selected days and same time, within 2 months
+    // Filter events matching the selected days and time within 30 minutes, within 2 months
     const matching = eventsToSearch.filter(e => {
       // Skip if already has a client assigned
       if (getEventClientId(e)) return false;
@@ -546,10 +420,14 @@ export function EventActionDialog({
       const eDayOfWeek = eDate.getDay();
       const eHours = eDate.getHours();
       const eMinutes = eDate.getMinutes();
-      const eTimeString = `${String(eHours).padStart(2, '0')}:${String(eMinutes).padStart(2, '0')}`;
+      const eTimeInMinutes = eHours * 60 + eMinutes; // Convert to minutes for easier comparison
       
-      // Check if day matches and time matches
-      return selectedDays.has(eDayOfWeek) && eTimeString === timeString;
+      // Check if day matches
+      if (!selectedDays.has(eDayOfWeek)) return false;
+      
+      // Check if time is within 30 minutes (before or after)
+      const timeDifference = Math.abs(eTimeInMinutes - eventTimeInMinutes);
+      return timeDifference <= 30;
     });
     
     // Sort by date
@@ -670,7 +548,7 @@ export function EventActionDialog({
 
   return (
     <>
-      <Dialog open={open && !showBulkConfirm} onOpenChange={handleOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{event.summary || 'Event'}</DialogTitle>
@@ -1099,20 +977,6 @@ export function EventActionDialog({
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Bulk Assignment Confirmation Dialog */}
-      <BulkAssignmentConfirmDialog
-        open={showBulkConfirm}
-        onOpenChange={(newOpen) => {
-          if (!newOpen) {
-            setShowBulkConfirm(false);
-          }
-        }}
-        clientName={getClientName(selectedClientId)}
-        patternResults={patternResults}
-        onConfirm={handleBulkConfirm}
-        isLoading={isAssigning}
-      />
     </>
   );
 }
