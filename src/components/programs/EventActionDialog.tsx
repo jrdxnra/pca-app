@@ -306,14 +306,18 @@ export function EventActionDialog({
         }];
         
         // Directly call bulk confirm handler with navigate=true flag
+        // Don't reset loading state here - handleBulkConfirm will handle it
         await handleBulkConfirm(singleEventPattern, true);
         return;
       }
       
       setPatternResults(results);
       setShowBulkConfirm(true);
-    } finally {
-      setIsAssigningAndGo(false); // Reset loading state if we exit early
+      // Don't reset loading state here - it will be reset when bulk confirm completes or dialog closes
+    } catch (error) {
+      // Only reset on error
+      setIsAssigningAndGo(false);
+      throw error;
     }
   };
 
@@ -351,14 +355,18 @@ export function EventActionDialog({
         }];
         
         // Directly call bulk confirm handler with navigate=false flag
+        // Don't reset loading state here - handleBulkConfirm will handle it
         await handleBulkConfirm(singleEventPattern, false);
         return;
       }
       
       setPatternResults(results);
       setShowBulkConfirm(true);
-    } finally {
-      setIsAssigning(false); // Reset loading state if we exit early
+      // Don't reset loading state here - it will be reset when bulk confirm completes or dialog closes
+    } catch (error) {
+      // Only reset on error
+      setIsAssigning(false);
+      throw error;
     }
   };
 
@@ -370,10 +378,11 @@ export function EventActionDialog({
     // Use parameter if provided, otherwise use state
     const doNavigate = shouldNavigate !== undefined ? shouldNavigate : navigateAfterAssign;
     
-    // Set the appropriate loading state based on whether we're navigating
-    if (doNavigate) {
+    // Only set loading state if not already set (prevents race condition when called from handleAssign/handleAssignAndGo)
+    // The calling function should have already set the appropriate loading state
+    if (doNavigate && !isAssigningAndGo) {
       setIsAssigningAndGo(true);
-    } else {
+    } else if (!doNavigate && !isAssigning) {
       setIsAssigning(true);
     }
     setAssignmentError(null);
