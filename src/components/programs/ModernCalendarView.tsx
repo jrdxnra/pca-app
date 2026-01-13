@@ -1868,7 +1868,10 @@ export function ModernCalendarView({
         onWorkoutClick={(workout) => {
           const workoutDate = safeToDate(workout.date);
           const dateParam = workoutDate.toISOString().split('T')[0];
-          const clientParam = selectedClient ? `client=${selectedClient}&` : '';
+          // Prefer the workout's clientId so the builder preselects the correct client,
+          // even when "All Clients" is selected in the calendar filter.
+          const clientIdToUse = workout.clientId || selectedClient;
+          const clientParam = clientIdToUse ? `client=${clientIdToUse}&` : '';
           const workoutUrl = `/workouts/builder?${clientParam}date=${dateParam}&workoutId=${workout.id}`;
           router.push(workoutUrl);
         }}
