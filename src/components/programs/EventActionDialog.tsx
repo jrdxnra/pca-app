@@ -114,6 +114,7 @@ export function EventActionDialog({
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const [patternResults, setPatternResults] = useState<PatternMatchResult[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [isAssigningAndGo, setIsAssigningAndGo] = useState(false); // Separate loading state for "Assign & Go" button
   const [isUnassigning, setIsUnassigning] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
@@ -271,44 +272,49 @@ export function EventActionDialog({
     }
   };
 
-  // Handle "Assign & Go to Workout" button click
+  // Handle "Assign & Go to Calendar" button click
   const handleAssignAndGo = async () => {
     if (!selectedClientId) return;
     
     setAssignmentError(null);
     setNavigateAfterAssign(true);
+    setIsAssigningAndGo(true); // Set specific loading state for this button
     
-    // Find all patterns and matching events
-    const results = findAllPatternsWithEvents(
-      event,
-      allEvents,
-      selectedClientId,
-      clientPrograms
-    );
-    
-    // Count total events across all patterns
-    const totalEvents = results.reduce((sum, pr) => sum + pr.events.length, 0);
-    
-    // If only one event (the clicked event), skip bulk confirm and assign directly
-    if (totalEvents <= 1) {
-      // Create a single-event pattern result for the clicked event
-      const eventDate = new Date(event.start.dateTime);
-      const singleEventPattern: PatternMatchResult[] = [{
-        pattern: {
-          dayOfWeek: eventDate.getDay(),
-          time: eventDate.toTimeString().slice(0, 5),
-          dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][eventDate.getDay()]
-        },
-        events: [event]
-      }];
+    try {
+      // Find all patterns and matching events
+      const results = findAllPatternsWithEvents(
+        event,
+        allEvents,
+        selectedClientId,
+        clientPrograms
+      );
       
-      // Directly call bulk confirm handler with navigate=true flag
-      await handleBulkConfirm(singleEventPattern, true);
-      return;
+      // Count total events across all patterns
+      const totalEvents = results.reduce((sum, pr) => sum + pr.events.length, 0);
+      
+      // If only one event (the clicked event), skip bulk confirm and assign directly
+      if (totalEvents <= 1) {
+        // Create a single-event pattern result for the clicked event
+        const eventDate = new Date(event.start.dateTime);
+        const singleEventPattern: PatternMatchResult[] = [{
+          pattern: {
+            dayOfWeek: eventDate.getDay(),
+            time: eventDate.toTimeString().slice(0, 5),
+            dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][eventDate.getDay()]
+          },
+          events: [event]
+        }];
+        
+        // Directly call bulk confirm handler with navigate=true flag
+        await handleBulkConfirm(singleEventPattern, true);
+        return;
+      }
+      
+      setPatternResults(results);
+      setShowBulkConfirm(true);
+    } finally {
+      setIsAssigningAndGo(false); // Reset loading state if we exit early
     }
-    
-    setPatternResults(results);
-    setShowBulkConfirm(true);
   };
 
   // Handle "Assign" button click (assigns but stays on calendar)
@@ -317,38 +323,43 @@ export function EventActionDialog({
     
     setAssignmentError(null);
     setNavigateAfterAssign(false);
+    setIsAssigning(true); // Set specific loading state for this button
     
-    // Find all patterns and matching events
-    const results = findAllPatternsWithEvents(
-      event,
-      allEvents,
-      selectedClientId,
-      clientPrograms
-    );
-    
-    // Count total events across all patterns
-    const totalEvents = results.reduce((sum, pr) => sum + pr.events.length, 0);
-    
-    // If only one event (the clicked event), skip bulk confirm and assign directly
-    if (totalEvents <= 1) {
-      // Create a single-event pattern result for the clicked event
-      const eventDate = new Date(event.start.dateTime);
-      const singleEventPattern: PatternMatchResult[] = [{
-        pattern: {
-          dayOfWeek: eventDate.getDay(),
-          time: eventDate.toTimeString().slice(0, 5),
-          dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][eventDate.getDay()]
-        },
-        events: [event]
-      }];
+    try {
+      // Find all patterns and matching events
+      const results = findAllPatternsWithEvents(
+        event,
+        allEvents,
+        selectedClientId,
+        clientPrograms
+      );
       
-      // Directly call bulk confirm handler with navigate=false flag
-      await handleBulkConfirm(singleEventPattern, false);
-      return;
+      // Count total events across all patterns
+      const totalEvents = results.reduce((sum, pr) => sum + pr.events.length, 0);
+      
+      // If only one event (the clicked event), skip bulk confirm and assign directly
+      if (totalEvents <= 1) {
+        // Create a single-event pattern result for the clicked event
+        const eventDate = new Date(event.start.dateTime);
+        const singleEventPattern: PatternMatchResult[] = [{
+          pattern: {
+            dayOfWeek: eventDate.getDay(),
+            time: eventDate.toTimeString().slice(0, 5),
+            dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][eventDate.getDay()]
+          },
+          events: [event]
+        }];
+        
+        // Directly call bulk confirm handler with navigate=false flag
+        await handleBulkConfirm(singleEventPattern, false);
+        return;
+      }
+      
+      setPatternResults(results);
+      setShowBulkConfirm(true);
+    } finally {
+      setIsAssigning(false); // Reset loading state if we exit early
     }
-    
-    setPatternResults(results);
-    setShowBulkConfirm(true);
   };
 
   // Handle bulk assignment confirmation
@@ -356,11 +367,16 @@ export function EventActionDialog({
   const handleBulkConfirm = async (selectedPatterns: PatternMatchResult[], shouldNavigate?: boolean) => {
     if (!selectedClientId) return;
     
-    setIsAssigning(true);
-    setAssignmentError(null);
-    
     // Use parameter if provided, otherwise use state
     const doNavigate = shouldNavigate !== undefined ? shouldNavigate : navigateAfterAssign;
+    
+    // Set the appropriate loading state based on whether we're navigating
+    if (doNavigate) {
+      setIsAssigningAndGo(true);
+    } else {
+      setIsAssigning(true);
+    }
+    setAssignmentError(null);
     
     try {
       // Collect all events from selected patterns
@@ -427,7 +443,9 @@ export function EventActionDialog({
       console.error('Bulk assignment failed:', error);
       setAssignmentError(error instanceof Error ? error.message : 'Assignment failed');
     } finally {
+      // Reset both loading states (only one should be active, but reset both to be safe)
       setIsAssigning(false);
+      setIsAssigningAndGo(false);
       setNavigateAfterAssign(false);
     }
   };
@@ -441,6 +459,8 @@ export function EventActionDialog({
       setPatternResults([]);
       setAssignmentError(null);
       setNavigateAfterAssign(false);
+      setIsAssigning(false);
+      setIsAssigningAndGo(false);
       // Reset repeat/pattern state
       setRepeatEnabled(false);
       setSelectedDays(new Set());
@@ -599,7 +619,7 @@ export function EventActionDialog({
   const handleBulkAssignDetected = async () => {
     if (!selectedClientId || selectedEventIds.size === 0) return;
     
-    setIsAssigning(true);
+    setIsAssigningAndGo(true); // Use specific loading state for "Assign & Go" button
     setAssignmentError(null);
     
     try {
@@ -635,7 +655,7 @@ export function EventActionDialog({
       console.error('Bulk assignment failed:', error);
       setAssignmentError(error instanceof Error ? error.message : 'Assignment failed');
     } finally {
-      setIsAssigning(false);
+      setIsAssigningAndGo(false);
     }
   };
 
@@ -881,17 +901,17 @@ export function EventActionDialog({
                       </Button>
                       <Button 
                         onClick={handleBulkAssignDetected}
-                        disabled={!selectedClientId || isAssigning || selectedEventIds.size === 0}
+                        disabled={!selectedClientId || isAssigning || isAssigningAndGo || selectedEventIds.size === 0}
                         className="w-full"
                         variant="outline"
                         size="lg"
                       >
-                        {isAssigning ? (
+                        {isAssigningAndGo ? (
                           'Assigning...'
                         ) : (
                           <>
                             <Users className="mr-2 h-4 w-4 icon-clients" />
-                            Assign {selectedEventIds.size} Session{selectedEventIds.size !== 1 ? 's' : ''} & Go to Workout
+                            Assign {selectedEventIds.size} Session{selectedEventIds.size !== 1 ? 's' : ''} & Go to Calendar
                             <ArrowRight className="ml-2 h-4 w-4" />
                           </>
                         )}
@@ -901,7 +921,7 @@ export function EventActionDialog({
                     <div className="space-y-2">
                       <Button 
                         onClick={handleAssign}
-                        disabled={!selectedClientId || isAssigning}
+                        disabled={!selectedClientId || isAssigning || isAssigningAndGo}
                         className="w-full"
                         variant="default"
                         size="lg"
@@ -917,17 +937,17 @@ export function EventActionDialog({
                       </Button>
                       <Button 
                         onClick={handleAssignAndGo}
-                        disabled={!selectedClientId || isAssigning}
+                        disabled={!selectedClientId || isAssigning || isAssigningAndGo}
                         className="w-full"
                         variant="outline"
                         size="lg"
                       >
-                        {isAssigning ? (
+                        {isAssigningAndGo ? (
                           'Assigning...'
                         ) : (
                           <>
                             <Users className="mr-2 h-4 w-4 icon-clients" />
-                            Assign & Go to Workout
+                            Assign & Go to Calendar
                             <ArrowRight className="ml-2 h-4 w-4" />
                           </>
                         )}
