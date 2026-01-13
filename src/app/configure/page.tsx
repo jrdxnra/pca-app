@@ -41,7 +41,6 @@ import { TestEventInput, LocationAbbreviation } from '@/lib/google-calendar/type
 import { initiateGoogleAuth, checkGoogleCalendarAuth, disconnectGoogleCalendar } from '@/lib/google-calendar/api-client';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MapPin } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
 import {
   DndContext,
   closestCenter,
@@ -288,6 +287,17 @@ export default function ConfigurePage() {
   const [locationAbbreviationInput, setLocationAbbreviationInput] = useState('');
   const [showIgnoredLocations, setShowIgnoredLocations] = useState(false);
 
+  // Display locations should include:
+  // - locations discovered from calendar events
+  // - locations already saved in config (so older/rare locations remain editable)
+  const savedLocations = (calendarConfig.locationAbbreviations ?? [])
+    .map(a => normalizeLocationKey(a.original))
+    .filter(Boolean);
+  const allLocationsForDisplay = Array.from(new Set([
+    ...uniqueLocations.map(normalizeLocationKey),
+    ...savedLocations
+  ])).sort();
+
   // Timezone settings state
   const [appTimezone, setAppTimezoneState] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -344,12 +354,13 @@ export default function ConfigurePage() {
       }
       
       try {
-        // Fetch events for a wide date range to get all locations
+        // Fetch events for a wide date range to discover locations.
+        // Note: we still union this list with saved locations so older locations remain editable.
         const today = new Date();
         const startDate = new Date(today);
-        startDate.setMonth(today.getMonth() - 3); // 3 months back
+        startDate.setMonth(today.getMonth() - 12); // 12 months back
         const endDate = new Date(today);
-        endDate.setMonth(today.getMonth() + 3); // 3 months forward
+        endDate.setMonth(today.getMonth() + 12); // 12 months forward
         
         const { fetchEvents } = useCalendarStore.getState();
         await fetchEvents({ start: startDate, end: endDate });
@@ -357,7 +368,8 @@ export default function ConfigurePage() {
         // Get events from store
         const { events, config } = useCalendarStore.getState();
         
-        // Filter to only coaching session events (workouts)
+        // Prefer coaching session events, but also include any event with a location
+        // so the list doesn't miss valid locations due to keyword detection.
         const coachingEvents = events.filter(event => {
           // Check if it's a coaching session
           if (event.isCoachingSession) return true;
@@ -378,8 +390,9 @@ export default function ConfigurePage() {
           return false;
         });
         
-        // Extract locations only from coaching events
-        const locations = coachingEvents
+        // Extract locations from coaching events + any event with a location
+        const allEventsWithLocations = events.filter(e => !!e.location && e.location.trim() !== '');
+        const locations = [...coachingEvents, ...allEventsWithLocations]
           .map(event => (event.location ? normalizeLocationKey(event.location) : ''))
           .filter((location): location is string => !!location && location.trim() !== '');
         
@@ -1875,7 +1888,7 @@ export default function ConfigurePage() {
                 <CardContent className="space-y-4">
                   {/* Active Locations */}
                   <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                    {uniqueLocations
+                    {allLocationsForDisplay
                       .filter(location => {
                         const existingAbbr = calendarConfig.locationAbbreviations?.find(abbr => normalizeLocationKey(abbr.original) === normalizeLocationKey(location));
                         return !existingAbbr?.ignored;
@@ -1964,9 +1977,13 @@ export default function ConfigurePage() {
                       })}
                   </div>
 
-                  {/* Ignored Locations - "Bluetooth style" minimized section */}
+                  {/* Ignored Locations - minimized, expandable section (always present) */}
                   <div className="border-t pt-4 mt-4">
-                    <div className="flex items-center justify-between w-full mb-2 p-2 rounded bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => setShowIgnoredLocations(!showIgnoredLocations)}
+                      className="flex items-center justify-between w-full mb-2 p-2 rounded bg-gray-50 hover:bg-gray-100 transition-colors"
+                    >
                       <div className="flex items-center gap-2 min-w-0">
                         {showIgnoredLocations ? (
                           <ChevronDown className="h-4 w-4 text-gray-500" />
@@ -1983,18 +2000,10 @@ export default function ConfigurePage() {
                           Hidden locations (kept for later review)
                         </span>
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">
-                          {showIgnoredLocations ? 'On' : 'Off'}
-                        </span>
-                        <Switch
-                          checked={showIgnoredLocations}
-                          onCheckedChange={(checked) => setShowIgnoredLocations(checked)}
-                          aria-label="Toggle N/A locations list"
-                        />
-                      </div>
-                    </div>
+                      <span className="text-xs text-gray-500">
+                        {showIgnoredLocations ? 'Hide' : 'Review'}
+                      </span>
+                    </button>
                     
                     {showIgnoredLocations && (
                       <div className="space-y-2 mt-2">
