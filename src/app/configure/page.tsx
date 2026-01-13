@@ -1217,10 +1217,14 @@ export default function ConfigurePage() {
                 <Layers className="h-5 w-5 icon-workout" />
                 Workout Structure Templates
               </h3>
-              <Button onClick={() => {
+              <Button
+                variant="outline"
+                onClick={() => {
                 setEditingWorkoutStructureTemplate(null);
                 setShowWorkoutStructureTemplateForm(true);
-              }} size="sm">
+              }}
+                size="sm"
+              >
                 <Plus className="h-4 w-4 mr-1.5 icon-add" />
                 Add Template
               </Button>
