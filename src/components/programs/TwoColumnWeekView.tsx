@@ -45,6 +45,58 @@ interface TwoColumnWeekViewProps {
   onWorkoutClick?: (workout: ClientWorkout) => void;
 }
 
+// Helper to get client ID from event - defined outside component to avoid minification issues
+function getEventClientId(event: GoogleCalendarEvent): string | null {
+  // Check preConfiguredClient first (highest priority)
+  if (event.preConfiguredClient) {
+    return event.preConfiguredClient;
+  }
+  
+  // Check extended properties (from Google Calendar API)
+  if ((event as any).extendedProperties?.private?.pcaClientId) {
+    return (event as any).extendedProperties.private.pcaClientId;
+  }
+  
+  // Check description metadata - try multiple patterns
+  if (event.description) {
+    // Pattern 1: [Metadata: ... client=...]
+    let clientMatch = event.description.match(/\[Metadata:.*client=([^,\s}\]]+)/);
+    if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
+      return clientMatch[1].trim();
+    }
+    
+    // Pattern 2: client=... (without Metadata wrapper)
+    clientMatch = event.description.match(/client=([^,\s\n]+)/);
+    if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
+      return clientMatch[1].trim();
+    }
+  }
+  
+  return null;
+}
+
+// Helper to detect if an event is an all-day event - defined outside component to avoid minification issues
+function isAllDayEvent(event: GoogleCalendarEvent): boolean {
+  // Check if event uses date instead of dateTime (Google Calendar all-day format)
+  if (event.start.date && !event.start.dateTime) {
+    return true;
+  }
+  // Check if start and end times are the same (broken all-day event)
+  if (event.start.dateTime && event.end?.dateTime) {
+    const start = new Date(event.start.dateTime);
+    const end = new Date(event.end.dateTime);
+    if (start.getTime() === end.getTime()) {
+      return true;
+    }
+    // Also check for events spanning more than 12 hours (likely all-day or multi-day)
+    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    if (durationHours >= 12) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Memoize the component to prevent re-rendering the structure when only data changes
 export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   calendarDate,
@@ -60,35 +112,14 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   onEventClick,
   onWorkoutClick
 }: TwoColumnWeekViewProps) {
-  // Helper to get client ID from event
-  const getEventClientId = (event: GoogleCalendarEvent): string | null => {
-    // Check preConfiguredClient first (highest priority)
-    if (event.preConfiguredClient) {
-      return event.preConfiguredClient;
-    }
-    
-    // Check extended properties (from Google Calendar API)
-    if ((event as any).extendedProperties?.private?.pcaClientId) {
-      return (event as any).extendedProperties.private.pcaClientId;
-    }
-    
-    // Check description metadata - try multiple patterns
-    if (event.description) {
-      // Pattern 1: [Metadata: ... client=...]
-      let clientMatch = event.description.match(/\[Metadata:.*client=([^,\s}\]]+)/);
-      if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
-        return clientMatch[1].trim();
-      }
-      
-      // Pattern 2: client=... (without Metadata wrapper)
-      clientMatch = event.description.match(/client=([^,\s\n]+)/);
-      if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
-        return clientMatch[1].trim();
-      }
-    }
-    
-    return null;
-  };
+  // All hooks must be called first, in the same order every render
+  const { workoutCategories: configWorkoutCategories, businessHours } = useConfigurationStore();
+  const router = useRouter();
+  const [allDayCollapsed, setAllDayCollapsed] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  
+  // Get app timezone (defaults to Pacific)
+  const appTimezone = getAppTimezone();
 
   // Filter events by client at the component level BEFORE any time slot processing
   const calendarEvents = React.useMemo(() => {
@@ -105,40 +136,10 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     }
   }, [allCalendarEvents, selectedClient]);
   
-  const { workoutCategories: configWorkoutCategories, businessHours } = useConfigurationStore();
-  const router = useRouter();
-  const [allDayCollapsed, setAllDayCollapsed] = useState(true);
-  const [mounted, setMounted] = useState(false);
-  
-  // Get app timezone (defaults to Pacific) - must be declared early since it's used in functions below
-  const appTimezone = getAppTimezone();
-  
   // Track when component is mounted to avoid hydration mismatch with dates
   useEffect(() => {
     setMounted(true);
   }, []);
-  
-  // Helper to detect if an event is an all-day event
-  const isAllDayEvent = (event: GoogleCalendarEvent): boolean => {
-    // Check if event uses date instead of dateTime (Google Calendar all-day format)
-    if (event.start.date && !event.start.dateTime) {
-      return true;
-    }
-    // Check if start and end times are the same (broken all-day event)
-    if (event.start.dateTime && event.end?.dateTime) {
-      const start = new Date(event.start.dateTime);
-      const end = new Date(event.end.dateTime);
-      if (start.getTime() === end.getTime()) {
-        return true;
-      }
-      // Also check for events spanning more than 12 hours (likely all-day or multi-day)
-      const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-      if (durationHours >= 12) {
-        return true;
-      }
-    }
-    return false;
-  };
   
   // Separate all-day events from timed events
   const { allDayEvents, timedEvents } = useMemo(() => {
