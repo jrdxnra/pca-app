@@ -21,6 +21,7 @@ import { ClientWorkout } from '@/lib/types';
 import { format } from 'date-fns';
 import { getAppTimezone } from '@/lib/utils/timezone';
 import { safeToDate } from '@/lib/utils/dateHelpers';
+import { getEventClientId } from '@/lib/utils/event-patterns';
 import { UnifiedDayCard } from './UnifiedDayCard';
 
 interface ModernCalendarViewProps {
@@ -1372,36 +1373,6 @@ export function ModernCalendarView({
           if (eventHour !== slotHour) {
             return false;
           }
-
-          // Helper to check if event belongs to a client
-          const getEventClientId = (event: GoogleCalendarEvent): string | null => {
-            // Check preConfiguredClient first (highest priority)
-            if (event.preConfiguredClient) {
-              return event.preConfiguredClient;
-            }
-            
-            // Check extended properties (from Google Calendar API)
-            if ((event as any).extendedProperties?.private?.pcaClientId) {
-              return (event as any).extendedProperties.private.pcaClientId;
-            }
-            
-            // Check description metadata - try multiple patterns
-            if (event.description) {
-              // Pattern 1: [Metadata: ... client=...]
-              let clientMatch = event.description.match(/\[Metadata:.*client=([^,\s}\]]+)/);
-              if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
-                return clientMatch[1].trim();
-            }
-            
-              // Pattern 2: client=... (without Metadata wrapper)
-              clientMatch = event.description.match(/client=([^,\s\n]+)/);
-              if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
-                return clientMatch[1].trim();
-              }
-            }
-            
-            return null;
-          };
 
           const eventClientId = getEventClientId(event);
 
