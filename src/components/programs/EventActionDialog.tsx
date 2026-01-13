@@ -920,7 +920,7 @@ export function EventActionDialog({
                         ) : (
                           <>
                             <Users className="mr-2 h-4 w-4 icon-clients" />
-                            Assign {selectedEventIds.size} Session{selectedEventIds.size !== 1 ? 's' : ''} & Go to Calendar
+                            Assign {selectedEventIds.size} Session{selectedEventIds.size !== 1 ? 's' : ''} & Go to Workout
                             <ArrowRight className="ml-2 h-4 w-4" />
                           </>
                         )}
@@ -940,7 +940,8 @@ export function EventActionDialog({
                         ) : (
                           <>
                             <Users className="mr-2 h-4 w-4 icon-clients" />
-                            Assign
+                            Assign & Go to Calendar
+                            <ArrowRight className="ml-2 h-4 w-4" />
                           </>
                         )}
                       </Button>
@@ -956,7 +957,7 @@ export function EventActionDialog({
                         ) : (
                           <>
                             <Users className="mr-2 h-4 w-4 icon-clients" />
-                            Assign & Go to Calendar
+                            Assign & Go to Workout
                             <ArrowRight className="ml-2 h-4 w-4" />
                           </>
                         )}
