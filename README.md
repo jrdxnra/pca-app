@@ -77,25 +77,19 @@ src/
 
 ## Deployment
 
-This app is deployed on **Vercel** for automatic deployments from GitHub.
+### Testing Environment: Vercel
+- **Purpose**: Quick testing and development validation
+- **Deployment**: Automatic via GitHub pushes
+- **Setup**: See [VERCEL_SETUP.md](./VERCEL_SETUP.md)
 
-### Quick Deploy
+### Production Environment: Firebase + Cloud Run
+- **Purpose**: Live production environment for end users
+- **Deployment**: Manual via `npm run deploy:firebase`
+- **Setup**: See [FIREBASE_SETUP.md](./FIREBASE_SETUP.md) and [QUICK_START_FIREBASE.md](./QUICK_START_FIREBASE.md)
 
-1. **Connect to Vercel:**
-   - Go to [vercel.com](https://vercel.com)
-   - Sign in with GitHub
-   - Import repository: `jrdxnra/pca-app`
-   - Vercel auto-detects Next.js
+**Workflow**: Test on Vercel → Validate → Deploy to Firebase when ready
 
-2. **Set Environment Variables:**
-   - Add all variables from `.env.local` in Vercel dashboard
-   - Update `GOOGLE_REDIRECT_URI` with your Vercel URL after first deploy
-
-3. **Deploy:**
-   - Push to GitHub → Vercel automatically deploys!
-   - Or run: `vercel` (if CLI installed)
-
-See [VERCEL_SETUP.md](./VERCEL_SETUP.md) for detailed setup instructions.
+See [PROJECT_PREFERENCES.md](./PROJECT_PREFERENCES.md) for deployment strategy details.
 
 ## License
 
