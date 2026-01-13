@@ -3,6 +3,11 @@ import "./globals.css";
 import { Header } from "@/components/Header";
 import { Providers } from "@/components/Providers";
 
+// This layout injects runtime config (from Cloud Run env vars) for the client.
+// Force dynamic rendering so we don't bake empty env vars into a prerendered HTML file.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: "Performance Coach + App (PC+)",
   description: "Professional performance coaching platform with periodization, RPE tracking, and client management for PC3s and PC4s",
