@@ -200,7 +200,7 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
         return (
           <Card 
             key={movement.id} 
-            className="overflow-hidden"
+            className="overflow-hidden py-0"
             draggable
             onDragStart={(e) => handleDragStart(e, index)}
             onDragOver={handleDragOver}

@@ -1007,10 +1007,10 @@ export default function ConfigurePage() {
             {/* New Period Form (at top) */}
             {showNewPeriodForm && editingPeriod && (
               <Card className="mb-4">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 px-3">
                   <CardTitle className="text-base">Add Period</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 px-3">
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       placeholder="Period name"
@@ -1062,8 +1062,8 @@ export default function ConfigurePage() {
                 <div className="space-y-3">
                   {periods.map((period) => (
                     editingPeriodId === period.id && editingPeriod ? (
-                      <Card key={period.id} className="p-4">
-                        <CardContent className="space-y-4 p-0">
+                      <Card key={period.id} className="py-0">
+                        <CardContent className="space-y-4 p-0 px-3 py-2">
                           <div className="grid grid-cols-2 gap-4">
                             <Input
                               placeholder="Period name"
@@ -1135,10 +1135,10 @@ export default function ConfigurePage() {
             {/* New Week Template Form (at top) */}
             {showNewTemplateForm && editingTemplate && (
               <Card className="mb-4">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 px-3">
                   <CardTitle className="text-base">Add Week Template</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 px-3">
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       placeholder="Template name"
@@ -1210,8 +1210,8 @@ export default function ConfigurePage() {
                 <div className="space-y-3">
                   {weekTemplates.map((template) => (
                     editingTemplateId === template.id && editingTemplate ? (
-                      <Card key={template.id} className="p-4">
-                        <CardContent className="space-y-4 p-0">
+                      <Card key={template.id} className="py-0">
+                        <CardContent className="space-y-4 p-0 px-3 py-2">
                           <div className="grid grid-cols-2 gap-4">
                             <Input
                               placeholder="Template name"
@@ -1306,10 +1306,10 @@ export default function ConfigurePage() {
             {/* New Category Form (at top) */}
             {showNewCategoryForm && editingCategory && (
               <Card className="mb-4">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 px-3">
                   <CardTitle className="text-base">Add Workout Category</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 px-3">
                   <Input
                     placeholder="Category name"
                     value={editingCategory.name}
@@ -1354,8 +1354,8 @@ export default function ConfigurePage() {
                 <div className="space-y-3">
                   {workoutCategories.map((category) => (
                     editingCategoryId === category.id && editingCategory ? (
-                      <Card key={category.id} className="p-4">
-                        <CardContent className="space-y-4 p-0">
+                      <Card key={category.id} className="py-0">
+                        <CardContent className="space-y-4 p-0 px-3 py-2">
                           <Input
                             placeholder="Category name"
                             value={editingCategory.name}
@@ -1527,10 +1527,10 @@ export default function ConfigurePage() {
             {/* New Workout Type Form (at top) */}
             {showNewWorkoutTypeForm && editingWorkoutType && (
               <Card className="mb-4">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 px-3">
                   <CardTitle className="text-base">Add Workout Type</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 px-3">
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       placeholder="Workout type name"
@@ -1582,8 +1582,8 @@ export default function ConfigurePage() {
                 <div className="space-y-3">
                   {workoutTypes.map((workoutType) => (
                     editingWorkoutTypeId === workoutType.id && editingWorkoutType ? (
-                      <Card key={workoutType.id} className="p-4">
-                        <CardContent className="space-y-4 p-0">
+                      <Card key={workoutType.id} className="py-0">
+                        <CardContent className="space-y-4 p-0 px-3 py-2">
                           <div className="grid grid-cols-2 gap-4">
                             <Input
                               placeholder="Workout type name"
