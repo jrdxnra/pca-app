@@ -259,13 +259,17 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
 
   return (
     <div className="space-y-2 relative">
-      {displayMovements.map((movement, index) => {
+      {displayMovements.map((movement, displayIndex) => {
+        // Find the original index in the movements array for accurate drop calculations
+        const originalIndex = movements.findIndex(m => m.id === movement.id);
+        const index = originalIndex !== -1 ? originalIndex : displayIndex;
         const isExpanded = expandedMovements.has(movement.id);
         const configBadges = getConfigurationBadges(movement.configuration);
         const currentEditData = editFormData[movement.id];
         const isDragging = draggedMovementId === movement.id;
-        const showDropLineAbove = dropIndex === index;
-        const showDropLineBelow = dropIndex === index + 1;
+        // Use displayIndex for drop line positioning (optimistic array position)
+        const showDropLineAbove = dropIndex === displayIndex;
+        const showDropLineBelow = dropIndex === displayIndex + 1;
 
         return (
           <div key={movement.id} className="relative">
