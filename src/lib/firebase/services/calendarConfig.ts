@@ -164,18 +164,52 @@ export async function updateCalendarSyncConfig(updates: Partial<CalendarSyncConf
   if (updates.selectedCalendarId !== undefined) payload.selectedCalendarId = updates.selectedCalendarId ?? null;
   if (updates.coachingKeywords !== undefined) payload.coachingKeywords = updates.coachingKeywords ?? [];
   if (updates.classKeywords !== undefined) payload.classKeywords = updates.classKeywords ?? [];
-  if (updates.locationAbbreviations !== undefined) payload.locationAbbreviations = updates.locationAbbreviations ?? [];
+  if (updates.locationAbbreviations !== undefined) {
+    // Clean location abbreviations to remove any undefined values
+    const cleanAbbreviations = (updates.locationAbbreviations ?? []).map((abbr: any) => {
+      const clean: any = {
+        original: abbr.original || '',
+        abbreviation: abbr.abbreviation || abbr.original || '',
+      };
+      // Only include ignored if it's explicitly set (not undefined)
+      if (abbr.ignored !== undefined) {
+        clean.ignored = abbr.ignored;
+      }
+      return clean;
+    }).filter((abbr: any) => abbr.original && abbr.original.length > 0);
+    payload.locationAbbreviations = cleanAbbreviations;
+  }
   if (updates.lastSyncTime !== undefined) {
     payload.lastSyncTime = updates.lastSyncTime ? Timestamp.fromDate(updates.lastSyncTime) : null;
   }
 
-  // Remove any undefined values from payload (Firestore doesn't allow undefined)
-  Object.keys(payload).forEach(key => {
-    if (payload[key] === undefined) {
-      delete payload[key];
-    }
-  });
+  // Deep clean: Remove any undefined values from payload and nested objects (Firestore doesn't allow undefined)
+  const cleanPayload = (obj: Record<string, unknown>): Record<string, unknown> => {
+    const cleaned: Record<string, unknown> = {};
+    Object.keys(obj).forEach(key => {
+      const value = obj[key];
+      if (value === undefined) {
+        // Skip undefined values
+        return;
+      } else if (Array.isArray(value)) {
+        // Clean arrays
+        cleaned[key] = value.map(item => {
+          if (typeof item === 'object' && item !== null) {
+            return cleanPayload(item as Record<string, unknown>);
+          }
+          return item;
+        });
+      } else if (typeof value === 'object' && value !== null) {
+        // Recursively clean objects
+        cleaned[key] = cleanPayload(value as Record<string, unknown>);
+      } else {
+        cleaned[key] = value;
+      }
+    });
+    return cleaned;
+  };
 
-  await setDoc(docRef, payload, { merge: true });
+  const finalPayload = cleanPayload(payload);
+  await setDoc(docRef, finalPayload, { merge: true });
 }
 

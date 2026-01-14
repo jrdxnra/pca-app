@@ -850,8 +850,8 @@ export default function ConfigurePage() {
       const updatedAbbr: LocationAbbreviation = {
         original: normalizedOriginal,
         abbreviation: locationAbbreviationInput.trim() || normalizedOriginal,
-        // Preserve ignored state when editing an existing / N/A entry
-        ignored: existing?.ignored ?? editingLocation.ignored
+        // Preserve ignored state when editing an existing / N/A entry, default to false if undefined
+        ignored: existing?.ignored ?? editingLocation.ignored ?? false
       };
       
       let updatedAbbreviations: LocationAbbreviation[];
@@ -862,12 +862,18 @@ export default function ConfigurePage() {
         updatedAbbreviations = [...abbreviations, updatedAbbr];
       }
       
-      // Normalize all abbreviations before saving
-      const normalizedAbbreviations = updatedAbbreviations.map(a => ({
-        ...a,
-        original: normalizeLocationKey(a.original),
-        abbreviation: (a.abbreviation || '').trim() || normalizeLocationKey(a.original),
-      })).filter(a => a.original.length > 0);
+      // Normalize all abbreviations before saving - ensure no undefined values
+      const normalizedAbbreviations = updatedAbbreviations.map(a => {
+        const normalized: LocationAbbreviation = {
+          original: normalizeLocationKey(a.original),
+          abbreviation: (a.abbreviation || '').trim() || normalizeLocationKey(a.original),
+        };
+        // Only include ignored if it's explicitly true or false (not undefined)
+        if (a.ignored !== undefined) {
+          normalized.ignored = a.ignored;
+        }
+        return normalized;
+      }).filter(a => a.original.length > 0);
       
       // Update local state immediately
       updateCalendarConfig({ locationAbbreviations: normalizedAbbreviations });
