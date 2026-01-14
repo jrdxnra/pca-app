@@ -99,10 +99,12 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
   };
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
+    e.stopPropagation();
     setDraggedIndex(index);
     setDraggedMovementId(movements[index].id);
     setDropIndex(null);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', ''); // Required for some browsers
     // Make dragged element semi-transparent
     if (e.currentTarget instanceof HTMLElement) {
       e.currentTarget.style.opacity = '0.5';
@@ -288,12 +290,29 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
               className={`overflow-hidden py-0 transition-all duration-200 ${
                 isDragging ? 'opacity-50 scale-95' : ''
               }`}
-              draggable
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragOver={(e) => handleDragOver(e, displayIndex)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, index)}
-              onDragEnd={handleDragEnd}
+              draggable={!isExpanded}
+              onDragStart={(e) => {
+                e.stopPropagation();
+                handleDragStart(e, index);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDragOver(e, displayIndex);
+              }}
+              onDragLeave={(e) => {
+                e.stopPropagation();
+                handleDragLeave();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDrop(e, index);
+              }}
+              onDragEnd={(e) => {
+                e.stopPropagation();
+                handleDragEnd();
+              }}
               style={{
                 transition: 'transform 0.2s ease-out, opacity 0.2s ease-out'
               }}
@@ -301,11 +320,16 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
             <CardContent className="p-0">
               {/* Movement Header */}
               <div 
-                className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
-                onClick={() => toggleExpanded(movement.id)}
+                className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors"
               >
-                <div className="flex items-center gap-3 flex-1">
-                  <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                <div 
+                  className="flex items-center gap-3 flex-1 cursor-pointer"
+                  onClick={() => toggleExpanded(movement.id)}
+                >
+                  <GripVertical 
+                    className="h-4 w-4 text-muted-foreground cursor-grab" 
+                    onMouseDown={(e) => e.stopPropagation()}
+                  />
                   
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium text-sm leading-tight">{movement.name}</h4>
