@@ -46,10 +46,10 @@ export function WorkoutStructureTemplateCard({
   const sortedSections = [...template.sections].sort((a, b) => a.order - b.order);
 
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-3">
+    <Card className="w-full py-0">
+      <CardHeader className="pb-3 px-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold">{template.name}</CardTitle>
+          <CardTitle className="text-lg font-semibold leading-tight">{template.name}</CardTitle>
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -73,7 +73,7 @@ export function WorkoutStructureTemplateCard({
           <p className="text-sm text-gray-600 mt-1">{template.description}</p>
         )}
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="pt-0 px-3">
         <div className="space-y-3">
           {sortedSections.map((section, index) => {
             const isExpanded = expandedSections.has(index);
@@ -81,7 +81,7 @@ export function WorkoutStructureTemplateCard({
             
             return (
               <div key={`${section.workoutTypeId}-${index}`} className="border rounded-lg">
-                <div className="flex items-center justify-between p-3">
+                <div className="flex items-center justify-between px-3 py-2">
                   <div className="flex items-center gap-3">
                     <GripVertical className="h-4 w-4 text-gray-400 cursor-grab" />
                     <Badge 

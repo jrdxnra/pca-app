@@ -384,29 +384,9 @@ export default function ConfigurePage() {
         // Get events from store
         const { events, config } = useCalendarStore.getState();
         
-        // Filter to only coaching session events (workouts)
-        const coachingEvents = events.filter(event => {
-          // Check if it's a coaching session
-          if (event.isCoachingSession) return true;
-          
-          // Check if it has a client assigned (from our app)
-          if (event.preConfiguredClient) return true;
-          
-          // Check if it has a linked workout
-          if (event.linkedWorkoutId) return true;
-          
-          // Check if it matches coaching keywords
-          const title = event.summary?.toLowerCase() || '';
-          const matchesKeyword = config.coachingKeywords.some(keyword => 
-            title.includes(keyword.toLowerCase())
-          );
-          if (matchesKeyword) return true;
-          
-          return false;
-        });
-        
-        // Extract locations only from coaching events
-        const locations = coachingEvents
+        // Extract locations from ALL events (not just coaching sessions)
+        // This ensures we capture all locations including ones that might not be classified as coaching yet
+        const locations = events
           .map(event => (event.location ? normalizeLocationKey(event.location) : ''))
           .filter((location): location is string => !!location && location.trim() !== '');
         
