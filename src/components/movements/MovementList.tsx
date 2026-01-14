@@ -16,6 +16,26 @@ import { Movement } from '@/lib/types';
 import { AddMovementDialog } from './AddMovementDialog';
 import { MovementConfigurationToggle } from './MovementConfigurationToggle';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  DragStartEvent,
+  DragEndEvent,
+  DragOverEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface MovementListProps {
   movements: Movement[];
@@ -24,24 +44,283 @@ interface MovementListProps {
   loading: boolean;
 }
 
+// Sortable Movement Item Component
+function SortableMovementItem({
+  movement,
+  index,
+  isExpanded,
+  currentEditData,
+  editFormData,
+  hasChanges,
+  expandedMovements,
+  onToggleExpanded,
+  onUpdateEditField,
+  onSaveEdit,
+  onDeleteMovement,
+  getConfigurationBadges,
+}: {
+  movement: Movement;
+  index: number;
+  isExpanded: boolean;
+  currentEditData: any;
+  editFormData: Record<string, any>;
+  hasChanges: Record<string, boolean>;
+  expandedMovements: Set<string>;
+  onToggleExpanded: (id: string) => void;
+  onUpdateEditField: (id: string, field: string, value: any) => void;
+  onSaveEdit: (id: string) => void;
+  onDeleteMovement: (id: string, name: string) => void;
+  getConfigurationBadges: (config: Movement['configuration']) => string[];
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: movement.id, disabled: isExpanded });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const configBadges = getConfigurationBadges(movement.configuration);
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      <Card className="overflow-hidden py-0">
+        <CardContent className="p-0">
+          {/* Movement Header */}
+          <div className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors">
+            <div 
+              className="flex items-center gap-3 flex-1 cursor-pointer"
+              onClick={() => onToggleExpanded(movement.id)}
+            >
+              <div
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <h4 className="font-medium text-sm leading-tight">{movement.name}</h4>
+              </div>
+            </div>
+          </div>
+
+          {/* Expanded Edit Content */}
+          {isExpanded && currentEditData && (
+            <div className="border-t p-3 space-y-3 bg-muted/20">
+              {/* Movement Name */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">Movement Name:</label>
+                <Input
+                  value={currentEditData.name}
+                  onChange={(e) => onUpdateEditField(movement.id, 'name', e.target.value)}
+                  className="text-sm"
+                  placeholder="Movement name"
+                />
+              </div>
+
+              {/* Links */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">Links:</label>
+                <div className="space-y-2">
+                  {(currentEditData.links || []).map((link: string, linkIndex: number) => (
+                    <div key={linkIndex} className="flex gap-2">
+                      <Input
+                        value={link}
+                        onChange={(e) => {
+                          const newLinks = [...(currentEditData.links || [])];
+                          newLinks[linkIndex] = e.target.value;
+                          onUpdateEditField(movement.id, 'links', newLinks);
+                        }}
+                        placeholder="https://example.com/video"
+                        className="text-sm"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newLinks = (currentEditData.links || []).filter((_unused: any, i: number) => i !== linkIndex);
+                          onUpdateEditField(movement.id, 'links', newLinks);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const newLinks = [...(currentEditData.links || []), ''];
+                      onUpdateEditField(movement.id, 'links', newLinks);
+                    }}
+                  >
+                    Add Link
+                  </Button>
+                </div>
+              </div>
+
+              {/* Configuration */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">Configuration:</label>
+                <div className="flex flex-wrap py-2 gap-1">
+                  <MovementConfigurationToggle
+                    name="Reps"
+                    value={currentEditData.configuration.use_reps}
+                    onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      use_reps: value
+                    })}
+                  />
+                  
+                  <MovementConfigurationToggle
+                    name="Weight"
+                    value={currentEditData.configuration.use_weight}
+                    onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      use_weight: value
+                    })}
+                    measureOptions={['lbs', 'kg']}
+                    measureValue={currentEditData.configuration.weight_measure}
+                    onMeasureChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      weight_measure: value
+                    })}
+                  />
+                  
+                  <MovementConfigurationToggle
+                    name="Distance"
+                    value={currentEditData.configuration.use_distance}
+                    onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      use_distance: value
+                    })}
+                    measureOptions={['mi', 'km', 'm', 'yd', 'ft']}
+                    measureValue={currentEditData.configuration.distance_measure}
+                    onMeasureChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      distance_measure: value
+                    })}
+                  />
+                  
+                  <MovementConfigurationToggle
+                    name="Pace"
+                    value={currentEditData.configuration.use_pace}
+                    onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      use_pace: value
+                    })}
+                    measureOptions={['mi', 'km']}
+                    measureValue={currentEditData.configuration.pace_measure}
+                    onMeasureChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      pace_measure: value
+                    })}
+                  />
+                  
+                  <MovementConfigurationToggle
+                    name="Tempo"
+                    value={currentEditData.configuration.use_tempo}
+                    onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      use_tempo: value
+                    })}
+                  />
+                  
+                  <MovementConfigurationToggle
+                    name="Time"
+                    value={currentEditData.configuration.use_time}
+                    onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      use_time: value
+                    })}
+                  />
+                  
+                  <MovementConfigurationToggle
+                    name="Unilateral"
+                    value={currentEditData.configuration.unilateral}
+                    onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      unilateral: value
+                    })}
+                  />
+                  
+                  <MovementConfigurationToggle
+                    name="Percentage"
+                    value={currentEditData.configuration.use_percentage}
+                    onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      use_percentage: value
+                    })}
+                  />
+                  
+                  <MovementConfigurationToggle
+                    name="RPE"
+                    value={currentEditData.configuration.use_rpe}
+                    onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
+                      ...currentEditData.configuration,
+                      use_rpe: value
+                    })}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => onDeleteMovement(movement.id, movement.name)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => onSaveEdit(movement.id)}
+                  disabled={!hasChanges[movement.id]}
+                >
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function MovementList({ movements, categoryId, categoryColor, loading }: MovementListProps) {
   const [expandedMovements, setExpandedMovements] = useState<Set<string>>(new Set());
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [draggedMovementId, setDraggedMovementId] = useState<string | null>(null);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [optimisticMovements, setOptimisticMovements] = useState<Movement[]>(movements);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
   const { removeMovement, reorderMovements, editMovement } = useMovementStore();
-  
-  // Sync optimistic movements when movements prop changes (but not during drag)
-  useEffect(() => {
-    if (draggedIndex === null) {
-      setOptimisticMovements(movements);
-    }
-  }, [movements, draggedIndex]);
   
   // Inline edit state for expanded movements
   const [editFormData, setEditFormData] = useState<Record<string, any>>({});
   const [hasChanges, setHasChanges] = useState<Record<string, boolean>>({});
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Require 8px of movement before drag starts
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const getConfigurationBadges = (config: Movement['configuration']) => {
     const badges = [];
@@ -98,93 +377,36 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    e.stopPropagation();
-    setDraggedIndex(index);
-    setDraggedMovementId(movements[index].id);
-    setDropIndex(null);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', ''); // Required for some browsers
-    // Make dragged element semi-transparent
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = '0.5';
-    }
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
   };
 
-  const handleDragOver = (e: React.DragEvent, displayIndex: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    setOverId(over ? (over.id as string) : null);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
     
-    if (draggedIndex !== null && draggedMovementId) {
-      // Find current position of dragged item in optimistic array
-      const currentDraggedIndex = optimisticMovements.findIndex(m => m.id === draggedMovementId);
-      if (currentDraggedIndex === -1) return;
-      
-      // Calculate drop position (above or below) using display index
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const midpoint = rect.top + rect.height / 2;
-      const mouseY = e.clientY;
-      
-      // Determine if dropping above or below this item
-      // If mouse is in upper half, drop above (at this index)
-      // If mouse is in lower half, drop below (at next index)
-      const newDropIndex = mouseY < midpoint ? displayIndex : displayIndex + 1;
-      const clampedDropIndex = Math.max(0, Math.min(newDropIndex, optimisticMovements.length));
-      
-      // Only update if different and not dropping on itself
-      if (clampedDropIndex !== dropIndex && clampedDropIndex !== currentDraggedIndex) {
-        setDropIndex(clampedDropIndex);
+    setActiveId(null);
+    setOverId(null);
+
+    if (over && active.id !== over.id) {
+      const oldIndex = movements.findIndex(m => m.id === active.id);
+      const newIndex = movements.findIndex(m => m.id === over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        // Optimistically update immediately
+        const reordered = arrayMove(movements, oldIndex, newIndex);
         
-        // Optimistically reorder immediately for smooth feel
-        const reordered = [...optimisticMovements];
-        const [movedItem] = reordered.splice(currentDraggedIndex, 1);
-        // Adjust drop index if we're moving forward in the array
-        const adjustedDropIndex = currentDraggedIndex < clampedDropIndex ? clampedDropIndex - 1 : clampedDropIndex;
-        reordered.splice(adjustedDropIndex, 0, movedItem);
-        setOptimisticMovements(reordered);
-      }
-    }
-  };
-
-  const handleDragLeave = () => {
-    // Don't clear dropIndex on drag leave - keep it for smooth experience
-  };
-
-  const handleDrop = async (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    
-    if (draggedMovementId && dropIndex !== null) {
-      // Get the original indices from the original movements array
-      const originalDraggedIndex = movements.findIndex(m => m.id === draggedMovementId);
-      const targetMovement = optimisticMovements[dropIndex];
-      const originalDropIndex = targetMovement ? movements.findIndex(m => m.id === targetMovement.id) : -1;
-      
-      if (originalDraggedIndex !== -1 && originalDropIndex !== -1 && originalDraggedIndex !== originalDropIndex) {
-        // Save to Firebase in background (optimistic update already done)
-        reorderMovements(categoryId, originalDraggedIndex, originalDropIndex).catch(error => {
+        // Save to Firebase in background
+        reorderMovements(categoryId, oldIndex, newIndex).catch(error => {
           console.error('Failed to reorder movements:', error);
-          // Revert on error
-          setOptimisticMovements(movements);
           alert('Failed to reorder movements. Please try again.');
         });
       }
     }
-    
-    setDraggedIndex(null);
-    setDraggedMovementId(null);
-    setDropIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-    setDraggedMovementId(null);
-    setDropIndex(null);
-    // Reset opacity of all cards
-    document.querySelectorAll('[draggable="true"]').forEach(el => {
-      if (el instanceof HTMLElement) {
-        el.style.opacity = '1';
-      }
-    });
   };
 
   const toggleExpanded = (movementId: string) => {
@@ -234,7 +456,6 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
     }));
   };
 
-
   const saveEdit = async (movementId: string) => {
     try {
       const movement = movements.find(m => m.id === movementId);
@@ -260,269 +481,71 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
     }
   };
 
-  // Use optimistic movements for display during drag
-  const displayMovements = draggedIndex !== null ? optimisticMovements : movements;
+  // Get active movement for drag overlay
+  const activeMovement = activeId ? movements.find(m => m.id === activeId) : null;
 
   return (
-    <div className="space-y-2 relative">
-      {displayMovements.map((movement, displayIndex) => {
-        // Find the original index in the movements array for accurate drop calculations
-        const originalIndex = movements.findIndex(m => m.id === movement.id);
-        const index = originalIndex !== -1 ? originalIndex : displayIndex;
-        const isExpanded = expandedMovements.has(movement.id);
-        const configBadges = getConfigurationBadges(movement.configuration);
-        const currentEditData = editFormData[movement.id];
-        const isDragging = draggedMovementId === movement.id;
-        // Use displayIndex for drop line positioning - show line above this item if dropIndex matches
-        const showDropLine = dropIndex === displayIndex && !isDragging;
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext items={movements.map(m => m.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-2 relative">
+          {movements.map((movement, index) => {
+            const isExpanded = expandedMovements.has(movement.id);
+            const currentEditData = editFormData[movement.id];
+            const isOver = overId === movement.id && activeId !== movement.id;
 
-        return (
-          <div key={movement.id} className="relative">
-            {/* Drop indicator line - single line with circle */}
-            {showDropLine && (
-              <div className="absolute top-0 left-0 right-0 z-10 flex items-center pointer-events-none">
-                <div className="w-1.5 h-1.5 rounded-full bg-purple-400 -ml-0.5"></div>
-                <div className="flex-1 h-px bg-purple-400"></div>
+            return (
+              <div key={movement.id} className="relative">
+                {/* Drop indicator line - show when dragging over this item */}
+                {isOver && (
+                  <div className="absolute top-0 left-0 right-0 z-10 flex items-center pointer-events-none">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-400 -ml-0.5"></div>
+                    <div className="flex-1 h-px bg-purple-400"></div>
+                  </div>
+                )}
+                
+                <SortableMovementItem
+                  movement={movement}
+                  index={index}
+                  isExpanded={isExpanded}
+                  currentEditData={currentEditData}
+                  editFormData={editFormData}
+                  hasChanges={hasChanges}
+                  expandedMovements={expandedMovements}
+                  onToggleExpanded={toggleExpanded}
+                  onUpdateEditField={updateEditField}
+                  onSaveEdit={saveEdit}
+                  onDeleteMovement={handleDeleteMovement}
+                  getConfigurationBadges={getConfigurationBadges}
+                />
               </div>
-            )}
-            
-            <Card 
-              className={`overflow-hidden py-0 transition-all duration-200 ${
-                isDragging ? 'opacity-50 scale-95' : ''
-              }`}
-              draggable={!isExpanded}
-              onDragStart={(e) => {
-                e.stopPropagation();
-                handleDragStart(e, index);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleDragOver(e, displayIndex);
-              }}
-              onDragLeave={(e) => {
-                e.stopPropagation();
-                handleDragLeave();
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleDrop(e, index);
-              }}
-              onDragEnd={(e) => {
-                e.stopPropagation();
-                handleDragEnd();
-              }}
-              style={{
-                transition: 'transform 0.2s ease-out, opacity 0.2s ease-out'
-              }}
-            >
+            );
+          })}
+        </div>
+      </SortableContext>
+
+      {/* Drag Overlay - shows the item being dragged */}
+      <DragOverlay>
+        {activeMovement ? (
+          <Card className="overflow-hidden py-0 opacity-90 shadow-lg">
             <CardContent className="p-0">
-              {/* Movement Header */}
-              <div 
-                className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors"
-              >
-                <div 
-                  className="flex items-center gap-3 flex-1 cursor-pointer"
-                  onClick={() => toggleExpanded(movement.id)}
-                >
-                  <GripVertical 
-                    className="h-4 w-4 text-muted-foreground cursor-grab" 
-                    onMouseDown={(e) => e.stopPropagation()}
-                  />
-                  
+              <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
+                <div className="flex items-center gap-3 flex-1">
+                  <GripVertical className="h-4 w-4 text-muted-foreground" />
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-sm leading-tight">{movement.name}</h4>
+                    <h4 className="font-medium text-sm leading-tight">{activeMovement.name}</h4>
                   </div>
                 </div>
-
               </div>
-
-              {/* Expanded Edit Content */}
-              {isExpanded && currentEditData && (
-                <div className="border-t p-3 space-y-3 bg-muted/20">
-                  {/* Movement Name */}
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Movement Name:</label>
-                    <Input
-                      value={currentEditData.name}
-                      onChange={(e) => updateEditField(movement.id, 'name', e.target.value)}
-                      className="text-sm"
-                      placeholder="Movement name"
-                    />
-                  </div>
-
-                  {/* Links */}
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Links:</label>
-                    <div className="space-y-2">
-                      {(currentEditData.links || []).map((link: string, linkIndex: number) => (
-                        <div key={linkIndex} className="flex gap-2">
-                          <Input
-                            value={link}
-                            onChange={(e) => {
-                              const newLinks = [...(currentEditData.links || [])];
-                              newLinks[linkIndex] = e.target.value;
-                              updateEditField(movement.id, 'links', newLinks);
-                            }}
-                            placeholder="https://example.com/video"
-                            className="text-sm"
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const newLinks = (currentEditData.links || []).filter((_unused: any, i: number) => i !== linkIndex);
-                              updateEditField(movement.id, 'links', newLinks);
-                            }}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const newLinks = [...(currentEditData.links || []), ''];
-                          updateEditField(movement.id, 'links', newLinks);
-                        }}
-                      >
-                        Add Link
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Configuration */}
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Configuration:</label>
-                    <div className="flex flex-wrap py-2 gap-1">
-                      <MovementConfigurationToggle
-                        name="Reps"
-                        value={currentEditData.configuration.use_reps}
-                        onChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          use_reps: value
-                        })}
-                      />
-                      
-                      <MovementConfigurationToggle
-                        name="Weight"
-                        value={currentEditData.configuration.use_weight}
-                        onChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          use_weight: value
-                        })}
-                        measureOptions={['lbs', 'kg']}
-                        measureValue={currentEditData.configuration.weight_measure}
-                        onMeasureChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          weight_measure: value
-                        })}
-                      />
-                      
-                      <MovementConfigurationToggle
-                        name="Distance"
-                        value={currentEditData.configuration.use_distance}
-                        onChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          use_distance: value
-                        })}
-                        measureOptions={['mi', 'km', 'm', 'yd', 'ft']}
-                        measureValue={currentEditData.configuration.distance_measure}
-                        onMeasureChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          distance_measure: value
-                        })}
-                      />
-                      
-                      <MovementConfigurationToggle
-                        name="Pace"
-                        value={currentEditData.configuration.use_pace}
-                        onChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          use_pace: value
-                        })}
-                        measureOptions={['mi', 'km']}
-                        measureValue={currentEditData.configuration.pace_measure}
-                        onMeasureChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          pace_measure: value
-                        })}
-                      />
-                      
-                      <MovementConfigurationToggle
-                        name="Tempo"
-                        value={currentEditData.configuration.use_tempo}
-                        onChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          use_tempo: value
-                        })}
-                      />
-                      
-                      <MovementConfigurationToggle
-                        name="Time"
-                        value={currentEditData.configuration.use_time}
-                        onChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          use_time: value
-                        })}
-                      />
-                      
-                      <MovementConfigurationToggle
-                        name="Unilateral"
-                        value={currentEditData.configuration.unilateral}
-                        onChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          unilateral: value
-                        })}
-                      />
-                      
-                      <MovementConfigurationToggle
-                        name="Percentage"
-                        value={currentEditData.configuration.use_percentage}
-                        onChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          use_percentage: value
-                        })}
-                      />
-                      
-                      <MovementConfigurationToggle
-                        name="RPE"
-                        value={currentEditData.configuration.use_rpe}
-                        onChange={(value) => updateEditField(movement.id, 'configuration', {
-                          ...currentEditData.configuration,
-                          use_rpe: value
-                        })}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex items-center justify-between pt-3 border-t">
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDeleteMovement(movement.id, movement.name)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => saveEdit(movement.id)}
-                      disabled={!hasChanges[movement.id]}
-                    >
-                      Save Changes
-                    </Button>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
-        </div>
-        );
-      })}
-    </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
