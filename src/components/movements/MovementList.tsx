@@ -27,6 +27,7 @@ interface MovementListProps {
 export function MovementList({ movements, categoryId, categoryColor, loading }: MovementListProps) {
   const [expandedMovements, setExpandedMovements] = useState<Set<string>>(new Set());
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [draggedMovementId, setDraggedMovementId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [optimisticMovements, setOptimisticMovements] = useState<Movement[]>(movements);
   const { removeMovement, reorderMovements, editMovement } = useMovementStore();
@@ -99,6 +100,7 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
+    setDraggedMovementId(movements[index].id);
     setDropIndex(null);
     e.dataTransfer.effectAllowed = 'move';
     // Make dragged element semi-transparent
@@ -111,26 +113,29 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     
-    if (draggedIndex !== null && draggedIndex !== index) {
+    if (draggedIndex !== null && draggedMovementId) {
+      // Find current position of dragged item in optimistic array
+      const currentDraggedIndex = optimisticMovements.findIndex(m => m.id === draggedMovementId);
+      if (currentDraggedIndex === -1) return;
+      
       // Calculate drop position (above or below)
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const midpoint = rect.top + rect.height / 2;
       const mouseY = e.clientY;
       
       // Determine if dropping above or below this item
-      const newDropIndex = mouseY < midpoint ? index : index + 1;
+      const targetIndex = mouseY < midpoint ? index : index + 1;
+      const newDropIndex = Math.max(0, Math.min(targetIndex, optimisticMovements.length));
       
-      if (newDropIndex !== dropIndex && newDropIndex !== draggedIndex) {
+      if (newDropIndex !== dropIndex && newDropIndex !== currentDraggedIndex) {
         setDropIndex(newDropIndex);
         
         // Optimistically reorder immediately for smooth feel
         const reordered = [...optimisticMovements];
-        const [movedItem] = reordered.splice(draggedIndex, 1);
-        const adjustedDropIndex = draggedIndex < newDropIndex ? newDropIndex - 1 : newDropIndex;
+        const [movedItem] = reordered.splice(currentDraggedIndex, 1);
+        const adjustedDropIndex = currentDraggedIndex < newDropIndex ? newDropIndex - 1 : newDropIndex;
         reordered.splice(adjustedDropIndex, 0, movedItem);
         setOptimisticMovements(reordered);
-        // Update draggedIndex to reflect new position for next drag over
-        setDraggedIndex(adjustedDropIndex);
       }
     }
   };
@@ -142,28 +147,31 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
   const handleDrop = async (e: React.DragEvent, index: number) => {
     e.preventDefault();
     
-    // Get the original dragged index before optimistic updates
-    const originalDraggedIndex = movements.findIndex(m => m.id === optimisticMovements[draggedIndex!]?.id);
-    const originalDropIndex = dropIndex !== null 
-      ? movements.findIndex(m => m.id === optimisticMovements[dropIndex]?.id)
-      : null;
-    
-    if (originalDraggedIndex !== null && originalDropIndex !== null && originalDraggedIndex !== originalDropIndex) {
-      // Save to Firebase in background (optimistic update already done)
-      reorderMovements(categoryId, originalDraggedIndex, originalDropIndex).catch(error => {
-        console.error('Failed to reorder movements:', error);
-        // Revert on error
-        setOptimisticMovements(movements);
-        alert('Failed to reorder movements. Please try again.');
-      });
+    if (draggedMovementId && dropIndex !== null) {
+      // Get the original indices from the original movements array
+      const originalDraggedIndex = movements.findIndex(m => m.id === draggedMovementId);
+      const targetMovement = optimisticMovements[dropIndex];
+      const originalDropIndex = targetMovement ? movements.findIndex(m => m.id === targetMovement.id) : -1;
+      
+      if (originalDraggedIndex !== -1 && originalDropIndex !== -1 && originalDraggedIndex !== originalDropIndex) {
+        // Save to Firebase in background (optimistic update already done)
+        reorderMovements(categoryId, originalDraggedIndex, originalDropIndex).catch(error => {
+          console.error('Failed to reorder movements:', error);
+          // Revert on error
+          setOptimisticMovements(movements);
+          alert('Failed to reorder movements. Please try again.');
+        });
+      }
     }
     
     setDraggedIndex(null);
+    setDraggedMovementId(null);
     setDropIndex(null);
   };
 
   const handleDragEnd = () => {
     setDraggedIndex(null);
+    setDraggedMovementId(null);
     setDropIndex(null);
     // Reset opacity of all cards
     document.querySelectorAll('[draggable="true"]').forEach(el => {
@@ -255,8 +263,7 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
         const isExpanded = expandedMovements.has(movement.id);
         const configBadges = getConfigurationBadges(movement.configuration);
         const currentEditData = editFormData[movement.id];
-        const isDragging = draggedIndex === index;
-        const isDropTarget = dropIndex === index || (dropIndex === index + 1 && draggedIndex !== null && draggedIndex < index);
+        const isDragging = draggedMovementId === movement.id;
         const showDropLineAbove = dropIndex === index;
         const showDropLineBelow = dropIndex === index + 1;
 
