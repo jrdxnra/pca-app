@@ -38,6 +38,7 @@ import { useClientStore } from '@/lib/stores/useClientStore';
 import { WorkoutStructureTemplate } from '@/lib/types';
 import { TestEventInput, LocationAbbreviation } from '@/lib/google-calendar/types';
 import { initiateGoogleAuth, checkGoogleCalendarAuth, disconnectGoogleCalendar } from '@/lib/google-calendar/api-client';
+import { updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MapPin } from 'lucide-react';
 import {
@@ -840,30 +841,47 @@ export default function ConfigurePage() {
   const handleSaveLocationAbbreviation = async () => {
     if (!editingLocation) return;
     
-    const abbreviations = calendarConfig.locationAbbreviations || [];
-    const normalizedOriginal = normalizeLocationKey(editingLocation.original);
-    const existingIndex = abbreviations.findIndex(abbr => normalizeLocationKey(abbr.original) === normalizedOriginal);
-    const existing = existingIndex >= 0 ? abbreviations[existingIndex] : undefined;
-    
-    const updatedAbbr: LocationAbbreviation = {
-      original: normalizedOriginal,
-      abbreviation: locationAbbreviationInput.trim() || normalizedOriginal,
-      // Preserve ignored state when editing an existing / N/A entry
-      ignored: existing?.ignored ?? editingLocation.ignored
-    };
-    
-    let updatedAbbreviations: LocationAbbreviation[];
-    if (existingIndex >= 0) {
-      updatedAbbreviations = [...abbreviations];
-      updatedAbbreviations[existingIndex] = updatedAbbr;
-    } else {
-      updatedAbbreviations = [...abbreviations, updatedAbbr];
+    try {
+      const abbreviations = calendarConfig.locationAbbreviations || [];
+      const normalizedOriginal = normalizeLocationKey(editingLocation.original);
+      const existingIndex = abbreviations.findIndex(abbr => normalizeLocationKey(abbr.original) === normalizedOriginal);
+      const existing = existingIndex >= 0 ? abbreviations[existingIndex] : undefined;
+      
+      const updatedAbbr: LocationAbbreviation = {
+        original: normalizedOriginal,
+        abbreviation: locationAbbreviationInput.trim() || normalizedOriginal,
+        // Preserve ignored state when editing an existing / N/A entry
+        ignored: existing?.ignored ?? editingLocation.ignored
+      };
+      
+      let updatedAbbreviations: LocationAbbreviation[];
+      if (existingIndex >= 0) {
+        updatedAbbreviations = [...abbreviations];
+        updatedAbbreviations[existingIndex] = updatedAbbr;
+      } else {
+        updatedAbbreviations = [...abbreviations, updatedAbbr];
+      }
+      
+      // Normalize all abbreviations before saving
+      const normalizedAbbreviations = updatedAbbreviations.map(a => ({
+        ...a,
+        original: normalizeLocationKey(a.original),
+        abbreviation: (a.abbreviation || '').trim() || normalizeLocationKey(a.original),
+      })).filter(a => a.original.length > 0);
+      
+      // Update local state immediately
+      updateCalendarConfig({ locationAbbreviations: normalizedAbbreviations });
+      
+      // Also save directly to Firebase to ensure persistence
+      await updateCalendarSyncConfig({ locationAbbreviations: normalizedAbbreviations });
+      
+      toastSuccess('Location abbreviation saved');
+      setEditingLocation(null);
+      setLocationAbbreviationInput('');
+    } catch (error) {
+      console.error('Error saving location abbreviation:', error);
+      toastError('Failed to save location abbreviation. Please try again.');
     }
-    
-    updateCalendarConfig({ locationAbbreviations: updatedAbbreviations });
-    toastSuccess('Location abbreviation saved');
-    setEditingLocation(null);
-    setLocationAbbreviationInput('');
   };
 
   const handleDeleteLocationAbbreviation = (original: string) => {
