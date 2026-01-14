@@ -204,14 +204,14 @@ function SortableItem({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 p-3 border rounded-lg bg-white">
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white">
       <div className="flex items-center gap-3 flex-1">
         <div 
           className="w-4 h-4 rounded-full" 
           style={{ backgroundColor: item.color }}
         />
         <div>
-          <h4 className="font-semibold flex items-center gap-2">
+          <h4 className="font-semibold flex items-center gap-2 leading-tight">
             {item.name}
             {'days' in item && Array.isArray(item.days) && (
               <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
@@ -220,10 +220,10 @@ function SortableItem({
             )}
           </h4>
           {'focus' in item && (
-            <p className="text-sm text-gray-600">{item.focus}</p>
+            <p className="text-sm text-gray-600 leading-tight">{item.focus}</p>
           )}
           {'description' in item && (
-            <p className="text-sm text-gray-600">{item.description}</p>
+            <p className="text-sm text-gray-600 leading-tight">{item.description}</p>
           )}
         </div>
       </div>
@@ -1389,7 +1389,7 @@ export default function ConfigurePage() {
                         </CardContent>
                       </Card>
                     ) : (
-                      <div key={category.id} className="p-4 border rounded-lg">
+                      <div key={category.id} className="px-3 py-2 border rounded-lg">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-4">
                             <div 
@@ -1397,7 +1397,7 @@ export default function ConfigurePage() {
                               style={{ backgroundColor: category.color }}
                             />
                             <div>
-                              <h4 className="font-semibold">{category.name}</h4>
+                              <h4 className="font-semibold leading-tight">{category.name}</h4>
                             </div>
                           </div>
                           <div className="flex gap-2">
