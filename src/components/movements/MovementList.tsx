@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -27,7 +27,16 @@ interface MovementListProps {
 export function MovementList({ movements, categoryId, categoryColor, loading }: MovementListProps) {
   const [expandedMovements, setExpandedMovements] = useState<Set<string>>(new Set());
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [optimisticMovements, setOptimisticMovements] = useState<Movement[]>(movements);
   const { removeMovement, reorderMovements, editMovement } = useMovementStore();
+  
+  // Sync optimistic movements when movements prop changes (but not during drag)
+  useEffect(() => {
+    if (draggedIndex === null) {
+      setOptimisticMovements(movements);
+    }
+  }, [movements, draggedIndex]);
   
   // Inline edit state for expanded movements
   const [editFormData, setEditFormData] = useState<Record<string, any>>({});
@@ -90,31 +99,78 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
+    setDropIndex(null);
     e.dataTransfer.effectAllowed = 'move';
+    // Make dragged element semi-transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.5';
+    }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    
+    if (draggedIndex !== null && draggedIndex !== index) {
+      // Calculate drop position (above or below)
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const midpoint = rect.top + rect.height / 2;
+      const mouseY = e.clientY;
+      
+      // Determine if dropping above or below this item
+      const newDropIndex = mouseY < midpoint ? index : index + 1;
+      
+      if (newDropIndex !== dropIndex && newDropIndex !== draggedIndex) {
+        setDropIndex(newDropIndex);
+        
+        // Optimistically reorder immediately for smooth feel
+        const reordered = [...optimisticMovements];
+        const [movedItem] = reordered.splice(draggedIndex, 1);
+        const adjustedDropIndex = draggedIndex < newDropIndex ? newDropIndex - 1 : newDropIndex;
+        reordered.splice(adjustedDropIndex, 0, movedItem);
+        setOptimisticMovements(reordered);
+        // Update draggedIndex to reflect new position for next drag over
+        setDraggedIndex(adjustedDropIndex);
+      }
+    }
   };
 
-  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+  const handleDragLeave = () => {
+    // Don't clear dropIndex on drag leave - keep it for smooth experience
+  };
+
+  const handleDrop = async (e: React.DragEvent, index: number) => {
     e.preventDefault();
     
-    if (draggedIndex !== null && draggedIndex !== dropIndex) {
-      try {
-        await reorderMovements(categoryId, draggedIndex, dropIndex);
-      } catch (error) {
+    // Get the original dragged index before optimistic updates
+    const originalDraggedIndex = movements.findIndex(m => m.id === optimisticMovements[draggedIndex!]?.id);
+    const originalDropIndex = dropIndex !== null 
+      ? movements.findIndex(m => m.id === optimisticMovements[dropIndex]?.id)
+      : null;
+    
+    if (originalDraggedIndex !== null && originalDropIndex !== null && originalDraggedIndex !== originalDropIndex) {
+      // Save to Firebase in background (optimistic update already done)
+      reorderMovements(categoryId, originalDraggedIndex, originalDropIndex).catch(error => {
         console.error('Failed to reorder movements:', error);
+        // Revert on error
+        setOptimisticMovements(movements);
         alert('Failed to reorder movements. Please try again.');
-      }
+      });
     }
     
     setDraggedIndex(null);
+    setDropIndex(null);
   };
 
   const handleDragEnd = () => {
     setDraggedIndex(null);
+    setDropIndex(null);
+    // Reset opacity of all cards
+    document.querySelectorAll('[draggable="true"]').forEach(el => {
+      if (el instanceof HTMLElement) {
+        el.style.opacity = '1';
+      }
+    });
   };
 
   const toggleExpanded = (movementId: string) => {
@@ -190,23 +246,41 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
     }
   };
 
+  // Use optimistic movements for display during drag
+  const displayMovements = draggedIndex !== null ? optimisticMovements : movements;
+
   return (
-    <div className="space-y-2">
-      {movements.map((movement, index) => {
+    <div className="space-y-2 relative">
+      {displayMovements.map((movement, index) => {
         const isExpanded = expandedMovements.has(movement.id);
         const configBadges = getConfigurationBadges(movement.configuration);
         const currentEditData = editFormData[movement.id];
+        const isDragging = draggedIndex === index;
+        const isDropTarget = dropIndex === index || (dropIndex === index + 1 && draggedIndex !== null && draggedIndex < index);
+        const showDropLineAbove = dropIndex === index;
+        const showDropLineBelow = dropIndex === index + 1;
 
         return (
-          <Card 
-            key={movement.id} 
-            className="overflow-hidden py-0"
-            draggable
-            onDragStart={(e) => handleDragStart(e, index)}
-            onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, index)}
-            onDragEnd={handleDragEnd}
-          >
+          <div key={movement.id} className="relative">
+            {/* Drop indicator line above */}
+            {showDropLineAbove && (
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary z-10 rounded-full shadow-lg" />
+            )}
+            
+            <Card 
+              className={`overflow-hidden py-0 transition-all duration-200 ${
+                isDragging ? 'opacity-50 scale-95' : ''
+              } ${isDropTarget && !isDragging ? 'translate-y-1' : ''}`}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              style={{
+                transition: 'transform 0.2s ease-out, opacity 0.2s ease-out'
+              }}
+            >
             <CardContent className="p-0">
               {/* Movement Header */}
               <div 
@@ -405,6 +479,12 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
               )}
             </CardContent>
           </Card>
+          
+          {/* Drop indicator line below */}
+          {showDropLineBelow && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary z-10 rounded-full shadow-lg" />
+          )}
+        </div>
         );
       })}
     </div>
