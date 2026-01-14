@@ -284,12 +284,12 @@ export function EventActionDialog({
       // Assign the single clicked event directly
       const result = await assignClientToEvents(
         [event],
-      selectedClientId,
+        selectedClientId,
         clientPrograms,
         clientName,
         selectedCategory || undefined
       );
-    
+      
       // Notify parent to refresh
       onClientAssigned?.();
       
@@ -332,7 +332,7 @@ export function EventActionDialog({
       onClientAssigned?.();
       
       // Close dialog and stay on calendar
-        onOpenChange(false);
+      onOpenChange(false);
     } catch (error) {
       console.error('Assignment failed:', error);
       setAssignmentError(error instanceof Error ? error.message : 'Assignment failed');
