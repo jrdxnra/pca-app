@@ -47,54 +47,54 @@ interface TwoColumnWeekViewProps {
 
 // Helper to get client ID from event - defined outside component to avoid minification issues
 function getEventClientId(event: GoogleCalendarEvent): string | null {
-  // Check preConfiguredClient first (highest priority)
-  if (event.preConfiguredClient) {
-    return event.preConfiguredClient;
-  }
-  
-  // Check extended properties (from Google Calendar API)
-  if ((event as any).extendedProperties?.private?.pcaClientId) {
-    return (event as any).extendedProperties.private.pcaClientId;
-  }
-  
-  // Check description metadata - try multiple patterns
-  if (event.description) {
-    // Pattern 1: [Metadata: ... client=...]
-    let clientMatch = event.description.match(/\[Metadata:.*client=([^,\s}\]]+)/);
-    if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
-      return clientMatch[1].trim();
+    // Check preConfiguredClient first (highest priority)
+    if (event.preConfiguredClient) {
+      return event.preConfiguredClient;
     }
     
-    // Pattern 2: client=... (without Metadata wrapper)
-    clientMatch = event.description.match(/client=([^,\s\n]+)/);
-    if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
-      return clientMatch[1].trim();
+    // Check extended properties (from Google Calendar API)
+    if ((event as any).extendedProperties?.private?.pcaClientId) {
+      return (event as any).extendedProperties.private.pcaClientId;
     }
-  }
-  
-  return null;
+    
+    // Check description metadata - try multiple patterns
+    if (event.description) {
+      // Pattern 1: [Metadata: ... client=...]
+      let clientMatch = event.description.match(/\[Metadata:.*client=([^,\s}\]]+)/);
+      if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
+        return clientMatch[1].trim();
+      }
+      
+      // Pattern 2: client=... (without Metadata wrapper)
+      clientMatch = event.description.match(/client=([^,\s\n]+)/);
+      if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
+        return clientMatch[1].trim();
+      }
+    }
+    
+    return null;
 }
 
 // Helper to detect if an event is an all-day event - defined outside component to avoid minification issues
 function isAllDayEvent(event: GoogleCalendarEvent): boolean {
-  // Check if event uses date instead of dateTime (Google Calendar all-day format)
-  if (event.start.date && !event.start.dateTime) {
-    return true;
-  }
-  // Check if start and end times are the same (broken all-day event)
-  if (event.start.dateTime && event.end?.dateTime) {
-    const start = new Date(event.start.dateTime);
-    const end = new Date(event.end.dateTime);
-    if (start.getTime() === end.getTime()) {
+    // Check if event uses date instead of dateTime (Google Calendar all-day format)
+    if (event.start.date && !event.start.dateTime) {
       return true;
     }
-    // Also check for events spanning more than 12 hours (likely all-day or multi-day)
-    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    if (durationHours >= 12) {
-      return true;
+    // Check if start and end times are the same (broken all-day event)
+    if (event.start.dateTime && event.end?.dateTime) {
+      const start = new Date(event.start.dateTime);
+      const end = new Date(event.end.dateTime);
+      if (start.getTime() === end.getTime()) {
+        return true;
+      }
+      // Also check for events spanning more than 12 hours (likely all-day or multi-day)
+      const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      if (durationHours >= 12) {
+        return true;
+      }
     }
-  }
-  return false;
+    return false;
 }
 
 // Memoize the component to prevent re-rendering the structure when only data changes
