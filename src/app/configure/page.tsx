@@ -440,18 +440,25 @@ export default function ConfigurePage() {
     }
   };
 
-  // State for forms
+  // State for forms - track editing IDs instead of showing forms at top
+  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingWorkoutTypeId, setEditingWorkoutTypeId] = useState<string | null>(null);
+  const [editingWorkoutStructureTemplate, setEditingWorkoutStructureTemplate] = useState<WorkoutStructureTemplate | null>(null);
+  
+  // For new items (show form at top)
+  const [showNewPeriodForm, setShowNewPeriodForm] = useState(false);
+  const [showNewTemplateForm, setShowNewTemplateForm] = useState(false);
+  const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
+  const [showNewWorkoutTypeForm, setShowNewWorkoutTypeForm] = useState(false);
+  const [showWorkoutStructureTemplateForm, setShowWorkoutStructureTemplateForm] = useState(false);
+  
+  // Temporary editing state for inline editing
   const [editingPeriod, setEditingPeriod] = useState<Period | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<WeekTemplate | null>(null);
   const [editingCategory, setEditingCategory] = useState<WorkoutCategory | null>(null);
   const [editingWorkoutType, setEditingWorkoutType] = useState<WorkoutType | null>(null);
-  const [editingWorkoutStructureTemplate, setEditingWorkoutStructureTemplate] = useState<WorkoutStructureTemplate | null>(null);
-  
-  const [showTemplateForm, setShowTemplateForm] = useState(false);
-  const [showPeriodForm, setShowPeriodForm] = useState(false);
-  const [showCategoryForm, setShowCategoryForm] = useState(false);
-  const [showWorkoutTypeForm, setShowWorkoutTypeForm] = useState(false);
-  const [showWorkoutStructureTemplateForm, setShowWorkoutStructureTemplateForm] = useState(false);
   
   // Calendar configuration state
   const [showTestEventForm, setShowTestEventForm] = useState(false);
@@ -482,31 +489,49 @@ export default function ConfigurePage() {
       focus: '',
       order: periods.length
     });
-    setShowPeriodForm(true);
+    setShowNewPeriodForm(true);
   };
 
-  const handleSavePeriod = () => {
+  const handleEditPeriod = (period: Period) => {
+    setEditingPeriod({ ...period });
+    setEditingPeriodId(period.id);
+  };
+
+  const handleSavePeriod = async () => {
     if (editingPeriod) {
-      if (editingPeriod.id.startsWith('temp_')) {
-        // New period
-        addPeriod({
-          name: editingPeriod.name,
-          color: editingPeriod.color,
-          focus: editingPeriod.focus,
-          order: editingPeriod.order || 0
-        });
-      } else {
-        // Update existing
-        updatePeriod(editingPeriod.id, {
-          name: editingPeriod.name,
-          color: editingPeriod.color,
-          focus: editingPeriod.focus,
-          order: editingPeriod.order
-        });
+      try {
+        if (editingPeriod.id.startsWith('temp_')) {
+          // New period
+          await addPeriod({
+            name: editingPeriod.name,
+            color: editingPeriod.color,
+            focus: editingPeriod.focus,
+            order: editingPeriod.order || 0
+          });
+          setShowNewPeriodForm(false);
+        } else {
+          // Update existing
+          await updatePeriod(editingPeriod.id, {
+            name: editingPeriod.name,
+            color: editingPeriod.color,
+            focus: editingPeriod.focus,
+            order: editingPeriod.order
+          });
+          setEditingPeriodId(null);
+        }
+        setEditingPeriod(null);
+        toastSuccess('Period saved');
+      } catch (error) {
+        console.error('Error saving period:', error);
+        toastError('Failed to save period');
       }
-      setEditingPeriod(null);
-      setShowPeriodForm(false);
     }
+  };
+
+  const handleCancelPeriod = () => {
+    setEditingPeriod(null);
+    setEditingPeriodId(null);
+    setShowNewPeriodForm(false);
   };
 
   const handleDeletePeriod = (id: string) => {
@@ -531,31 +556,49 @@ export default function ConfigurePage() {
       ],
       order: weekTemplates.length
     });
-    setShowTemplateForm(true);
+    setShowNewTemplateForm(true);
   };
 
-  const handleSaveWeekTemplate = () => {
+  const handleEditWeekTemplate = (template: WeekTemplate) => {
+    setEditingTemplate({ ...template });
+    setEditingTemplateId(template.id);
+  };
+
+  const handleSaveWeekTemplate = async () => {
     if (editingTemplate) {
-      if (editingTemplate.id.startsWith('temp_')) {
-        // New template
-        addWeekTemplate({
-          name: editingTemplate.name,
-          color: editingTemplate.color,
-          days: editingTemplate.days,
-          order: editingTemplate.order || 0
-        });
-      } else {
-        // Update existing
-        updateWeekTemplate(editingTemplate.id, {
-          name: editingTemplate.name,
-          color: editingTemplate.color,
-          days: editingTemplate.days,
-          order: editingTemplate.order
-        });
+      try {
+        if (editingTemplate.id.startsWith('temp_')) {
+          // New template
+          await addWeekTemplate({
+            name: editingTemplate.name,
+            color: editingTemplate.color,
+            days: editingTemplate.days,
+            order: editingTemplate.order || 0
+          });
+          setShowNewTemplateForm(false);
+        } else {
+          // Update existing
+          await updateWeekTemplate(editingTemplate.id, {
+            name: editingTemplate.name,
+            color: editingTemplate.color,
+            days: editingTemplate.days,
+            order: editingTemplate.order
+          });
+          setEditingTemplateId(null);
+        }
+        setEditingTemplate(null);
+        toastSuccess('Week template saved');
+      } catch (error) {
+        console.error('Error saving week template:', error);
+        toastError('Failed to save week template');
       }
-      setEditingTemplate(null);
-      setShowTemplateForm(false);
     }
+  };
+
+  const handleCancelWeekTemplate = () => {
+    setEditingTemplate(null);
+    setEditingTemplateId(null);
+    setShowNewTemplateForm(false);
   };
 
   const handleDeleteWeekTemplate = (id: string) => {
@@ -595,29 +638,47 @@ export default function ConfigurePage() {
       color: '#f59e0b',
       order: workoutCategories.length
     });
-    setShowCategoryForm(true);
+    setShowNewCategoryForm(true);
   };
 
-  const handleSaveCategory = () => {
+  const handleEditCategory = (category: WorkoutCategory) => {
+    setEditingCategory({ ...category });
+    setEditingCategoryId(category.id);
+  };
+
+  const handleSaveCategory = async () => {
     if (editingCategory) {
-      if (editingCategory.id.startsWith('temp_')) {
-        // New category
-        addWorkoutCategory({
-          name: editingCategory.name,
-          color: editingCategory.color,
-          order: editingCategory.order || 0
-        });
-      } else {
-        // Update existing
-        updateWorkoutCategory(editingCategory.id, {
-          name: editingCategory.name,
-          color: editingCategory.color,
-          order: editingCategory.order
-        });
+      try {
+        if (editingCategory.id.startsWith('temp_')) {
+          // New category
+          await addWorkoutCategory({
+            name: editingCategory.name,
+            color: editingCategory.color,
+            order: editingCategory.order || 0
+          });
+          setShowNewCategoryForm(false);
+        } else {
+          // Update existing
+          await updateWorkoutCategory(editingCategory.id, {
+            name: editingCategory.name,
+            color: editingCategory.color,
+            order: editingCategory.order
+          });
+          setEditingCategoryId(null);
+        }
+        setEditingCategory(null);
+        toastSuccess('Workout category saved');
+      } catch (error) {
+        console.error('Error saving workout category:', error);
+        toastError('Failed to save workout category');
       }
-      setEditingCategory(null);
-      setShowCategoryForm(false);
     }
+  };
+
+  const handleCancelCategory = () => {
+    setEditingCategory(null);
+    setEditingCategoryId(null);
+    setShowNewCategoryForm(false);
   };
 
   const handleDeleteCategory = (id: string) => {
@@ -634,31 +695,49 @@ export default function ConfigurePage() {
       description: '',
       order: workoutTypes.length
     });
-    setShowWorkoutTypeForm(true);
+    setShowNewWorkoutTypeForm(true);
   };
 
-  const handleSaveWorkoutType = () => {
+  const handleEditWorkoutType = (workoutType: WorkoutType) => {
+    setEditingWorkoutType({ ...workoutType });
+    setEditingWorkoutTypeId(workoutType.id);
+  };
+
+  const handleSaveWorkoutType = async () => {
     if (editingWorkoutType) {
-      if (editingWorkoutType.id.startsWith('temp_')) {
-        // New workout type
-        addWorkoutType({
-          name: editingWorkoutType.name,
-          color: editingWorkoutType.color,
-          description: editingWorkoutType.description,
-          order: editingWorkoutType.order || 0
-        });
-      } else {
-        // Update existing
-        updateWorkoutType(editingWorkoutType.id, {
-          name: editingWorkoutType.name,
-          color: editingWorkoutType.color,
-          description: editingWorkoutType.description,
-          order: editingWorkoutType.order
-        });
+      try {
+        if (editingWorkoutType.id.startsWith('temp_')) {
+          // New workout type
+          await addWorkoutType({
+            name: editingWorkoutType.name,
+            color: editingWorkoutType.color,
+            description: editingWorkoutType.description,
+            order: editingWorkoutType.order || 0
+          });
+          setShowNewWorkoutTypeForm(false);
+        } else {
+          // Update existing
+          await updateWorkoutType(editingWorkoutType.id, {
+            name: editingWorkoutType.name,
+            color: editingWorkoutType.color,
+            description: editingWorkoutType.description,
+            order: editingWorkoutType.order
+          });
+          setEditingWorkoutTypeId(null);
+        }
+        setEditingWorkoutType(null);
+        toastSuccess('Workout type saved');
+      } catch (error) {
+        console.error('Error saving workout type:', error);
+        toastError('Failed to save workout type');
       }
-      setEditingWorkoutType(null);
-      setShowWorkoutTypeForm(false);
     }
+  };
+
+  const handleCancelWorkoutType = () => {
+    setEditingWorkoutType(null);
+    setEditingWorkoutTypeId(null);
+    setShowNewWorkoutTypeForm(false);
   };
 
   const handleDeleteWorkoutType = (id: string) => {
@@ -896,8 +975,8 @@ export default function ConfigurePage() {
               </Button>
             </div>
             
-            {/* Period Form */}
-            {showPeriodForm && (
+            {/* New Period Form (at top) */}
+            {showNewPeriodForm && editingPeriod && (
               <Card className="mb-4">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Add Period</CardTitle>
@@ -906,12 +985,12 @@ export default function ConfigurePage() {
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       placeholder="Period name"
-                      value={editingPeriod?.name || ''}
+                      value={editingPeriod.name}
                       onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, name: e.target.value } : null)}
                     />
                     <Input
                       placeholder="Focus"
-                      value={editingPeriod?.focus || ''}
+                      value={editingPeriod.focus}
                       onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, focus: e.target.value } : null)}
                     />
                   </div>
@@ -922,7 +1001,7 @@ export default function ConfigurePage() {
                         <button
                           key={color}
                           className={`w-6 h-6 rounded-full border-2 ${
-                            editingPeriod?.color === color ? 'border-gray-900' : 'border-gray-300'
+                            editingPeriod.color === color ? 'border-gray-900' : 'border-gray-300'
                           }`}
                           style={{ backgroundColor: color }}
                           onClick={() => setEditingPeriod(prev => prev ? { ...prev, color } : null)}
@@ -935,14 +1014,7 @@ export default function ConfigurePage() {
                       <Save className="h-4 w-4 mr-2 icon-success" />
                       Save Period
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingPeriod(null);
-                        setShowPeriodForm(false);
-                      }}
-                      className="flex-1"
-                    >
+                    <Button variant="outline" onClick={handleCancelPeriod} className="flex-1">
                       <X className="h-4 w-4 mr-2" />
                       Cancel
                     </Button>
@@ -960,17 +1032,58 @@ export default function ConfigurePage() {
               <SortableContext items={periods.map(p => `period-${p.id}`)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {periods.map((period) => (
-                    <SortableItem
-                      key={period.id}
-                      item={period}
-                      onEdit={(period) => {
-                        setEditingPeriod(period);
-                        setShowPeriodForm(true);
-                      }}
-                      onDelete={handleDeletePeriod}
-                      index={periods.indexOf(period)}
-                      type="period"
-                    />
+                    editingPeriodId === period.id && editingPeriod ? (
+                      <Card key={period.id} className="p-4">
+                        <CardContent className="space-y-4 p-0">
+                          <div className="grid grid-cols-2 gap-4">
+                            <Input
+                              placeholder="Period name"
+                              value={editingPeriod.name}
+                              onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, name: e.target.value } : null)}
+                            />
+                            <Input
+                              placeholder="Focus"
+                              value={editingPeriod.focus}
+                              onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, focus: e.target.value } : null)}
+                            />
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <label className="text-sm font-medium">Color:</label>
+                            <div className="flex gap-2">
+                              {colors.map((color) => (
+                                <button
+                                  key={color}
+                                  className={`w-6 h-6 rounded-full border-2 ${
+                                    editingPeriod.color === color ? 'border-gray-900' : 'border-gray-300'
+                                  }`}
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => setEditingPeriod(prev => prev ? { ...prev, color } : null)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={handleSavePeriod} className="flex-1">
+                              <Save className="h-4 w-4 mr-2 icon-success" />
+                              Save
+                            </Button>
+                            <Button variant="outline" onClick={handleCancelPeriod} className="flex-1">
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <SortableItem
+                        key={period.id}
+                        item={period}
+                        onEdit={handleEditPeriod}
+                        onDelete={handleDeletePeriod}
+                        index={periods.indexOf(period)}
+                        type="period"
+                      />
+                    )
                   ))}
                 </div>
               </SortableContext>
@@ -990,8 +1103,8 @@ export default function ConfigurePage() {
               </Button>
             </div>
             
-            {/* Week Template Form */}
-            {showTemplateForm && (
+            {/* New Week Template Form (at top) */}
+            {showNewTemplateForm && editingTemplate && (
               <Card className="mb-4">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Add Week Template</CardTitle>
@@ -1000,7 +1113,7 @@ export default function ConfigurePage() {
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       placeholder="Template name"
-                      value={editingTemplate?.name || ''}
+                      value={editingTemplate.name}
                       onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
                     />
                     <div className="flex items-center gap-4">
@@ -1010,7 +1123,7 @@ export default function ConfigurePage() {
                           <button
                             key={color}
                             className={`w-6 h-6 rounded-full border-2 ${
-                              editingTemplate?.color === color ? 'border-gray-900' : 'border-gray-300'
+                              editingTemplate.color === color ? 'border-gray-900' : 'border-gray-300'
                             }`}
                             style={{ backgroundColor: color }}
                             onClick={() => setEditingTemplate(prev => prev ? { ...prev, color } : null)}
@@ -1028,7 +1141,7 @@ export default function ConfigurePage() {
                         Add Day
                       </Button>
                     </div>
-                    {editingTemplate?.days.map((day, index) => (
+                    {editingTemplate.days.map((day, index) => (
                       <HorizontalDayItem
                         key={index}
                         day={day}
@@ -1044,14 +1157,7 @@ export default function ConfigurePage() {
                       <Save className="h-4 w-4 mr-2 icon-success" />
                       Save Template
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingTemplate(null);
-                        setShowTemplateForm(false);
-                      }}
-                      className="flex-1"
-                    >
+                    <Button variant="outline" onClick={handleCancelWeekTemplate} className="flex-1">
                       <X className="h-4 w-4 mr-2" />
                       Cancel
                     </Button>
@@ -1069,17 +1175,73 @@ export default function ConfigurePage() {
               <SortableContext items={weekTemplates.map(t => `template-${t.id}`)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {weekTemplates.map((template) => (
-                    <SortableItem
-                      key={template.id}
-                      item={template}
-                      onEdit={(template) => {
-                        setEditingTemplate(template);
-                        setShowTemplateForm(true);
-                      }}
-                      onDelete={handleDeleteWeekTemplate}
-                      index={weekTemplates.indexOf(template)}
-                      type="template"
-                    />
+                    editingTemplateId === template.id && editingTemplate ? (
+                      <Card key={template.id} className="p-4">
+                        <CardContent className="space-y-4 p-0">
+                          <div className="grid grid-cols-2 gap-4">
+                            <Input
+                              placeholder="Template name"
+                              value={editingTemplate.name}
+                              onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
+                            />
+                            <div className="flex items-center gap-4">
+                              <label className="text-sm font-medium">Color:</label>
+                              <div className="flex gap-2">
+                                {colors.map((color) => (
+                                  <button
+                                    key={color}
+                                    className={`w-6 h-6 rounded-full border-2 ${
+                                      editingTemplate.color === color ? 'border-gray-900' : 'border-gray-300'
+                                    }`}
+                                    style={{ backgroundColor: color }}
+                                    onClick={() => setEditingTemplate(prev => prev ? { ...prev, color } : null)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium">Days:</label>
+                              <Button onClick={addTemplateDay} size="sm" variant="outline">
+                                <Plus className="h-4 w-4 mr-1.5 icon-add" />
+                                Add Day
+                              </Button>
+                            </div>
+                            {editingTemplate.days.map((day, index) => (
+                              <HorizontalDayItem
+                                key={index}
+                                day={day}
+                                index={index}
+                                onUpdate={updateTemplateDay}
+                                onDelete={deleteTemplateDay}
+                              />
+                            ))}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={handleSaveWeekTemplate} className="flex-1">
+                              <Save className="h-4 w-4 mr-2 icon-success" />
+                              Save
+                            </Button>
+                            <Button variant="outline" onClick={handleCancelWeekTemplate} className="flex-1">
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <SortableItem
+                        key={template.id}
+                        item={template}
+                        onEdit={handleEditWeekTemplate}
+                        onDelete={handleDeleteWeekTemplate}
+                        index={weekTemplates.indexOf(template)}
+                        type="template"
+                      />
+                    )
                   ))}
                 </div>
               </SortableContext>
@@ -1102,8 +1264,8 @@ export default function ConfigurePage() {
               </Button>
             </div>
             
-            {/* Category Form */}
-            {showCategoryForm && (
+            {/* New Category Form (at top) */}
+            {showNewCategoryForm && editingCategory && (
               <Card className="mb-4">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Add Workout Category</CardTitle>
@@ -1111,7 +1273,7 @@ export default function ConfigurePage() {
                 <CardContent className="space-y-4">
                   <Input
                     placeholder="Category name"
-                    value={editingCategory?.name || ''}
+                    value={editingCategory.name}
                     onChange={(e) => setEditingCategory(prev => prev ? { ...prev, name: e.target.value } : null)}
                   />
                   <div className="flex items-center gap-4">
@@ -1121,7 +1283,7 @@ export default function ConfigurePage() {
                         <button
                           key={color}
                           className={`w-6 h-6 rounded-full border-2 ${
-                            editingCategory?.color === color ? 'border-gray-900' : 'border-gray-300'
+                            editingCategory.color === color ? 'border-gray-900' : 'border-gray-300'
                           }`}
                           style={{ backgroundColor: color }}
                           onClick={() => setEditingCategory(prev => prev ? { ...prev, color } : null)}
@@ -1134,14 +1296,7 @@ export default function ConfigurePage() {
                       <Save className="h-4 w-4 mr-2 icon-success" />
                       Save Category
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingCategory(null);
-                        setShowCategoryForm(false);
-                      }}
-                      className="flex-1"
-                    >
+                    <Button variant="outline" onClick={handleCancelCategory} className="flex-1">
                       <X className="h-4 w-4 mr-2" />
                       Cancel
                     </Button>
@@ -1159,64 +1314,98 @@ export default function ConfigurePage() {
               <SortableContext items={workoutCategories.map(c => `category-${c.id}`)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {workoutCategories.map((category) => (
-                    <div key={category.id} className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-4">
-                          <div 
-                            className="w-4 h-4 rounded-full" 
-                            style={{ backgroundColor: category.color }}
+                    editingCategoryId === category.id && editingCategory ? (
+                      <Card key={category.id} className="p-4">
+                        <CardContent className="space-y-4 p-0">
+                          <Input
+                            placeholder="Category name"
+                            value={editingCategory.name}
+                            onChange={(e) => setEditingCategory(prev => prev ? { ...prev, name: e.target.value } : null)}
                           />
-                          <div>
-                            <h4 className="font-semibold">{category.name}</h4>
+                          <div className="flex items-center gap-4">
+                            <label className="text-sm font-medium">Color:</label>
+                            <div className="flex gap-2">
+                              {colors.map((color) => (
+                                <button
+                                  key={color}
+                                  className={`w-6 h-6 rounded-full border-2 ${
+                                    editingCategory.color === color ? 'border-gray-900' : 'border-gray-300'
+                                  }`}
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => setEditingCategory(prev => prev ? { ...prev, color } : null)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={handleSaveCategory} className="flex-1">
+                              <Save className="h-4 w-4 mr-2 icon-success" />
+                              Save
+                            </Button>
+                            <Button variant="outline" onClick={handleCancelCategory} className="flex-1">
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div key={category.id} className="p-4 border rounded-lg">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-4">
+                            <div 
+                              className="w-4 h-4 rounded-full" 
+                              style={{ backgroundColor: category.color }}
+                            />
+                            <div>
+                              <h4 className="font-semibold">{category.name}</h4>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditCategory(category)}
+                            >
+                              <Edit className="h-4 w-4 icon-edit" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDeleteCategory(category.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setEditingCategory(category);
-                              setShowCategoryForm(true);
+                        
+                        {/* Linked Template Dropdown */}
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm font-medium text-gray-700">Linked Template:</label>
+                          <Select
+                            value={category.linkedWorkoutStructureTemplateId || 'none'}
+                            onValueChange={(value) => {
+                              updateWorkoutCategory(category.id, {
+                                linkedWorkoutStructureTemplateId: value === 'none' ? '' : value
+                              });
                             }}
                           >
-                            <Edit className="h-4 w-4 icon-edit" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDeleteCategory(category.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                            <SelectTrigger className="w-48 h-8 text-xs">
+                              <SelectValue placeholder="None" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              {workoutStructureTemplates.map((template) => (
+                                <SelectItem key={template.id} value={template.id}>
+                                  {template.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
-                      
-                      {/* Linked Template Dropdown */}
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium text-gray-700">Linked Template:</label>
-                        <Select
-                          value={category.linkedWorkoutStructureTemplateId || 'none'}
-                          onValueChange={(value) => {
-                            updateWorkoutCategory(category.id, {
-                              linkedWorkoutStructureTemplateId: value === 'none' ? '' : value
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="w-48 h-8 text-xs">
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            {workoutStructureTemplates.map((template) => (
-                              <SelectItem key={template.id} value={template.id}>
-                                {template.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
+                    )
                   ))}
                 </div>
               </SortableContext>
@@ -1296,8 +1485,8 @@ export default function ConfigurePage() {
               </Button>
             </div>
             
-            {/* Workout Type Form */}
-            {showWorkoutTypeForm && (
+            {/* New Workout Type Form (at top) */}
+            {showNewWorkoutTypeForm && editingWorkoutType && (
               <Card className="mb-4">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Add Workout Type</CardTitle>
@@ -1306,12 +1495,12 @@ export default function ConfigurePage() {
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       placeholder="Workout type name"
-                      value={editingWorkoutType?.name || ''}
+                      value={editingWorkoutType.name}
                       onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, name: e.target.value } : null)}
                     />
                     <Input
                       placeholder="Description"
-                      value={editingWorkoutType?.description || ''}
+                      value={editingWorkoutType.description}
                       onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, description: e.target.value } : null)}
                     />
                   </div>
@@ -1322,7 +1511,7 @@ export default function ConfigurePage() {
                         <button
                           key={color}
                           className={`w-6 h-6 rounded-full border-2 ${
-                            editingWorkoutType?.color === color ? 'border-gray-900' : 'border-gray-300'
+                            editingWorkoutType.color === color ? 'border-gray-900' : 'border-gray-300'
                           }`}
                           style={{ backgroundColor: color }}
                           onClick={() => setEditingWorkoutType(prev => prev ? { ...prev, color } : null)}
@@ -1335,14 +1524,7 @@ export default function ConfigurePage() {
                       <Save className="h-4 w-4 mr-2 icon-success" />
                       Save Workout Type
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingWorkoutType(null);
-                        setShowWorkoutTypeForm(false);
-                      }}
-                      className="flex-1"
-                    >
+                    <Button variant="outline" onClick={handleCancelWorkoutType} className="flex-1">
                       <X className="h-4 w-4 mr-2" />
                       Cancel
                     </Button>
@@ -1360,17 +1542,58 @@ export default function ConfigurePage() {
               <SortableContext items={workoutTypes.map(w => `workoutType-${w.id}`)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {workoutTypes.map((workoutType) => (
-                    <SortableItem
-                      key={workoutType.id}
-                      item={workoutType}
-                      onEdit={(workoutType) => {
-                        setEditingWorkoutType(workoutType);
-                        setShowWorkoutTypeForm(true);
-                      }}
-                      onDelete={handleDeleteWorkoutType}
-                      index={workoutTypes.indexOf(workoutType)}
-                      type="workoutType"
-                    />
+                    editingWorkoutTypeId === workoutType.id && editingWorkoutType ? (
+                      <Card key={workoutType.id} className="p-4">
+                        <CardContent className="space-y-4 p-0">
+                          <div className="grid grid-cols-2 gap-4">
+                            <Input
+                              placeholder="Workout type name"
+                              value={editingWorkoutType.name}
+                              onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, name: e.target.value } : null)}
+                            />
+                            <Input
+                              placeholder="Description"
+                              value={editingWorkoutType.description}
+                              onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, description: e.target.value } : null)}
+                            />
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <label className="text-sm font-medium">Color:</label>
+                            <div className="flex gap-2">
+                              {colors.map((color) => (
+                                <button
+                                  key={color}
+                                  className={`w-6 h-6 rounded-full border-2 ${
+                                    editingWorkoutType.color === color ? 'border-gray-900' : 'border-gray-300'
+                                  }`}
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => setEditingWorkoutType(prev => prev ? { ...prev, color } : null)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={handleSaveWorkoutType} className="flex-1">
+                              <Save className="h-4 w-4 mr-2 icon-success" />
+                              Save
+                            </Button>
+                            <Button variant="outline" onClick={handleCancelWorkoutType} className="flex-1">
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <SortableItem
+                        key={workoutType.id}
+                        item={workoutType}
+                        onEdit={handleEditWorkoutType}
+                        onDelete={handleDeleteWorkoutType}
+                        index={workoutTypes.indexOf(workoutType)}
+                        type="workoutType"
+                      />
+                    )
                   ))}
                 </div>
               </SortableContext>
