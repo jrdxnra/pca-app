@@ -250,7 +250,11 @@ function SortableItem({
 }
 
 export default function ConfigurePage() {
-  const normalizeLocationKey = (input: string) => (input || '').trim().replace(/\\s+/g, ' ');
+  const normalizeLocationKey = (input: string) => {
+    if (!input) return '';
+    // Normalize: trim, collapse multiple spaces, convert to lowercase for comparison
+    return input.trim().replace(/\s+/g, ' ').toLowerCase();
+  };
 
   const {
     periods,
@@ -856,10 +860,10 @@ export default function ConfigurePage() {
       }).filter(a => a.original.length > 0);
       
       // Update local state immediately
-      updateCalendarConfig({ locationAbbreviations: normalizedAbbreviations });
+      updateCalendarConfig({ locationAbbreviations: deduplicatedAbbreviations });
       
       // Also save directly to Firebase to ensure persistence
-      await updateCalendarSyncConfig({ locationAbbreviations: normalizedAbbreviations });
+      await updateCalendarSyncConfig({ locationAbbreviations: deduplicatedAbbreviations });
       
       toastSuccess('Location abbreviation saved');
       setEditingLocation(null);
@@ -2277,7 +2281,15 @@ export default function ConfigurePage() {
                           N/A Locations
                         </span>
                         <Badge variant="secondary" className="bg-gray-300 text-gray-700 text-xs font-medium">
-                          {calendarConfig.locationAbbreviations?.filter(abbr => abbr.ignored).length ?? 0}
+                          {(() => {
+                            // Count unique ignored locations
+                            const ignoredAbbrs = (calendarConfig.locationAbbreviations ?? []).filter(abbr => abbr.ignored);
+                            const seen = new Set<string>();
+                            for (const abbr of ignoredAbbrs) {
+                              seen.add(normalizeLocationKey(abbr.original));
+                            }
+                            return seen.size;
+                          })()}
                         </Badge>
                         <span className="text-xs text-gray-500 ml-2">
                           (Click to {showIgnoredLocations ? 'hide' : 'expand'})
@@ -2288,15 +2300,36 @@ export default function ConfigurePage() {
                     {showIgnoredLocations && (
                       <div className="space-y-2 mt-2">
                         {/* Empty state */}
-                        {(calendarConfig.locationAbbreviations?.filter(abbr => abbr.ignored).length ?? 0) === 0 ? (
+                        {(() => {
+                          // Count unique ignored locations
+                          const ignoredAbbrs = (calendarConfig.locationAbbreviations ?? []).filter(abbr => abbr.ignored);
+                          const seen = new Set<string>();
+                          for (const abbr of ignoredAbbrs) {
+                            seen.add(normalizeLocationKey(abbr.original));
+                          }
+                          return seen.size;
+                        })() === 0 ? (
                           <p className="text-sm text-gray-500 italic p-3 bg-gray-50 rounded-lg">
                             No locations marked as N/A. Click the "N/A" button on any location above to hide it from the calendar display.
                           </p>
                         ) : (
-                          /* Show ALL ignored locations from saved config */
-                          (calendarConfig.locationAbbreviations ?? [])
-                            .filter(abbr => abbr.ignored)
-                            .map((existingAbbr) => {
+                          /* Show ALL ignored locations from saved config - deduplicated */
+                          (() => {
+                            // Deduplicate ignored locations by normalized key
+                            const ignoredAbbrs = (calendarConfig.locationAbbreviations ?? []).filter(abbr => abbr.ignored);
+                            const seen = new Set<string>();
+                            const uniqueIgnored: LocationAbbreviation[] = [];
+                            
+                            for (const abbr of ignoredAbbrs) {
+                              const normalizedKey = normalizeLocationKey(abbr.original);
+                              if (!seen.has(normalizedKey)) {
+                                seen.add(normalizedKey);
+                                uniqueIgnored.push(abbr);
+                              }
+                            }
+                            
+                            return uniqueIgnored;
+                          })().map((existingAbbr) => {
                               const location = existingAbbr.original;
                               const isEditing = normalizeLocationKey(editingLocation?.original || '') === normalizeLocationKey(location);
                               

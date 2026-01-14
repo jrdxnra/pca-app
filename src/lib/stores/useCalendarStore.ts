@@ -527,13 +527,23 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
     const { config } = get();
     // Normalize location abbreviations to make matching robust across whitespace differences
     const nextLocationAbbreviations = updates.locationAbbreviations
-      ? updates.locationAbbreviations
-          .map(a => ({
-            ...a,
-            original: normalizeLocationKey(a.original),
-            abbreviation: (a.abbreviation || '').trim() || normalizeLocationKey(a.original),
-          }))
-          .filter(a => a.original.length > 0)
+      ? (() => {
+          // Normalize and deduplicate
+          const normalized = updates.locationAbbreviations
+            .map(a => ({
+              ...a,
+              original: normalizeLocationKey(a.original),
+              abbreviation: (a.abbreviation || '').trim() || normalizeLocationKey(a.original),
+            }))
+            .filter(a => a.original.length > 0);
+          
+          // Deduplicate by normalized original key (keep last one)
+          const deduplicatedMap = new Map<string, typeof normalized[0]>();
+          for (const abbr of normalized) {
+            deduplicatedMap.set(abbr.original, abbr);
+          }
+          return Array.from(deduplicatedMap.values());
+        })()
       : undefined;
 
     const newConfig = { ...config, ...updates, ...(nextLocationAbbreviations ? { locationAbbreviations: nextLocationAbbreviations } : {}) };
