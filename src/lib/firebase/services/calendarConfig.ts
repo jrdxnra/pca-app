@@ -1,5 +1,5 @@
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
-import { getDb } from '../config';
+import { doc, getDoc, setDoc, Timestamp, deleteField } from 'firebase/firestore';
+import { db } from '../config';
 import type { CalendarSyncConfig, LocationAbbreviation } from '@/lib/google-calendar/types';
 
 const DOC_ID = 'calendar-config';
@@ -111,7 +111,10 @@ function normalizeLastSyncTime(value: unknown): Date | undefined {
 }
 
 export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promise<CalendarSyncConfig> {
-  const db = getDb();
+  if (!db) {
+    console.warn('Firestore not initialized, returning defaults');
+    return defaults;
+  }
   const docRef = doc(db, 'configuration', DOC_ID);
   const snap = await getDoc(docRef);
 
@@ -119,9 +122,11 @@ export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promi
     // Seed defaults so config exists for all clients.
     const seeded: CalendarSyncConfig = { ...defaults };
     await setDoc(docRef, {
-      ...seeded,
-      // Store dates as timestamps for consistency
-      lastSyncTime: undefined,
+      selectedCalendarId: seeded.selectedCalendarId ?? null,
+      coachingKeywords: seeded.coachingKeywords,
+      classKeywords: seeded.classKeywords,
+      locationAbbreviations: seeded.locationAbbreviations ?? [],
+      // Don't include lastSyncTime if undefined - Firestore rejects undefined values
     }, { merge: true });
     return seeded;
   }
@@ -149,7 +154,10 @@ export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promi
 }
 
 export async function updateCalendarSyncConfig(updates: Partial<CalendarSyncConfig>): Promise<void> {
-  const db = getDb();
+  if (!db) {
+    console.warn('Firestore not initialized, skipping save');
+    return;
+  }
   const docRef = doc(db, 'configuration', DOC_ID);
 
   const payload: Record<string, unknown> = {};
