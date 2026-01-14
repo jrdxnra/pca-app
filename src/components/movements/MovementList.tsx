@@ -109,7 +109,7 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
     }
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = (e: React.DragEvent, displayIndex: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     
@@ -118,13 +118,13 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
       const currentDraggedIndex = optimisticMovements.findIndex(m => m.id === draggedMovementId);
       if (currentDraggedIndex === -1) return;
       
-      // Calculate drop position (above or below)
+      // Calculate drop position (above or below) using display index
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const midpoint = rect.top + rect.height / 2;
       const mouseY = e.clientY;
       
       // Determine if dropping above or below this item
-      const targetIndex = mouseY < midpoint ? index : index + 1;
+      const targetIndex = mouseY < midpoint ? displayIndex : displayIndex + 1;
       const newDropIndex = Math.max(0, Math.min(targetIndex, optimisticMovements.length));
       
       if (newDropIndex !== dropIndex && newDropIndex !== currentDraggedIndex) {
@@ -287,7 +287,7 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
               }`}
               draggable
               onDragStart={(e) => handleDragStart(e, index)}
-              onDragOver={(e) => handleDragOver(e, index)}
+              onDragOver={(e) => handleDragOver(e, displayIndex)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, index)}
               onDragEnd={handleDragEnd}
