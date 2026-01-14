@@ -271,13 +271,16 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
           <div key={movement.id} className="relative">
             {/* Drop indicator line above */}
             {showDropLineAbove && (
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary z-10 rounded-full shadow-lg" />
+              <div className="absolute top-0 left-0 right-0 z-10 flex items-center">
+                <div className="w-2 h-2 rounded-full bg-purple-400 -ml-1"></div>
+                <div className="flex-1 h-0.5 bg-purple-400"></div>
+              </div>
             )}
             
             <Card 
               className={`overflow-hidden py-0 transition-all duration-200 ${
                 isDragging ? 'opacity-50 scale-95' : ''
-              } ${isDropTarget && !isDragging ? 'translate-y-1' : ''}`}
+              }`}
               draggable
               onDragStart={(e) => handleDragStart(e, index)}
               onDragOver={(e) => handleDragOver(e, index)}
@@ -489,7 +492,10 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
           
           {/* Drop indicator line below */}
           {showDropLineBelow && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary z-10 rounded-full shadow-lg" />
+            <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center">
+              <div className="w-2 h-2 rounded-full bg-purple-400 -ml-1"></div>
+              <div className="flex-1 h-0.5 bg-purple-400"></div>
+            </div>
           )}
         </div>
         );
