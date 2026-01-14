@@ -124,16 +124,20 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
       const mouseY = e.clientY;
       
       // Determine if dropping above or below this item
-      const targetIndex = mouseY < midpoint ? displayIndex : displayIndex + 1;
-      const newDropIndex = Math.max(0, Math.min(targetIndex, optimisticMovements.length));
+      // If mouse is in upper half, drop above (at this index)
+      // If mouse is in lower half, drop below (at next index)
+      const newDropIndex = mouseY < midpoint ? displayIndex : displayIndex + 1;
+      const clampedDropIndex = Math.max(0, Math.min(newDropIndex, optimisticMovements.length));
       
-      if (newDropIndex !== dropIndex && newDropIndex !== currentDraggedIndex) {
-        setDropIndex(newDropIndex);
+      // Only update if different and not dropping on itself
+      if (clampedDropIndex !== dropIndex && clampedDropIndex !== currentDraggedIndex) {
+        setDropIndex(clampedDropIndex);
         
         // Optimistically reorder immediately for smooth feel
         const reordered = [...optimisticMovements];
         const [movedItem] = reordered.splice(currentDraggedIndex, 1);
-        const adjustedDropIndex = currentDraggedIndex < newDropIndex ? newDropIndex - 1 : newDropIndex;
+        // Adjust drop index if we're moving forward in the array
+        const adjustedDropIndex = currentDraggedIndex < clampedDropIndex ? clampedDropIndex - 1 : clampedDropIndex;
         reordered.splice(adjustedDropIndex, 0, movedItem);
         setOptimisticMovements(reordered);
       }
@@ -267,15 +271,14 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
         const configBadges = getConfigurationBadges(movement.configuration);
         const currentEditData = editFormData[movement.id];
         const isDragging = draggedMovementId === movement.id;
-        // Use displayIndex for drop line positioning (optimistic array position)
-        const showDropLineAbove = dropIndex === displayIndex;
-        const showDropLineBelow = dropIndex === displayIndex + 1;
+        // Use displayIndex for drop line positioning - show line above this item if dropIndex matches
+        const showDropLine = dropIndex === displayIndex && !isDragging;
 
         return (
           <div key={movement.id} className="relative">
-            {/* Drop indicator line above */}
-            {showDropLineAbove && (
-              <div className="absolute top-0 left-0 right-0 z-10 flex items-center -mt-0.5">
+            {/* Drop indicator line - single line with circle */}
+            {showDropLine && (
+              <div className="absolute top-0 left-0 right-0 z-10 flex items-center pointer-events-none">
                 <div className="w-1.5 h-1.5 rounded-full bg-purple-400 -ml-0.5"></div>
                 <div className="flex-1 h-px bg-purple-400"></div>
               </div>
@@ -493,14 +496,6 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
               )}
             </CardContent>
           </Card>
-          
-          {/* Drop indicator line below */}
-          {showDropLineBelow && (
-            <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center -mb-0.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-400 -ml-0.5"></div>
-              <div className="flex-1 h-px bg-purple-400"></div>
-            </div>
-          )}
         </div>
         );
       })}
