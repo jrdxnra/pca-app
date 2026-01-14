@@ -528,21 +528,29 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
     // Normalize location abbreviations to make matching robust across whitespace differences
     const nextLocationAbbreviations = updates.locationAbbreviations
       ? (() => {
-          // Normalize and deduplicate
-          const normalized = updates.locationAbbreviations
-            .map(a => ({
-              ...a,
-              original: normalizeLocationKey(a.original),
-              abbreviation: (a.abbreviation || '').trim() || normalizeLocationKey(a.original),
-            }))
+          // Preserve original casing but normalize for deduplication
+          const processed = updates.locationAbbreviations
+            .map(a => {
+              // Preserve original casing for display
+              const originalDisplay = (a.original || '').trim().replace(/\s+/g, ' ');
+              const normalizedKey = normalizeLocationKey(a.original);
+              
+              return {
+                ...a,
+                original: originalDisplay, // Keep original casing
+                abbreviation: (a.abbreviation || '').trim() || originalDisplay,
+                _normalizedKey: normalizedKey // For deduplication
+              };
+            })
             .filter(a => a.original.length > 0);
           
-          // Deduplicate by normalized original key (keep last one)
-          const deduplicatedMap = new Map<string, typeof normalized[0]>();
-          for (const abbr of normalized) {
-            deduplicatedMap.set(abbr.original, abbr);
+          // Deduplicate by normalized key (keep last one)
+          const deduplicatedMap = new Map<string, typeof processed[0]>();
+          for (const abbr of processed) {
+            deduplicatedMap.set(abbr._normalizedKey, abbr);
           }
-          return Array.from(deduplicatedMap.values());
+          // Remove the temporary _normalizedKey before returning
+          return Array.from(deduplicatedMap.values()).map(({ _normalizedKey, ...abbr }) => abbr);
         })()
       : undefined;
 
