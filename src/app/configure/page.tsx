@@ -250,10 +250,15 @@ function SortableItem({
 }
 
 export default function ConfigurePage() {
+  // Normalize location key for comparison (lowercase, trimmed, collapsed spaces)
   const normalizeLocationKey = (input: string) => {
     if (!input) return '';
-    // Normalize: trim, collapse multiple spaces, convert to lowercase for comparison
     return input.trim().replace(/\s+/g, ' ').toLowerCase();
+  };
+  
+  // Preserve original casing for display
+  const preserveOriginalCasing = (original: string, normalized: string): string => {
+    return original.trim().replace(/\s+/g, ' ');
   };
 
   const {
@@ -846,23 +851,27 @@ export default function ConfigurePage() {
         updatedAbbreviations = [...abbreviations, updatedAbbr];
       }
       
-      // Normalize all abbreviations before saving - ensure no undefined values
+      // Normalize all abbreviations before saving - preserve original casing but use normalized for comparison
       const normalizedAbbreviations = updatedAbbreviations.map(a => {
+        // Preserve original casing for display
+        const originalDisplay = a.original.trim().replace(/\s+/g, ' ');
+        const normalizedKey = normalizeLocationKey(a.original);
+        
         const normalized: LocationAbbreviation = {
-          original: normalizeLocationKey(a.original),
-          abbreviation: (a.abbreviation || '').trim() || normalizeLocationKey(a.original),
+          original: originalDisplay, // Keep original casing for display
+          abbreviation: (a.abbreviation || '').trim() || originalDisplay,
         };
         // Only include ignored if it's explicitly true or false (not undefined)
         if (a.ignored !== undefined) {
           normalized.ignored = a.ignored;
         }
-        return normalized;
-      }).filter(a => a.original.length > 0);
+        return { normalized, normalizedKey };
+      }).filter(item => item.normalizedKey.length > 0);
       
-      // Deduplicate by normalized original key (keep the last one if duplicates exist)
+      // Deduplicate by normalized key (keep the last one if duplicates exist)
       const deduplicatedMap = new Map<string, LocationAbbreviation>();
-      for (const abbr of normalizedAbbreviations) {
-        deduplicatedMap.set(abbr.original, abbr);
+      for (const item of normalizedAbbreviations) {
+        deduplicatedMap.set(item.normalizedKey, item.normalized);
       }
       const deduplicatedAbbreviations = Array.from(deduplicatedMap.values());
       
