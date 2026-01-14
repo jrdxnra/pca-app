@@ -152,18 +152,37 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
   },
 
   reorderMovements: async (categoryId, draggedIndex, dropIndex) => {
-    set({ loading: true, error: null });
+    // Optimistic update - don't set loading to avoid UI flicker during drag
+    const { movements } = get();
+    const categoryMovements = movements.filter(m => m.categoryId === categoryId);
+    
+    // Optimistically reorder in local state
+    const reordered = [...categoryMovements];
+    const [movedMovement] = reordered.splice(draggedIndex, 1);
+    reordered.splice(dropIndex, 0, movedMovement);
+    
+    // Update ordinals optimistically
+    const updatedMovements = movements.map(m => {
+      if (m.categoryId === categoryId) {
+        const newIndex = reordered.findIndex(rm => rm.id === m.id);
+        if (newIndex !== -1) {
+          return { ...m, ordinal: newIndex };
+        }
+      }
+      return m;
+    });
+    
+    set({ movements: updatedMovements });
+    
     try {
       await reorderMovementsInCategory(categoryId, draggedIndex, dropIndex);
-      
-      // Refresh movements for the category
+      // Silently refresh to ensure sync, but don't show loading
       await get().fetchMovementsByCategory(categoryId);
-      
-      set({ loading: false });
     } catch (error) {
+      // Revert on error
+      set({ movements });
       set({ 
-        error: error instanceof Error ? error.message : 'Failed to reorder movements',
-        loading: false 
+        error: error instanceof Error ? error.message : 'Failed to reorder movements'
       });
       throw error;
     }

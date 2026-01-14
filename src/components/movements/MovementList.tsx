@@ -210,14 +210,14 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
             <CardContent className="p-0">
               {/* Movement Header */}
               <div 
-                className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
                 onClick={() => toggleExpanded(movement.id)}
               >
                 <div className="flex items-center gap-3 flex-1">
                   <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
                   
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-sm">{movement.name}</h4>
+                    <h4 className="font-medium text-sm leading-tight">{movement.name}</h4>
                   </div>
                 </div>
 

@@ -24,7 +24,6 @@ import {
   X,
   Palette,
   Settings,
-  GripVertical,
   Layers,
   Calendar as CalendarIcon,
   RefreshCw,
@@ -109,7 +108,7 @@ function HorizontalDayItem({
   onUpdate: (index: number, updates: Partial<{ day: string; workoutCategory: string }>) => void;
   onDelete: (index: number) => void;
 }) {
-  const workoutTypes = ['Workout', 'Cardio Day', 'Conditioning', 'Rest Day'];
+  const workoutTypes = ['Workout', 'Cardio Day', 'Conditioning'];
 
   return (
     <div className="flex items-center gap-2 p-2 border rounded bg-gray-50">
@@ -147,6 +146,34 @@ function HorizontalDayItem({
   );
 }
 
+// Helper function to count workout days by category for WeekTemplate
+function getWorkoutDaysSummary(template: WeekTemplate): string {
+  const categoryCounts: Record<string, number> = {};
+  
+  template.days.forEach(day => {
+    const category = day.workoutCategory?.trim();
+    if (category && category.toLowerCase() !== 'rest day') {
+      categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+    }
+  });
+  
+  const parts: string[] = [];
+  Object.entries(categoryCounts).forEach(([category, count]) => {
+    // Handle pluralization
+    let label = category.toLowerCase();
+    if (category === 'Cardio Day') {
+      label = count === 1 ? 'cardio day' : 'cardio days';
+    } else if (category === 'Workout') {
+      label = count === 1 ? 'workout' : 'workouts';
+    } else {
+      label = count === 1 ? label : `${label}s`;
+    }
+    parts.push(`${count} ${label}`);
+  });
+  
+  return parts.join(', ') || 'No workouts';
+}
+
 // Sortable Item Component
 function SortableItem({ 
   item, 
@@ -178,20 +205,20 @@ function SortableItem({
 
   return (
     <div ref={setNodeRef} style={style} className="flex items-center gap-2 p-3 border rounded-lg bg-white">
-      <div
-        {...attributes}
-        {...listeners}
-        className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded"
-      >
-        <GripVertical className="h-4 w-4 text-gray-400" />
-      </div>
       <div className="flex items-center gap-3 flex-1">
         <div 
           className="w-4 h-4 rounded-full" 
           style={{ backgroundColor: item.color }}
         />
         <div>
-          <h4 className="font-semibold">{item.name}</h4>
+          <h4 className="font-semibold flex items-center gap-2">
+            {item.name}
+            {'days' in item && Array.isArray(item.days) && (
+              <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                {getWorkoutDaysSummary(item as WeekTemplate)}
+              </span>
+            )}
+          </h4>
           {'focus' in item && (
             <p className="text-sm text-gray-600">{item.focus}</p>
           )}
@@ -547,12 +574,8 @@ export default function ConfigurePage() {
       color: '#10b981',
       days: [
         { day: 'Monday', workoutCategory: 'Workout' },
-        { day: 'Tuesday', workoutCategory: 'Cardio Day' },
-        { day: 'Wednesday', workoutCategory: 'Rest Day' },
-        { day: 'Thursday', workoutCategory: 'Workout' },
-        { day: 'Friday', workoutCategory: 'Conditioning' },
-        { day: 'Saturday', workoutCategory: 'Rest Day' },
-        { day: 'Sunday', workoutCategory: 'Rest Day' }
+        { day: 'Wednesday', workoutCategory: 'Workout' },
+        { day: 'Friday', workoutCategory: 'Workout' }
       ],
       order: weekTemplates.length
     });
@@ -567,12 +590,17 @@ export default function ConfigurePage() {
   const handleSaveWeekTemplate = async () => {
     if (editingTemplate) {
       try {
+        // Filter out rest days before saving
+        const activeDays = editingTemplate.days.filter(day => 
+          day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day'
+        );
+        
         if (editingTemplate.id.startsWith('temp_')) {
           // New template
           await addWeekTemplate({
             name: editingTemplate.name,
             color: editingTemplate.color,
-            days: editingTemplate.days,
+            days: activeDays,
             order: editingTemplate.order || 0
           });
           setShowNewTemplateForm(false);
@@ -581,7 +609,7 @@ export default function ConfigurePage() {
           await updateWeekTemplate(editingTemplate.id, {
             name: editingTemplate.name,
             color: editingTemplate.color,
-            days: editingTemplate.days,
+            days: activeDays,
             order: editingTemplate.order
           });
           setEditingTemplateId(null);
@@ -887,7 +915,8 @@ export default function ConfigurePage() {
 
   const handleSaveClassKeywords = async () => {
     const keywordArray = classKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
-    updateCalendarConfig({ classKeywords: keywordArray });
+    // Ensure we don't pass undefined - use empty array if no keywords
+    updateCalendarConfig({ classKeywords: keywordArray.length > 0 ? keywordArray : [] });
     toastSuccess('Class session keywords saved');
   };
 
@@ -1135,21 +1164,26 @@ export default function ConfigurePage() {
                   
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium">Days:</label>
+                      <label className="text-sm font-medium">Workout Days:</label>
                       <Button onClick={addTemplateDay} size="sm" variant="outline">
                         <Plus className="h-4 w-4 mr-1.5 icon-add" />
                         Add Day
                       </Button>
                     </div>
-                    {editingTemplate.days.map((day, index) => (
-                      <HorizontalDayItem
-                        key={index}
-                        day={day}
-                        index={index}
-                        onUpdate={updateTemplateDay}
-                        onDelete={deleteTemplateDay}
-                      />
-                    ))}
+                    {editingTemplate.days
+                      .filter(day => day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day')
+                      .map((day, index) => {
+                        const originalIndex = editingTemplate.days.indexOf(day);
+                        return (
+                          <HorizontalDayItem
+                            key={originalIndex}
+                            day={day}
+                            index={originalIndex}
+                            onUpdate={updateTemplateDay}
+                            onDelete={deleteTemplateDay}
+                          />
+                        );
+                      })}
                   </div>
                   
                   <div className="flex gap-2 pt-4">
@@ -1203,21 +1237,26 @@ export default function ConfigurePage() {
                           
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                              <label className="text-sm font-medium">Days:</label>
+                              <label className="text-sm font-medium">Workout Days:</label>
                               <Button onClick={addTemplateDay} size="sm" variant="outline">
                                 <Plus className="h-4 w-4 mr-1.5 icon-add" />
                                 Add Day
                               </Button>
                             </div>
-                            {editingTemplate.days.map((day, index) => (
-                              <HorizontalDayItem
-                                key={index}
-                                day={day}
-                                index={index}
-                                onUpdate={updateTemplateDay}
-                                onDelete={deleteTemplateDay}
-                              />
-                            ))}
+                            {editingTemplate.days
+                              .filter(day => day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day')
+                              .map((day, index) => {
+                                const originalIndex = editingTemplate.days.indexOf(day);
+                                return (
+                                  <HorizontalDayItem
+                                    key={originalIndex}
+                                    day={day}
+                                    index={originalIndex}
+                                    onUpdate={updateTemplateDay}
+                                    onDelete={deleteTemplateDay}
+                                  />
+                                );
+                              })}
                           </div>
                           
                           <div className="flex gap-2">
