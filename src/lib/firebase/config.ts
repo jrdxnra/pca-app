@@ -1,4 +1,4 @@
-import { initializeApp, getApp, getApps } from 'firebase/app';
+import { initializeApp, getApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
@@ -46,20 +46,65 @@ function getPublicFirebaseConfig(): PublicFirebaseConfig {
   };
 }
 
-const firebaseConfig = getPublicFirebaseConfig();
+// Lazy initialization to handle async script loading race conditions
+let _app: FirebaseApp | undefined;
+let _db: Firestore | undefined;
+let _auth: Auth | undefined;
 
-const hasFirebaseConfig = Boolean(
-  firebaseConfig.apiKey &&
+function ensureInitialized(): FirebaseApp | undefined {
+  if (_app) return _app;
+  
+  const firebaseConfig = getPublicFirebaseConfig();
+  const hasFirebaseConfig = Boolean(
+    firebaseConfig.apiKey &&
     firebaseConfig.authDomain &&
     firebaseConfig.projectId &&
     firebaseConfig.appId
-);
+  );
 
-// Initialize Firebase (skip during builds without env vars)
-const app = hasFirebaseConfig ? (getApps().length ? getApp() : initializeApp(firebaseConfig)) : undefined;
+  if (!hasFirebaseConfig) {
+    console.warn('Firebase config not available yet');
+    return undefined;
+  }
 
-// Initialize Firebase services
-export const db: Firestore = app ? getFirestore(app) : (undefined as unknown as Firestore);
-export const auth: Auth = app ? getAuth(app) : (undefined as unknown as Auth);
+  _app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  return _app;
+}
 
-export default app;
+// Getter for db that ensures initialization
+export function getDb(): Firestore {
+  if (_db) return _db;
+  const app = ensureInitialized();
+  if (!app) {
+    throw new Error('Firebase not initialized - config may not be available yet');
+  }
+  _db = getFirestore(app);
+  return _db;
+}
+
+// Getter for auth that ensures initialization
+export function getAuthInstance(): Auth {
+  if (_auth) return _auth;
+  const app = ensureInitialized();
+  if (!app) {
+    throw new Error('Firebase not initialized - config may not be available yet');
+  }
+  _auth = getAuth(app);
+  return _auth;
+}
+
+// For backwards compatibility, export db and auth as getters
+// These will throw if Firebase isn't initialized
+export const db: Firestore = new Proxy({} as Firestore, {
+  get(_, prop) {
+    return (getDb() as any)[prop];
+  }
+});
+
+export const auth: Auth = new Proxy({} as Auth, {
+  get(_, prop) {
+    return (getAuthInstance() as any)[prop];
+  }
+});
+
+export default ensureInitialized();

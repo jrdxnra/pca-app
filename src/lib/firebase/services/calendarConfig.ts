@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../config';
+import { getDb } from '../config';
 import type { CalendarSyncConfig, LocationAbbreviation } from '@/lib/google-calendar/types';
 
 const DOC_ID = 'calendar-config';
@@ -111,6 +111,7 @@ function normalizeLastSyncTime(value: unknown): Date | undefined {
 }
 
 export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promise<CalendarSyncConfig> {
+  const db = getDb();
   const docRef = doc(db, 'configuration', DOC_ID);
   const snap = await getDoc(docRef);
 
@@ -148,6 +149,7 @@ export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promi
 }
 
 export async function updateCalendarSyncConfig(updates: Partial<CalendarSyncConfig>): Promise<void> {
+  const db = getDb();
   const docRef = doc(db, 'configuration', DOC_ID);
 
   const payload: Record<string, unknown> = {};
