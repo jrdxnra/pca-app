@@ -24,7 +24,6 @@ import {
   X,
   Palette,
   Settings,
-  GripVertical,
   Layers,
   Calendar as CalendarIcon,
   RefreshCw,
@@ -39,6 +38,7 @@ import { useClientStore } from '@/lib/stores/useClientStore';
 import { WorkoutStructureTemplate } from '@/lib/types';
 import { TestEventInput, LocationAbbreviation } from '@/lib/google-calendar/types';
 import { initiateGoogleAuth, checkGoogleCalendarAuth, disconnectGoogleCalendar } from '@/lib/google-calendar/api-client';
+import { updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MapPin } from 'lucide-react';
 import {
@@ -109,7 +109,7 @@ function HorizontalDayItem({
   onUpdate: (index: number, updates: Partial<{ day: string; workoutCategory: string }>) => void;
   onDelete: (index: number) => void;
 }) {
-  const workoutTypes = ['Workout', 'Cardio Day', 'Conditioning', 'Rest Day'];
+  const workoutTypes = ['Workout', 'Cardio Day', 'Conditioning'];
 
   return (
     <div className="flex items-center gap-2 p-2 border rounded bg-gray-50">
@@ -147,6 +147,34 @@ function HorizontalDayItem({
   );
 }
 
+// Helper function to count workout days by category for WeekTemplate
+function getWorkoutDaysSummary(template: WeekTemplate): string {
+  const categoryCounts: Record<string, number> = {};
+  
+  template.days.forEach(day => {
+    const category = day.workoutCategory?.trim();
+    if (category && category.toLowerCase() !== 'rest day') {
+      categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+    }
+  });
+  
+  const parts: string[] = [];
+  Object.entries(categoryCounts).forEach(([category, count]) => {
+    // Handle pluralization
+    let label = category.toLowerCase();
+    if (category === 'Cardio Day') {
+      label = count === 1 ? 'cardio day' : 'cardio days';
+    } else if (category === 'Workout') {
+      label = count === 1 ? 'workout' : 'workouts';
+    } else {
+      label = count === 1 ? label : `${label}s`;
+    }
+    parts.push(`${count} ${label}`);
+  });
+  
+  return parts.join(', ') || 'No workouts';
+}
+
 // Sortable Item Component
 function SortableItem({ 
   item, 
@@ -177,26 +205,26 @@ function SortableItem({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 p-3 border rounded-lg bg-white">
-      <div
-        {...attributes}
-        {...listeners}
-        className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded"
-      >
-        <GripVertical className="h-4 w-4 text-gray-400" />
-      </div>
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white">
       <div className="flex items-center gap-3 flex-1">
         <div 
           className="w-4 h-4 rounded-full" 
           style={{ backgroundColor: item.color }}
         />
         <div>
-          <h4 className="font-semibold">{item.name}</h4>
+          <h4 className="font-semibold flex items-center gap-2 leading-tight">
+            {item.name}
+            {'days' in item && Array.isArray(item.days) && (
+              <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                {getWorkoutDaysSummary(item as WeekTemplate)}
+              </span>
+            )}
+          </h4>
           {'focus' in item && (
-            <p className="text-sm text-gray-600">{item.focus}</p>
+            <p className="text-sm text-gray-600 leading-tight">{item.focus}</p>
           )}
           {'description' in item && (
-            <p className="text-sm text-gray-600">{item.description}</p>
+            <p className="text-sm text-gray-600 leading-tight">{item.description}</p>
           )}
         </div>
       </div>
@@ -300,7 +328,7 @@ export default function ConfigurePage() {
   const [coachingKeywordsInput, setCoachingKeywordsInput] = useState('');
   const [classKeywordsInput, setClassKeywordsInput] = useState('');
   
-  // Sync keyword inputs from config on mount
+  // Sync keyword inputs from config on mount and when config changes
   useEffect(() => {
     if (calendarConfig.coachingKeywords) {
       setCoachingKeywordsInput(calendarConfig.coachingKeywords.join(', '));
@@ -308,7 +336,7 @@ export default function ConfigurePage() {
     if (calendarConfig.classKeywords) {
       setClassKeywordsInput(calendarConfig.classKeywords.join(', '));
     }
-  }, []);
+  }, [calendarConfig.coachingKeywords, calendarConfig.classKeywords]);
 
   // Fetch configuration on mount
   useEffect(() => {
@@ -440,18 +468,25 @@ export default function ConfigurePage() {
     }
   };
 
-  // State for forms
+  // State for forms - track editing IDs instead of showing forms at top
+  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingWorkoutTypeId, setEditingWorkoutTypeId] = useState<string | null>(null);
+  const [editingWorkoutStructureTemplate, setEditingWorkoutStructureTemplate] = useState<WorkoutStructureTemplate | null>(null);
+  
+  // For new items (show form at top)
+  const [showNewPeriodForm, setShowNewPeriodForm] = useState(false);
+  const [showNewTemplateForm, setShowNewTemplateForm] = useState(false);
+  const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
+  const [showNewWorkoutTypeForm, setShowNewWorkoutTypeForm] = useState(false);
+  const [showWorkoutStructureTemplateForm, setShowWorkoutStructureTemplateForm] = useState(false);
+  
+  // Temporary editing state for inline editing
   const [editingPeriod, setEditingPeriod] = useState<Period | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<WeekTemplate | null>(null);
   const [editingCategory, setEditingCategory] = useState<WorkoutCategory | null>(null);
   const [editingWorkoutType, setEditingWorkoutType] = useState<WorkoutType | null>(null);
-  const [editingWorkoutStructureTemplate, setEditingWorkoutStructureTemplate] = useState<WorkoutStructureTemplate | null>(null);
-  
-  const [showTemplateForm, setShowTemplateForm] = useState(false);
-  const [showPeriodForm, setShowPeriodForm] = useState(false);
-  const [showCategoryForm, setShowCategoryForm] = useState(false);
-  const [showWorkoutTypeForm, setShowWorkoutTypeForm] = useState(false);
-  const [showWorkoutStructureTemplateForm, setShowWorkoutStructureTemplateForm] = useState(false);
   
   // Calendar configuration state
   const [showTestEventForm, setShowTestEventForm] = useState(false);
@@ -482,31 +517,49 @@ export default function ConfigurePage() {
       focus: '',
       order: periods.length
     });
-    setShowPeriodForm(true);
+    setShowNewPeriodForm(true);
   };
 
-  const handleSavePeriod = () => {
+  const handleEditPeriod = (period: Period) => {
+    setEditingPeriod({ ...period });
+    setEditingPeriodId(period.id);
+  };
+
+  const handleSavePeriod = async () => {
     if (editingPeriod) {
-      if (editingPeriod.id.startsWith('temp_')) {
-        // New period
-        addPeriod({
-          name: editingPeriod.name,
-          color: editingPeriod.color,
-          focus: editingPeriod.focus,
-          order: editingPeriod.order || 0
-        });
-      } else {
-        // Update existing
-        updatePeriod(editingPeriod.id, {
-          name: editingPeriod.name,
-          color: editingPeriod.color,
-          focus: editingPeriod.focus,
-          order: editingPeriod.order
-        });
+      try {
+        if (editingPeriod.id.startsWith('temp_')) {
+          // New period
+          await addPeriod({
+            name: editingPeriod.name,
+            color: editingPeriod.color,
+            focus: editingPeriod.focus,
+            order: editingPeriod.order || 0
+          });
+          setShowNewPeriodForm(false);
+        } else {
+          // Update existing
+          await updatePeriod(editingPeriod.id, {
+            name: editingPeriod.name,
+            color: editingPeriod.color,
+            focus: editingPeriod.focus,
+            order: editingPeriod.order
+          });
+          setEditingPeriodId(null);
+        }
+        setEditingPeriod(null);
+        toastSuccess('Period saved');
+      } catch (error) {
+        console.error('Error saving period:', error);
+        toastError('Failed to save period');
       }
-      setEditingPeriod(null);
-      setShowPeriodForm(false);
     }
+  };
+
+  const handleCancelPeriod = () => {
+    setEditingPeriod(null);
+    setEditingPeriodId(null);
+    setShowNewPeriodForm(false);
   };
 
   const handleDeletePeriod = (id: string) => {
@@ -522,40 +575,59 @@ export default function ConfigurePage() {
       color: '#10b981',
       days: [
         { day: 'Monday', workoutCategory: 'Workout' },
-        { day: 'Tuesday', workoutCategory: 'Cardio Day' },
-        { day: 'Wednesday', workoutCategory: 'Rest Day' },
-        { day: 'Thursday', workoutCategory: 'Workout' },
-        { day: 'Friday', workoutCategory: 'Conditioning' },
-        { day: 'Saturday', workoutCategory: 'Rest Day' },
-        { day: 'Sunday', workoutCategory: 'Rest Day' }
+        { day: 'Wednesday', workoutCategory: 'Workout' },
+        { day: 'Friday', workoutCategory: 'Workout' }
       ],
       order: weekTemplates.length
     });
-    setShowTemplateForm(true);
+    setShowNewTemplateForm(true);
   };
 
-  const handleSaveWeekTemplate = () => {
+  const handleEditWeekTemplate = (template: WeekTemplate) => {
+    setEditingTemplate({ ...template });
+    setEditingTemplateId(template.id);
+  };
+
+  const handleSaveWeekTemplate = async () => {
     if (editingTemplate) {
-      if (editingTemplate.id.startsWith('temp_')) {
-        // New template
-        addWeekTemplate({
-          name: editingTemplate.name,
-          color: editingTemplate.color,
-          days: editingTemplate.days,
-          order: editingTemplate.order || 0
-        });
-      } else {
-        // Update existing
-        updateWeekTemplate(editingTemplate.id, {
-          name: editingTemplate.name,
-          color: editingTemplate.color,
-          days: editingTemplate.days,
-          order: editingTemplate.order
-        });
+      try {
+        // Filter out rest days before saving
+        const activeDays = editingTemplate.days.filter(day => 
+          day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day'
+        );
+        
+        if (editingTemplate.id.startsWith('temp_')) {
+          // New template
+          await addWeekTemplate({
+            name: editingTemplate.name,
+            color: editingTemplate.color,
+            days: activeDays,
+            order: editingTemplate.order || 0
+          });
+          setShowNewTemplateForm(false);
+        } else {
+          // Update existing
+          await updateWeekTemplate(editingTemplate.id, {
+            name: editingTemplate.name,
+            color: editingTemplate.color,
+            days: activeDays,
+            order: editingTemplate.order
+          });
+          setEditingTemplateId(null);
+        }
+        setEditingTemplate(null);
+        toastSuccess('Week template saved');
+      } catch (error) {
+        console.error('Error saving week template:', error);
+        toastError('Failed to save week template');
       }
-      setEditingTemplate(null);
-      setShowTemplateForm(false);
     }
+  };
+
+  const handleCancelWeekTemplate = () => {
+    setEditingTemplate(null);
+    setEditingTemplateId(null);
+    setShowNewTemplateForm(false);
   };
 
   const handleDeleteWeekTemplate = (id: string) => {
@@ -595,29 +667,47 @@ export default function ConfigurePage() {
       color: '#f59e0b',
       order: workoutCategories.length
     });
-    setShowCategoryForm(true);
+    setShowNewCategoryForm(true);
   };
 
-  const handleSaveCategory = () => {
+  const handleEditCategory = (category: WorkoutCategory) => {
+    setEditingCategory({ ...category });
+    setEditingCategoryId(category.id);
+  };
+
+  const handleSaveCategory = async () => {
     if (editingCategory) {
-      if (editingCategory.id.startsWith('temp_')) {
-        // New category
-        addWorkoutCategory({
-          name: editingCategory.name,
-          color: editingCategory.color,
-          order: editingCategory.order || 0
-        });
-      } else {
-        // Update existing
-        updateWorkoutCategory(editingCategory.id, {
-          name: editingCategory.name,
-          color: editingCategory.color,
-          order: editingCategory.order
-        });
+      try {
+        if (editingCategory.id.startsWith('temp_')) {
+          // New category
+          await addWorkoutCategory({
+            name: editingCategory.name,
+            color: editingCategory.color,
+            order: editingCategory.order || 0
+          });
+          setShowNewCategoryForm(false);
+        } else {
+          // Update existing
+          await updateWorkoutCategory(editingCategory.id, {
+            name: editingCategory.name,
+            color: editingCategory.color,
+            order: editingCategory.order
+          });
+          setEditingCategoryId(null);
+        }
+        setEditingCategory(null);
+        toastSuccess('Workout category saved');
+      } catch (error) {
+        console.error('Error saving workout category:', error);
+        toastError('Failed to save workout category');
       }
-      setEditingCategory(null);
-      setShowCategoryForm(false);
     }
+  };
+
+  const handleCancelCategory = () => {
+    setEditingCategory(null);
+    setEditingCategoryId(null);
+    setShowNewCategoryForm(false);
   };
 
   const handleDeleteCategory = (id: string) => {
@@ -634,31 +724,49 @@ export default function ConfigurePage() {
       description: '',
       order: workoutTypes.length
     });
-    setShowWorkoutTypeForm(true);
+    setShowNewWorkoutTypeForm(true);
   };
 
-  const handleSaveWorkoutType = () => {
+  const handleEditWorkoutType = (workoutType: WorkoutType) => {
+    setEditingWorkoutType({ ...workoutType });
+    setEditingWorkoutTypeId(workoutType.id);
+  };
+
+  const handleSaveWorkoutType = async () => {
     if (editingWorkoutType) {
-      if (editingWorkoutType.id.startsWith('temp_')) {
-        // New workout type
-        addWorkoutType({
-          name: editingWorkoutType.name,
-          color: editingWorkoutType.color,
-          description: editingWorkoutType.description,
-          order: editingWorkoutType.order || 0
-        });
-      } else {
-        // Update existing
-        updateWorkoutType(editingWorkoutType.id, {
-          name: editingWorkoutType.name,
-          color: editingWorkoutType.color,
-          description: editingWorkoutType.description,
-          order: editingWorkoutType.order
-        });
+      try {
+        if (editingWorkoutType.id.startsWith('temp_')) {
+          // New workout type
+          await addWorkoutType({
+            name: editingWorkoutType.name,
+            color: editingWorkoutType.color,
+            description: editingWorkoutType.description,
+            order: editingWorkoutType.order || 0
+          });
+          setShowNewWorkoutTypeForm(false);
+        } else {
+          // Update existing
+          await updateWorkoutType(editingWorkoutType.id, {
+            name: editingWorkoutType.name,
+            color: editingWorkoutType.color,
+            description: editingWorkoutType.description,
+            order: editingWorkoutType.order
+          });
+          setEditingWorkoutTypeId(null);
+        }
+        setEditingWorkoutType(null);
+        toastSuccess('Workout type saved');
+      } catch (error) {
+        console.error('Error saving workout type:', error);
+        toastError('Failed to save workout type');
       }
-      setEditingWorkoutType(null);
-      setShowWorkoutTypeForm(false);
     }
+  };
+
+  const handleCancelWorkoutType = () => {
+    setEditingWorkoutType(null);
+    setEditingWorkoutTypeId(null);
+    setShowNewWorkoutTypeForm(false);
   };
 
   const handleDeleteWorkoutType = (id: string) => {
@@ -730,32 +838,50 @@ export default function ConfigurePage() {
     }
   };
 
-  const handleSaveLocationAbbreviation = () => {
+  const handleSaveLocationAbbreviation = async () => {
     if (!editingLocation) return;
     
-    const abbreviations = calendarConfig.locationAbbreviations || [];
-    const normalizedOriginal = normalizeLocationKey(editingLocation.original);
-    const existingIndex = abbreviations.findIndex(abbr => normalizeLocationKey(abbr.original) === normalizedOriginal);
-    const existing = existingIndex >= 0 ? abbreviations[existingIndex] : undefined;
-    
-    const updatedAbbr: LocationAbbreviation = {
-      original: normalizedOriginal,
-      abbreviation: locationAbbreviationInput.trim() || normalizedOriginal,
-      // Preserve ignored state when editing an existing / N/A entry
-      ignored: existing?.ignored ?? editingLocation.ignored
-    };
-    
-    let updatedAbbreviations: LocationAbbreviation[];
-    if (existingIndex >= 0) {
-      updatedAbbreviations = [...abbreviations];
-      updatedAbbreviations[existingIndex] = updatedAbbr;
-    } else {
-      updatedAbbreviations = [...abbreviations, updatedAbbr];
+    try {
+      const abbreviations = calendarConfig.locationAbbreviations || [];
+      const normalizedOriginal = normalizeLocationKey(editingLocation.original);
+      const existingIndex = abbreviations.findIndex(abbr => normalizeLocationKey(abbr.original) === normalizedOriginal);
+      const existing = existingIndex >= 0 ? abbreviations[existingIndex] : undefined;
+      
+      const updatedAbbr: LocationAbbreviation = {
+        original: normalizedOriginal,
+        abbreviation: locationAbbreviationInput.trim() || normalizedOriginal,
+        // Preserve ignored state when editing an existing / N/A entry
+        ignored: existing?.ignored ?? editingLocation.ignored
+      };
+      
+      let updatedAbbreviations: LocationAbbreviation[];
+      if (existingIndex >= 0) {
+        updatedAbbreviations = [...abbreviations];
+        updatedAbbreviations[existingIndex] = updatedAbbr;
+      } else {
+        updatedAbbreviations = [...abbreviations, updatedAbbr];
+      }
+      
+      // Normalize all abbreviations before saving
+      const normalizedAbbreviations = updatedAbbreviations.map(a => ({
+        ...a,
+        original: normalizeLocationKey(a.original),
+        abbreviation: (a.abbreviation || '').trim() || normalizeLocationKey(a.original),
+      })).filter(a => a.original.length > 0);
+      
+      // Update local state immediately
+      updateCalendarConfig({ locationAbbreviations: normalizedAbbreviations });
+      
+      // Also save directly to Firebase to ensure persistence
+      await updateCalendarSyncConfig({ locationAbbreviations: normalizedAbbreviations });
+      
+      toastSuccess('Location abbreviation saved');
+      setEditingLocation(null);
+      setLocationAbbreviationInput('');
+    } catch (error) {
+      console.error('Error saving location abbreviation:', error);
+      toastError('Failed to save location abbreviation. Please try again.');
     }
-    
-    updateCalendarConfig({ locationAbbreviations: updatedAbbreviations });
-    setEditingLocation(null);
-    setLocationAbbreviationInput('');
   };
 
   const handleDeleteLocationAbbreviation = (original: string) => {
@@ -799,14 +925,28 @@ export default function ConfigurePage() {
     updateCalendarConfig({ locationAbbreviations: updatedAbbreviations });
   };
 
-  const handleSaveCoachingKeywords = () => {
-    const keywordArray = coachingKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
-    updateCalendarConfig({ coachingKeywords: keywordArray });
+  const handleSaveCoachingKeywords = async () => {
+    try {
+      const keywordArray = coachingKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
+      // Ensure we always pass an array, never undefined
+      updateCalendarConfig({ coachingKeywords: keywordArray.length > 0 ? keywordArray : [] });
+      toastSuccess('Coaching session keywords saved');
+    } catch (error) {
+      console.error('Error saving coaching keywords:', error);
+      toastError('Failed to save coaching keywords. Please try again.');
+    }
   };
 
-  const handleSaveClassKeywords = () => {
-    const keywordArray = classKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
-    updateCalendarConfig({ classKeywords: keywordArray });
+  const handleSaveClassKeywords = async () => {
+    try {
+      const keywordArray = classKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
+      // Ensure we always pass an array, never undefined
+      updateCalendarConfig({ classKeywords: keywordArray.length > 0 ? keywordArray : [] });
+      toastSuccess('Class session keywords saved');
+    } catch (error) {
+      console.error('Error saving class keywords:', error);
+      toastError('Failed to save class keywords. Please try again.');
+    }
   };
 
   // Drag and drop handlers
@@ -893,22 +1033,22 @@ export default function ConfigurePage() {
               </Button>
             </div>
             
-            {/* Period Form */}
-            {showPeriodForm && (
+            {/* New Period Form (at top) */}
+            {showNewPeriodForm && editingPeriod && (
               <Card className="mb-4">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 px-3">
                   <CardTitle className="text-base">Add Period</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 px-3">
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       placeholder="Period name"
-                      value={editingPeriod?.name || ''}
+                      value={editingPeriod.name}
                       onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, name: e.target.value } : null)}
                     />
                     <Input
                       placeholder="Focus"
-                      value={editingPeriod?.focus || ''}
+                      value={editingPeriod.focus}
                       onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, focus: e.target.value } : null)}
                     />
                   </div>
@@ -919,7 +1059,7 @@ export default function ConfigurePage() {
                         <button
                           key={color}
                           className={`w-6 h-6 rounded-full border-2 ${
-                            editingPeriod?.color === color ? 'border-gray-900' : 'border-gray-300'
+                            editingPeriod.color === color ? 'border-gray-900' : 'border-gray-300'
                           }`}
                           style={{ backgroundColor: color }}
                           onClick={() => setEditingPeriod(prev => prev ? { ...prev, color } : null)}
@@ -932,14 +1072,7 @@ export default function ConfigurePage() {
                       <Save className="h-4 w-4 mr-2 icon-success" />
                       Save Period
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingPeriod(null);
-                        setShowPeriodForm(false);
-                      }}
-                      className="flex-1"
-                    >
+                    <Button variant="outline" onClick={handleCancelPeriod} className="flex-1">
                       <X className="h-4 w-4 mr-2" />
                       Cancel
                     </Button>
@@ -957,17 +1090,58 @@ export default function ConfigurePage() {
               <SortableContext items={periods.map(p => `period-${p.id}`)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {periods.map((period) => (
-                    <SortableItem
-                      key={period.id}
-                      item={period}
-                      onEdit={(period) => {
-                        setEditingPeriod(period);
-                        setShowPeriodForm(true);
-                      }}
-                      onDelete={handleDeletePeriod}
-                      index={periods.indexOf(period)}
-                      type="period"
-                    />
+                    editingPeriodId === period.id && editingPeriod ? (
+                      <Card key={period.id} className="py-0">
+                        <CardContent className="space-y-4 p-0 px-3 py-2">
+                          <div className="grid grid-cols-2 gap-4">
+                            <Input
+                              placeholder="Period name"
+                              value={editingPeriod.name}
+                              onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, name: e.target.value } : null)}
+                            />
+                            <Input
+                              placeholder="Focus"
+                              value={editingPeriod.focus}
+                              onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, focus: e.target.value } : null)}
+                            />
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <label className="text-sm font-medium">Color:</label>
+                            <div className="flex gap-2">
+                              {colors.map((color) => (
+                                <button
+                                  key={color}
+                                  className={`w-6 h-6 rounded-full border-2 ${
+                                    editingPeriod.color === color ? 'border-gray-900' : 'border-gray-300'
+                                  }`}
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => setEditingPeriod(prev => prev ? { ...prev, color } : null)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={handleSavePeriod} className="flex-1">
+                              <Save className="h-4 w-4 mr-2 icon-success" />
+                              Save
+                            </Button>
+                            <Button variant="outline" onClick={handleCancelPeriod} className="flex-1">
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <SortableItem
+                        key={period.id}
+                        item={period}
+                        onEdit={handleEditPeriod}
+                        onDelete={handleDeletePeriod}
+                        index={periods.indexOf(period)}
+                        type="period"
+                      />
+                    )
                   ))}
                 </div>
               </SortableContext>
@@ -987,17 +1161,17 @@ export default function ConfigurePage() {
               </Button>
             </div>
             
-            {/* Week Template Form */}
-            {showTemplateForm && (
+            {/* New Week Template Form (at top) */}
+            {showNewTemplateForm && editingTemplate && (
               <Card className="mb-4">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 px-3">
                   <CardTitle className="text-base">Add Week Template</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 px-3">
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       placeholder="Template name"
-                      value={editingTemplate?.name || ''}
+                      value={editingTemplate.name}
                       onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
                     />
                     <div className="flex items-center gap-4">
@@ -1007,7 +1181,7 @@ export default function ConfigurePage() {
                           <button
                             key={color}
                             className={`w-6 h-6 rounded-full border-2 ${
-                              editingTemplate?.color === color ? 'border-gray-900' : 'border-gray-300'
+                              editingTemplate.color === color ? 'border-gray-900' : 'border-gray-300'
                             }`}
                             style={{ backgroundColor: color }}
                             onClick={() => setEditingTemplate(prev => prev ? { ...prev, color } : null)}
@@ -1019,21 +1193,26 @@ export default function ConfigurePage() {
                   
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium">Days:</label>
+                      <label className="text-sm font-medium">Workout Days:</label>
                       <Button onClick={addTemplateDay} size="sm" variant="outline">
                         <Plus className="h-4 w-4 mr-1.5 icon-add" />
                         Add Day
                       </Button>
                     </div>
-                    {editingTemplate?.days.map((day, index) => (
-                      <HorizontalDayItem
-                        key={index}
-                        day={day}
-                        index={index}
-                        onUpdate={updateTemplateDay}
-                        onDelete={deleteTemplateDay}
-                      />
-                    ))}
+                    {editingTemplate.days
+                      .filter(day => day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day')
+                      .map((day, index) => {
+                        const originalIndex = editingTemplate.days.indexOf(day);
+                        return (
+                          <HorizontalDayItem
+                            key={originalIndex}
+                            day={day}
+                            index={originalIndex}
+                            onUpdate={updateTemplateDay}
+                            onDelete={deleteTemplateDay}
+                          />
+                        );
+                      })}
                   </div>
                   
                   <div className="flex gap-2 pt-4">
@@ -1041,14 +1220,7 @@ export default function ConfigurePage() {
                       <Save className="h-4 w-4 mr-2 icon-success" />
                       Save Template
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingTemplate(null);
-                        setShowTemplateForm(false);
-                      }}
-                      className="flex-1"
-                    >
+                    <Button variant="outline" onClick={handleCancelWeekTemplate} className="flex-1">
                       <X className="h-4 w-4 mr-2" />
                       Cancel
                     </Button>
@@ -1066,17 +1238,78 @@ export default function ConfigurePage() {
               <SortableContext items={weekTemplates.map(t => `template-${t.id}`)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {weekTemplates.map((template) => (
-                    <SortableItem
-                      key={template.id}
-                      item={template}
-                      onEdit={(template) => {
-                        setEditingTemplate(template);
-                        setShowTemplateForm(true);
-                      }}
-                      onDelete={handleDeleteWeekTemplate}
-                      index={weekTemplates.indexOf(template)}
-                      type="template"
-                    />
+                    editingTemplateId === template.id && editingTemplate ? (
+                      <Card key={template.id} className="py-0">
+                        <CardContent className="space-y-4 p-0 px-3 py-2">
+                          <div className="grid grid-cols-2 gap-4">
+                            <Input
+                              placeholder="Template name"
+                              value={editingTemplate.name}
+                              onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
+                            />
+                            <div className="flex items-center gap-4">
+                              <label className="text-sm font-medium">Color:</label>
+                              <div className="flex gap-2">
+                                {colors.map((color) => (
+                                  <button
+                                    key={color}
+                                    className={`w-6 h-6 rounded-full border-2 ${
+                                      editingTemplate.color === color ? 'border-gray-900' : 'border-gray-300'
+                                    }`}
+                                    style={{ backgroundColor: color }}
+                                    onClick={() => setEditingTemplate(prev => prev ? { ...prev, color } : null)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium">Workout Days:</label>
+                              <Button onClick={addTemplateDay} size="sm" variant="outline">
+                                <Plus className="h-4 w-4 mr-1.5 icon-add" />
+                                Add Day
+                              </Button>
+                            </div>
+                            {editingTemplate.days
+                              .filter(day => day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day')
+                              .map((day, index) => {
+                                const originalIndex = editingTemplate.days.indexOf(day);
+                                return (
+                                  <HorizontalDayItem
+                                    key={originalIndex}
+                                    day={day}
+                                    index={originalIndex}
+                                    onUpdate={updateTemplateDay}
+                                    onDelete={deleteTemplateDay}
+                                  />
+                                );
+                              })}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={handleSaveWeekTemplate} className="flex-1">
+                              <Save className="h-4 w-4 mr-2 icon-success" />
+                              Save
+                            </Button>
+                            <Button variant="outline" onClick={handleCancelWeekTemplate} className="flex-1">
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <SortableItem
+                        key={template.id}
+                        item={template}
+                        onEdit={handleEditWeekTemplate}
+                        onDelete={handleDeleteWeekTemplate}
+                        index={weekTemplates.indexOf(template)}
+                        type="template"
+                      />
+                    )
                   ))}
                 </div>
               </SortableContext>
@@ -1099,16 +1332,16 @@ export default function ConfigurePage() {
               </Button>
             </div>
             
-            {/* Category Form */}
-            {showCategoryForm && (
+            {/* New Category Form (at top) */}
+            {showNewCategoryForm && editingCategory && (
               <Card className="mb-4">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 px-3">
                   <CardTitle className="text-base">Add Workout Category</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 px-3">
                   <Input
                     placeholder="Category name"
-                    value={editingCategory?.name || ''}
+                    value={editingCategory.name}
                     onChange={(e) => setEditingCategory(prev => prev ? { ...prev, name: e.target.value } : null)}
                   />
                   <div className="flex items-center gap-4">
@@ -1118,7 +1351,7 @@ export default function ConfigurePage() {
                         <button
                           key={color}
                           className={`w-6 h-6 rounded-full border-2 ${
-                            editingCategory?.color === color ? 'border-gray-900' : 'border-gray-300'
+                            editingCategory.color === color ? 'border-gray-900' : 'border-gray-300'
                           }`}
                           style={{ backgroundColor: color }}
                           onClick={() => setEditingCategory(prev => prev ? { ...prev, color } : null)}
@@ -1131,14 +1364,7 @@ export default function ConfigurePage() {
                       <Save className="h-4 w-4 mr-2 icon-success" />
                       Save Category
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingCategory(null);
-                        setShowCategoryForm(false);
-                      }}
-                      className="flex-1"
-                    >
+                    <Button variant="outline" onClick={handleCancelCategory} className="flex-1">
                       <X className="h-4 w-4 mr-2" />
                       Cancel
                     </Button>
@@ -1156,64 +1382,98 @@ export default function ConfigurePage() {
               <SortableContext items={workoutCategories.map(c => `category-${c.id}`)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {workoutCategories.map((category) => (
-                    <div key={category.id} className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-4">
-                          <div 
-                            className="w-4 h-4 rounded-full" 
-                            style={{ backgroundColor: category.color }}
+                    editingCategoryId === category.id && editingCategory ? (
+                      <Card key={category.id} className="py-0">
+                        <CardContent className="space-y-4 p-0 px-3 py-2">
+                          <Input
+                            placeholder="Category name"
+                            value={editingCategory.name}
+                            onChange={(e) => setEditingCategory(prev => prev ? { ...prev, name: e.target.value } : null)}
                           />
-                          <div>
-                            <h4 className="font-semibold">{category.name}</h4>
+                          <div className="flex items-center gap-4">
+                            <label className="text-sm font-medium">Color:</label>
+                            <div className="flex gap-2">
+                              {colors.map((color) => (
+                                <button
+                                  key={color}
+                                  className={`w-6 h-6 rounded-full border-2 ${
+                                    editingCategory.color === color ? 'border-gray-900' : 'border-gray-300'
+                                  }`}
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => setEditingCategory(prev => prev ? { ...prev, color } : null)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={handleSaveCategory} className="flex-1">
+                              <Save className="h-4 w-4 mr-2 icon-success" />
+                              Save
+                            </Button>
+                            <Button variant="outline" onClick={handleCancelCategory} className="flex-1">
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div key={category.id} className="px-3 py-2 border rounded-lg">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-4">
+                            <div 
+                              className="w-4 h-4 rounded-full" 
+                              style={{ backgroundColor: category.color }}
+                            />
+                            <div>
+                              <h4 className="font-semibold leading-tight">{category.name}</h4>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditCategory(category)}
+                            >
+                              <Edit className="h-4 w-4 icon-edit" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDeleteCategory(category.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setEditingCategory(category);
-                              setShowCategoryForm(true);
+                        
+                        {/* Linked Template Dropdown */}
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm font-medium text-gray-700">Linked Template:</label>
+                          <Select
+                            value={category.linkedWorkoutStructureTemplateId || 'none'}
+                            onValueChange={(value) => {
+                              updateWorkoutCategory(category.id, {
+                                linkedWorkoutStructureTemplateId: value === 'none' ? '' : value
+                              });
                             }}
                           >
-                            <Edit className="h-4 w-4 icon-edit" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDeleteCategory(category.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                            <SelectTrigger className="w-48 h-8 text-xs">
+                              <SelectValue placeholder="None" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              {workoutStructureTemplates.map((template) => (
+                                <SelectItem key={template.id} value={template.id}>
+                                  {template.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
-                      
-                      {/* Linked Template Dropdown */}
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium text-gray-700">Linked Template:</label>
-                        <Select
-                          value={category.linkedWorkoutStructureTemplateId || 'none'}
-                          onValueChange={(value) => {
-                            updateWorkoutCategory(category.id, {
-                              linkedWorkoutStructureTemplateId: value === 'none' ? '' : value
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="w-48 h-8 text-xs">
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            {workoutStructureTemplates.map((template) => (
-                              <SelectItem key={template.id} value={template.id}>
-                                {template.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
+                    )
                   ))}
                 </div>
               </SortableContext>
@@ -1293,22 +1553,22 @@ export default function ConfigurePage() {
               </Button>
             </div>
             
-            {/* Workout Type Form */}
-            {showWorkoutTypeForm && (
+            {/* New Workout Type Form (at top) */}
+            {showNewWorkoutTypeForm && editingWorkoutType && (
               <Card className="mb-4">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 px-3">
                   <CardTitle className="text-base">Add Workout Type</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 px-3">
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       placeholder="Workout type name"
-                      value={editingWorkoutType?.name || ''}
+                      value={editingWorkoutType.name}
                       onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, name: e.target.value } : null)}
                     />
                     <Input
                       placeholder="Description"
-                      value={editingWorkoutType?.description || ''}
+                      value={editingWorkoutType.description}
                       onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, description: e.target.value } : null)}
                     />
                   </div>
@@ -1319,7 +1579,7 @@ export default function ConfigurePage() {
                         <button
                           key={color}
                           className={`w-6 h-6 rounded-full border-2 ${
-                            editingWorkoutType?.color === color ? 'border-gray-900' : 'border-gray-300'
+                            editingWorkoutType.color === color ? 'border-gray-900' : 'border-gray-300'
                           }`}
                           style={{ backgroundColor: color }}
                           onClick={() => setEditingWorkoutType(prev => prev ? { ...prev, color } : null)}
@@ -1332,14 +1592,7 @@ export default function ConfigurePage() {
                       <Save className="h-4 w-4 mr-2 icon-success" />
                       Save Workout Type
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingWorkoutType(null);
-                        setShowWorkoutTypeForm(false);
-                      }}
-                      className="flex-1"
-                    >
+                    <Button variant="outline" onClick={handleCancelWorkoutType} className="flex-1">
                       <X className="h-4 w-4 mr-2" />
                       Cancel
                     </Button>
@@ -1357,17 +1610,58 @@ export default function ConfigurePage() {
               <SortableContext items={workoutTypes.map(w => `workoutType-${w.id}`)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {workoutTypes.map((workoutType) => (
-                    <SortableItem
-                      key={workoutType.id}
-                      item={workoutType}
-                      onEdit={(workoutType) => {
-                        setEditingWorkoutType(workoutType);
-                        setShowWorkoutTypeForm(true);
-                      }}
-                      onDelete={handleDeleteWorkoutType}
-                      index={workoutTypes.indexOf(workoutType)}
-                      type="workoutType"
-                    />
+                    editingWorkoutTypeId === workoutType.id && editingWorkoutType ? (
+                      <Card key={workoutType.id} className="py-0">
+                        <CardContent className="space-y-4 p-0 px-3 py-2">
+                          <div className="grid grid-cols-2 gap-4">
+                            <Input
+                              placeholder="Workout type name"
+                              value={editingWorkoutType.name}
+                              onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, name: e.target.value } : null)}
+                            />
+                            <Input
+                              placeholder="Description"
+                              value={editingWorkoutType.description}
+                              onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, description: e.target.value } : null)}
+                            />
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <label className="text-sm font-medium">Color:</label>
+                            <div className="flex gap-2">
+                              {colors.map((color) => (
+                                <button
+                                  key={color}
+                                  className={`w-6 h-6 rounded-full border-2 ${
+                                    editingWorkoutType.color === color ? 'border-gray-900' : 'border-gray-300'
+                                  }`}
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => setEditingWorkoutType(prev => prev ? { ...prev, color } : null)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={handleSaveWorkoutType} className="flex-1">
+                              <Save className="h-4 w-4 mr-2 icon-success" />
+                              Save
+                            </Button>
+                            <Button variant="outline" onClick={handleCancelWorkoutType} className="flex-1">
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <SortableItem
+                        key={workoutType.id}
+                        item={workoutType}
+                        onEdit={handleEditWorkoutType}
+                        onDelete={handleDeleteWorkoutType}
+                        index={workoutTypes.indexOf(workoutType)}
+                        type="workoutType"
+                      />
+                    )
                   ))}
                 </div>
               </SortableContext>
@@ -1513,13 +1807,22 @@ export default function ConfigurePage() {
                     Coaching Sessions
                   </label>
                 </div>
-                <Input
-                  placeholder="Personal Training, PT, Training Session, Workout"
-                  value={coachingKeywordsInput}
-                  onChange={(e) => setCoachingKeywordsInput(e.target.value)}
-                  onBlur={handleSaveCoachingKeywords}
-                  className="text-sm"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Personal Training, PT, Training Session, Workout"
+                    value={coachingKeywordsInput}
+                    onChange={(e) => setCoachingKeywordsInput(e.target.value)}
+                    className="text-sm flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSaveCoachingKeywords}
+                    variant="outline"
+                  >
+                    <Save className="h-3 w-3 mr-1" />
+                    Save
+                  </Button>
+                </div>
               </div>
 
               {/* Class Session Keywords */}
@@ -1530,13 +1833,22 @@ export default function ConfigurePage() {
                     Class Sessions
                   </label>
                 </div>
-                <Input
-                  placeholder="Class, Group Class, Group Training"
-                  value={classKeywordsInput}
-                  onChange={(e) => setClassKeywordsInput(e.target.value)}
-                  onBlur={handleSaveClassKeywords}
-                  className="text-sm"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Class, Group Class, Group Training"
+                    value={classKeywordsInput}
+                    onChange={(e) => setClassKeywordsInput(e.target.value)}
+                    className="text-sm flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSaveClassKeywords}
+                    variant="outline"
+                  >
+                    <Save className="h-3 w-3 mr-1" />
+                    Save
+                  </Button>
+                </div>
               </div>
 
               <p className="text-xs text-gray-500">
