@@ -47,9 +47,9 @@ export function WorkoutStructureTemplateCard({
 
   return (
     <Card className="w-full py-0">
-      <CardHeader className="pb-3 px-3">
+      <CardHeader className="pb-1 px-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold leading-tight">{template.name}</CardTitle>
+          <CardTitle className="text-lg font-semibold leading-tight text-center flex-1">{template.name}</CardTitle>
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -73,8 +73,8 @@ export function WorkoutStructureTemplateCard({
           <p className="text-sm text-gray-600 mt-1">{template.description}</p>
         )}
       </CardHeader>
-      <CardContent className="pt-0 px-3">
-        <div className="space-y-3">
+      <CardContent className="pt-1 px-3">
+        <div className="space-y-2">
           {sortedSections.map((section, index) => {
             const isExpanded = expandedSections.has(index);
             const workoutType = workoutTypes.find(wt => wt.id === section.workoutTypeId);
