@@ -162,12 +162,19 @@ export async function updateCalendarSyncConfig(updates: Partial<CalendarSyncConf
 
   const payload: Record<string, unknown> = {};
   if (updates.selectedCalendarId !== undefined) payload.selectedCalendarId = updates.selectedCalendarId ?? null;
-  if (updates.coachingKeywords !== undefined) payload.coachingKeywords = updates.coachingKeywords;
-  if (updates.classKeywords !== undefined) payload.classKeywords = updates.classKeywords;
+  if (updates.coachingKeywords !== undefined) payload.coachingKeywords = updates.coachingKeywords ?? [];
+  if (updates.classKeywords !== undefined) payload.classKeywords = updates.classKeywords ?? [];
   if (updates.locationAbbreviations !== undefined) payload.locationAbbreviations = updates.locationAbbreviations ?? [];
   if (updates.lastSyncTime !== undefined) {
     payload.lastSyncTime = updates.lastSyncTime ? Timestamp.fromDate(updates.lastSyncTime) : null;
   }
+
+  // Remove any undefined values from payload (Firestore doesn't allow undefined)
+  Object.keys(payload).forEach(key => {
+    if (payload[key] === undefined) {
+      delete payload[key];
+    }
+  });
 
   await setDoc(docRef, payload, { merge: true });
 }

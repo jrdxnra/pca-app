@@ -926,16 +926,27 @@ export default function ConfigurePage() {
   };
 
   const handleSaveCoachingKeywords = async () => {
-    const keywordArray = coachingKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
-    updateCalendarConfig({ coachingKeywords: keywordArray });
-    toastSuccess('Coaching session keywords saved');
+    try {
+      const keywordArray = coachingKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
+      // Ensure we always pass an array, never undefined
+      updateCalendarConfig({ coachingKeywords: keywordArray.length > 0 ? keywordArray : [] });
+      toastSuccess('Coaching session keywords saved');
+    } catch (error) {
+      console.error('Error saving coaching keywords:', error);
+      toastError('Failed to save coaching keywords. Please try again.');
+    }
   };
 
   const handleSaveClassKeywords = async () => {
-    const keywordArray = classKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
-    // Ensure we don't pass undefined - use empty array if no keywords
-    updateCalendarConfig({ classKeywords: keywordArray.length > 0 ? keywordArray : [] });
-    toastSuccess('Class session keywords saved');
+    try {
+      const keywordArray = classKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
+      // Ensure we always pass an array, never undefined
+      updateCalendarConfig({ classKeywords: keywordArray.length > 0 ? keywordArray : [] });
+      toastSuccess('Class session keywords saved');
+    } catch (error) {
+      console.error('Error saving class keywords:', error);
+      toastError('Failed to save class keywords. Please try again.');
+    }
   };
 
   // Drag and drop handlers
