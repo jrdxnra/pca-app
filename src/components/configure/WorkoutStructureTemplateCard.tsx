@@ -47,10 +47,10 @@ export function WorkoutStructureTemplateCard({
 
   return (
     <Card className="w-full py-0">
-      <CardHeader className="pb-1 px-3">
-        <div className="flex items-end justify-between">
-          <CardTitle className="text-lg font-semibold leading-tight">{template.name}</CardTitle>
-          <div className="flex items-center gap-2">
+      <CardHeader className="pb-0 px-3 pt-2">
+        <div className="flex items-end justify-between min-h-[2rem]">
+          <CardTitle className="text-lg font-semibold leading-tight pb-0.5">{template.name}</CardTitle>
+          <div className="flex items-center gap-2 pb-0.5">
             <Button
               variant="ghost"
               size="sm"

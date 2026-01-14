@@ -275,9 +275,9 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
           <div key={movement.id} className="relative">
             {/* Drop indicator line above */}
             {showDropLineAbove && (
-              <div className="absolute top-0 left-0 right-0 z-10 flex items-center">
-                <div className="w-2 h-2 rounded-full bg-purple-400 -ml-1"></div>
-                <div className="flex-1 h-0.5 bg-purple-400"></div>
+              <div className="absolute top-0 left-0 right-0 z-10 flex items-center -mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-400 -ml-0.5"></div>
+                <div className="flex-1 h-px bg-purple-400"></div>
               </div>
             )}
             
@@ -496,9 +496,9 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
           
           {/* Drop indicator line below */}
           {showDropLineBelow && (
-            <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center">
-              <div className="w-2 h-2 rounded-full bg-purple-400 -ml-1"></div>
-              <div className="flex-1 h-0.5 bg-purple-400"></div>
+            <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center -mb-0.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-purple-400 -ml-0.5"></div>
+              <div className="flex-1 h-px bg-purple-400"></div>
             </div>
           )}
         </div>
