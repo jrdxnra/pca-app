@@ -1963,36 +1963,40 @@ export default function ConfigurePage() {
                       })}
                   </div>
 
-                  {/* Ignored Locations - Collapsible Section */}
-                  {/* Always show this section if there are ANY ignored locations saved */}
-                  {(calendarConfig.locationAbbreviations?.some(abbr => abbr.ignored) ?? false) && (
-                    <div className="border-t pt-4 mt-4">
-                      <button
-                        onClick={() => setShowIgnoredLocations(!showIgnoredLocations)}
-                        className="flex items-center justify-between w-full text-left mb-2 p-2 rounded hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          {showIgnoredLocations ? (
-                            <ChevronDown className="h-4 w-4 text-gray-500" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-gray-500" />
-                          )}
-                          <span className="text-sm font-medium text-gray-700">
-                            N/A Locations
-                          </span>
-                          <Badge variant="secondary" className="bg-gray-300 text-gray-700 text-xs font-medium">
-                            {calendarConfig.locationAbbreviations?.filter(abbr => abbr.ignored).length ?? 0}
-                          </Badge>
-                          <span className="text-xs text-gray-500 ml-2">
-                            (Click to {showIgnoredLocations ? 'hide' : 'review'})
-                          </span>
-                        </div>
-                      </button>
-                      
-                      {showIgnoredLocations && (
-                        <div className="space-y-2 mt-2">
-                          {/* Show ALL ignored locations from saved config, not just from current events */}
-                          {(calendarConfig.locationAbbreviations ?? [])
+                  {/* Ignored Locations - Collapsible Section (Always visible like Bluetooth settings) */}
+                  <div className="border-t pt-4 mt-4">
+                    <button
+                      onClick={() => setShowIgnoredLocations(!showIgnoredLocations)}
+                      className="flex items-center justify-between w-full text-left mb-2 p-2 rounded hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        {showIgnoredLocations ? (
+                          <ChevronDown className="h-4 w-4 text-gray-500" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-gray-500" />
+                        )}
+                        <span className="text-sm font-medium text-gray-700">
+                          N/A Locations
+                        </span>
+                        <Badge variant="secondary" className="bg-gray-300 text-gray-700 text-xs font-medium">
+                          {calendarConfig.locationAbbreviations?.filter(abbr => abbr.ignored).length ?? 0}
+                        </Badge>
+                        <span className="text-xs text-gray-500 ml-2">
+                          (Click to {showIgnoredLocations ? 'hide' : 'expand'})
+                        </span>
+                      </div>
+                    </button>
+                    
+                    {showIgnoredLocations && (
+                      <div className="space-y-2 mt-2">
+                        {/* Empty state */}
+                        {(calendarConfig.locationAbbreviations?.filter(abbr => abbr.ignored).length ?? 0) === 0 ? (
+                          <p className="text-sm text-gray-500 italic p-3 bg-gray-50 rounded-lg">
+                            No locations marked as N/A. Click the "N/A" button on any location above to hide it from the calendar display.
+                          </p>
+                        ) : (
+                          /* Show ALL ignored locations from saved config */
+                          (calendarConfig.locationAbbreviations ?? [])
                             .filter(abbr => abbr.ignored)
                             .map((existingAbbr) => {
                               const location = existingAbbr.original;
@@ -2081,11 +2085,11 @@ export default function ConfigurePage() {
                                   </div>
                                 </div>
                               );
-                            })}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                            })
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             )}
