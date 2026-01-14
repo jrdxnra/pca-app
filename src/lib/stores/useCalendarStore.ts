@@ -19,7 +19,8 @@ import { getCalendarSyncConfig, updateCalendarSyncConfig } from '@/lib/firebase/
 const CACHE_DURATION = 30 * 1000;
 
 function normalizeLocationKey(input: string): string {
-  return (input || '').trim().replace(/\s+/g, ' ');
+  // Normalize for comparison: lowercase, trim, collapse spaces
+  return (input || '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 interface CalendarStore {
