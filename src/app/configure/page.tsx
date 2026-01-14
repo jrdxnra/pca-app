@@ -859,6 +859,13 @@ export default function ConfigurePage() {
         return normalized;
       }).filter(a => a.original.length > 0);
       
+      // Deduplicate by normalized original key (keep the last one if duplicates exist)
+      const deduplicatedMap = new Map<string, LocationAbbreviation>();
+      for (const abbr of normalizedAbbreviations) {
+        deduplicatedMap.set(abbr.original, abbr);
+      }
+      const deduplicatedAbbreviations = Array.from(deduplicatedMap.values());
+      
       // Update local state immediately
       updateCalendarConfig({ locationAbbreviations: deduplicatedAbbreviations });
       
