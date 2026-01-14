@@ -47,7 +47,7 @@ export function WorkoutStructureTemplateCard({
 
   return (
     <Card className="w-full py-0">
-      <CardHeader className="pb-0 px-3 pt-2">
+      <CardHeader className="pb-2 px-3 pt-2">
         <div className="flex items-end justify-between min-h-[2rem]">
           <CardTitle className="text-lg font-semibold leading-tight pb-0.5">{template.name}</CardTitle>
           <div className="flex items-center gap-2 pb-0.5">
@@ -73,7 +73,7 @@ export function WorkoutStructureTemplateCard({
           <p className="text-sm text-gray-600 mt-1">{template.description}</p>
         )}
       </CardHeader>
-      <CardContent className="pt-1 px-3">
+      <CardContent className="pt-1 pb-3 px-3">
         <div className="space-y-2">
           {sortedSections.map((section, index) => {
             const isExpanded = expandedSections.has(index);
