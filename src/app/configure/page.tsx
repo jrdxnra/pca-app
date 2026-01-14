@@ -300,7 +300,7 @@ export default function ConfigurePage() {
   const [coachingKeywordsInput, setCoachingKeywordsInput] = useState('');
   const [classKeywordsInput, setClassKeywordsInput] = useState('');
   
-  // Sync keyword inputs from config on mount
+  // Sync keyword inputs from config on mount and when config changes
   useEffect(() => {
     if (calendarConfig.coachingKeywords) {
       setCoachingKeywordsInput(calendarConfig.coachingKeywords.join(', '));
@@ -308,7 +308,7 @@ export default function ConfigurePage() {
     if (calendarConfig.classKeywords) {
       setClassKeywordsInput(calendarConfig.classKeywords.join(', '));
     }
-  }, []);
+  }, [calendarConfig.coachingKeywords, calendarConfig.classKeywords]);
 
   // Fetch configuration on mount
   useEffect(() => {
@@ -730,7 +730,7 @@ export default function ConfigurePage() {
     }
   };
 
-  const handleSaveLocationAbbreviation = () => {
+  const handleSaveLocationAbbreviation = async () => {
     if (!editingLocation) return;
     
     const abbreviations = calendarConfig.locationAbbreviations || [];
@@ -754,6 +754,7 @@ export default function ConfigurePage() {
     }
     
     updateCalendarConfig({ locationAbbreviations: updatedAbbreviations });
+    toastSuccess('Location abbreviation saved');
     setEditingLocation(null);
     setLocationAbbreviationInput('');
   };
@@ -799,14 +800,16 @@ export default function ConfigurePage() {
     updateCalendarConfig({ locationAbbreviations: updatedAbbreviations });
   };
 
-  const handleSaveCoachingKeywords = () => {
+  const handleSaveCoachingKeywords = async () => {
     const keywordArray = coachingKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
     updateCalendarConfig({ coachingKeywords: keywordArray });
+    toastSuccess('Coaching session keywords saved');
   };
 
-  const handleSaveClassKeywords = () => {
+  const handleSaveClassKeywords = async () => {
     const keywordArray = classKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
     updateCalendarConfig({ classKeywords: keywordArray });
+    toastSuccess('Class session keywords saved');
   };
 
   // Drag and drop handlers
@@ -1513,13 +1516,22 @@ export default function ConfigurePage() {
                     Coaching Sessions
                   </label>
                 </div>
-                <Input
-                  placeholder="Personal Training, PT, Training Session, Workout"
-                  value={coachingKeywordsInput}
-                  onChange={(e) => setCoachingKeywordsInput(e.target.value)}
-                  onBlur={handleSaveCoachingKeywords}
-                  className="text-sm"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Personal Training, PT, Training Session, Workout"
+                    value={coachingKeywordsInput}
+                    onChange={(e) => setCoachingKeywordsInput(e.target.value)}
+                    className="text-sm flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSaveCoachingKeywords}
+                    variant="outline"
+                  >
+                    <Save className="h-3 w-3 mr-1" />
+                    Save
+                  </Button>
+                </div>
               </div>
 
               {/* Class Session Keywords */}
@@ -1530,13 +1542,22 @@ export default function ConfigurePage() {
                     Class Sessions
                   </label>
                 </div>
-                <Input
-                  placeholder="Class, Group Class, Group Training"
-                  value={classKeywordsInput}
-                  onChange={(e) => setClassKeywordsInput(e.target.value)}
-                  onBlur={handleSaveClassKeywords}
-                  className="text-sm"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Class, Group Class, Group Training"
+                    value={classKeywordsInput}
+                    onChange={(e) => setClassKeywordsInput(e.target.value)}
+                    className="text-sm flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSaveClassKeywords}
+                    variant="outline"
+                  >
+                    <Save className="h-3 w-3 mr-1" />
+                    Save
+                  </Button>
+                </div>
               </div>
 
               <p className="text-xs text-gray-500">

@@ -924,7 +924,7 @@ export function ModernCalendarView({
 
                       {/* RIGHT: Workout Side */}
                       <div
-                        className="flex-1 p-1 bg-blue-50 hover:bg-blue-100 cursor-pointer flex items-center justify-between gap-1"
+                        className="flex-1 p-1 bg-teal-50 hover:bg-teal-100 cursor-pointer flex items-center justify-between gap-1"
                         onClick={(e) => {
                           e.stopPropagation();
                           const buildWorkoutUrl = `/workouts/builder?${clientParam}date=${dateParam}${eventIdParam}&workoutId=${workout.id}`;
@@ -932,10 +932,10 @@ export function ModernCalendarView({
                         }}
                       >
                         <div className="flex flex-col min-w-0">
-                          <span className="font-medium text-blue-800 truncate leading-tight">
+                          <span className="font-medium text-teal-800 truncate leading-tight">
                             {workoutTitle}
                           </span>
-                          <span className="text-blue-600 text-[9px] leading-tight">
+                          <span className="text-teal-600 text-[9px] leading-tight">
                             View Plan →
                           </span>
                         </div>
@@ -992,7 +992,7 @@ export function ModernCalendarView({
                   return (
                     <div
                       key={`workout-${workout.id}`}
-                      className="flex items-center justify-between text-[10px] bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded px-1 py-0.5 cursor-pointer shadow-sm"
+                      className="flex items-center justify-between text-[10px] bg-teal-50 border border-teal-100 hover:bg-teal-100 rounded px-1 py-0.5 cursor-pointer shadow-sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         const url = `/workouts/builder?${clientParam}date=${dateParam}&workoutId=${workout.id}`;
@@ -1000,12 +1000,12 @@ export function ModernCalendarView({
                       }}
                     >
                       <div className="flex items-center gap-1 min-w-0">
-                        <Dumbbell className="h-3 w-3 text-blue-600 flex-shrink-0" />
-                        <span className="font-medium text-blue-800 truncate">
+                        <Dumbbell className="h-3 w-3 text-teal-600 flex-shrink-0" />
+                        <span className="font-medium text-teal-800 truncate">
                           {getClientName(workout.clientId)}
                         </span>
                       </div>
-                      <span className="text-blue-600 font-medium whitespace-nowrap ml-1">
+                      <span className="text-teal-600 font-medium whitespace-nowrap ml-1">
                         {workoutTitle}
                       </span>
                     </div>
@@ -1185,7 +1185,7 @@ export function ModernCalendarView({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 hover:bg-blue-100"
+                    className="h-6 w-6 p-0 hover:bg-teal-100"
                     title="Schedule workout"
                   >
                     <Plus className="h-3 w-3" />
@@ -1763,7 +1763,7 @@ export function ModernCalendarView({
           ) : (
             <div className="space-y-4">
               {filteredWorkouts.map((workout) => (
-                <div key={workout.id} className="p-4 border rounded-lg bg-blue-50">
+                <div key={workout.id} className="p-4 border rounded-lg bg-teal-50">
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-medium">{getClientName(workout.clientId)}</h4>

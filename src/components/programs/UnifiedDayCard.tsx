@@ -55,7 +55,7 @@ export function UnifiedDayCard({
           border shadow-sm cursor-pointer
           ${isLinked ? 'bg-gradient-to-r from-gray-50 to-blue-50 hover:from-gray-100 hover:to-blue-100' : ''}
           ${isEventOnly ? 'bg-gray-50 hover:bg-gray-100' : ''}
-          ${isWorkoutOnly ? 'bg-blue-50 hover:bg-blue-100' : ''}
+          ${isWorkoutOnly ? 'bg-teal-50 hover:bg-teal-100' : ''}
         `}
                 style={{ borderLeftColor: categoryColor, borderLeftWidth: 3 }}
             >
@@ -100,8 +100,8 @@ export function UnifiedDayCard({
                 >
                     {hasWorkout ? (
                         <>
-                            <Dumbbell className="h-2.5 w-2.5 text-blue-600 flex-shrink-0" />
-                            <span className="truncate font-medium text-blue-800">
+                            <Dumbbell className="h-2.5 w-2.5 text-teal-600 flex-shrink-0" />
+                            <span className="truncate font-medium text-teal-800">
                                 {workoutTitle || 'Workout'}
                             </span>
                         </>
@@ -120,7 +120,7 @@ export function UnifiedDayCard({
         flex rounded-lg overflow-hidden border shadow-sm
         ${isLinked ? 'bg-gradient-to-r from-white to-blue-50/50' : ''}
         ${isEventOnly ? 'bg-white' : ''}
-        ${isWorkoutOnly ? 'bg-blue-50/30' : ''}
+        ${isWorkoutOnly ? 'bg-teal-50/30' : ''}
         transition-shadow hover:shadow-md
       `}
             style={{ borderLeftColor: categoryColor, borderLeftWidth: 4 }}
@@ -169,7 +169,7 @@ export function UnifiedDayCard({
             <div
                 className={`
           flex-1 p-2 flex flex-col justify-center min-w-0
-          ${hasWorkout ? 'cursor-pointer hover:bg-blue-50' : 'bg-blue-50/30'}
+          ${hasWorkout ? 'cursor-pointer hover:bg-teal-50' : 'bg-teal-50/30'}
         `}
                 onClick={(e) => {
                     e.stopPropagation();
@@ -179,12 +179,12 @@ export function UnifiedDayCard({
                 {hasWorkout ? (
                     <>
                         <div className="flex items-center gap-1.5 mb-0.5">
-                            <Dumbbell className="h-3 w-3 text-blue-600 flex-shrink-0" />
-                            <span className="text-xs font-semibold text-blue-800 truncate">
+                            <Dumbbell className="h-3 w-3 text-teal-600 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-teal-800 truncate">
                                 {workoutTitle}
                             </span>
                         </div>
-                        <span className="text-[11px] text-blue-600">
+                        <span className="text-[11px] text-teal-600">
                             View Plan →
                         </span>
                     </>
