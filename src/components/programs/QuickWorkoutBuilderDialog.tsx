@@ -493,7 +493,7 @@ export function QuickWorkoutBuilderDialog({
                                   {abbrevList.map((item, idx) => (
                                     <span
                                       key={idx}
-                                      className="inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white"
+                                      className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white"
                                       style={{ backgroundColor: item.color }}
                                     >
                                       {item.abbrev}
