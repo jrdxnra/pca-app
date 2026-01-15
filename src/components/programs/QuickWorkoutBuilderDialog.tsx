@@ -60,17 +60,21 @@ function abbreviateWorkoutType(name: string): string {
   return abbreviations[lowerName] || name.substring(0, 3).toUpperCase();
 }
 
-// Helper function to get abbreviation list for a template
-function getTemplateAbbreviationList(template: WorkoutStructureTemplate): string {
+// Helper function to get abbreviation list for a template with colors
+function getTemplateAbbreviationList(template: WorkoutStructureTemplate, workoutTypes: any[]): Array<{ abbrev: string; color: string }> {
   if (!template.sections || template.sections.length === 0) {
-    return '';
+    return [];
   }
   
-  const abbreviations = template.sections
+  return template.sections
     .sort((a, b) => a.order - b.order)
-    .map(section => abbreviateWorkoutType(section.workoutTypeName));
-  
-  return `(${abbreviations.join(' / ')})`;
+    .map(section => {
+      const workoutType = workoutTypes.find(wt => wt.id === section.workoutTypeId);
+      return {
+        abbrev: abbreviateWorkoutType(section.workoutTypeName),
+        color: workoutType?.color || '#6b7280'
+      };
+    });
 }
 
 interface QuickWorkoutBuilderDialogProps {
@@ -111,7 +115,7 @@ export function QuickWorkoutBuilderDialog({
   const [eventIdToLink, setEventIdToLink] = useState<string | undefined>(propEventId);
 
   const { clients } = useClientStore();
-  const { workoutCategories, workoutStructureTemplates, fetchAll: fetchConfig } = useConfigurationStore();
+  const { workoutCategories, workoutStructureTemplates, workoutTypes, fetchAll: fetchConfig } = useConfigurationStore();
   const { createTestEvent, linkToWorkout, deleteEvent, events: calendarEvents, updateEvent } = useCalendarStore();
   const { findPeriodForDate } = useClientPrograms(clientId);
 
@@ -479,13 +483,23 @@ export function QuickWorkoutBuilderDialog({
                       {workoutStructureTemplates.map((template) => {
                         const category = workoutCategories.find(cat => cat.name === selectedCategory);
                         const isLinked = category?.linkedWorkoutStructureTemplateId === template.id;
-                        const abbrevList = getTemplateAbbreviationList(template);
+                        const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
                         return (
                           <SelectItem key={template.id} value={template.id}>
-                            <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center gap-2 w-full">
                               <span>{template.name}{isLinked ? ' (default)' : ''}</span>
-                              {abbrevList && (
-                                <span className="text-xs text-gray-500 ml-2">{abbrevList}</span>
+                              {abbrevList.length > 0 && (
+                                <div className="flex items-center gap-1 ml-auto">
+                                  {abbrevList.map((item, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white"
+                                      style={{ backgroundColor: item.color }}
+                                    >
+                                      {item.abbrev}
+                                    </span>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           </SelectItem>
