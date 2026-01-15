@@ -9,7 +9,7 @@ import {
   orderBy,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 
 export interface WeekTemplateDay {
   day: string;
@@ -29,7 +29,7 @@ export interface WeekTemplate {
 
 export const createWeekTemplate = async (template: Omit<WeekTemplate, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<string> => {
   try {
-    const docRef = await addDoc(collection(db, 'weekTemplates'), {
+    const docRef = await addDoc(collection(getDb(), 'weekTemplates'), {
       ...template,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -44,7 +44,7 @@ export const createWeekTemplate = async (template: Omit<WeekTemplate, 'id' | 'cr
 
 export const updateWeekTemplate = async (id: string, updates: Partial<Omit<WeekTemplate, 'id' | 'createdAt' | 'createdBy'>>): Promise<void> => {
   try {
-    const templateRef = doc(db, 'weekTemplates', id);
+    const templateRef = doc(getDb(), 'weekTemplates', id);
     await updateDoc(templateRef, {
       ...updates,
       updatedAt: Timestamp.now()
@@ -57,7 +57,7 @@ export const updateWeekTemplate = async (id: string, updates: Partial<Omit<WeekT
 
 export const deleteWeekTemplate = async (id: string): Promise<void> => {
   try {
-    const templateRef = doc(db, 'weekTemplates', id);
+    const templateRef = doc(getDb(), 'weekTemplates', id);
     await deleteDoc(templateRef);
   } catch (error) {
     console.error('Error deleting week template:', error);
@@ -67,7 +67,7 @@ export const deleteWeekTemplate = async (id: string): Promise<void> => {
 
 export const fetchWeekTemplates = async (): Promise<WeekTemplate[]> => {
   try {
-    const q = query(collection(db, 'weekTemplates'), orderBy('order', 'asc'));
+    const q = query(collection(getDb(), 'weekTemplates'), orderBy('order', 'asc'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,

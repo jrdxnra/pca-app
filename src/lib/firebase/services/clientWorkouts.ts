@@ -12,7 +12,7 @@ import {
   Timestamp,
   writeBatch
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import type { 
   ClientWorkout, 
   ClientWorkoutWarmup,
@@ -36,7 +36,7 @@ export async function createClientWorkout(
     updatedAt: now,
   };
 
-  const docRef = await addDoc(collection(db, COLLECTION_NAME), workoutData);
+  const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), workoutData);
   
   return {
     id: docRef.id,
@@ -48,7 +48,7 @@ export async function createClientWorkout(
  * Get a single client workout by ID
  */
 export async function getClientWorkout(id: string): Promise<ClientWorkout | null> {
-  const docRef = doc(db, COLLECTION_NAME, id);
+  const docRef = doc(getDb(), COLLECTION_NAME, id);
   const docSnap = await getDoc(docRef);
 
   if (!docSnap.exists()) {
@@ -66,7 +66,7 @@ export async function getClientWorkout(id: string): Promise<ClientWorkout | null
  */
 export async function fetchClientWorkouts(clientId: string): Promise<ClientWorkout[]> {
   const q = query(
-    collection(db, COLLECTION_NAME),
+    collection(getDb(), COLLECTION_NAME),
     where('clientId', '==', clientId),
     orderBy('date', 'asc')
   );
@@ -83,7 +83,7 @@ export async function fetchClientWorkouts(clientId: string): Promise<ClientWorko
  */
 export async function fetchPeriodWorkouts(periodId: string): Promise<ClientWorkout[]> {
   const q = query(
-    collection(db, COLLECTION_NAME),
+    collection(getDb(), COLLECTION_NAME),
     where('periodId', '==', periodId),
     orderBy('date', 'asc')
   );
@@ -104,7 +104,7 @@ export async function fetchWorkoutsByDateRange(
   endDate: Timestamp
 ): Promise<ClientWorkout[]> {
   const q = query(
-    collection(db, COLLECTION_NAME),
+    collection(getDb(), COLLECTION_NAME),
     where('clientId', '==', clientId),
     where('date', '>=', startDate),
     where('date', '<=', endDate)
@@ -131,7 +131,7 @@ export async function updateClientWorkout(
   id: string,
   updates: Partial<ClientWorkout>
 ): Promise<void> {
-  const docRef = doc(db, COLLECTION_NAME, id);
+  const docRef = doc(getDb(), COLLECTION_NAME, id);
   await updateDoc(docRef, {
     ...updates,
     updatedAt: Timestamp.now(),
@@ -142,7 +142,7 @@ export async function updateClientWorkout(
  * Delete a client workout
  */
 export async function deleteClientWorkout(id: string): Promise<void> {
-  const docRef = doc(db, COLLECTION_NAME, id);
+  const docRef = doc(getDb(), COLLECTION_NAME, id);
   await deleteDoc(docRef);
 }
 
@@ -154,7 +154,7 @@ export async function copyTemplateToClientWorkout(
   workoutId: string,
   template: WorkoutTemplate
 ): Promise<void> {
-  const docRef = doc(db, COLLECTION_NAME, workoutId);
+  const docRef = doc(getDb(), COLLECTION_NAME, workoutId);
   
   // Convert template rounds to ClientWorkoutRounds
   const rounds: ClientWorkoutRound[] = template.rounds.map((round, roundIndex) => ({
@@ -234,7 +234,7 @@ export async function bulkCreateWorkouts(
   const now = Timestamp.now();
 
   workouts.forEach(workout => {
-    const docRef = doc(collection(db, COLLECTION_NAME));
+    const docRef = doc(collection(getDb(), COLLECTION_NAME));
     batch.set(docRef, {
       ...workout,
       createdAt: now,
@@ -331,7 +331,7 @@ export async function fetchAllWorkoutsByDateRange(
   endDate: Timestamp
 ): Promise<ClientWorkout[]> {
   const q = query(
-    collection(db, COLLECTION_NAME),
+    collection(getDb(), COLLECTION_NAME),
     where('date', '>=', startDate),
     where('date', '<=', endDate),
     orderBy('date', 'asc')

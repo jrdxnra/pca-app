@@ -11,7 +11,7 @@ import {
   onSnapshot,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import { MovementCategory } from '@/lib/types';
 
 const COLLECTION_NAME = 'movement-categories';
@@ -23,7 +23,7 @@ export async function addMovementCategory(
   categoryData: Omit<MovementCategory, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   try {
-    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+    const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...categoryData,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -40,7 +40,7 @@ export async function addMovementCategory(
  */
 export async function getMovementCategory(id: string): Promise<MovementCategory | null> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -58,7 +58,7 @@ export async function getMovementCategory(id: string): Promise<MovementCategory 
  */
 export async function getAllMovementCategories(): Promise<MovementCategory[]> {
   try {
-    const q = query(collection(db, COLLECTION_NAME), orderBy('name'));
+    const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
     const querySnapshot = await getDocs(q);
     
     return querySnapshot.docs.map(doc => ({
@@ -79,7 +79,7 @@ export async function updateMovementCategory(
   updates: Partial<Omit<MovementCategory, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     await updateDoc(docRef, {
       ...updates,
       updatedAt: Timestamp.now(),
@@ -95,7 +95,7 @@ export async function updateMovementCategory(
  */
 export async function deleteMovementCategory(id: string): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     await deleteDoc(docRef);
   } catch (error) {
     console.error('Error deleting movement category:', error);
@@ -107,7 +107,7 @@ export async function deleteMovementCategory(id: string): Promise<void> {
  * Subscribe to movement categories changes
  */
 export function subscribeToMovementCategories(callback: (categories: MovementCategory[]) => void): () => void {
-  const q = query(collection(db, COLLECTION_NAME), orderBy('name'));
+  const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
   
   return onSnapshot(q, (querySnapshot) => {
     const categories = querySnapshot.docs.map(doc => ({

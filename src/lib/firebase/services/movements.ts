@@ -12,7 +12,7 @@ import {
   onSnapshot,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import { Movement, MovementCategory } from '@/lib/types';
 import { getMovementCategory } from './movementCategories';
 
@@ -63,7 +63,7 @@ export async function addMovement(
       updatedAt: Timestamp.now(),
     };
 
-    const docRef = await addDoc(collection(db, COLLECTION_NAME), cleanData);
+    const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), cleanData);
     return docRef.id;
   } catch (error) {
     console.error('Error adding movement:', error);
@@ -76,7 +76,7 @@ export async function addMovement(
  */
 export async function getMovement(id: string, includeCategory = false): Promise<Movement | null> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -100,7 +100,7 @@ export async function getMovement(id: string, includeCategory = false): Promise<
  */
 export async function getAllMovements(includeCategory = false): Promise<Movement[]> {
   try {
-    const q = query(collection(db, COLLECTION_NAME), orderBy('name'));
+    const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
     const querySnapshot = await getDocs(q);
     
     const movements = querySnapshot.docs.map(doc => ({
@@ -137,7 +137,7 @@ export async function getMovementsByCategory(
 ): Promise<Movement[]> {
   try {
     const q = query(
-      collection(db, COLLECTION_NAME), 
+      collection(getDb(), COLLECTION_NAME), 
       where('categoryId', '==', categoryId)
     );
     const querySnapshot = await getDocs(q);
@@ -177,7 +177,7 @@ export async function updateMovement(
   updates: Partial<Omit<Movement, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     
     // Filter out undefined values for Firestore
     const cleanUpdates: any = {
@@ -203,7 +203,7 @@ export async function updateMovement(
  */
 export async function deleteMovement(id: string): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     await deleteDoc(docRef);
   } catch (error) {
     console.error('Error deleting movement:', error);
@@ -266,7 +266,7 @@ export function subscribeToMovementsByCategory(
   callback: (movements: Movement[]) => void
 ): () => void {
   const q = query(
-    collection(db, COLLECTION_NAME),
+    collection(getDb(), COLLECTION_NAME),
     where('categoryId', '==', categoryId)
   );
   
@@ -294,7 +294,7 @@ export function subscribeToMovementsByCategory(
  * Subscribe to all movements changes
  */
 export function subscribeToMovements(callback: (movements: Movement[]) => void): () => void {
-  const q = query(collection(db, COLLECTION_NAME), orderBy('name'));
+  const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
   
   return onSnapshot(q, (querySnapshot) => {
     const movements = querySnapshot.docs.map(doc => ({
@@ -314,7 +314,7 @@ export function subscribeToMovements(callback: (movements: Movement[]) => void):
 export async function getNextOrdinal(categoryId: string): Promise<number> {
   try {
     const q = query(
-      collection(db, COLLECTION_NAME),
+      collection(getDb(), COLLECTION_NAME),
       where('categoryId', '==', categoryId)
     );
     const querySnapshot = await getDocs(q);

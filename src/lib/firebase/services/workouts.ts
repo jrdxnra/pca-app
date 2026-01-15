@@ -12,7 +12,7 @@ import {
   onSnapshot,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import { WorkoutTemplate, WorkoutRound } from '@/lib/types';
 
 const COLLECTION_NAME = 'workout-templates';
@@ -25,7 +25,7 @@ export async function createWorkoutTemplate(
   templateData: Omit<WorkoutTemplate, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   try {
-    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+    const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...templateData,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -39,7 +39,7 @@ export async function createWorkoutTemplate(
 
 export async function getWorkoutTemplate(id: string): Promise<WorkoutTemplate | null> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -54,7 +54,7 @@ export async function getWorkoutTemplate(id: string): Promise<WorkoutTemplate | 
 
 export async function getAllWorkoutTemplates(): Promise<WorkoutTemplate[]> {
   try {
-    const q = query(collection(db, COLLECTION_NAME), orderBy('name'));
+    const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
     const querySnapshot = await getDocs(q);
     
     return querySnapshot.docs.map(doc => ({
@@ -70,7 +70,7 @@ export async function getAllWorkoutTemplates(): Promise<WorkoutTemplate[]> {
 export async function getWorkoutTemplatesByCreator(createdBy: string): Promise<WorkoutTemplate[]> {
   try {
     const q = query(
-      collection(db, COLLECTION_NAME), 
+      collection(getDb(), COLLECTION_NAME), 
       where('createdBy', '==', createdBy),
       orderBy('name')
     );
@@ -89,7 +89,7 @@ export async function getWorkoutTemplatesByCreator(createdBy: string): Promise<W
 export async function getPublicWorkoutTemplates(): Promise<WorkoutTemplate[]> {
   try {
     const q = query(
-      collection(db, COLLECTION_NAME), 
+      collection(getDb(), COLLECTION_NAME), 
       where('isPublic', '==', true),
       orderBy('name')
     );
@@ -110,7 +110,7 @@ export async function updateWorkoutTemplate(
   updates: Partial<Omit<WorkoutTemplate, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     await updateDoc(docRef, {
       ...updates,
       updatedAt: Timestamp.now(),
@@ -123,7 +123,7 @@ export async function updateWorkoutTemplate(
 
 export async function deleteWorkoutTemplate(id: string): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     await deleteDoc(docRef);
   } catch (error) {
     console.error('Error deleting workout template:', error);
@@ -138,11 +138,11 @@ export function subscribeToWorkoutTemplates(
   callback: (templates: WorkoutTemplate[]) => void,
   createdBy?: string
 ): () => void {
-  let q = query(collection(db, COLLECTION_NAME), orderBy('name'));
+  let q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
   
   if (createdBy) {
     q = query(
-      collection(db, COLLECTION_NAME), 
+      collection(getDb(), COLLECTION_NAME), 
       where('createdBy', '==', createdBy),
       orderBy('name')
     );

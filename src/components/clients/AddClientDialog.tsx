@@ -25,6 +25,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Plus, Pencil } from 'lucide-react';
 import { useClientStore } from '@/lib/stores/useClientStore';
 import { Client } from '@/lib/types';
@@ -232,16 +239,24 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Sessions/Week</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        min={0}
-                        max={14}
-                        placeholder="e.g., 3"
-                        {...field}
-                        value={field.value ?? ''}
-                      />
-                    </FormControl>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === '' ? undefined : parseInt(value, 10))}
+                      value={field.value?.toString() ?? ''}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select target" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map((num) => (
+                          <SelectItem key={num} value={num.toString()}>
+                            {num} {num === 1 ? 'session' : 'sessions'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormDescription className="text-xs">
                       Target sessions
                     </FormDescription>

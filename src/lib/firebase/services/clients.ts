@@ -12,7 +12,7 @@ import {
   onSnapshot,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import { Client, PersonalRecord, SessionCounts, RecentExercisePerformance, ClientRecentPerformance } from '@/lib/types';
 
 const COLLECTION_NAME = 'clients';
@@ -31,7 +31,7 @@ export async function createClient(clientData: Omit<Client, 'id' | 'createdAt' |
       return acc;
     }, {} as Record<string, any>);
 
-    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+    const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...cleanData,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -47,7 +47,7 @@ export async function createClient(clientData: Omit<Client, 'id' | 'createdAt' |
 
 export async function getClient(id: string): Promise<Client | null> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -62,10 +62,10 @@ export async function getClient(id: string): Promise<Client | null> {
 
 export async function getAllClients(includeDeleted = false): Promise<Client[]> {
   try {
-    let q = query(collection(db, COLLECTION_NAME), orderBy('name'));
+    let q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
     
     if (!includeDeleted) {
-      q = query(collection(db, COLLECTION_NAME), where('isDeleted', '==', false), orderBy('name'));
+      q = query(collection(getDb(), COLLECTION_NAME), where('isDeleted', '==', false), orderBy('name'));
     }
     
     const querySnapshot = await getDocs(q);
@@ -90,7 +90,7 @@ export async function updateClient(id: string, updates: Partial<Omit<Client, 'id
       return acc;
     }, {} as Record<string, any>);
 
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     await updateDoc(docRef, {
       ...cleanUpdates,
       updatedAt: Timestamp.now(),
@@ -103,7 +103,7 @@ export async function updateClient(id: string, updates: Partial<Omit<Client, 'id
 
 export async function softDeleteClient(id: string): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     await updateDoc(docRef, {
       isDeleted: true,
       deletedAt: Timestamp.now(),
@@ -117,7 +117,7 @@ export async function softDeleteClient(id: string): Promise<void> {
 
 export async function permanentDeleteClient(id: string): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     await deleteDoc(docRef);
   } catch (error) {
     console.error('Error permanently deleting client:', error);
@@ -127,7 +127,7 @@ export async function permanentDeleteClient(id: string): Promise<void> {
 
 export async function restoreClient(id: string): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     await updateDoc(docRef, {
       isDeleted: false,
       deletedAt: null,
@@ -269,10 +269,10 @@ export async function getAllRecentExercisePerformance(
  * Real-time subscription to clients
  */
 export function subscribeToClients(callback: (clients: Client[]) => void, includeDeleted = false): () => void {
-  let q = query(collection(db, COLLECTION_NAME), orderBy('name'));
+  let q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
   
   if (!includeDeleted) {
-    q = query(collection(db, COLLECTION_NAME), where('isDeleted', '==', false), orderBy('name'));
+    q = query(collection(getDb(), COLLECTION_NAME), where('isDeleted', '==', false), orderBy('name'));
   }
   
   return onSnapshot(q, (querySnapshot) => {
