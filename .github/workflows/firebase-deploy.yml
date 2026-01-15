@@ -30,6 +30,7 @@ jobs:
           project_id: performancecoachapp-26bd1
 
       - name: Grant Firebase Service Account Cloud Run Permissions
+        continue-on-error: true
         run: |
           echo "🔐 Granting Cloud Run permissions to Firebase service account..."
           # Get the Firebase service account email from the service account JSON
@@ -40,16 +41,16 @@ jobs:
           gcloud projects add-iam-policy-binding performancecoachapp-26bd1 \
             --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
             --role="roles/run.viewer" \
-            --condition=None || echo "⚠️  Permission may already exist, continuing..."
+            --condition=None || echo "⚠️  Permission granting failed (insufficient privileges), continuing..."
           
           # Also grant Cloud Run Invoker if needed
           gcloud run services add-iam-policy-binding pca-app \
             --region=us-central1 \
             --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
             --role="roles/run.invoker" \
-            --condition=None || echo "⚠️  Invoker permission may already exist, continuing..."
+            --condition=None || echo "⚠️  Invoker permission granting failed, continuing..."
           
-          echo "✅ Permissions granted"
+          echo "✅ Permission check complete"
 
       - name: Submit Cloud Build
         id: cloud-build
@@ -64,10 +65,15 @@ jobs:
 
       - name: Get Cloud Run Service URL
         id: service-url
+        continue-on-error: true
         run: |
-          SERVICE_URL=$(gcloud run services describe pca-app --region us-central1 --format 'value(status.url)' --project performancecoachapp-26bd1)
+          SERVICE_URL=$(gcloud run services describe pca-app --region us-central1 --format 'value(status.url)' --project performancecoachapp-26bd1 || echo "")
           echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
-          echo "🌐 Cloud Run Service URL: $SERVICE_URL"
+          if [ -n "$SERVICE_URL" ]; then
+            echo "🌐 Cloud Run Service URL: $SERVICE_URL"
+          else
+            echo "⚠️ Could not retrieve Service URL (permissions issue?)"
+          fi
 
       - name: Deploy Firebase Hosting
         id: firebase-deploy
