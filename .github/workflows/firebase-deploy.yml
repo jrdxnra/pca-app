@@ -78,12 +78,15 @@ jobs:
       - name: Deploy Firebase Hosting
         id: firebase-deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
+        env:
+          FIREBASE_CLI_EXPERIMENTS: webframeworks
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           projectId: performancecoachapp-26bd1
           channelId: live
           target: performancecoach
+          entryPoint: .
 
       - name: Deployment Summary
         run: |
