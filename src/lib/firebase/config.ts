@@ -148,10 +148,8 @@ async function waitForFirebaseConfig(maxWait = 2000): Promise<boolean> {
 
 // Export getter function - always returns a valid Firestore instance or throws
 export function getDb(): Firestore {
-  // Firestore only works on the client side
-  if (typeof window === 'undefined') {
-    throw new Error('Firestore can only be used on the client side. This function was called during server-side rendering.');
-  }
+  // Allow server-side execution for API routes
+  // The check for window is removed to allow server-side usage (e.g. in API routes)
   
   try {
     return initializeDb();
@@ -180,7 +178,8 @@ export function getDb(): Firestore {
 // Async version for cases where we can wait for config
 export async function getDbAsync(): Promise<Firestore> {
   if (typeof window === 'undefined') {
-    throw new Error('Firestore can only be used on the client side.');
+    // Server-side: no need to wait for window injection, just initialize
+    return initializeDb();
   }
 
   // Wait for config if needed
