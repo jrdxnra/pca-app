@@ -25,12 +25,25 @@ jobs:
           project_id: performancecoachapp-26bd1
 
       - name: Submit Cloud Build
+        id: cloud-build
         run: |
+          echo "🔨 Starting Cloud Build deployment..."
+          echo "📦 Commit: ${GITHUB_SHA::7}"
+          echo "🌿 Branch: ${GITHUB_REF#refs/heads/}"
           gcloud builds submit \
             --config=cloudbuild.yaml \
             --substitutions=SHORT_SHA=${GITHUB_SHA::7},_NEXT_PUBLIC_FIREBASE_API_KEY="${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}",_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}",_NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}",_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}",_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}",_NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}",_GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}",_GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}",_GOOGLE_REDIRECT_URI="${{ secrets.GOOGLE_REDIRECT_URI }}"
+          echo "✅ Cloud Build completed successfully"
+
+      - name: Get Cloud Run Service URL
+        id: service-url
+        run: |
+          SERVICE_URL=$(gcloud run services describe pca-app --region us-central1 --format 'value(status.url)' --project performancecoachapp-26bd1)
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "🌐 Cloud Run Service URL: $SERVICE_URL"
 
       - name: Deploy Firebase Hosting
+        id: firebase-deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
@@ -38,3 +51,17 @@ jobs:
           projectId: performancecoachapp-26bd1
           channelId: live
           target: performancecoach
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${GITHUB_SHA::7}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${GITHUB_REF#refs/heads/}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Cloud Run URL:** ${{ steps.service-url.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Your app is now live on Firebase!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "You can start testing your changes now." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**View deployment:** https://console.firebase.google.com/project/performancecoachapp-26bd1/hosting" >> $GITHUB_STEP_SUMMARY
