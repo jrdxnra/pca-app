@@ -66,9 +66,27 @@ function ensureApp() {
   if (!app) {
     const config = getPublicFirebaseConfig();
     if (config.apiKey && config.projectId && config.authDomain && config.appId) {
-      app = getApps().length ? getApp() : initializeApp(config);
+      try {
+        app = getApps().length ? getApp() : initializeApp(config);
+      } catch (error) {
+        console.error('Error initializing Firebase app:', error);
+        return undefined;
+      }
     } else {
       // In browser, config might be injected later via window.__FIREBASE_CONFIG__
+      // Try to wait a bit if we're in the browser
+      if (typeof window !== 'undefined') {
+        // Check if config is available now (script might have loaded)
+        const retryConfig = getPublicFirebaseConfig();
+        if (retryConfig.apiKey && retryConfig.projectId && retryConfig.authDomain && retryConfig.appId) {
+          try {
+            app = getApps().length ? getApp() : initializeApp(retryConfig);
+            return app;
+          } catch (error) {
+            console.error('Error initializing Firebase app on retry:', error);
+          }
+        }
+      }
       return undefined;
     }
   }
@@ -83,9 +101,18 @@ function initializeDb(): Firestore {
   if (!dbInstance) {
     const firebaseApp = ensureApp();
     if (!firebaseApp) {
+      // Log a helpful error message
+      console.error('Firestore not initialized, returning defaults');
+      console.error('Firebase configuration is missing. Please ensure Firebase configuration is available in window.__FIREBASE_CONFIG__ or environment variables.');
+      // Return a mock that will throw clear errors when used
       throw new Error('Firebase not initialized. Please ensure Firebase configuration is available in window.__FIREBASE_CONFIG__ or environment variables.');
     }
-    dbInstance = getFirestore(firebaseApp);
+    try {
+      dbInstance = getFirestore(firebaseApp);
+    } catch (error) {
+      console.error('Error initializing Firestore:', error);
+      throw error;
+    }
   }
   return dbInstance;
 }
@@ -101,30 +128,45 @@ function initializeAuth(): Auth {
   return authInstance;
 }
 
-// Export getter function
+// Export getter function - always returns a valid Firestore instance or throws
 export function getDb(): Firestore {
-  return initializeDb();
+  // Firestore only works on the client side
+  if (typeof window === 'undefined') {
+    throw new Error('Firestore can only be used on the client side. This function was called during server-side rendering.');
+  }
+  
+  try {
+    return initializeDb();
+  } catch (error) {
+    // Re-throw with more context
+    console.error('Failed to get Firestore instance:', error);
+    throw error;
+  }
 }
 
-// Export direct access - will throw if Firebase isn't initialized yet
-// This ensures we get clear errors instead of mysterious "collection() expects Firestore" errors
-export const db: Firestore = (() => {
-  // Try to initialize immediately if config is available
-  const firebaseApp = ensureApp();
-  if (firebaseApp) {
-    return getFirestore(firebaseApp);
+// Export direct access - use getDb() instead for better error handling
+// This is kept for backwards compatibility but should be avoided
+// We use a getter function to defer initialization until first access
+let _db: Firestore | null = null;
+export const db = new Proxy({} as Firestore, {
+  get(_target, prop) {
+    if (!_db) {
+      _db = getDb();
+    }
+    const value = (_db as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(_db);
+    }
+    return value;
   }
-  // If not available, return a placeholder that will throw helpful errors
-  // Services should handle initialization timing issues
-  return undefined as unknown as Firestore;
-})();
+});
 
 export const auth: Auth = (() => {
   const firebaseApp = ensureApp();
   if (firebaseApp) {
     return getAuth(firebaseApp);
   }
-  return undefined as unknown as Auth;
+  throw new Error('Firebase Auth not initialized. Please ensure Firebase configuration is available.');
 })();
 
 export default app;
