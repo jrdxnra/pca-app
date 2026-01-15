@@ -12,7 +12,7 @@ import {
   onSnapshot,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import { Program, ScheduledWorkout } from '@/lib/types';
 
 const PROGRAMS_COLLECTION = 'programs';
@@ -26,7 +26,7 @@ export async function createProgram(
   programData: Omit<Program, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   try {
-    const docRef = await addDoc(collection(db, PROGRAMS_COLLECTION), {
+    const docRef = await addDoc(collection(getDb(), PROGRAMS_COLLECTION), {
       ...programData,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -40,7 +40,7 @@ export async function createProgram(
 
 export async function getProgram(id: string): Promise<Program | null> {
   try {
-    const docRef = doc(db, PROGRAMS_COLLECTION, id);
+    const docRef = doc(getDb(), PROGRAMS_COLLECTION, id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -55,7 +55,7 @@ export async function getProgram(id: string): Promise<Program | null> {
 
 export async function getAllPrograms(): Promise<Program[]> {
   try {
-    const q = query(collection(db, PROGRAMS_COLLECTION), orderBy('startDate', 'desc'));
+    const q = query(collection(getDb(), PROGRAMS_COLLECTION), orderBy('startDate', 'desc'));
     const querySnapshot = await getDocs(q);
     
     return querySnapshot.docs.map(doc => ({
@@ -71,7 +71,7 @@ export async function getAllPrograms(): Promise<Program[]> {
 export async function getProgramsByClient(clientId: string): Promise<Program[]> {
   try {
     const q = query(
-      collection(db, PROGRAMS_COLLECTION), 
+      collection(getDb(), PROGRAMS_COLLECTION), 
       where('clientId', '==', clientId),
       orderBy('startDate', 'desc')
     );
@@ -92,7 +92,7 @@ export async function updateProgram(
   updates: Partial<Omit<Program, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
-    const docRef = doc(db, PROGRAMS_COLLECTION, id);
+    const docRef = doc(getDb(), PROGRAMS_COLLECTION, id);
     await updateDoc(docRef, {
       ...updates,
       updatedAt: Timestamp.now(),
@@ -105,7 +105,7 @@ export async function updateProgram(
 
 export async function deleteProgram(id: string): Promise<void> {
   try {
-    const docRef = doc(db, PROGRAMS_COLLECTION, id);
+    const docRef = doc(getDb(), PROGRAMS_COLLECTION, id);
     await deleteDoc(docRef);
   } catch (error) {
     console.error('Error deleting program:', error);
@@ -121,7 +121,7 @@ export async function createScheduledWorkout(
   workoutData: Omit<ScheduledWorkout, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   try {
-    const docRef = await addDoc(collection(db, SCHEDULED_WORKOUTS_COLLECTION), {
+    const docRef = await addDoc(collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION), {
       ...workoutData,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -135,7 +135,7 @@ export async function createScheduledWorkout(
 
 export async function getScheduledWorkout(id: string): Promise<ScheduledWorkout | null> {
   try {
-    const docRef = doc(db, SCHEDULED_WORKOUTS_COLLECTION, id);
+    const docRef = doc(getDb(), SCHEDULED_WORKOUTS_COLLECTION, id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -151,7 +151,7 @@ export async function getScheduledWorkout(id: string): Promise<ScheduledWorkout 
 export async function getScheduledWorkoutsByProgram(programId: string): Promise<ScheduledWorkout[]> {
   try {
     const q = query(
-      collection(db, SCHEDULED_WORKOUTS_COLLECTION), 
+      collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION), 
       where('programId', '==', programId),
       orderBy('date')
     );
@@ -170,7 +170,7 @@ export async function getScheduledWorkoutsByProgram(programId: string): Promise<
 export async function getScheduledWorkoutsByClient(clientId: string): Promise<ScheduledWorkout[]> {
   try {
     const q = query(
-      collection(db, SCHEDULED_WORKOUTS_COLLECTION), 
+      collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION), 
       where('clientId', '==', clientId),
       orderBy('date')
     );
@@ -189,7 +189,7 @@ export async function getScheduledWorkoutsByClient(clientId: string): Promise<Sc
 export async function getAllScheduledWorkouts(): Promise<ScheduledWorkout[]> {
   try {
     const q = query(
-      collection(db, SCHEDULED_WORKOUTS_COLLECTION), 
+      collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION), 
       orderBy('date')
     );
     const querySnapshot = await getDocs(q);
@@ -211,7 +211,7 @@ export async function getScheduledWorkoutsByDateRange(
 ): Promise<ScheduledWorkout[]> {
   try {
     const q = query(
-      collection(db, SCHEDULED_WORKOUTS_COLLECTION),
+      collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION),
       where('clientId', '==', clientId),
       where('date', '>=', Timestamp.fromDate(startDate)),
       where('date', '<=', Timestamp.fromDate(endDate)),
@@ -234,7 +234,7 @@ export async function updateScheduledWorkout(
   updates: Partial<Omit<ScheduledWorkout, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
-    const docRef = doc(db, SCHEDULED_WORKOUTS_COLLECTION, id);
+    const docRef = doc(getDb(), SCHEDULED_WORKOUTS_COLLECTION, id);
     await updateDoc(docRef, {
       ...updates,
       updatedAt: Timestamp.now(),
@@ -247,7 +247,7 @@ export async function updateScheduledWorkout(
 
 export async function deleteScheduledWorkout(id: string): Promise<void> {
   try {
-    const docRef = doc(db, SCHEDULED_WORKOUTS_COLLECTION, id);
+    const docRef = doc(getDb(), SCHEDULED_WORKOUTS_COLLECTION, id);
     await deleteDoc(docRef);
   } catch (error) {
     console.error('Error deleting scheduled workout:', error);
@@ -269,7 +269,7 @@ export async function scheduleWorkoutFromTemplate(
 ): Promise<string> {
   try {
     // Get the workout template
-    const templateDoc = await getDoc(doc(db, 'workout-templates', workoutTemplateId));
+    const templateDoc = await getDoc(doc(getDb(), 'workout-templates', workoutTemplateId));
     if (!templateDoc.exists()) {
       throw new Error('Workout template not found');
     }
@@ -347,7 +347,7 @@ export async function duplicateWeek(
  */
 
 export function subscribeToPrograms(callback: (programs: Program[]) => void): () => void {
-  const q = query(collection(db, PROGRAMS_COLLECTION), orderBy('startDate', 'desc'));
+  const q = query(collection(getDb(), PROGRAMS_COLLECTION), orderBy('startDate', 'desc'));
   
   return onSnapshot(q, (querySnapshot) => {
     const programs = querySnapshot.docs.map(doc => ({
@@ -366,7 +366,7 @@ export function subscribeToScheduledWorkouts(
   callback: (workouts: ScheduledWorkout[]) => void
 ): () => void {
   const q = query(
-    collection(db, SCHEDULED_WORKOUTS_COLLECTION),
+    collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION),
     where('programId', '==', programId),
     orderBy('date')
   );

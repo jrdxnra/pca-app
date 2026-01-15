@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc, Timestamp, deleteField } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import type { CalendarSyncConfig, LocationAbbreviation } from '@/lib/google-calendar/types';
 
 const DOC_ID = 'calendar-config';
@@ -115,7 +115,7 @@ export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promi
     console.warn('Firestore not initialized, returning defaults');
     return defaults;
   }
-  const docRef = doc(db, 'configuration', DOC_ID);
+  const docRef = doc(getDb(), 'configuration', DOC_ID);
   const snap = await getDoc(docRef);
 
   if (!snap.exists()) {
@@ -158,7 +158,7 @@ export async function updateCalendarSyncConfig(updates: Partial<CalendarSyncConf
     console.warn('Firestore not initialized, skipping save');
     return;
   }
-  const docRef = doc(db, 'configuration', DOC_ID);
+  const docRef = doc(getDb(), 'configuration', DOC_ID);
 
   const payload: Record<string, unknown> = {};
   if (updates.selectedCalendarId !== undefined) payload.selectedCalendarId = updates.selectedCalendarId ?? null;

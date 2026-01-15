@@ -10,7 +10,7 @@ import {
   onSnapshot,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import { WorkoutStructureTemplate, WorkoutStructureTemplateSection } from '@/lib/types';
 
 const COLLECTION_NAME = 'workoutStructureTemplates';
@@ -22,7 +22,7 @@ export const createWorkoutStructureTemplate = async (
   template: Omit<WorkoutStructureTemplate, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>
 ): Promise<string> => {
   try {
-    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+    const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...template,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -43,7 +43,7 @@ export const updateWorkoutStructureTemplate = async (
   updates: Partial<Omit<WorkoutStructureTemplate, 'id' | 'createdAt' | 'createdBy'>>
 ): Promise<void> => {
   try {
-    await updateDoc(doc(db, COLLECTION_NAME, id), {
+    await updateDoc(doc(getDb(), COLLECTION_NAME, id), {
       ...updates,
       updatedAt: Timestamp.now()
     });
@@ -58,7 +58,7 @@ export const updateWorkoutStructureTemplate = async (
  */
 export const deleteWorkoutStructureTemplate = async (id: string): Promise<void> => {
   try {
-    await deleteDoc(doc(db, COLLECTION_NAME, id));
+    await deleteDoc(doc(getDb(), COLLECTION_NAME, id));
   } catch (error) {
     console.error('Error deleting workout structure template:', error);
     throw error;
@@ -70,7 +70,7 @@ export const deleteWorkoutStructureTemplate = async (id: string): Promise<void> 
  */
 export const fetchWorkoutStructureTemplates = async (): Promise<WorkoutStructureTemplate[]> => {
   try {
-    const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'asc'));
+    const q = query(collection(getDb(), COLLECTION_NAME), orderBy('createdAt', 'asc'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
@@ -88,7 +88,7 @@ export const fetchWorkoutStructureTemplates = async (): Promise<WorkoutStructure
 export const subscribeToWorkoutStructureTemplates = (
   callback: (templates: WorkoutStructureTemplate[]) => void
 ): () => void => {
-  const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'asc'));
+  const q = query(collection(getDb(), COLLECTION_NAME), orderBy('createdAt', 'asc'));
   
   return onSnapshot(q, (querySnapshot) => {
     const templates = querySnapshot.docs.map(doc => ({

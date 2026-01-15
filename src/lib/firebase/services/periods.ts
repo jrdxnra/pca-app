@@ -9,7 +9,7 @@ import {
   orderBy,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 
 export interface Period {
   id: string;
@@ -24,7 +24,8 @@ export interface Period {
 
 export const createPeriod = async (period: Omit<Period, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<string> => {
   try {
-    const docRef = await addDoc(collection(db, 'periods'), {
+    const dbInstance = getDb();
+    const docRef = await addDoc(collection(dbInstance, 'periods'), {
       ...period,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -39,7 +40,8 @@ export const createPeriod = async (period: Omit<Period, 'id' | 'createdAt' | 'up
 
 export const updatePeriod = async (id: string, updates: Partial<Omit<Period, 'id' | 'createdAt' | 'createdBy'>>): Promise<void> => {
   try {
-    const periodRef = doc(db, 'periods', id);
+    const dbInstance = getDb();
+    const periodRef = doc(dbInstance, 'periods', id);
     await updateDoc(periodRef, {
       ...updates,
       updatedAt: Timestamp.now()
@@ -52,7 +54,8 @@ export const updatePeriod = async (id: string, updates: Partial<Omit<Period, 'id
 
 export const deletePeriod = async (id: string): Promise<void> => {
   try {
-    const periodRef = doc(db, 'periods', id);
+    const dbInstance = getDb();
+    const periodRef = doc(dbInstance, 'periods', id);
     await deleteDoc(periodRef);
   } catch (error) {
     console.error('Error deleting period:', error);
@@ -62,7 +65,8 @@ export const deletePeriod = async (id: string): Promise<void> => {
 
 export const fetchPeriods = async (): Promise<Period[]> => {
   try {
-    const q = query(collection(db, 'periods'), orderBy('order', 'asc'));
+    const dbInstance = getDb();
+    const q = query(collection(dbInstance, 'periods'), orderBy('order', 'asc'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
