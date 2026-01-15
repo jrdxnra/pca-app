@@ -128,6 +128,24 @@ function initializeAuth(): Auth {
   return authInstance;
 }
 
+// Helper to wait for Firebase config in browser (if script tag hasn't loaded yet)
+async function waitForFirebaseConfig(maxWait = 2000): Promise<boolean> {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const startTime = Date.now();
+  while (Date.now() - startTime < maxWait) {
+    const config = getPublicFirebaseConfig();
+    if (config.apiKey && config.projectId && config.authDomain && config.appId) {
+      return true;
+    }
+    // Wait a bit before checking again
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  return false;
+}
+
 // Export getter function - always returns a valid Firestore instance or throws
 export function getDb(): Firestore {
   // Firestore only works on the client side
@@ -138,10 +156,40 @@ export function getDb(): Firestore {
   try {
     return initializeDb();
   } catch (error) {
+    // If initialization failed, try waiting for config (in case script tag hasn't loaded)
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('Firebase not initialized') || errorMessage.includes('configuration is missing')) {
+      // Try to wait for config synchronously (quick check)
+      const config = getPublicFirebaseConfig();
+      if (config.apiKey && config.projectId && config.authDomain && config.appId) {
+        // Config is now available, try again
+        try {
+          return initializeDb();
+        } catch (retryError) {
+          console.error('Failed to initialize Firestore after config became available:', retryError);
+          throw retryError;
+        }
+      }
+    }
     // Re-throw with more context
     console.error('Failed to get Firestore instance:', error);
     throw error;
   }
+}
+
+// Async version for cases where we can wait for config
+export async function getDbAsync(): Promise<Firestore> {
+  if (typeof window === 'undefined') {
+    throw new Error('Firestore can only be used on the client side.');
+  }
+
+  // Wait for config if needed
+  const configAvailable = await waitForFirebaseConfig();
+  if (!configAvailable) {
+    throw new Error('Firebase configuration not available after waiting. Please check your environment variables or window.__FIREBASE_CONFIG__.');
+  }
+
+  return initializeDb();
 }
 
 // Export direct access - use getDb() instead for better error handling
