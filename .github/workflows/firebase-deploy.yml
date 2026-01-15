@@ -24,6 +24,28 @@ jobs:
         with:
           project_id: performancecoachapp-26bd1
 
+      - name: Grant Firebase Service Account Cloud Run Permissions
+        run: |
+          echo "🔐 Granting Cloud Run permissions to Firebase service account..."
+          # Get the Firebase service account email from the service account JSON
+          SERVICE_ACCOUNT_EMAIL=$(echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' | jq -r '.client_email')
+          echo "Service Account: $SERVICE_ACCOUNT_EMAIL"
+          
+          # Grant Cloud Run Viewer role (needed to verify Cloud Run services exist)
+          gcloud projects add-iam-policy-binding performancecoachapp-26bd1 \
+            --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+            --role="roles/run.viewer" \
+            --condition=None || echo "⚠️  Permission may already exist, continuing..."
+          
+          # Also grant Cloud Run Invoker if needed
+          gcloud run services add-iam-policy-binding pca-app \
+            --region=us-central1 \
+            --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+            --role="roles/run.invoker" \
+            --condition=None || echo "⚠️  Invoker permission may already exist, continuing..."
+          
+          echo "✅ Permissions granted"
+
       - name: Submit Cloud Build
         id: cloud-build
         run: |
