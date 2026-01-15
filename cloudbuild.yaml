@@ -17,11 +17,16 @@ steps:
       - 'NEXT_PUBLIC_FIREBASE_APP_ID=${_NEXT_PUBLIC_FIREBASE_APP_ID}'
       - '-t'
       - 'gcr.io/$PROJECT_ID/pca-app:$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/pca-app:latest'
       - '.'
   
   # Push the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/pca-app:$SHORT_SHA']
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'gcr.io/$PROJECT_ID/pca-app'
   
   # Deploy container image to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
