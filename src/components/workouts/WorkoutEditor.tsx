@@ -890,7 +890,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                                 {abbrevList.map((item, idx) => (
                                   <span
                                     key={idx}
-                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white"
+                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
                                     style={{ backgroundColor: item.color }}
                                   >
                                     {item.abbrev}
@@ -1030,19 +1030,19 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                     <SelectItem key={template.id} value={template.id}>
                       <div className="flex items-center gap-2 w-full">
                         <span>{template.name}</span>
-                        {abbrevList.length > 0 && (
-                          <div className="flex items-center gap-1 ml-auto">
-                            {abbrevList.map((item, idx) => (
-                              <span
-                                key={idx}
-                                className="inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white"
-                                style={{ backgroundColor: item.color }}
-                              >
-                                {item.abbrev}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                            {abbrevList.length > 0 && (
+                              <div className="flex items-center gap-1 ml-auto">
+                                {abbrevList.map((item, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
+                                    style={{ backgroundColor: item.color }}
+                                  >
+                                    {item.abbrev}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                       </div>
                     </SelectItem>
                   );
@@ -1330,7 +1330,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                                 {abbrevList.map((item, idx) => (
                                   <span
                                     key={idx}
-                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white"
+                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
                                     style={{ backgroundColor: item.color }}
                                   >
                                     {item.abbrev}
