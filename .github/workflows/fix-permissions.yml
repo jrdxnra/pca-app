@@ -1,0 +1,39 @@
+name: Fix Permissions
+
+on:
+  push:
+    branches:
+      - fix-permissions
+
+jobs:
+  grant-permissions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: performancecoachapp-26bd1
+
+      - name: Grant Cloud Run Viewer Role
+        run: |
+          # Get the service account email
+          SERVICE_ACCOUNT_EMAIL=$(echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' | jq -r '.client_email')
+          echo "Granting permissions to: $SERVICE_ACCOUNT_EMAIL"
+          
+          # Grant Cloud Run Viewer
+          gcloud projects add-iam-policy-binding performancecoachapp-26bd1 \
+            --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+            --role="roles/run.viewer" \
+            --condition=None
+            
+          # Grant Cloud Run Invoker (just in case)
+          gcloud run services add-iam-policy-binding pca-app \
+            --region=us-central1 \
+            --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+            --role="roles/run.invoker" \
+            --condition=None || echo "Invoker role might already exist or service not found yet"
