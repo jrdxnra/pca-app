@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, GripVertical, X, Save } from 'lucide-react';
 import {
   ClientWorkout,
@@ -16,6 +17,51 @@ import {
   ClientWorkoutTargetWorkload,
   WorkoutStructureTemplate
 } from '@/lib/types';
+
+// Helper function to abbreviate workout type names
+function abbreviateWorkoutType(name: string): string {
+  const abbreviations: Record<string, string> = {
+    'power prep': 'PP',
+    'performance prep': 'PP',
+    'movement prep': 'MP',
+    'movement preparation': 'MP',
+    'ballistics': 'BAL',
+    'ballistic': 'BAL',
+    'strength 1': 'S1',
+    'strength1': 'S1',
+    'strength 2': 'S2',
+    'strength2': 'S2',
+    'energy system development': 'ESD',
+    'esd': 'ESD',
+    'conditioning': 'COND',
+    'mobility': 'MOB',
+    'activation': 'ACT',
+    'warm-up': 'WU',
+    'warmup': 'WU',
+    'cool-down': 'CD',
+    'cooldown': 'CD',
+  };
+  
+  const lowerName = name.toLowerCase().trim();
+  return abbreviations[lowerName] || name.substring(0, 3).toUpperCase();
+}
+
+// Helper function to get abbreviation list for a template with colors
+function getTemplateAbbreviationList(template: WorkoutStructureTemplate, workoutTypes: any[]): Array<{ abbrev: string; color: string }> {
+  if (!template.sections || template.sections.length === 0) {
+    return [];
+  }
+  
+  return template.sections
+    .sort((a, b) => a.order - b.order)
+    .map(section => {
+      const workoutType = workoutTypes.find(wt => wt.id === section.workoutTypeId);
+      return {
+        abbrev: abbreviateWorkoutType(section.workoutTypeName),
+        color: workoutType?.color || '#6b7280'
+      };
+    });
+}
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
@@ -824,19 +870,40 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
               {/* Template Selector */}
               <div>
                 <Label htmlFor="template">Workout Structure Template</Label>
-                <select
-                  id="template"
+                <Select
                   value={currentTemplateId || 'none'}
-                  onChange={handleChangeTemplate}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
                 >
-                  <option value="none">None (Custom)</option>
-                  {workoutStructureTemplates.map(template => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (Custom)</SelectItem>
+                    {workoutStructureTemplates.map(template => {
+                      const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
+                      return (
+                        <SelectItem key={template.id} value={template.id}>
+                          <div className="flex items-center gap-2 w-full">
+                            <span>{template.name}</span>
+                            {abbrevList.length > 0 && (
+                              <div className="flex items-center gap-1 ml-auto">
+                                {abbrevList.map((item, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white"
+                                    style={{ backgroundColor: item.color }}
+                                  >
+                                    {item.abbrev}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
@@ -948,18 +1015,40 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           {/* Template Selector - First */}
           <div className="flex items-center gap-1">
             <label className="text-xs font-medium">Structure:</label>
-            <select
+            <Select
               value={currentTemplateId || 'none'}
-              onChange={handleChangeTemplate}
-              className="text-xs border rounded p-1 flex-1"
+              onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
             >
-              <option value="none">None (Custom)</option>
-              {workoutStructureTemplates.map(template => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="text-xs flex-1 h-7">
+                <SelectValue placeholder="Select structure" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (Custom)</SelectItem>
+                {workoutStructureTemplates.map(template => {
+                  const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
+                  return (
+                    <SelectItem key={template.id} value={template.id}>
+                      <div className="flex items-center gap-2 w-full">
+                        <span>{template.name}</span>
+                        {abbrevList.length > 0 && (
+                          <div className="flex items-center gap-1 ml-auto">
+                            {abbrevList.map((item, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white"
+                                style={{ backgroundColor: item.color }}
+                              >
+                                {item.abbrev}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Title and Time - Second */}
@@ -1221,19 +1310,40 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
               </div>
               <div>
                 <Label htmlFor="structure">Workout Structure</Label>
-                <select
-                  id="structure"
+                <Select
                   value={currentTemplateId || 'none'}
-                  onChange={handleChangeTemplate}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
                 >
-                  <option value="none">None (Custom)</option>
-                  {workoutStructureTemplates.map(template => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select structure" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (Custom)</SelectItem>
+                    {workoutStructureTemplates.map(template => {
+                      const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
+                      return (
+                        <SelectItem key={template.id} value={template.id}>
+                          <div className="flex items-center gap-2 w-full">
+                            <span>{template.name}</span>
+                            {abbrevList.length > 0 && (
+                              <div className="flex items-center gap-1 ml-auto">
+                                {abbrevList.map((item, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white"
+                                    style={{ backgroundColor: item.color }}
+                                  >
+                                    {item.abbrev}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>

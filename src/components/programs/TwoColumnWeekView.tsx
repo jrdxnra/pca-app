@@ -157,23 +157,6 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     return { allDayEvents: allDay, timedEvents: timed };
   }, [calendarEvents]);
   
-  // Debug: Log workouts received
-  React.useEffect(() => {
-    if (workouts.length > 0) {
-      console.log('TwoColumnWeekView received workouts:', {
-        count: workouts.length,
-        workouts: workouts.map(w => ({
-          id: w.id,
-          category: w.categoryName,
-          time: w.time,
-          date: format(safeToDate(w.date), 'yyyy-MM-dd'),
-          clientId: w.clientId
-        }))
-      });
-    } else {
-      console.log('TwoColumnWeekView received 0 workouts');
-    }
-  }, [workouts]);
   const dayColumnsRef = useRef<HTMLDivElement>(null);
 
   // Helper to safely convert dates
@@ -450,21 +433,6 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     const slotHour = slotAppTime.hour;
     const slotMinute = slotAppTime.minute;
     
-    // Debug: Log all workouts when checking
-    if (workouts.length > 0 && slotHour === 6 && slotMinute === 0) {
-      console.log('🔍 getWorkoutsForTimeSlot - Checking workouts:', {
-        targetDate: targetDateStr,
-        slotTime: `${slotHour}:${String(slotMinute).padStart(2, '0')}`,
-        totalWorkouts: workouts.length,
-        workouts: workouts.map(w => ({
-          id: w.id,
-          date: format(safeToDate(w.date), 'yyyy-MM-dd'),
-          time: w.time,
-          category: w.categoryName
-        }))
-      });
-    }
-    
     const matchingWorkouts = workouts.filter(workout => {
       const workoutDate = safeToDate(workout.date);
       workoutDate.setHours(12, 0, 0, 0); // Use noon to avoid DST issues
@@ -500,28 +468,6 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
       const workoutHour = parseInt(timeParts[0], 10);
       const workoutMinute = parseInt(timeParts[1] || '0', 10);
       
-      // Debug specific matches
-      if (workoutDateStr === targetDateStr && workoutHour === slotHour) {
-        console.log('🔍 Checking workout match:', {
-          workoutId: workout.id,
-          workoutDate: workoutDateStr,
-          targetDate: targetDateStr,
-          workoutTime: workout.time,
-          parsedTime: `${workoutHour}:${String(workoutMinute).padStart(2, '0')}`,
-          slotTime: `${slotHour}:${String(slotMinute).padStart(2, '0')}`,
-          willMatch: (() => {
-            if (workoutMinute === 0) {
-              return workoutHour === slotHour && slotMinute === 0;
-            }
-            if (workoutMinute === 30) {
-              return workoutHour === slotHour && slotMinute === 30;
-            }
-            return workoutHour === slotHour && 
-                   (workoutMinute >= slotMinute && workoutMinute < slotMinute + 30);
-          })()
-        });
-      }
-      
       // If workout starts at a full hour (minute === 0), only show it in the full hour slot (not the half hour slot)
       // This allows it to span both rows visually
       if (workoutMinute === 0) {
@@ -552,15 +498,6 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
       
       return true;
     });
-    
-    if (deduplicatedWorkouts.length > 0) {
-      console.log('✅ Found matching workouts:', {
-        date: targetDateStr,
-        slotTime: `${slotHour}:${String(slotMinute).padStart(2, '0')}`,
-        count: deduplicatedWorkouts.length,
-        workouts: deduplicatedWorkouts.map(w => ({ id: w.id, time: w.time, category: w.categoryName }))
-      });
-    }
     
     return deduplicatedWorkouts;
   };

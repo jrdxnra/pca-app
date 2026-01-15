@@ -8,7 +8,7 @@ import {
   Timestamp,
   onSnapshot
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import { Client, Program, ScheduledWorkout, WorkoutTemplate, Movement, ClientWorkout } from '@/lib/types';
 
 export interface DashboardStats {
@@ -53,11 +53,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
     // Get all collections data
     const [clientsSnapshot, programsSnapshot, workoutsSnapshot, movementsSnapshot, scheduledWorkoutsSnapshot] = await Promise.all([
-      getDocs(collection(db, 'clients')),
-      getDocs(collection(db, 'programs')),
-      getDocs(collection(db, 'workout-templates')),
-      getDocs(collection(db, 'movements')),
-      getDocs(collection(db, 'scheduled-workouts'))
+      getDocs(collection(getDb(), 'clients')),
+      getDocs(collection(getDb(), 'programs')),
+      getDocs(collection(getDb(), 'workout-templates')),
+      getDocs(collection(getDb(), 'movements')),
+      getDocs(collection(getDb(), 'scheduled-workouts'))
     ]);
 
     // Process clients
@@ -110,7 +110,7 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
 
     // Get recent clients
     const recentClientsQuery = query(
-      collection(db, 'clients'),
+      collection(getDb(), 'clients'),
       where('createdAt', '>=', Timestamp.fromDate(thirtyDaysAgo)),
       orderBy('createdAt', 'desc'),
       limit(10)
@@ -119,7 +119,7 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
 
     // Get recent programs
     const recentProgramsQuery = query(
-      collection(db, 'programs'),
+      collection(getDb(), 'programs'),
       where('createdAt', '>=', Timestamp.fromDate(thirtyDaysAgo)),
       orderBy('createdAt', 'desc'),
       limit(10)
@@ -128,7 +128,7 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
 
     // Get recent completed workouts
     const recentWorkoutsQuery = query(
-      collection(db, 'scheduled-workouts'),
+      collection(getDb(), 'scheduled-workouts'),
       where('status', '==', 'completed'),
       where('updatedAt', '>=', Timestamp.fromDate(thirtyDaysAgo)),
       orderBy('updatedAt', 'desc'),
@@ -171,7 +171,7 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
       
       // Get client name
       const clientDoc = await getDocs(query(
-        collection(db, 'clients'),
+        collection(getDb(), 'clients'),
         where('__name__', '==', workout.clientId),
         limit(1)
       ));
@@ -212,7 +212,7 @@ export async function getUpcomingSessions(): Promise<UpcomingSession[]> {
 
     // Get upcoming client workouts (the actual workouts being used)
     const upcomingQuery = query(
-      collection(db, 'clientWorkouts'),
+      collection(getDb(), 'clientWorkouts'),
       where('date', '>=', Timestamp.fromDate(startOfToday)),
       where('date', '<=', Timestamp.fromDate(sevenDaysFromNow))
       // Removed orderBy to avoid composite index requirement
@@ -234,7 +234,7 @@ export async function getUpcomingSessions(): Promise<UpcomingSession[]> {
       for (let i = 0; i < clientIds.length; i += 10) {
         const batch = clientIds.slice(i, i + 10);
         const clientsQuery = query(
-          collection(db, 'clients'),
+          collection(getDb(), 'clients'),
           where('__name__', 'in', batch)
         );
         const clientsSnapshot = await getDocs(clientsQuery);
@@ -290,7 +290,7 @@ export async function getClientProgressSummary(): Promise<{
   try {
     // Get all active clients
     const clientsQuery = query(
-      collection(db, 'clients'),
+      collection(getDb(), 'clients'),
       where('isDeleted', '==', false)
     );
     const clientsSnapshot = await getDocs(clientsQuery);
@@ -302,7 +302,7 @@ export async function getClientProgressSummary(): Promise<{
       
       // Get client's scheduled workouts
       const workoutsQuery = query(
-        collection(db, 'scheduled-workouts'),
+        collection(getDb(), 'scheduled-workouts'),
         where('clientId', '==', clientDoc.id)
       );
       const workoutsSnapshot = await getDocs(workoutsQuery);
@@ -350,18 +350,18 @@ export function subscribeToDashboardStats(callback: (stats: DashboardStats) => v
   const unsubscribeFunctions: (() => void)[] = [];
 
   // Subscribe to clients changes
-  const clientsUnsubscribe = onSnapshot(collection(db, 'clients'), () => {
+  const clientsUnsubscribe = onSnapshot(collection(getDb(), 'clients'), () => {
     // Recalculate stats when any collection changes
     getDashboardStats().then(callback).catch(console.error);
   });
 
   // Subscribe to programs changes
-  const programsUnsubscribe = onSnapshot(collection(db, 'programs'), () => {
+  const programsUnsubscribe = onSnapshot(collection(getDb(), 'programs'), () => {
     getDashboardStats().then(callback).catch(console.error);
   });
 
   // Subscribe to scheduled workouts changes
-  const workoutsUnsubscribe = onSnapshot(collection(db, 'scheduled-workouts'), () => {
+  const workoutsUnsubscribe = onSnapshot(collection(getDb(), 'scheduled-workouts'), () => {
     getDashboardStats().then(callback).catch(console.error);
   });
 

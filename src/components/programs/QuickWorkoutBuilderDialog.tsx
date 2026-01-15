@@ -30,6 +30,52 @@ import { createClientWorkout, fetchWorkoutsByDateRange, deleteClientWorkout } fr
 import { Timestamp } from 'firebase/firestore';
 import { toastSuccess, toastError, toastWarning } from '@/components/ui/toaster';
 import { format } from 'date-fns';
+import { WorkoutStructureTemplate } from '@/lib/types';
+
+// Helper function to abbreviate workout type names
+function abbreviateWorkoutType(name: string): string {
+  const abbreviations: Record<string, string> = {
+    'power prep': 'PP',
+    'performance prep': 'PP',
+    'movement prep': 'MP',
+    'movement preparation': 'MP',
+    'ballistics': 'BAL',
+    'ballistic': 'BAL',
+    'strength 1': 'S1',
+    'strength1': 'S1',
+    'strength 2': 'S2',
+    'strength2': 'S2',
+    'energy system development': 'ESD',
+    'esd': 'ESD',
+    'conditioning': 'COND',
+    'mobility': 'MOB',
+    'activation': 'ACT',
+    'warm-up': 'WU',
+    'warmup': 'WU',
+    'cool-down': 'CD',
+    'cooldown': 'CD',
+  };
+  
+  const lowerName = name.toLowerCase().trim();
+  return abbreviations[lowerName] || name.substring(0, 3).toUpperCase();
+}
+
+// Helper function to get abbreviation list for a template with colors
+function getTemplateAbbreviationList(template: WorkoutStructureTemplate, workoutTypes: any[]): Array<{ abbrev: string; color: string }> {
+  if (!template.sections || template.sections.length === 0) {
+    return [];
+  }
+  
+  return template.sections
+    .sort((a, b) => a.order - b.order)
+    .map(section => {
+      const workoutType = workoutTypes.find(wt => wt.id === section.workoutTypeId);
+      return {
+        abbrev: abbreviateWorkoutType(section.workoutTypeName),
+        color: workoutType?.color || '#6b7280'
+      };
+    });
+}
 
 interface QuickWorkoutBuilderDialogProps {
   clientId: string;
@@ -69,7 +115,7 @@ export function QuickWorkoutBuilderDialog({
   const [eventIdToLink, setEventIdToLink] = useState<string | undefined>(propEventId);
 
   const { clients } = useClientStore();
-  const { workoutCategories, workoutStructureTemplates, fetchAll: fetchConfig } = useConfigurationStore();
+  const { workoutCategories, workoutStructureTemplates, workoutTypes, fetchAll: fetchConfig } = useConfigurationStore();
   const { createTestEvent, linkToWorkout, deleteEvent, events: calendarEvents, updateEvent } = useCalendarStore();
   const { findPeriodForDate } = useClientPrograms(clientId);
 
@@ -437,9 +483,25 @@ export function QuickWorkoutBuilderDialog({
                       {workoutStructureTemplates.map((template) => {
                         const category = workoutCategories.find(cat => cat.name === selectedCategory);
                         const isLinked = category?.linkedWorkoutStructureTemplateId === template.id;
+                        const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
                         return (
                           <SelectItem key={template.id} value={template.id}>
-                            {template.name}{isLinked ? ' (default)' : ''}
+                            <div className="flex items-center gap-2 w-full">
+                              <span>{template.name}{isLinked ? ' (default)' : ''}</span>
+                              {abbrevList.length > 0 && (
+                                <div className="flex items-center gap-1 ml-auto">
+                                  {abbrevList.map((item, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white"
+                                      style={{ backgroundColor: item.color }}
+                                    >
+                                      {item.abbrev}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </SelectItem>
                         );
                       })}
