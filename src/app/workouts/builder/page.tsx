@@ -1844,20 +1844,37 @@ export default function BuilderPage() {
                             }
 
                             return (
-                              <div key={dayIndex} className={`min-h-[160px] relative ${isToday ? 'bg-blue-50 border-2 border-blue-300' : (
-                                inPeriod ? 'bg-white' : 'bg-gray-50'
-                              )
-                                } ${isEditingThisDate && !isToday ? 'bg-gray-50' : ''} ${!inPeriod && !isToday ? 'opacity-60' : ''}`}>
+                              <div key={dayIndex} className={`min-h-[160px] relative ${
+                                isEditingThisDate && !isToday 
+                                  ? 'bg-amber-50 border-2 border-amber-400' 
+                                  : isToday 
+                                    ? 'bg-blue-50 border-2 border-blue-300' 
+                                    : inPeriod 
+                                      ? 'bg-white' 
+                                      : 'bg-gray-50'
+                              } ${!inPeriod && !isToday && !isEditingThisDate ? 'opacity-60' : ''}`}>
 
                                 {/* Date Header */}
-                                <div className={`px-3 py-2 border-b border-gray-100 ${isToday ? 'bg-blue-100' : 'bg-gray-50'
+                                <div className={`px-3 py-2 border-b border-gray-100 ${
+                                  isEditingThisDate && !isToday
+                                    ? 'bg-amber-100'
+                                    : isToday 
+                                      ? 'bg-blue-100' 
+                                      : 'bg-gray-50'
+                                }`}>
+                                  <div className={`text-sm font-semibold ${
+                                    isEditingThisDate && !isToday
+                                      ? 'text-amber-800 font-bold'
+                                      : isToday 
+                                        ? 'text-blue-700 font-bold' 
+                                        : 'text-gray-700'
                                   }`}>
-                                  <div className={`text-sm font-semibold ${isToday ? 'text-blue-700 font-bold' : 'text-gray-700'
-                                    }`}>
                                     {date.getDate()}
                                   </div>
                                   {isEditingThisDate && (
-                                    <div className="text-xs text-gray-600 font-medium">
+                                    <div className={`text-xs font-medium ${
+                                      isToday ? 'text-blue-600' : 'text-amber-700'
+                                    }`}>
                                       ✏️ Editing {editingWorkout?.categoryName || createWorkoutData?.category || ''}
                                     </div>
                                   )}

@@ -30,6 +30,48 @@ import { createClientWorkout, fetchWorkoutsByDateRange, deleteClientWorkout } fr
 import { Timestamp } from 'firebase/firestore';
 import { toastSuccess, toastError, toastWarning } from '@/components/ui/toaster';
 import { format } from 'date-fns';
+import { WorkoutStructureTemplate } from '@/lib/types';
+
+// Helper function to abbreviate workout type names
+function abbreviateWorkoutType(name: string): string {
+  const abbreviations: Record<string, string> = {
+    'power prep': 'PP',
+    'performance prep': 'PP',
+    'movement prep': 'MP',
+    'movement preparation': 'MP',
+    'ballistics': 'BAL',
+    'ballistic': 'BAL',
+    'strength 1': 'S1',
+    'strength1': 'S1',
+    'strength 2': 'S2',
+    'strength2': 'S2',
+    'energy system development': 'ESD',
+    'esd': 'ESD',
+    'conditioning': 'COND',
+    'mobility': 'MOB',
+    'activation': 'ACT',
+    'warm-up': 'WU',
+    'warmup': 'WU',
+    'cool-down': 'CD',
+    'cooldown': 'CD',
+  };
+  
+  const lowerName = name.toLowerCase().trim();
+  return abbreviations[lowerName] || name.substring(0, 3).toUpperCase();
+}
+
+// Helper function to get abbreviation list for a template
+function getTemplateAbbreviationList(template: WorkoutStructureTemplate): string {
+  if (!template.sections || template.sections.length === 0) {
+    return '';
+  }
+  
+  const abbreviations = template.sections
+    .sort((a, b) => a.order - b.order)
+    .map(section => abbreviateWorkoutType(section.workoutTypeName));
+  
+  return `(${abbreviations.join(' / ')})`;
+}
 
 interface QuickWorkoutBuilderDialogProps {
   clientId: string;
@@ -437,9 +479,15 @@ export function QuickWorkoutBuilderDialog({
                       {workoutStructureTemplates.map((template) => {
                         const category = workoutCategories.find(cat => cat.name === selectedCategory);
                         const isLinked = category?.linkedWorkoutStructureTemplateId === template.id;
+                        const abbrevList = getTemplateAbbreviationList(template);
                         return (
                           <SelectItem key={template.id} value={template.id}>
-                            {template.name}{isLinked ? ' (default)' : ''}
+                            <div className="flex items-center justify-between w-full">
+                              <span>{template.name}{isLinked ? ' (default)' : ''}</span>
+                              {abbrevList && (
+                                <span className="text-xs text-gray-500 ml-2">{abbrevList}</span>
+                              )}
+                            </div>
                           </SelectItem>
                         );
                       })}

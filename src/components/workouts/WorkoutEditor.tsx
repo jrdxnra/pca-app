@@ -16,6 +16,47 @@ import {
   ClientWorkoutTargetWorkload,
   WorkoutStructureTemplate
 } from '@/lib/types';
+
+// Helper function to abbreviate workout type names
+function abbreviateWorkoutType(name: string): string {
+  const abbreviations: Record<string, string> = {
+    'power prep': 'PP',
+    'performance prep': 'PP',
+    'movement prep': 'MP',
+    'movement preparation': 'MP',
+    'ballistics': 'BAL',
+    'ballistic': 'BAL',
+    'strength 1': 'S1',
+    'strength1': 'S1',
+    'strength 2': 'S2',
+    'strength2': 'S2',
+    'energy system development': 'ESD',
+    'esd': 'ESD',
+    'conditioning': 'COND',
+    'mobility': 'MOB',
+    'activation': 'ACT',
+    'warm-up': 'WU',
+    'warmup': 'WU',
+    'cool-down': 'CD',
+    'cooldown': 'CD',
+  };
+  
+  const lowerName = name.toLowerCase().trim();
+  return abbreviations[lowerName] || name.substring(0, 3).toUpperCase();
+}
+
+// Helper function to get abbreviation list for a template
+function getTemplateAbbreviationList(template: WorkoutStructureTemplate): string {
+  if (!template.sections || template.sections.length === 0) {
+    return '';
+  }
+  
+  const abbreviations = template.sections
+    .sort((a, b) => a.order - b.order)
+    .map(section => abbreviateWorkoutType(section.workoutTypeName));
+  
+  return `(${abbreviations.join(' / ')})`;
+}
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
@@ -831,11 +872,14 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="none">None (Custom)</option>
-                  {workoutStructureTemplates.map(template => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
+                  {workoutStructureTemplates.map(template => {
+                    const abbrevList = getTemplateAbbreviationList(template);
+                    return (
+                      <option key={template.id} value={template.id}>
+                        {template.name}{abbrevList ? ` ${abbrevList}` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </CardContent>
@@ -1228,11 +1272,14 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="none">None (Custom)</option>
-                  {workoutStructureTemplates.map(template => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
+                  {workoutStructureTemplates.map(template => {
+                    const abbrevList = getTemplateAbbreviationList(template);
+                    return (
+                      <option key={template.id} value={template.id}>
+                        {template.name}{abbrevList ? ` ${abbrevList}` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </CardContent>
