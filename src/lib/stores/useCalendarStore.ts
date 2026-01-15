@@ -130,19 +130,6 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
             const clientId = event.extendedProperties?.private?.pcaClientId;
             const category = event.extendedProperties?.private?.pcaCategory;
             
-            // DEBUG: Log attendee info for events (remove after testing)
-            if (event.attendees && event.attendees.length > 0) {
-              console.log('📅 Event with attendees:', {
-                summary: event.summary,
-                time: event.start?.dateTime,
-                attendees: event.attendees.map((a: any) => ({
-                  email: a.email,
-                  displayName: a.displayName,
-                  responseStatus: a.responseStatus
-                }))
-              });
-            }
-            
             return {
               id: event.id,
               summary: event.summary || '',
