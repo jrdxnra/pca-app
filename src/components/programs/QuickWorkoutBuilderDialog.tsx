@@ -34,7 +34,11 @@ import { WorkoutStructureTemplate } from '@/lib/types';
 
 // Helper function to abbreviate workout type names
 function abbreviateWorkoutType(name: string): string {
-  const abbreviations: Record<string, string> = {
+  // Normalize the name: lowercase, trim, and replace multiple spaces with single space
+  const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
+  
+  // Check for exact matches first
+  const exactMatches: Record<string, string> = {
     'power prep': 'PREP',
     'performance prep': 'PREP',
     'pp': 'PREP',
@@ -75,8 +79,31 @@ function abbreviateWorkoutType(name: string): string {
     'activation': 'ACT',
   };
   
-  const lowerName = name.toLowerCase().trim();
-  return abbreviations[lowerName] || name.substring(0, 3).toUpperCase();
+  if (exactMatches[normalized]) {
+    return exactMatches[normalized];
+  }
+  
+  // Check for partial matches (contains the key phrase)
+  if (normalized.includes('power prep') || normalized.includes('performance prep') || normalized.includes('movement prep') || normalized.includes('ballistic')) {
+    return 'PREP';
+  }
+  if (normalized.includes('warm up') || normalized.includes('warm-up')) {
+    return 'W/U';
+  }
+  if (normalized.includes('round 1') || normalized === 'round1') {
+    return 'R1';
+  }
+  if (normalized.includes('round 2') || normalized === 'round2') {
+    return 'R2';
+  }
+  if (normalized.includes('cool down') || normalized.includes('cool-down')) {
+    return 'C/D';
+  }
+  if (normalized.includes('pre-hab') || normalized.includes('pre hab')) {
+    return 'PRE/HAB';
+  }
+  
+  return name.substring(0, 3).toUpperCase();
 }
 
 // Helper function to get abbreviation list for a template with colors
