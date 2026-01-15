@@ -12,7 +12,7 @@ import {
   onSnapshot,
   Unsubscribe
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 
 const COLLECTION_NAME = 'calendarEvents';
@@ -85,7 +85,7 @@ export async function createCalendarEvent(
   event: Omit<GoogleCalendarEvent, 'id'>
 ): Promise<GoogleCalendarEvent> {
   const eventData = eventToFirestore(event as GoogleCalendarEvent);
-  const docRef = await addDoc(collection(db, COLLECTION_NAME), eventData);
+  const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), eventData);
 
   return firestoreToEvent(docRef.id, eventData);
 }
@@ -101,7 +101,7 @@ export async function getCalendarEventsByDateRange(
   const endTimestamp = Timestamp.fromDate(endDate);
 
   const q = query(
-    collection(db, COLLECTION_NAME),
+    collection(getDb(), COLLECTION_NAME),
     where('startDateTime', '>=', startTimestamp),
     where('startDateTime', '<=', endTimestamp),
     orderBy('startDateTime', 'asc')
@@ -118,7 +118,7 @@ export async function updateCalendarEvent(
   eventId: string,
   updates: Partial<GoogleCalendarEvent>
 ): Promise<void> {
-  const eventRef = doc(db, COLLECTION_NAME, eventId);
+  const eventRef = doc(getDb(), COLLECTION_NAME, eventId);
   
   // Convert updates to Firestore format
   const firestoreUpdates: any = {
@@ -148,7 +148,7 @@ export async function updateCalendarEvent(
  * Delete a calendar event
  */
 export async function deleteCalendarEvent(eventId: string): Promise<void> {
-  const eventRef = doc(db, COLLECTION_NAME, eventId);
+  const eventRef = doc(getDb(), COLLECTION_NAME, eventId);
   await deleteDoc(eventRef);
 }
 
@@ -164,7 +164,7 @@ export function subscribeToCalendarEvents(
   const endTimestamp = Timestamp.fromDate(endDate);
 
   const q = query(
-    collection(db, COLLECTION_NAME),
+    collection(getDb(), COLLECTION_NAME),
     where('startDateTime', '>=', startTimestamp),
     where('startDateTime', '<=', endTimestamp),
     orderBy('startDateTime', 'asc')

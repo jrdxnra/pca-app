@@ -10,7 +10,7 @@ import {
   orderBy,
   Timestamp
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import type { WorkoutLog } from '@/lib/types';
 
 const COLLECTION_NAME = 'workoutLogs';
@@ -28,7 +28,7 @@ export async function createWorkoutLog(
     createdAt: now,
   };
 
-  const docRef = await addDoc(collection(db, COLLECTION_NAME), logData);
+  const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), logData);
   
   return {
     id: docRef.id,
@@ -40,7 +40,7 @@ export async function createWorkoutLog(
  * Get a workout log by ID
  */
 export async function getWorkoutLog(id: string): Promise<WorkoutLog | null> {
-  const docRef = doc(db, COLLECTION_NAME, id);
+  const docRef = doc(getDb(), COLLECTION_NAME, id);
   const docSnap = await getDoc(docRef);
 
   if (!docSnap.exists()) {
@@ -60,7 +60,7 @@ export async function getWorkoutLogByScheduledWorkout(
   scheduledWorkoutId: string
 ): Promise<WorkoutLog | null> {
   const q = query(
-    collection(db, COLLECTION_NAME),
+    collection(getDb(), COLLECTION_NAME),
     where('scheduledWorkoutId', '==', scheduledWorkoutId)
   );
 
@@ -83,7 +83,7 @@ export async function getWorkoutLogByScheduledWorkout(
  */
 export async function fetchClientWorkoutLogs(clientId: string): Promise<WorkoutLog[]> {
   const q = query(
-    collection(db, COLLECTION_NAME),
+    collection(getDb(), COLLECTION_NAME),
     where('clientId', '==', clientId),
     orderBy('completedDate', 'desc')
   );
@@ -102,7 +102,7 @@ export async function updateWorkoutLog(
   id: string,
   updates: Partial<WorkoutLog>
 ): Promise<void> {
-  const docRef = doc(db, COLLECTION_NAME, id);
+  const docRef = doc(getDb(), COLLECTION_NAME, id);
   await updateDoc(docRef, updates);
 }
 

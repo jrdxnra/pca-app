@@ -9,7 +9,7 @@ import {
   orderBy,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 
 export interface WorkoutCategory {
   id: string;
@@ -24,7 +24,7 @@ export interface WorkoutCategory {
 
 export const createWorkoutCategory = async (category: Omit<WorkoutCategory, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<string> => {
   try {
-    const docRef = await addDoc(collection(db, 'workoutCategories'), {
+    const docRef = await addDoc(collection(getDb(), 'workoutCategories'), {
       ...category,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -39,7 +39,7 @@ export const createWorkoutCategory = async (category: Omit<WorkoutCategory, 'id'
 
 export const updateWorkoutCategory = async (id: string, updates: Partial<Omit<WorkoutCategory, 'id' | 'createdAt' | 'createdBy'>>): Promise<void> => {
   try {
-    const categoryRef = doc(db, 'workoutCategories', id);
+    const categoryRef = doc(getDb(), 'workoutCategories', id);
     await updateDoc(categoryRef, {
       ...updates,
       updatedAt: Timestamp.now()
@@ -52,7 +52,7 @@ export const updateWorkoutCategory = async (id: string, updates: Partial<Omit<Wo
 
 export const deleteWorkoutCategory = async (id: string): Promise<void> => {
   try {
-    const categoryRef = doc(db, 'workoutCategories', id);
+    const categoryRef = doc(getDb(), 'workoutCategories', id);
     await deleteDoc(categoryRef);
   } catch (error) {
     console.error('Error deleting workout category:', error);
@@ -62,7 +62,7 @@ export const deleteWorkoutCategory = async (id: string): Promise<void> => {
 
 export const fetchWorkoutCategories = async (): Promise<WorkoutCategory[]> => {
   try {
-    const q = query(collection(db, 'workoutCategories'), orderBy('order', 'asc'));
+    const q = query(collection(getDb(), 'workoutCategories'), orderBy('order', 'asc'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,

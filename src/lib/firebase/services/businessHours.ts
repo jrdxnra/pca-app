@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 
 const DOC_ID = 'business-hours';
 
@@ -27,7 +27,7 @@ const DEFAULT_HOURS: BusinessHours = {
 
 export async function getBusinessHours(): Promise<BusinessHours> {
   try {
-    const docRef = doc(db, 'configuration', DOC_ID);
+    const docRef = doc(getDb(), 'configuration', DOC_ID);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -92,7 +92,7 @@ export function getBusinessHoursRange(businessHours: BusinessHours | null): { st
 
 export async function updateBusinessHoursInFirebase(hours: BusinessHours): Promise<void> {
   try {
-    const docRef = doc(db, 'configuration', DOC_ID);
+    const docRef = doc(getDb(), 'configuration', DOC_ID);
     await setDoc(docRef, hours, { merge: true });
   } catch (error) {
     console.error('Error updating business hours:', error);

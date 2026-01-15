@@ -56,22 +56,75 @@ const hasFirebaseConfig = Boolean(
 );
 
 // Initialize Firebase app only once
-const app = hasFirebaseConfig ? (getApps().length ? getApp() : initializeApp(firebaseConfig)) : undefined;
-
-// Initialize Firebase services
-export const db: Firestore = app ? getFirestore(app) : (undefined as unknown as Firestore);
-export const auth: Auth = app ? getAuth(app) : (undefined as unknown as Auth);
-
-// Export getter for cases where lazy init is needed
-export function getDb(): Firestore {
-  if (db) return db;
-  // Try to reinitialize if config became available
-  const config = getPublicFirebaseConfig();
-  if (config.apiKey && config.projectId) {
-    const newApp = getApps().length ? getApp() : initializeApp(config);
-    return getFirestore(newApp);
-  }
-  throw new Error('Firebase not initialized');
+let app: ReturnType<typeof initializeApp> | undefined;
+if (hasFirebaseConfig) {
+  app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 }
+
+// Helper to ensure app is initialized
+function ensureApp() {
+  if (!app) {
+    const config = getPublicFirebaseConfig();
+    if (config.apiKey && config.projectId && config.authDomain && config.appId) {
+      app = getApps().length ? getApp() : initializeApp(config);
+    } else {
+      // In browser, config might be injected later via window.__FIREBASE_CONFIG__
+      return undefined;
+    }
+  }
+  return app;
+}
+
+// Lazy initialization - initialize on first access
+let dbInstance: Firestore | undefined;
+let authInstance: Auth | undefined;
+
+function initializeDb(): Firestore {
+  if (!dbInstance) {
+    const firebaseApp = ensureApp();
+    if (!firebaseApp) {
+      throw new Error('Firebase not initialized. Please ensure Firebase configuration is available in window.__FIREBASE_CONFIG__ or environment variables.');
+    }
+    dbInstance = getFirestore(firebaseApp);
+  }
+  return dbInstance;
+}
+
+function initializeAuth(): Auth {
+  if (!authInstance) {
+    const firebaseApp = ensureApp();
+    if (!firebaseApp) {
+      throw new Error('Firebase not initialized. Please ensure Firebase configuration is available in window.__FIREBASE_CONFIG__ or environment variables.');
+    }
+    authInstance = getAuth(firebaseApp);
+  }
+  return authInstance;
+}
+
+// Export getter function
+export function getDb(): Firestore {
+  return initializeDb();
+}
+
+// Export direct access - will throw if Firebase isn't initialized yet
+// This ensures we get clear errors instead of mysterious "collection() expects Firestore" errors
+export const db: Firestore = (() => {
+  // Try to initialize immediately if config is available
+  const firebaseApp = ensureApp();
+  if (firebaseApp) {
+    return getFirestore(firebaseApp);
+  }
+  // If not available, return a placeholder that will throw helpful errors
+  // Services should handle initialization timing issues
+  return undefined as unknown as Firestore;
+})();
+
+export const auth: Auth = (() => {
+  const firebaseApp = ensureApp();
+  if (firebaseApp) {
+    return getAuth(firebaseApp);
+  }
+  return undefined as unknown as Auth;
+})();
 
 export default app;

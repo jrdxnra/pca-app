@@ -11,7 +11,7 @@ import {
   orderBy,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config';
+import { db, getDb } from '../config';
 import { ClientProgram, ClientProgramPeriod } from '@/lib/types';
 
 const COLLECTION_NAME = 'client-programs';
@@ -46,7 +46,7 @@ export async function createClientProgram(
 ): Promise<ClientProgram> {
   try {
     const now = Timestamp.now();
-    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+    const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...clientProgramData,
       createdAt: now,
       updatedAt: now,
@@ -67,7 +67,7 @@ export async function createClientProgram(
 
 export async function getClientProgram(id: string): Promise<ClientProgram | null> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -86,7 +86,7 @@ export async function getClientProgram(id: string): Promise<ClientProgram | null
 export async function getClientProgramsByClient(clientId: string): Promise<ClientProgram[]> {
   try {
     const q = query(
-      collection(db, COLLECTION_NAME), 
+      collection(getDb(), COLLECTION_NAME), 
       where('clientId', '==', clientId),
       orderBy('startDate', 'desc')
     );
@@ -105,7 +105,7 @@ export async function getClientProgramsByClient(clientId: string): Promise<Clien
 export async function getAllClientPrograms(): Promise<ClientProgram[]> {
   try {
     const q = query(
-      collection(db, COLLECTION_NAME), 
+      collection(getDb(), COLLECTION_NAME), 
       orderBy('startDate', 'desc')
     );
     const querySnapshot = await getDocs(q);
@@ -125,7 +125,7 @@ export async function updateClientProgram(
   updates: Partial<Omit<ClientProgram, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     const cleanedUpdates = cleanForFirebase({
       ...updates,
       updatedAt: Timestamp.now(),
@@ -139,7 +139,7 @@ export async function updateClientProgram(
 
 export async function deleteClientProgram(id: string): Promise<void> {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(getDb(), COLLECTION_NAME, id);
     await deleteDoc(docRef);
   } catch (error) {
     console.error('Error deleting client program:', error);
