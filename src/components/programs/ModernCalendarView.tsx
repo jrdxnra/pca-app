@@ -258,23 +258,23 @@ export function ModernCalendarView({
     };
   }, [calendarDateKey]); // Use stable key
 
-  // Filter workouts - CRITICAL: Use timestamps instead of Date objects to prevent infinite loops
-  // Use a ref to track the actual workouts array to avoid dependency issues
-  const allWorkoutsRef = React.useRef(allWorkouts);
-  React.useEffect(() => {
-    allWorkoutsRef.current = allWorkouts;
+  // Filter workouts - CRITICAL: Use timestamps and stable dependencies
+  // Create a stable key from workout IDs to detect actual changes
+  const workoutsStableKey = React.useMemo(() => {
+    if (allWorkouts.length === 0) return 'empty';
+    // Create a stable key from first 10 workout IDs (enough to detect changes)
+    return allWorkouts.slice(0, 10).map(w => w.id).join(',');
   }, [allWorkouts]);
 
   const filteredWorkouts = React.useMemo(() => {
-    const workouts = allWorkoutsRef.current;
     // Early return if no workouts to avoid unnecessary computation
-    if (!workouts || workouts.length === 0 || dateRangeTimestamps.startTime === 0) return [];
+    if (!allWorkouts || allWorkouts.length === 0 || dateRangeTimestamps.startTime === 0) return [];
     
     try {
       const startDate = new Date(dateRangeTimestamps.startTime);
       const endDate = new Date(dateRangeTimestamps.endTime);
       
-      return workouts.filter(workout => {
+      return allWorkouts.filter(workout => {
         // If a specific client is selected, filter by that client
         if (selectedClient && workout.clientId !== selectedClient) return false;
         
@@ -286,9 +286,8 @@ export function ModernCalendarView({
       console.error('Error filtering workouts:', error);
       return [];
     }
-    // Only depend on stable values - use ref to access current workouts
-    // This prevents infinite loops from array reference changes
-  }, [allWorkouts.length, selectedClient, dateRangeTimestamps.startTime, dateRangeTimestamps.endTime]);
+    // Use stable key instead of array reference to prevent infinite loops
+  }, [workoutsStableKey, selectedClient, dateRangeTimestamps.startTime, dateRangeTimestamps.endTime]);
 
   // Helper to get calendar events for a specific date
   const getCalendarEventsForDate = (date: Date): GoogleCalendarEvent[] => {
