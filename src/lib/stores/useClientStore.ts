@@ -14,6 +14,7 @@ import {
   subscribeToClients
 } from '@/lib/firebase/services/clients';
 import { executeMutation } from './mutationHelpers';
+import { createOptimizedSubscription } from './subscriptionHelpers';
 
 // Cache duration in milliseconds (30 seconds)
 const CACHE_DURATION = 30 * 1000;

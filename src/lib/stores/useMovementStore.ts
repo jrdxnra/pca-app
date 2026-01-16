@@ -12,6 +12,7 @@ import {
   getNextOrdinal
 } from '@/lib/firebase/services/movements';
 import { executeMutation, createOptimisticArrayUpdate } from './mutationHelpers';
+import { createOptimizedSubscription } from './subscriptionHelpers';
 
 interface MovementStore {
   // State
@@ -241,11 +242,19 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
     set({ error: null });
   },
 
-  // Real-time subscription
+  // Real-time subscription with optimized updates
   subscribeToMovements: (categoryId) => {
     set({ currentCategoryId: categoryId });
-    return subscribeToMovementsByCategory(categoryId, (movements) => {
-      set({ movements });
-    });
+    const optimizedUpdate = createOptimizedSubscription<Movement[]>(
+      (movements) => set({ movements }),
+      (prev, next) => {
+        // Compare by array length and first 10 IDs for fast comparison
+        if (prev.length !== next.length) return false;
+        const prevIds = prev.slice(0, 10).map(m => m.id).join(',');
+        const nextIds = next.slice(0, 10).map(m => m.id).join(',');
+        return prevIds === nextIds;
+      }
+    );
+    return subscribeToMovementsByCategory(categoryId, optimizedUpdate);
   },
 }));

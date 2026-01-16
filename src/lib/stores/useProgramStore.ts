@@ -22,6 +22,7 @@ import {
   getWeekEndDate
 } from '@/lib/firebase/services/programs';
 import { executeMutation } from './mutationHelpers';
+import { createOptimizedSubscription } from './subscriptionHelpers';
 
 // Cache duration in milliseconds (30 seconds)
 const CACHE_DURATION = 30 * 1000;
@@ -675,14 +676,36 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
 
   // Real-time subscriptions
   subscribeToPrograms: () => {
-    return subscribeToPrograms((programs) => {
-      set({ programs });
-    });
+    const optimizedUpdate = createOptimizedSubscription<Program[]>(
+      (programs) => set({ programs }),
+      (prev, next) => {
+        if (prev.length !== next.length) return false;
+        const prevIds = new Set(prev.map(p => p.id));
+        const nextIds = new Set(next.map(p => p.id));
+        if (prevIds.size !== nextIds.size) return false;
+        for (const id of prevIds) {
+          if (!nextIds.has(id)) return false;
+        }
+        return true;
+      }
+    );
+    return subscribeToPrograms(optimizedUpdate);
   },
 
   subscribeToScheduledWorkouts: (programId) => {
-    return subscribeToScheduledWorkouts(programId, (workouts) => {
-      set({ scheduledWorkouts: workouts });
-    });
+    const optimizedUpdate = createOptimizedSubscription<ScheduledWorkout[]>(
+      (workouts) => set({ scheduledWorkouts: workouts }),
+      (prev, next) => {
+        if (prev.length !== next.length) return false;
+        const prevIds = new Set(prev.map(w => w.id));
+        const nextIds = new Set(next.map(w => w.id));
+        if (prevIds.size !== nextIds.size) return false;
+        for (const id of prevIds) {
+          if (!nextIds.has(id)) return false;
+        }
+        return true;
+      }
+    );
+    return subscribeToScheduledWorkouts(programId, optimizedUpdate);
   },
 }));
