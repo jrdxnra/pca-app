@@ -259,15 +259,22 @@ export function ModernCalendarView({
   }, [calendarDateKey]); // Use stable key
 
   // Filter workouts - CRITICAL: Use timestamps instead of Date objects to prevent infinite loops
+  // Use a ref to track the actual workouts array to avoid dependency issues
+  const allWorkoutsRef = React.useRef(allWorkouts);
+  React.useEffect(() => {
+    allWorkoutsRef.current = allWorkouts;
+  }, [allWorkouts]);
+
   const filteredWorkouts = React.useMemo(() => {
+    const workouts = allWorkoutsRef.current;
     // Early return if no workouts to avoid unnecessary computation
-    if (!allWorkouts || allWorkouts.length === 0 || dateRangeTimestamps.startTime === 0) return [];
+    if (!workouts || workouts.length === 0 || dateRangeTimestamps.startTime === 0) return [];
     
     try {
       const startDate = new Date(dateRangeTimestamps.startTime);
       const endDate = new Date(dateRangeTimestamps.endTime);
       
-      return allWorkouts.filter(workout => {
+      return workouts.filter(workout => {
         // If a specific client is selected, filter by that client
         if (selectedClient && workout.clientId !== selectedClient) return false;
         
@@ -279,7 +286,8 @@ export function ModernCalendarView({
       console.error('Error filtering workouts:', error);
       return [];
     }
-    // Use timestamps and array length - avoid object references in dependencies
+    // Only depend on stable values - use ref to access current workouts
+    // This prevents infinite loops from array reference changes
   }, [allWorkouts.length, selectedClient, dateRangeTimestamps.startTime, dateRangeTimestamps.endTime]);
 
   // Helper to get calendar events for a specific date
