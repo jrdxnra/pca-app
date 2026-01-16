@@ -241,13 +241,12 @@ export function ModernCalendarView({
   const dateRangeTimestampsRef = React.useRef<{ startTime: number; endTime: number }>({ startTime: 0, endTime: 0 });
   const lastCalendarDateRef = React.useRef<number>(0);
   
-  // Calculate stable timestamp from calendarDate
-  const calendarDateTimestamp = React.useMemo(() => {
-    if (!calendarDate) return 0;
+  // Calculate stable timestamp from calendarDate - compute directly to avoid useMemo loops
+  const calendarDateTimestamp = calendarDate ? (() => {
     const normalized = new Date(calendarDate);
     normalized.setHours(0, 0, 0, 0);
     return normalized.getTime();
-  }, [calendarDate?.getTime()]); // Use getTime() for stable comparison
+  })() : 0;
   
   // Only recalculate if timestamp actually changed
   if (calendarDateTimestamp !== lastCalendarDateRef.current && calendarDateTimestamp > 0) {
