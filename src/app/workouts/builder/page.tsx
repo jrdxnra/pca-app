@@ -7,14 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   Layers,
   Grid3X3,
   List,
@@ -33,6 +25,7 @@ import { CategoryFilter } from '@/components/workouts/CategoryFilter';
 import { BuilderHeader } from '@/components/workouts/builder/BuilderHeader';
 import { BuilderFilters } from '@/components/workouts/builder/BuilderFilters';
 import { BuilderWeekCard } from '@/components/workouts/builder/BuilderWeekCard';
+import { BuilderDeleteDialog } from '@/components/workouts/builder/BuilderDeleteDialog';
 import { Timestamp } from 'firebase/firestore';
 import { createClientWorkout, updateClientWorkout, deleteClientWorkout, getClientWorkout, fetchWorkoutsByDateRange } from '@/lib/firebase/services/clientWorkouts';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
@@ -1673,144 +1666,26 @@ export default function BuilderPage() {
       </div>
 
       {/* Delete Workout Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
-        setDeleteDialogOpen(open);
-        if (!open) {
+      <BuilderDeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        deleteDialogData={deleteDialogData}
+        showCategorySelector={showCategorySelector}
+        deleteDialogNewCategory={deleteDialogNewCategory}
+        onShowCategorySelector={setShowCategorySelector}
+        onSetNewCategory={setDeleteDialogNewCategory}
+        workoutCategories={workoutCategories}
+        loading={loading}
+        onDeleteWorkoutKeepEvent={handleDeleteWorkoutKeepEvent}
+        onDeleteWorkoutChangeCategory={handleDeleteWorkoutChangeCategory}
+        onDeleteWorkoutAndEvent={handleDeleteWorkoutAndEvent}
+        onCancel={() => {
+          setDeleteDialogOpen(false);
+          setDeleteDialogData(null);
           setShowCategorySelector(false);
           setDeleteDialogNewCategory('');
-        }
-      }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete Workout</DialogTitle>
-            <DialogDescription>
-              {deleteDialogData?.linkedEventId 
-                ? 'This workout is linked to a calendar event. What would you like to do?'
-                : 'Are you sure you want to delete this workout? This cannot be undone.'
-              }
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 py-4">
-            {deleteDialogData?.linkedEventId ? (
-              <>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left h-auto py-3"
-                  onClick={handleDeleteWorkoutKeepEvent}
-                  disabled={loading}
-                >
-                  <div>
-                    <div className="font-medium">Delete workout only</div>
-                    <div className="text-xs text-gray-500">Keep the calendar event with current category - you can link a new workout later</div>
-                  </div>
-                </Button>
-
-                {/* Change category option */}
-                {!showCategorySelector ? (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left h-auto py-3"
-                    onClick={() => setShowCategorySelector(true)}
-                    disabled={loading}
-                  >
-                    <div>
-                      <div className="font-medium">Delete workout and change event category</div>
-                      <div className="text-xs text-gray-500">
-                        Keep the event but assign a different workout category
-                        {deleteDialogData.currentCategory && (
-                          <span className="block mt-1">Current: <strong>{deleteDialogData.currentCategory}</strong></span>
-                        )}
-                      </div>
-                    </div>
-                  </Button>
-                ) : (
-                  <div className="border rounded-lg p-3 space-y-3">
-                    <div className="text-sm font-medium">Select new category:</div>
-                    <Select 
-                      value={deleteDialogNewCategory} 
-                      onValueChange={setDeleteDialogNewCategory}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Choose a category..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {workoutCategories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.name}>
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
-                                style={{ backgroundColor: cat.color }}
-                              />
-                              {cat.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setShowCategorySelector(false);
-                          setDeleteDialogNewCategory('');
-                        }}
-                        disabled={loading}
-                      >
-                        Back
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleDeleteWorkoutChangeCategory}
-                        disabled={loading || !deleteDialogNewCategory}
-                      >
-                        {loading ? 'Saving...' : 'Confirm'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left h-auto py-3 border-red-200 hover:bg-red-50"
-                  onClick={handleDeleteWorkoutAndEvent}
-                  disabled={loading}
-                >
-                  <div>
-                    <div className="font-medium text-red-600">Delete workout and event</div>
-                    <div className="text-xs text-gray-500">Remove both the workout and the linked calendar event</div>
-                  </div>
-                </Button>
-              </>
-            ) : (
-              <Button
-                variant="destructive"
-                className="w-full"
-                onClick={handleDeleteWorkoutKeepEvent}
-                disabled={loading}
-              >
-                {loading ? 'Deleting...' : 'Delete Workout'}
-              </Button>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button 
-              variant="ghost" 
-              onClick={() => {
-                setDeleteDialogOpen(false);
-                setDeleteDialogData(null);
-                setShowCategorySelector(false);
-                setDeleteDialogNewCategory('');
-              }}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        }}
+      />
 
       {/* Quick Workout Dialog - opens when coming from calendar event */}
       {clientId && quickWorkoutDialogOpen && (
