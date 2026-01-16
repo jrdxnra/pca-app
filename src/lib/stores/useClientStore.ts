@@ -409,8 +409,20 @@ export const useClientStore = create<ClientStore>((set, get) => ({
 
   subscribeToClients: () => {
     const { includeDeleted } = get();
-    return subscribeToClients((clients) => {
-      set({ clients });
-    }, includeDeleted);
+    const optimizedUpdate = createOptimizedSubscription<Client[]>(
+      (clients) => set({ clients }),
+      (prev, next) => {
+        // Compare by array length and IDs
+        if (prev.length !== next.length) return false;
+        const prevIds = new Set(prev.map(c => c.id));
+        const nextIds = new Set(next.map(c => c.id));
+        if (prevIds.size !== nextIds.size) return false;
+        for (const id of prevIds) {
+          if (!nextIds.has(id)) return false;
+        }
+        return true;
+      }
+    );
+    return subscribeToClients(optimizedUpdate, includeDeleted);
   },
 }));
