@@ -1,9 +1,9 @@
 name: Deploy to Firebase
 
 on:
-  workflow_dispatch:  # Manual deployment only - saves resources during development
+  workflow_dispatch:  # Can be triggered manually or via API/CLI
   # Removed auto-deploy on push to reduce resource usage
-  # Commit as much as you want, deploy manually when ready via GitHub Actions UI
+  # Commit as much as you want, deploy when you ask (I'll trigger it via CLI)
 
 # Cancel in-progress runs when a new deployment is triggered
 # Note: With manual deployments, this is less critical but still useful
