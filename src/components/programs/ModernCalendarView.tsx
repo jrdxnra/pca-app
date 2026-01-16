@@ -237,32 +237,38 @@ export function ModernCalendarView({
   }, [calendarDate, viewMode, selectedClient, refreshKey]);
 
   // Filter workouts for current view - get date range for current + adjacent weeks
-  // Calculate date range timestamps directly (avoid object recreation and useMemo loops)
-  // Extract timestamp once to use as stable dependency
-  const calendarDateTimestamp = calendarDate ? (() => {
+  // Calculate date range timestamps - use ref to prevent infinite loops
+  const dateRangeTimestampsRef = React.useRef<{ startTime: number; endTime: number }>({ startTime: 0, endTime: 0 });
+  const lastCalendarDateRef = React.useRef<number>(0);
+  
+  // Calculate stable timestamp from calendarDate
+  const calendarDateTimestamp = React.useMemo(() => {
+    if (!calendarDate) return 0;
     const normalized = new Date(calendarDate);
     normalized.setHours(0, 0, 0, 0);
     return normalized.getTime();
-  })() : 0;
-
-  const dateRangeTimestamps = React.useMemo(() => {
-    if (!calendarDate || calendarDateTimestamp === 0) return { startTime: 0, endTime: 0 };
-    
-    const currentWeekStart = new Date(calendarDate);
-    currentWeekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
+  }, [calendarDate?.getTime()]); // Use getTime() for stable comparison
+  
+  // Only recalculate if timestamp actually changed
+  if (calendarDateTimestamp !== lastCalendarDateRef.current && calendarDateTimestamp > 0) {
+    const currentWeekStart = new Date(calendarDate!);
+    currentWeekStart.setDate(calendarDate!.getDate() - calendarDate!.getDay());
     const previousWeekStart = new Date(currentWeekStart);
     previousWeekStart.setDate(currentWeekStart.getDate() - 7);
     const nextWeekEnd = new Date(currentWeekStart);
-    nextWeekEnd.setDate(currentWeekStart.getDate() + 13); // Current week + next week
+    nextWeekEnd.setDate(currentWeekStart.getDate() + 13);
     
     previousWeekStart.setHours(0, 0, 0, 0);
     nextWeekEnd.setHours(23, 59, 59, 999);
     
-    return { 
-      startTime: previousWeekStart.getTime(), 
-      endTime: nextWeekEnd.getTime() 
+    dateRangeTimestampsRef.current = {
+      startTime: previousWeekStart.getTime(),
+      endTime: nextWeekEnd.getTime()
     };
-  }, [calendarDateTimestamp]); // Use stable timestamp number instead of Date object
+    lastCalendarDateRef.current = calendarDateTimestamp;
+  }
+  
+  const dateRangeTimestamps = dateRangeTimestampsRef.current;
 
   // Filter workouts - COMPUTE DIRECTLY (no useMemo) to prevent React error #310
   // Removed useMemo entirely because array dependencies cause infinite re-renders
