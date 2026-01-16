@@ -7,7 +7,9 @@ const DOC_ID = 'calendar-config';
 type FirestoreCalendarConfig = {
   selectedCalendarId?: string;
   coachingKeywords?: unknown;
+  coachingColor?: unknown;
   classKeywords?: unknown;
+  classColor?: unknown;
   locationAbbreviations?: unknown;
   lastSyncTime?: unknown;
 };
@@ -124,7 +126,9 @@ export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promi
     await setDoc(docRef, {
       selectedCalendarId: seeded.selectedCalendarId ?? null,
       coachingKeywords: seeded.coachingKeywords,
+      coachingColor: seeded.coachingColor ?? null,
       classKeywords: seeded.classKeywords,
+      classColor: seeded.classColor ?? null,
       locationAbbreviations: seeded.locationAbbreviations ?? [],
       // Don't include lastSyncTime if undefined - Firestore rejects undefined values
     }, { merge: true });
@@ -136,7 +140,9 @@ export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promi
   const normalized: CalendarSyncConfig = {
     selectedCalendarId: typeof data.selectedCalendarId === 'string' ? data.selectedCalendarId : defaults.selectedCalendarId,
     coachingKeywords: normalizeKeywordList(data.coachingKeywords, defaults.coachingKeywords),
+    coachingColor: typeof data.coachingColor === 'string' ? data.coachingColor : defaults.coachingColor,
     classKeywords: normalizeKeywordList(data.classKeywords, defaults.classKeywords),
+    classColor: typeof data.classColor === 'string' ? data.classColor : defaults.classColor,
     locationAbbreviations: normalizeLocationAbbreviations(data.locationAbbreviations),
     lastSyncTime: normalizeLastSyncTime(data.lastSyncTime),
   };
@@ -145,7 +151,9 @@ export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promi
   await setDoc(docRef, {
     selectedCalendarId: normalized.selectedCalendarId ?? null,
     coachingKeywords: normalized.coachingKeywords,
+    coachingColor: normalized.coachingColor ?? null,
     classKeywords: normalized.classKeywords,
+    classColor: normalized.classColor ?? null,
     locationAbbreviations: normalized.locationAbbreviations ?? [],
     lastSyncTime: normalized.lastSyncTime ? Timestamp.fromDate(normalized.lastSyncTime) : null,
   }, { merge: true });
@@ -163,7 +171,9 @@ export async function updateCalendarSyncConfig(updates: Partial<CalendarSyncConf
   const payload: Record<string, unknown> = {};
   if (updates.selectedCalendarId !== undefined) payload.selectedCalendarId = updates.selectedCalendarId ?? null;
   if (updates.coachingKeywords !== undefined) payload.coachingKeywords = updates.coachingKeywords ?? [];
+  if (updates.coachingColor !== undefined) payload.coachingColor = updates.coachingColor ?? null;
   if (updates.classKeywords !== undefined) payload.classKeywords = updates.classKeywords ?? [];
+  if (updates.classColor !== undefined) payload.classColor = updates.classColor ?? null;
   if (updates.locationAbbreviations !== undefined) {
     // Clean location abbreviations to remove any undefined values
     const cleanAbbreviations = (updates.locationAbbreviations ?? []).map((abbr: any) => {

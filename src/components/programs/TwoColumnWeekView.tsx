@@ -114,6 +114,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
 }: TwoColumnWeekViewProps) {
   // All hooks must be called first, in the same order every render
   const { workoutCategories: configWorkoutCategories, businessHours } = useConfigurationStore();
+  const { config: calendarConfig } = useCalendarStore();
   const router = useRouter();
   const [allDayCollapsed, setAllDayCollapsed] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -603,6 +604,16 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   const getEventCategoryColor = (event: GoogleCalendarEvent): string => {
     // Check if this is a class session
     if (event.isClassSession) {
+      if (calendarConfig.classColor) {
+        const colorMap: Record<string, string> = {
+          'blue': '#3b82f6',
+          'purple': '#a855f7',
+          'green': '#22c55e',
+          'orange': '#f97316',
+          'pink': '#ec4899',
+        };
+        return colorMap[calendarConfig.classColor] || calendarConfig.classColor;
+      }
       return '#a855f7'; // Purple for class sessions
     }
 
@@ -630,8 +641,25 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
 
     // Priority 3: Default colors based on event type
     if (isCoaching) {
+      if (calendarConfig.coachingColor) {
+        const colorMap: Record<string, string> = {
+          'blue': '#3b82f6',
+          'purple': '#a855f7',
+          'green': '#22c55e',
+          'orange': '#f97316',
+          'pink': '#ec4899',
+        };
+        return colorMap[calendarConfig.coachingColor] || calendarConfig.coachingColor;
+      }
       return '#f97316'; // Orange for coaching sessions without category
     }
+    
+    // Check if this is a class session (after coaching check)
+    // Note: getEventCategoryColor logic in ModernCalendarView had class check first. 
+    // Here logic order was different in original code (class check at top), but I am replacing the END of the function.
+    // The original function had class check at the very top. I should leave that or update it if I can match the whole function.
+    // Let's stick to replacing the last part.
+    
     return '#3b82f6'; // Blue for other events
   };
   

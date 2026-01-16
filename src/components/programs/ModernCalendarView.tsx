@@ -278,6 +278,16 @@ export function ModernCalendarView({
   const getEventCategoryColor = (event: GoogleCalendarEvent): string => {
     // Check if this is a class session
     if (event.isClassSession) {
+      if (calendarConfig.classColor) {
+        const colorMap: Record<string, string> = {
+          'blue': '#3b82f6',
+          'purple': '#a855f7',
+          'green': '#22c55e',
+          'orange': '#f97316',
+          'pink': '#ec4899',
+        };
+        return colorMap[calendarConfig.classColor] || calendarConfig.classColor;
+      }
       return '#a855f7'; // Purple for class sessions
     }
 
@@ -309,8 +319,37 @@ export function ModernCalendarView({
     // Priority 3: Default colors based on event type
     // Coaching sessions default to orange
     if (isCoaching) {
+      // Use configured coaching color if available, otherwise default to orange
+      if (calendarConfig.coachingColor) {
+        // Map simple color names to hex/tailwind colors if needed, or use as is
+        // For simplicity, we'll map the standard colors to their Tailwind hex values
+        const colorMap: Record<string, string> = {
+          'blue': '#3b82f6',
+          'purple': '#a855f7',
+          'green': '#22c55e',
+          'orange': '#f97316',
+          'pink': '#ec4899',
+        };
+        return colorMap[calendarConfig.coachingColor] || calendarConfig.coachingColor;
+      }
       return '#f97316'; // Orange for coaching sessions without category
     }
+    
+    // Class sessions default to purple
+    if (event.isClassSession) {
+      if (calendarConfig.classColor) {
+        const colorMap: Record<string, string> = {
+          'blue': '#3b82f6',
+          'purple': '#a855f7',
+          'green': '#22c55e',
+          'orange': '#f97316',
+          'pink': '#ec4899',
+        };
+        return colorMap[calendarConfig.classColor] || calendarConfig.classColor;
+      }
+      return '#a855f7';
+    }
+    
     return '#3b82f6'; // Blue for other events
   };
 

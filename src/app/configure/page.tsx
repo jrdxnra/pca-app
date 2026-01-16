@@ -13,6 +13,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -62,6 +67,14 @@ import { CSS } from '@dnd-kit/utilities';
 import { toastSuccess, toastError, toastWarning } from '@/components/ui/toaster';
 import { getAppTimezone, setAppTimezone, getBrowserTimezone, hasTimezoneChanged, COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/utils/timezone';
 import { Clock } from 'lucide-react';
+
+const AVAILABLE_COLORS = [
+  { name: 'Blue', value: 'blue', class: 'bg-blue-500' },
+  { name: 'Purple', value: 'purple', class: 'bg-purple-500' },
+  { name: 'Green', value: 'green', class: 'bg-green-500' },
+  { name: 'Orange', value: 'orange', class: 'bg-orange-500' },
+  { name: 'Pink', value: 'pink', class: 'bg-pink-500' },
+];
 
 interface Period {
   id: string;
@@ -336,6 +349,8 @@ export default function ConfigurePage() {
   // Keyword input states (local state to allow typing commas)
   const [coachingKeywordsInput, setCoachingKeywordsInput] = useState('');
   const [classKeywordsInput, setClassKeywordsInput] = useState('');
+  const [coachingColor, setCoachingColor] = useState('blue');
+  const [classColor, setClassColor] = useState('purple');
   
   // Sync keyword inputs from config on mount and when config changes
   useEffect(() => {
@@ -345,7 +360,13 @@ export default function ConfigurePage() {
     if (calendarConfig.classKeywords) {
       setClassKeywordsInput(calendarConfig.classKeywords.join(', '));
     }
-  }, [calendarConfig.coachingKeywords, calendarConfig.classKeywords]);
+    if (calendarConfig.coachingColor) {
+      setCoachingColor(calendarConfig.coachingColor);
+    }
+    if (calendarConfig.classColor) {
+      setClassColor(calendarConfig.classColor);
+    }
+  }, [calendarConfig.coachingKeywords, calendarConfig.classKeywords, calendarConfig.coachingColor, calendarConfig.classColor]);
 
   // Fetch configuration on mount
   useEffect(() => {
@@ -935,11 +956,14 @@ export default function ConfigurePage() {
     try {
       const keywordArray = coachingKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
       // Ensure we always pass an array, never undefined
-      updateCalendarConfig({ coachingKeywords: keywordArray.length > 0 ? keywordArray : [] });
-      toastSuccess('Coaching session keywords saved');
+      updateCalendarConfig({ 
+        coachingKeywords: keywordArray.length > 0 ? keywordArray : [],
+        coachingColor
+      });
+      toastSuccess('Coaching session settings saved');
     } catch (error) {
       console.error('Error saving coaching keywords:', error);
-      toastError('Failed to save coaching keywords. Please try again.');
+      toastError('Failed to save coaching settings. Please try again.');
     }
   };
 
@@ -947,11 +971,14 @@ export default function ConfigurePage() {
     try {
       const keywordArray = classKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
       // Ensure we always pass an array, never undefined
-      updateCalendarConfig({ classKeywords: keywordArray.length > 0 ? keywordArray : [] });
-      toastSuccess('Class session keywords saved');
+      updateCalendarConfig({ 
+        classKeywords: keywordArray.length > 0 ? keywordArray : [],
+        classColor
+      });
+      toastSuccess('Class session settings saved');
     } catch (error) {
       console.error('Error saving class keywords:', error);
-      toastError('Failed to save class keywords. Please try again.');
+      toastError('Failed to save class settings. Please try again.');
     }
   };
 
@@ -1808,7 +1835,28 @@ export default function ConfigurePage() {
               {/* Coaching Keywords */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button 
+                        className={`w-4 h-4 rounded-full ${AVAILABLE_COLORS.find(c => c.value === coachingColor)?.class || 'bg-blue-500'} ring-offset-2 hover:ring-2 focus:ring-2 ring-gray-400 outline-none transition-all`}
+                        type="button"
+                        aria-label="Pick color for coaching sessions"
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3" align="start">
+                      <div className="flex gap-2">
+                        {AVAILABLE_COLORS.map((color) => (
+                          <button
+                            key={color.value}
+                            className={`w-6 h-6 rounded-full ${color.class} hover:scale-110 transition-transform ${coachingColor === color.value ? 'ring-2 ring-offset-2 ring-gray-900' : ''}`}
+                            onClick={() => setCoachingColor(color.value)}
+                            title={color.name}
+                            type="button"
+                          />
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   <label className="text-sm font-medium text-gray-700">
                     Coaching Sessions
                   </label>
@@ -1834,7 +1882,28 @@ export default function ConfigurePage() {
               {/* Class Session Keywords */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button 
+                        className={`w-4 h-4 rounded-full ${AVAILABLE_COLORS.find(c => c.value === classColor)?.class || 'bg-purple-500'} ring-offset-2 hover:ring-2 focus:ring-2 ring-gray-400 outline-none transition-all`}
+                        type="button"
+                        aria-label="Pick color for class sessions"
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3" align="start">
+                      <div className="flex gap-2">
+                        {AVAILABLE_COLORS.map((color) => (
+                          <button
+                            key={color.value}
+                            className={`w-6 h-6 rounded-full ${color.class} hover:scale-110 transition-transform ${classColor === color.value ? 'ring-2 ring-offset-2 ring-gray-900' : ''}`}
+                            onClick={() => setClassColor(color.value)}
+                            title={color.name}
+                            type="button"
+                          />
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   <label className="text-sm font-medium text-gray-700">
                     Class Sessions
                   </label>
