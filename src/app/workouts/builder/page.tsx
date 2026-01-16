@@ -15,9 +15,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  ChevronLeft,
-  ChevronRight,
-  Users,
   Layers,
   Grid3X3,
   List,
@@ -1461,141 +1458,47 @@ export default function BuilderPage() {
     }
   };
 
-  const getNavigationLabel = () => {
-    // Only day view is supported - show week range since we display workouts for the week
-    const weekStart = new Date(calendarDate);
-    weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="w-full px-1 pt-1 pb-4 space-y-2">
-        {/* Filters and Controls */}
-          <Card className="py-2">
-            <CardContent className="py-1 px-2">
-              {/* Navigation */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                {/* Left aligned - Client Selector */}
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 icon-clients" />
-                    <label className="text-sm font-medium">Client:</label>
-                  </div>
-                  <Select value={clientIdImmediate || ''} onValueChange={handleClientChange} disabled={loading}>
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Select client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {clientId && (
-                    <QuickWorkoutBuilderDialog
-                      clientId={clientId}
-                      clientName={clients.find(c => c.id === clientId)?.name || 'Unknown Client'}
-                      onWorkoutCreated={() => {
-                        // Force re-fetch by updating calendarDate (triggers useEffect)
-                        setCalendarDate(new Date(calendarDate));
-                      }}
-                    />
-                  )}
-                  <PeriodAssignmentDialog
-                    clientId={clientId || ''}
-                    clientName={clientId ? (clients.find(c => c.id === clientId)?.name || 'Unknown Client') : ''}
-                    periods={periods}
-                    workoutCategories={workoutCategories}
-                    weekTemplates={weekTemplates}
-                    onAssignPeriod={handleAssignPeriod}
-                    existingAssignments={clientId ? (clientPrograms.find(cp => cp.clientId === clientId)?.periods || []) : []}
-                  />
-                </div>
+        {/* Header */}
+        <BuilderHeader
+          clientId={clientIdImmediate}
+          clients={clients}
+          loading={loading}
+          calendarDate={calendarDate}
+          onClientChange={handleClientChange}
+          onNavigate={handleNavigate}
+          onAssignPeriod={handleAssignPeriod}
+          periods={periods}
+          workoutCategories={workoutCategories}
+          weekTemplates={weekTemplates}
+          clientPrograms={clientPrograms}
+        />
 
-                {/* Right aligned - Week Selector (matches Schedule page) */}
-                <div className="flex items-center gap-1 md:gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleNavigate('today')} className="text-xs md:text-sm px-2">
-                    Today
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleNavigate('prev')}
-                    className="p-1 md:p-2"
-                  >
-                    <ChevronLeft className="h-3 w-3 md:h-4 md:w-4 icon-builder" />
-                  </Button>
-                  <div className="min-w-[110px] md:min-w-[140px] text-center font-medium text-sm">
-                    {getNavigationLabel()}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleNavigate('next')}
-                    className="p-1 md:p-2"
-                  >
-                    <ChevronRight className="h-3 w-3 md:h-4 md:w-4 icon-builder" />
-                  </Button>
-                </div>
-              </div>
+        {/* Filters */}
+        {clientId && (
+          <BuilderFilters
+            viewMode={viewMode}
+            visibleColumns={visibleColumns}
+            onColumnVisibilityChange={handleColumnVisibilityChange}
+            workoutCategories={workoutCategories}
+            selectedCategories={selectedCategories}
+            onCategoriesChange={setSelectedCategories}
+            weekOrder={weekSettings.weekOrder}
+            onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
+          />
+        )}
 
-              {/* Workout Building Actions */}
-              {!clientId && (
-                <div className="col-span-full text-center py-8 text-muted-foreground">
-                  Please select a client to start building workouts.
-                </div>
-              )}
-
-              {/* Second Row - Column Toggle, Category Filter, Week Order */}
-              <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
-                {/* Left side - Column Toggle and Category Filter */}
-                <div className="flex items-center gap-2">
-                  <ColumnVisibilityToggle
-                    visibleColumns={visibleColumns}
-                    availableColumns={{
-                      tempo: true,
-                      distance: true,
-                      rpe: true,
-                      percentage: true
-                    }}
-                    onToggle={handleColumnVisibilityChange}
-                  />
-                  {viewMode === 'day' && workoutCategories.length > 0 && (
-                    <CategoryFilter
-                      categories={workoutCategories}
-                      selectedCategories={selectedCategories}
-                      onSelectionChange={setSelectedCategories}
-                    />
-                  )}
-                </div>
-
-                {/* Right side - Week Order */}
-                <div className="flex items-center gap-2">
-                  <label htmlFor="weekOrder" className="text-sm font-medium">Week order:</label>
-                  <Select 
-                    value={weekSettings.weekOrder} 
-                    onValueChange={(value) => setWeekSettings(prev => ({
-                      ...prev,
-                      weekOrder: value as 'ascending' | 'descending'
-                    }))}
-                  >
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ascending">Ascending</SelectItem>
-                      <SelectItem value="descending">Descending</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+        {/* No Client Selected Message */}
+        {!clientId && (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              Please select a client to start building workouts.
             </CardContent>
           </Card>
+        )}
 
         {/* Content - Structure always visible, only cell data loads */}
         <>

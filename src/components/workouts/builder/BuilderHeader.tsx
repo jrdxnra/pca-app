@@ -47,13 +47,13 @@ export function BuilderHeader({
 }: BuilderHeaderProps) {
   const selectedClient = clients.find(c => c.id === clientId);
   
-  const getNavigationLabel = () => {
+  const getNavigationLabel = React.useMemo(() => {
     const weekStart = new Date(calendarDate);
     weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
     return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-  };
+  }, [calendarDate]);
 
   return (
     <Card className="py-2">
@@ -112,7 +112,7 @@ export function BuilderHeader({
               <ChevronLeft className="h-3 w-3 md:h-4 md:w-4 icon-schedule" />
             </Button>
             <div className="min-w-[110px] md:min-w-[140px] text-center font-medium text-sm">
-              {getNavigationLabel()}
+              {getNavigationLabel}
             </div>
             <Button
               variant="outline"
