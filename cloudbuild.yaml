@@ -15,9 +15,8 @@ steps:
       - 'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}'
       - '--build-arg'
       - 'NEXT_PUBLIC_FIREBASE_APP_ID=${_NEXT_PUBLIC_FIREBASE_APP_ID}'
-      # Use cache from previous builds for faster rebuilds
-      - '--cache-from'
-      - 'gcr.io/$PROJECT_ID/pca-app:latest'
+      # Note: Docker layer caching happens automatically in Cloud Build
+      # Layers are cached if the Dockerfile and source files haven't changed
       - '-t'
       - 'gcr.io/$PROJECT_ID/pca-app:$SHORT_SHA'
       - '-t'

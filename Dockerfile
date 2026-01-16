@@ -9,10 +9,9 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies with cache mount for faster rebuilds
-# This caches node_modules between builds if package.json hasn't changed
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --prefer-offline --no-audit
+# Install dependencies
+# Note: Docker layer caching will cache this if package.json doesn't change
+RUN npm ci --prefer-offline --no-audit
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -39,10 +38,9 @@ ENV NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
 ENV NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
 
-# Build Next.js with cache mount for faster rebuilds
-# This caches .next directory between builds
-RUN --mount=type=cache,target=/app/.next/cache \
-    npm run build
+# Build Next.js
+# Note: Docker layer caching will help, but Next.js builds are inherently slow
+RUN npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
