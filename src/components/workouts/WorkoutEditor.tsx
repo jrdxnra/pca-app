@@ -116,6 +116,7 @@ import { WarmupEditor } from './WarmupEditor';
 import { RoundEditor } from './RoundEditor';
 import { MovementUsageRow } from './MovementUsageRow';
 import { ColumnVisibilityToggle } from './ColumnVisibilityToggle';
+import { WorkoutEditorForm } from './WorkoutEditorForm';
 
 const DEFAULT_TARGET_WORKLOAD: ClientWorkoutTargetWorkload = {
   useWeight: false,
@@ -1311,88 +1312,20 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           )}
 
           {/* Basic Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Workout Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="title">Title *</Label>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g., Upper Body Push Day"
-                    className={errors.title ? 'border-red-500' : ''}
-                  />
-                  {errors.title && (
-                    <p className="text-red-500 text-sm mt-1">{errors.title}</p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="time">Time</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={time}
-                    onChange={(e) => handleTimeChange(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="notes">Workout Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="General notes about this workout..."
-                  rows={3}
-                  className={errors.notes ? 'border-red-500' : ''}
-                />
-                {errors.notes && (
-                  <p className="text-red-500 text-sm mt-1">{errors.notes}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="structure">Workout Structure</Label>
-                <Select
-                  value={currentTemplateId || 'none'}
-                  onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select structure" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None (Custom)</SelectItem>
-                    {workoutStructureTemplates.map(template => {
-                      const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
-                      return (
-                        <SelectItem key={template.id} value={template.id}>
-                          <div className="flex items-center gap-2 w-full">
-                            <span>{template.name}</span>
-                            {abbrevList.length > 0 && (
-                              <div className="flex items-center gap-1 ml-auto">
-                                {abbrevList.map((item, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
-                                    style={{ backgroundColor: item.color }}
-                                  >
-                                    {item.abbrev}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+          <WorkoutEditorForm
+            title={title}
+            notes={notes}
+            time={time}
+            currentTemplateId={currentTemplateId}
+            errors={errors}
+            workoutStructureTemplates={workoutStructureTemplates}
+            workoutTypes={workoutTypes}
+            onTitleChange={setTitle}
+            onNotesChange={setNotes}
+            onTimeChange={handleTimeChange}
+            onTemplateChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
+            getTemplateAbbreviationList={getTemplateAbbreviationList}
+          />
 
 
           {/* Rounds */}
