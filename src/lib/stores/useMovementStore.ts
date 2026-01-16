@@ -73,63 +73,34 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
   },
 
   addMovement: async (movementData) => {
-    return executeMutation(
-      async () => {
-        // Get next ordinal for the category
-        const ordinal = await getNextOrdinal(movementData.categoryId);
-        
-        const id = await addMovement({
-          ...movementData,
-          ordinal
-        });
-        
-        // Refresh movements for current category
-        const { currentCategoryId } = get();
-        if (currentCategoryId === movementData.categoryId) {
-          await get().fetchMovementsByCategory(currentCategoryId);
-        } else {
-          // If not viewing this category, just add to all movements
-          const { movements } = get();
-          const newMovement: Movement = {
-            ...movementData,
-            id,
-            ordinal,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          } as Movement;
-          set({ movements: [...movements, newMovement] });
-        }
-        
-        return id;
-      },
-      {
-        optimisticUpdate: () => {
-          // Optimistically add a temporary movement (will be replaced by real one)
-          const { movements } = get();
-          const tempMovement: Movement = {
-            ...movementData,
-            id: `temp-${Date.now()}`,
-            ordinal: movements.filter(m => m.categoryId === movementData.categoryId).length,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          } as Movement;
-          set({ movements: [...movements, tempMovement], loading: true, error: null });
-        },
-        rollback: () => {
-          const { movements } = get();
-          set({ movements: movements.filter(m => !m.id.startsWith('temp-')) });
-        },
-        onError: (error) => {
-          set({ 
-            error: error.message || 'Failed to add movement',
-            loading: false 
-          });
-        },
-        onSuccess: () => {
-          set({ loading: false });
-        }
+    set({ loading: true, error: null });
+    try {
+      // Get next ordinal for the category
+      const ordinal = await getNextOrdinal(movementData.categoryId);
+      
+      const id = await addMovement({
+        ...movementData,
+        ordinal
+      });
+      
+      // Refresh movements for current category
+      const { currentCategoryId } = get();
+      if (currentCategoryId === movementData.categoryId) {
+        await get().fetchMovementsByCategory(currentCategoryId);
+      } else {
+        // If not viewing this category, fetch all to include the new one
+        await get().fetchMovements();
       }
-    );
+      
+      set({ loading: false });
+      return id;
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to add movement',
+        loading: false 
+      });
+      throw error;
+    }
   },
 
   editMovement: async (id, updates) => {
