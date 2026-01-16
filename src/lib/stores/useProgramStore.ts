@@ -21,6 +21,7 @@ import {
   getWeekStartDate,
   getWeekEndDate
 } from '@/lib/firebase/services/programs';
+import { executeMutation } from './mutationHelpers';
 
 // Cache duration in milliseconds (30 seconds)
 const CACHE_DURATION = 30 * 1000;
@@ -278,32 +279,59 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   },
 
   editProgram: async (id, updates) => {
-    set({ loading: true, error: null });
-    try {
-      await updateProgramService(id, updates);
-      
-      // Update local state
-      const { programs, currentProgram } = get();
-      const updatedPrograms = programs.map(program => 
-        program.id === id ? { ...program, ...updates } : program
-      );
-      
-      const updatedCurrentProgram = currentProgram?.id === id 
-        ? { ...currentProgram, ...updates } 
-        : currentProgram;
-      
-      set({ 
-        programs: updatedPrograms, 
-        currentProgram: updatedCurrentProgram,
-        loading: false 
-      });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to update program',
-        loading: false 
-      });
-      throw error;
-    }
+    const { programs, currentProgram } = get();
+    
+    return executeMutation(
+      async () => {
+        await updateProgramService(id, updates);
+        
+        // Update local state
+        const updatedPrograms = programs.map(program => 
+          program.id === id ? { ...program, ...updates } : program
+        );
+        
+        const updatedCurrentProgram = currentProgram?.id === id 
+          ? { ...currentProgram, ...updates } 
+          : currentProgram;
+        
+        set({ 
+          programs: updatedPrograms, 
+          currentProgram: updatedCurrentProgram
+        });
+        return undefined;
+      },
+      {
+        optimisticUpdate: () => {
+          const optimisticPrograms = programs.map(program => 
+            program.id === id ? { ...program, ...updates } : program
+          );
+          const optimisticCurrent = currentProgram?.id === id 
+            ? { ...currentProgram, ...updates } 
+            : currentProgram;
+          set({ 
+            programs: optimisticPrograms, 
+            currentProgram: optimisticCurrent,
+            loading: true, 
+            error: null 
+          });
+          return { programs, currentProgram };
+        },
+        rollback: (data) => {
+          if (data) {
+            set({ programs: data.programs, currentProgram: data.currentProgram });
+          }
+        },
+        onError: (error) => {
+          set({ 
+            error: error.message || 'Failed to update program',
+            loading: false 
+          });
+        },
+        onSuccess: () => {
+          set({ loading: false });
+        }
+      }
+    );
   },
 
   updateProgram: async (program) => {
@@ -336,26 +364,49 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   },
 
   removeProgram: async (id) => {
-    set({ loading: true, error: null });
-    try {
-      await deleteProgram(id);
-      
-      const { programs, currentProgram } = get();
-      const filteredPrograms = programs.filter(program => program.id !== id);
-      const updatedCurrentProgram = currentProgram?.id === id ? null : currentProgram;
-      
-      set({ 
-        programs: filteredPrograms,
-        currentProgram: updatedCurrentProgram,
-        loading: false 
-      });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to delete program',
-        loading: false 
-      });
-      throw error;
-    }
+    const { programs, currentProgram } = get();
+    
+    return executeMutation(
+      async () => {
+        await deleteProgram(id);
+        
+        const filteredPrograms = programs.filter(program => program.id !== id);
+        const updatedCurrentProgram = currentProgram?.id === id ? null : currentProgram;
+        
+        set({ 
+          programs: filteredPrograms,
+          currentProgram: updatedCurrentProgram
+        });
+        return undefined;
+      },
+      {
+        optimisticUpdate: () => {
+          const optimistic = programs.filter(program => program.id !== id);
+          const optimisticCurrent = currentProgram?.id === id ? null : currentProgram;
+          set({ 
+            programs: optimistic,
+            currentProgram: optimisticCurrent,
+            loading: true, 
+            error: null 
+          });
+          return { programs, currentProgram };
+        },
+        rollback: (data) => {
+          if (data) {
+            set({ programs: data.programs, currentProgram: data.currentProgram });
+          }
+        },
+        onError: (error) => {
+          set({ 
+            error: error.message || 'Failed to delete program',
+            loading: false 
+          });
+        },
+        onSuccess: () => {
+          set({ loading: false });
+        }
+      }
+    );
   },
 
   addScheduledWorkout: async (workoutData) => {
@@ -380,42 +431,79 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   },
 
   editScheduledWorkout: async (id, updates) => {
-    set({ loading: true, error: null });
-    try {
-      await updateScheduledWorkout(id, updates);
-      
-      // Update local state
-      const { scheduledWorkouts } = get();
-      const updatedWorkouts = scheduledWorkouts.map(workout => 
-        workout.id === id ? { ...workout, ...updates } : workout
-      );
-      
-      set({ scheduledWorkouts: updatedWorkouts, loading: false });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to update scheduled workout',
-        loading: false 
-      });
-      throw error;
-    }
+    const { scheduledWorkouts } = get();
+    
+    return executeMutation(
+      async () => {
+        await updateScheduledWorkout(id, updates);
+        
+        // Update local state
+        const updatedWorkouts = scheduledWorkouts.map(workout => 
+          workout.id === id ? { ...workout, ...updates } : workout
+        );
+        
+        set({ scheduledWorkouts: updatedWorkouts });
+        return undefined;
+      },
+      {
+        optimisticUpdate: () => {
+          const optimistic = scheduledWorkouts.map(workout => 
+            workout.id === id ? { ...workout, ...updates } : workout
+          );
+          set({ scheduledWorkouts: optimistic, loading: true, error: null });
+          return scheduledWorkouts;
+        },
+        rollback: (data) => {
+          if (data) {
+            set({ scheduledWorkouts: data });
+          }
+        },
+        onError: (error) => {
+          set({ 
+            error: error.message || 'Failed to update scheduled workout',
+            loading: false 
+          });
+        },
+        onSuccess: () => {
+          set({ loading: false });
+        }
+      }
+    );
   },
 
   removeScheduledWorkout: async (id) => {
-    set({ loading: true, error: null });
-    try {
-      await deleteScheduledWorkout(id);
-      
-      const { scheduledWorkouts } = get();
-      const filteredWorkouts = scheduledWorkouts.filter(workout => workout.id !== id);
-      
-      set({ scheduledWorkouts: filteredWorkouts, loading: false });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to delete scheduled workout',
-        loading: false 
-      });
-      throw error;
-    }
+    const { scheduledWorkouts } = get();
+    
+    return executeMutation(
+      async () => {
+        await deleteScheduledWorkout(id);
+        
+        const filteredWorkouts = scheduledWorkouts.filter(workout => workout.id !== id);
+        set({ scheduledWorkouts: filteredWorkouts });
+        return undefined;
+      },
+      {
+        optimisticUpdate: () => {
+          const optimistic = scheduledWorkouts.filter(workout => workout.id !== id);
+          set({ scheduledWorkouts: optimistic, loading: true, error: null });
+          return scheduledWorkouts;
+        },
+        rollback: (data) => {
+          if (data) {
+            set({ scheduledWorkouts: data });
+          }
+        },
+        onError: (error) => {
+          set({ 
+            error: error.message || 'Failed to delete scheduled workout',
+            loading: false 
+          });
+        },
+        onSuccess: () => {
+          set({ loading: false });
+        }
+      }
+    );
   },
 
   scheduleWorkout: async (programId, clientId, date, workoutTemplateId, sessionType, keepLinked = true) => {

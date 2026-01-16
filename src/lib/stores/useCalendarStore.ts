@@ -14,6 +14,7 @@ import {
   addWorkoutLinksToEvent
 } from '@/lib/google-calendar/api-client';
 import { getCalendarSyncConfig, updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
+import { executeMutation } from './mutationHelpers';
 
 // Cache duration in milliseconds (30 seconds)
 const CACHE_DURATION = 30 * 1000;
@@ -427,88 +428,125 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   },
 
   updateEvent: async (eventId: string, updates: Partial<GoogleCalendarEvent>) => {
-    set({ loading: true, error: null });
-    try {
-      const { events, isGoogleCalendarConnected } = get();
-      const existingEvent = events.find(e => e.id === eventId);
-      
-      // If connected to Google Calendar, update the event there first
-      if (isGoogleCalendarConnected && existingEvent) {
-        try {
-          // Build updates for Google Calendar API
-          const googleUpdates: Record<string, unknown> = {};
-          
-          if (updates.summary) googleUpdates.summary = updates.summary;
-          if (updates.description !== undefined) googleUpdates.description = updates.description;
-          if (updates.location) googleUpdates.location = updates.location;
-          
-          // Handle time updates
-          if (updates.start?.dateTime || updates.end?.dateTime) {
-            googleUpdates.start = updates.start || existingEvent.start;
-            googleUpdates.end = updates.end || existingEvent.end;
+    const { events, isGoogleCalendarConnected } = get();
+    const existingEvent = events.find(e => e.id === eventId);
+    
+    return executeMutation(
+      async () => {
+        // If connected to Google Calendar, update the event there first
+        if (isGoogleCalendarConnected && existingEvent) {
+          try {
+            // Build updates for Google Calendar API
+            const googleUpdates: Record<string, unknown> = {};
+            
+            if (updates.summary) googleUpdates.summary = updates.summary;
+            if (updates.description !== undefined) googleUpdates.description = updates.description;
+            if (updates.location) googleUpdates.location = updates.location;
+            
+            // Handle time updates
+            if (updates.start?.dateTime || updates.end?.dateTime) {
+              googleUpdates.start = updates.start || existingEvent.start;
+              googleUpdates.end = updates.end || existingEvent.end;
+            }
+            
+            // Get the event date for the API call
+            const eventDate = existingEvent.start.dateTime 
+              ? new Date(existingEvent.start.dateTime).toISOString()
+              : new Date().toISOString();
+            
+            const response = await fetch('/api/calendar/events/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                eventId,
+                instanceDate: eventDate,
+                updateType: 'single',
+                updates: googleUpdates,
+              }),
+            });
+            
+            if (!response.ok) {
+              const errorData = await response.json();
+              console.error('Google Calendar update failed:', errorData);
+              // Continue with local update even if Google fails
+            }
+          } catch (googleError) {
+            console.error('Failed to update Google Calendar event:', googleError);
+            // Continue with local update
           }
-          
-          // Get the event date for the API call
-          const eventDate = existingEvent.start.dateTime 
-            ? new Date(existingEvent.start.dateTime).toISOString()
-            : new Date().toISOString();
-          
-          const response = await fetch('/api/calendar/events/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              eventId,
-              instanceDate: eventDate,
-              updateType: 'single',
-              updates: googleUpdates,
-            }),
+        }
+        
+        // Also update Firebase (for local caching)
+        await updateCalendarEvent(eventId, updates);
+        
+        // Update in local state
+        const updatedEvents = events.map(event => 
+          event.id === eventId ? { ...event, ...updates } : event
+        );
+        
+        set({ events: updatedEvents });
+        return undefined;
+      },
+      {
+        optimisticUpdate: () => {
+          const optimistic = events.map(event => 
+            event.id === eventId ? { ...event, ...updates } : event
+          );
+          set({ events: optimistic, loading: true, error: null });
+          return events;
+        },
+        rollback: (data) => {
+          if (data) {
+            set({ events: data });
+          }
+        },
+        onError: (error) => {
+          set({ 
+            error: error.message || 'Failed to update event',
+            loading: false 
           });
-          
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Google Calendar update failed:', errorData);
-            // Continue with local update even if Google fails
-          }
-        } catch (googleError) {
-          console.error('Failed to update Google Calendar event:', googleError);
-          // Continue with local update
+        },
+        onSuccess: () => {
+          set({ loading: false });
         }
       }
-      
-      // Also update Firebase (for local caching)
-      await updateCalendarEvent(eventId, updates);
-      
-      // Update in local state
-      const updatedEvents = events.map(event => 
-        event.id === eventId ? { ...event, ...updates } : event
-      );
-      
-      set({ events: updatedEvents, loading: false });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to update event',
-        loading: false 
-      });
-    }
+    );
   },
 
   deleteEvent: async (eventId: string) => {
-    set({ loading: true, error: null });
-    try {
-      await deleteCalendarEvent(eventId);
-      
-      // Remove from local state
-      const { events } = get();
-      const updatedEvents = events.filter(event => event.id !== eventId);
-      
-      set({ events: updatedEvents, loading: false });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to delete event',
-        loading: false 
-      });
-      throw error;
-    }
+    const { events } = get();
+    
+    return executeMutation(
+      async () => {
+        await deleteCalendarEvent(eventId);
+        
+        // Remove from local state
+        const updatedEvents = events.filter(event => event.id !== eventId);
+        set({ events: updatedEvents });
+        return undefined;
+      },
+      {
+        optimisticUpdate: () => {
+          const optimistic = events.filter(event => event.id !== eventId);
+          set({ events: optimistic, loading: true, error: null });
+          return events;
+        },
+        rollback: (data) => {
+          if (data) {
+            set({ events: data });
+          }
+        },
+        onError: (error) => {
+          set({ 
+            error: error.message || 'Failed to delete event',
+            loading: false 
+          });
+        },
+        onSuccess: () => {
+          set({ loading: false });
+        }
+      }
+    );
   },
 
   updateConfig: (updates: Partial<CalendarSyncConfig>) => {
