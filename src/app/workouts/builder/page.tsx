@@ -33,6 +33,8 @@ import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBui
 import { WorkoutEditor, WorkoutEditorHandle } from '@/components/workouts/WorkoutEditor';
 import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
 import { CategoryFilter } from '@/components/workouts/CategoryFilter';
+import { BuilderHeader } from '@/components/workouts/builder/BuilderHeader';
+import { BuilderFilters } from '@/components/workouts/builder/BuilderFilters';
 import { Timestamp } from 'firebase/firestore';
 import { createClientWorkout, updateClientWorkout, deleteClientWorkout, getClientWorkout, fetchWorkoutsByDateRange } from '@/lib/firebase/services/clientWorkouts';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
