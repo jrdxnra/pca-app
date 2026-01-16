@@ -122,6 +122,11 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   const appTimezone = getAppTimezone();
 
   // Filter events by client at the component level BEFORE any time slot processing
+  // Filter events by client - use content-based key to detect actual changes
+  // This prevents infinite loops when array reference changes but content is same
+  // Create a stable key from array content (first 20 event IDs + length)
+  const eventsContentKey = `${allCalendarEvents.length}:${allCalendarEvents.slice(0, Math.min(20, allCalendarEvents.length)).map(e => e.id).join(',')}`;
+  
   const calendarEvents = React.useMemo(() => {
     if (!selectedClient) {
       // "All Clients" - show ALL events so coach can see their full schedule
@@ -134,7 +139,8 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
         return String(eventClientId).trim() === String(selectedClient).trim();
       });
     }
-  }, [allCalendarEvents, selectedClient]);
+    // eventsContentKey triggers re-computation when content changes, allCalendarEvents accessed from closure
+  }, [eventsContentKey, selectedClient]);
   
   // Track when component is mounted to avoid hydration mismatch with dates
   useEffect(() => {
@@ -1089,12 +1095,19 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     prevProps.includeWeekends !== nextProps.includeWeekends
   );
   
+  // Check if events content actually changed (not just reference)
+  const eventsChanged = (
+    prevProps.calendarEvents.length !== nextProps.calendarEvents.length ||
+    (prevProps.calendarEvents.length > 0 && nextProps.calendarEvents.length > 0 &&
+     prevProps.calendarEvents[0]?.id !== nextProps.calendarEvents[0]?.id)
+  );
+  
   const dataChanged = (
     prevProps.selectedClient !== nextProps.selectedClient ||
-    prevProps.calendarEvents !== nextProps.calendarEvents ||
-    prevProps.calendarEvents.length !== nextProps.calendarEvents.length ||
-    prevProps.workouts !== nextProps.workouts ||
+    eventsChanged ||
     prevProps.workouts.length !== nextProps.workouts.length ||
+    (prevProps.workouts.length > 0 && nextProps.workouts.length > 0 &&
+     prevProps.workouts[0]?.id !== nextProps.workouts[0]?.id) ||
     prevProps.clientPrograms !== nextProps.clientPrograms
   );
   
