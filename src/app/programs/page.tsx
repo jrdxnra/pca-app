@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 import { useEffect, useState, useCallback } from 'react';
 import React from 'react';
@@ -1546,6 +1547,11 @@ export default function ProgramsPage() {
     await fetchEvents({ start: startDate, end: endDate });
   };
 
+  // Prevent rendering if critical data isn't ready (prevents freeze)
+  if (!mounted) {
+    return <PageSkeleton />;
+  }
+
   return (
     <div className="w-full px-1 pt-1 pb-4 space-y-2">
       {/* Timezone Change Notification */}
@@ -1751,31 +1757,35 @@ export default function ProgramsPage() {
         <div className="flex gap-1 mt-1">
           {/* Week View - Scrollable, constrained to leave space for sidebar */}
           <div className="flex-1 min-w-0 overflow-x-auto" style={{ maxWidth: 'calc(100% - 272px)' }}>
-              <ModernCalendarView
-                viewMode="week"
-                calendarDate={calendarDate}
-                scheduledWorkouts={scheduledWorkouts}
-                selectedClient={selectedClient}
-                programs={programs}
-                clients={clients}
-                clientPrograms={clientPrograms}
-                includeWeekends={includeWeekends}
-                refreshKey={calendarKey}
-                onPeriodClick={handlePeriodClick}
-                onDateClick={handleDateClick}
-                onScheduleCellClick={handleWeekCellClick}
-                onWorkoutCellClick={(date: Date, timeSlot: Date, period?: ClientProgramPeriod) => {
-                  // When clicking workout cell, navigate to builder
-                  const dateParam = format(date, 'yyyy-MM-dd');
-                  const clientParam = selectedClient ? `client=${selectedClient}&` : '';
+            <ErrorBoundary fallback={<div className="p-4 text-center text-destructive">Error loading calendar. Please refresh the page.</div>}>
+              <React.Suspense fallback={<PageSkeleton />}>
+                <ModernCalendarView
+                  viewMode="week"
+                  calendarDate={calendarDate}
+                  scheduledWorkouts={scheduledWorkouts}
+                  selectedClient={selectedClient}
+                  programs={programs}
+                  clients={clients}
+                  clientPrograms={clientPrograms}
+                  includeWeekends={includeWeekends}
+                  refreshKey={calendarKey}
+                  onPeriodClick={handlePeriodClick}
+                  onDateClick={handleDateClick}
+                  onScheduleCellClick={handleWeekCellClick}
+                  onWorkoutCellClick={(date: Date, timeSlot: Date, period?: ClientProgramPeriod) => {
+                    // When clicking workout cell, navigate to builder
+                    const dateParam = format(date, 'yyyy-MM-dd');
+                    const clientParam = selectedClient ? `client=${selectedClient}&` : '';
 
-                  // Navigate to builder - if there's a period, the builder will handle it
-                  const buildWorkoutUrl = `/workouts/builder?${clientParam}date=${dateParam}`;
-                  window.location.href = buildWorkoutUrl;
-                }}
-                onMoveWorkoutCategory={handleMoveWorkoutCategory}
-                onEventClick={handleScheduleEventClick}
-              />
+                    // Navigate to builder - if there's a period, the builder will handle it
+                    const buildWorkoutUrl = `/workouts/builder?${clientParam}date=${dateParam}`;
+                    window.location.href = buildWorkoutUrl;
+                  }}
+                  onMoveWorkoutCategory={handleMoveWorkoutCategory}
+                  onEventClick={handleScheduleEventClick}
+                />
+              </React.Suspense>
+            </ErrorBoundary>
           </div>
 
           {/* Current Day Schedule - Side view - Always visible, fixed width */}
