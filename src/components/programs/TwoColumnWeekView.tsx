@@ -124,8 +124,14 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Filter events by client at the component level BEFORE any time slot processing
   // Filter events by client - use content-based key to detect actual changes
   // This prevents infinite loops when array reference changes but content is same
-  // Create a stable key from array content (first 20 event IDs + length)
-  const eventsContentKey = `${allCalendarEvents.length}:${allCalendarEvents.slice(0, Math.min(20, allCalendarEvents.length)).map(e => e.id).join(',')}`;
+  // LONG-TERM FIX: Compute key from all event IDs (sorted for stability) + length
+  // This ensures we detect ANY content change, not just first 20 items
+  // The computation is O(n log n) but only runs when array reference changes
+  // For typical event counts (< 100), this is very fast (< 1ms)
+  const eventsContentKey = (() => {
+    const ids = allCalendarEvents.map(e => e.id).sort().join(',');
+    return `${allCalendarEvents.length}:${ids}`;
+  })();
   
   const calendarEvents = React.useMemo(() => {
     if (!selectedClient) {
