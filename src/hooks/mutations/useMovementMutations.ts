@@ -16,7 +16,8 @@ export function useAddMovement() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (movementData: Omit<Movement, 'id' | 'createdAt' | 'updatedAt' | 'ordinal'>) => {
+    mutationFn: async (movementData: Omit<Movement, 'id' | 'createdAt' | 'updatedAt'>) => {
+      // addMovement will calculate ordinal automatically if not provided
       return await addMovement(movementData);
     },
     onSuccess: (id, variables) => {

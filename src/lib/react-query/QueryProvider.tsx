@@ -1,8 +1,20 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ReactNode, useState } from 'react';
+
+// Dynamically import devtools only in development to avoid build errors
+let ReactQueryDevtools: typeof import('@tanstack/react-query-devtools').ReactQueryDevtools | null = null;
+
+if (process.env.NODE_ENV === 'development') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const devtools = require('@tanstack/react-query-devtools');
+    ReactQueryDevtools = devtools.ReactQueryDevtools;
+  } catch {
+    // Devtools not available, that's okay
+  }
+}
 
 interface QueryProviderProps {
   children: ReactNode;
@@ -62,7 +74,7 @@ export function QueryProvider({ children }: QueryProviderProps) {
     <QueryClientProvider client={queryClient}>
       {children}
       {/* Show React Query DevTools in development */}
-      {process.env.NODE_ENV === 'development' && (
+      {process.env.NODE_ENV === 'development' && ReactQueryDevtools && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}
     </QueryClientProvider>

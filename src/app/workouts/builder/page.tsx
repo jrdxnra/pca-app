@@ -29,17 +29,27 @@ import {
 } from 'lucide-react';
 import { Client, Program, ScheduledWorkout, ClientProgramPeriod, WorkoutStructureTemplate, ClientWorkoutRound, ClientWorkout } from '@/lib/types';
 // Lazy load heavy components for code splitting
-const ModernCalendarView = dynamic(() => import('@/components/programs/ModernCalendarView'), {
-  loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
-});
+const ModernCalendarView = dynamic(
+  () => import('@/components/programs/ModernCalendarView').then(mod => ({ default: mod.ModernCalendarView })),
+  {
+    loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
+  }
+);
 
-const PeriodAssignmentDialog = dynamic(() => import('@/components/programs/PeriodAssignmentDialog'));
+const PeriodAssignmentDialog = dynamic(
+  () => import('@/components/programs/PeriodAssignmentDialog').then(mod => ({ default: mod.PeriodAssignmentDialog }))
+);
 
-const QuickWorkoutBuilderDialog = dynamic(() => import('@/components/programs/QuickWorkoutBuilderDialog'));
+const QuickWorkoutBuilderDialog = dynamic(
+  () => import('@/components/programs/QuickWorkoutBuilderDialog').then(mod => ({ default: mod.QuickWorkoutBuilderDialog }))
+);
 
-const WorkoutEditor = dynamic(() => import('@/components/workouts/WorkoutEditor'), {
-  loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
-});
+const WorkoutEditor = dynamic(
+  () => import('@/components/workouts/WorkoutEditor').then(mod => ({ default: mod.WorkoutEditor })),
+  {
+    loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
+  }
+);
 
 import type { WorkoutEditorHandle } from '@/components/workouts/WorkoutEditor';
 import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
