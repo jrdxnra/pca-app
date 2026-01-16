@@ -237,20 +237,16 @@ export function ModernCalendarView({
   }, [calendarDate, viewMode, selectedClient, refreshKey]);
 
   // Filter workouts for current view - get date range for current + adjacent weeks
-  // Memoize the date range calculation to prevent infinite loops
-  // Use a stable key based on the date's time value to prevent unnecessary recalculations
-  // CRITICAL: Use getTime() for stable comparison - Date objects are compared by reference
-  const calendarDateKey = React.useMemo(() => {
-    if (!calendarDate) return null;
-    // Create a stable key from the date's timestamp (normalized to start of day)
-    const normalizedDate = new Date(calendarDate);
-    normalizedDate.setHours(0, 0, 0, 0);
-    return normalizedDate.getTime().toString();
-  }, [calendarDate ? calendarDate.getTime() : null]); // Use getTime() for stable comparison
+  // Calculate date range timestamps directly (avoid object recreation and useMemo loops)
+  // Extract timestamp once to use as stable dependency
+  const calendarDateTimestamp = calendarDate ? (() => {
+    const normalized = new Date(calendarDate);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized.getTime();
+  })() : 0;
 
-  // Calculate date range timestamps directly (avoid object recreation)
   const dateRangeTimestamps = React.useMemo(() => {
-    if (!calendarDate) return { startTime: 0, endTime: 0 };
+    if (!calendarDate || calendarDateTimestamp === 0) return { startTime: 0, endTime: 0 };
     
     const currentWeekStart = new Date(calendarDate);
     currentWeekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -266,7 +262,7 @@ export function ModernCalendarView({
       startTime: previousWeekStart.getTime(), 
       endTime: nextWeekEnd.getTime() 
     };
-  }, [calendarDateKey]); // Use stable key
+  }, [calendarDateTimestamp]); // Use stable timestamp number instead of Date object
 
   // Filter workouts - COMPUTE DIRECTLY (no useMemo) to prevent React error #310
   // Removed useMemo entirely because array dependencies cause infinite re-renders
