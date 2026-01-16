@@ -1,7 +1,7 @@
 name: Deploy to Firebase
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Manual deployment
   push:
     branches:
       - main
@@ -16,6 +16,7 @@ on:
       - 'PROGRESS*.md'
       - 'PERFORMANCE*.md'
       - 'FIX_*.md'
+      - '.github/workflows/*.yml'  # Workflow changes don't need deployment
 
 # Cancel in-progress runs when a new deployment is triggered
 concurrency:
