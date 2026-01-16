@@ -124,14 +124,28 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Filter events by client at the component level BEFORE any time slot processing
   // Filter events by client - use content-based key to detect actual changes
   // This prevents infinite loops when array reference changes but content is same
-  // LONG-TERM FIX: Compute key from all event IDs (sorted for stability) + length
-  // This ensures we detect ANY content change, not just first 20 items
-  // The computation is O(n log n) but only runs when array reference changes
-  // For typical event counts (< 100), this is very fast (< 1ms)
-  const eventsContentKey = (() => {
+  // OPTIMIZED: Use ref to cache previous computation and only recompute when array reference changes
+  // This avoids unnecessary O(n log n) computation on every render
+  const eventsContentKeyRef = React.useRef<string>('');
+  const allCalendarEventsRef = React.useRef<GoogleCalendarEvent[]>([]);
+  
+  // Only recompute key if array reference changed
+  let eventsContentKey = eventsContentKeyRef.current;
+  if (allCalendarEventsRef.current !== allCalendarEvents) {
+    // Array reference changed - compute new key to check if content actually changed
     const ids = allCalendarEvents.map(e => e.id).sort().join(',');
-    return `${allCalendarEvents.length}:${ids}`;
-  })();
+    const newKey = `${allCalendarEvents.length}:${ids}`;
+    
+    // Only update if content actually changed (key is different)
+    if (newKey !== eventsContentKeyRef.current) {
+      eventsContentKey = newKey;
+      eventsContentKeyRef.current = newKey;
+      allCalendarEventsRef.current = allCalendarEvents;
+    } else {
+      // Content is the same, just reference changed - reuse cached key
+      allCalendarEventsRef.current = allCalendarEvents;
+    }
+  }
   
   const calendarEvents = React.useMemo(() => {
     if (!selectedClient) {
