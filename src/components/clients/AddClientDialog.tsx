@@ -240,8 +240,8 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                   <FormItem>
                     <FormLabel>Sessions/Week</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(value === '' ? undefined : parseInt(value, 10))}
-                      value={field.value?.toString() ?? ''}
+                      onValueChange={(value) => field.onChange(value === 'none' ? undefined : parseInt(value, 10))}
+                      value={field.value?.toString() ?? 'none'}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -249,7 +249,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map((num) => (
                           <SelectItem key={num} value={num.toString()}>
                             {num} {num === 1 ? 'session' : 'sessions'}
