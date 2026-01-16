@@ -1,6 +1,6 @@
-# Fix Deployment Permission Error
+# Fix Deployment Permission Error - REQUIRED ACTION
 
-## The Problem
+## ⚠️ CRITICAL: Deployments Will Keep Failing Until This Is Fixed
 
 Deployments are failing with:
 ```
@@ -10,6 +10,8 @@ Permission 'run.services.get' denied on resource 'namespaces/63362206075/service
 ## Why This Happens
 
 Firebase Hosting needs to verify that the Cloud Run service exists when you have rewrites in `firebase.json`. The Firebase service account doesn't have permission to check Cloud Run services.
+
+**This is blocking all deployments.** You must fix this manually.
 
 ## The Fix (One-Time Setup)
 
