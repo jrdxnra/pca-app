@@ -129,6 +129,7 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
           const { movements } = get();
           set({ movements });
         },
+        retry: true, // Enable retry for network errors
         onError: (error) => {
           set({ 
             error: error.message || 'Failed to update movement',
@@ -164,6 +165,7 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
             set({ movements: [...movements] });
           }
         },
+        retry: true, // Enable retry for network errors
         onError: (error) => {
           set({ 
             error: error.message || 'Failed to delete movement',
