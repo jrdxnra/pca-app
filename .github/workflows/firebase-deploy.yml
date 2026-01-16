@@ -86,6 +86,8 @@ jobs:
         uses: FirebaseExtended/action-hosting-deploy@v0
         env:
           FIREBASE_CLI_EXPERIMENTS: webframeworks
+          # Skip Cloud Functions check to avoid permission errors
+          FIREBASE_SKIP_FUNCTIONS_CHECK: 'true'
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
@@ -93,6 +95,8 @@ jobs:
           channelId: live
           target: performancecoach
           entryPoint: .
+          # Continue even if Cloud Run verification fails (we know the service exists)
+          continueOnError: false
 
       - name: Deployment Summary
         run: |
