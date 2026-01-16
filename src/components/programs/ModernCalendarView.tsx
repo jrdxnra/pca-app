@@ -211,7 +211,20 @@ export function ModernCalendarView({
   }, [calendarDate, viewMode, selectedClient, refreshKey]);
 
   // Filter workouts for current view - get date range for current + adjacent weeks
-  const getCurrentDateRange = () => {
+  // Memoize the date range calculation to prevent infinite loops
+  // Use a stable key based on the date's time value to prevent unnecessary recalculations
+  const calendarDateKey = React.useMemo(() => {
+    if (!calendarDate) return null;
+    // Create a stable key from the date (YYYY-MM-DD format)
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+    const date = calendarDate.getDate();
+    return `${year}-${month}-${date}`;
+  }, [calendarDate]);
+
+  const dateRange = React.useMemo(() => {
+    if (!calendarDate) return { start: new Date(), end: new Date() };
+    
     const currentWeekStart = new Date(calendarDate);
     currentWeekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
     const previousWeekStart = new Date(currentWeekStart);
@@ -223,15 +236,13 @@ export function ModernCalendarView({
     nextWeekEnd.setHours(23, 59, 59, 999);
     
     return { start: previousWeekStart, end: nextWeekEnd };
-  };
+  }, [calendarDateKey]); // Use stable key instead of Date object
 
   // Filter allWorkouts for current client and date range
   // Use useMemo with proper dependencies to prevent excessive re-computation
   const filteredWorkouts = React.useMemo(() => {
     // Early return if no workouts to avoid unnecessary computation
-    if (allWorkouts.length === 0) return [];
-    
-    const { start, end } = getCurrentDateRange();
+    if (allWorkouts.length === 0 || !dateRange) return [];
     
     return allWorkouts.filter(workout => {
       // If a specific client is selected, filter by that client
@@ -239,9 +250,9 @@ export function ModernCalendarView({
       
       const workoutDate = safeToDate(workout.date);
       
-      return workoutDate >= start && workoutDate <= end;
+      return workoutDate >= dateRange.start && workoutDate <= dateRange.end;
     });
-  }, [allWorkouts, selectedClient, calendarDate]);
+  }, [allWorkouts, selectedClient, calendarDateKey]); // Use stable key instead of dateRange object
 
   // Helper to get calendar events for a specific date
   const getCalendarEventsForDate = (date: Date): GoogleCalendarEvent[] => {
