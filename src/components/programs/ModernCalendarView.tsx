@@ -229,14 +229,14 @@ export function ModernCalendarView({
   // Filter workouts for current view - get date range for current + adjacent weeks
   // Memoize the date range calculation to prevent infinite loops
   // Use a stable key based on the date's time value to prevent unnecessary recalculations
+  // CRITICAL: Use getTime() for stable comparison - Date objects are compared by reference
   const calendarDateKey = React.useMemo(() => {
     if (!calendarDate) return null;
-    // Create a stable key from the date (YYYY-MM-DD format)
-    const year = calendarDate.getFullYear();
-    const month = calendarDate.getMonth();
-    const date = calendarDate.getDate();
-    return `${year}-${month}-${date}`;
-  }, [calendarDate]);
+    // Create a stable key from the date's timestamp (normalized to start of day)
+    const normalizedDate = new Date(calendarDate);
+    normalizedDate.setHours(0, 0, 0, 0);
+    return normalizedDate.getTime().toString();
+  }, [calendarDate?.getTime()]); // Use getTime() for stable comparison
 
   const dateRange = React.useMemo(() => {
     if (!calendarDate) return { start: new Date(), end: new Date() };
