@@ -13,6 +13,7 @@ import {
   getAllPersonalRecords,
   subscribeToClients
 } from '@/lib/firebase/services/clients';
+import { executeMutation } from './mutationHelpers';
 
 // Cache duration in milliseconds (30 seconds)
 const CACHE_DURATION = 30 * 1000;
@@ -151,68 +152,121 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   },
 
   editClient: async (id, updates) => {
-    set({ loading: true, error: null });
-    try {
-      await updateClient(id, updates);
-      
-      // Update local state
-      const { clients, currentClient } = get();
-      const updatedClients = clients.map(client => 
-        client.id === id ? { ...client, ...updates } : client
-      );
-      
-      // Update current client if it's the one being edited
-      const updatedCurrentClient = currentClient?.id === id 
-        ? { ...currentClient, ...updates } 
-        : currentClient;
-      
-      set({ 
-        clients: updatedClients, 
-        currentClient: updatedCurrentClient,
-        loading: false 
-      });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to update client',
-        loading: false 
-      });
-      throw error;
-    }
+    const { clients, currentClient } = get();
+    
+    return executeMutation(
+      async () => {
+        await updateClient(id, updates);
+        
+        // Update local state
+        const updatedClients = clients.map(client => 
+          client.id === id ? { ...client, ...updates } : client
+        );
+        
+        // Update current client if it's the one being edited
+        const updatedCurrentClient = currentClient?.id === id 
+          ? { ...currentClient, ...updates } 
+          : currentClient;
+        
+        set({ 
+          clients: updatedClients, 
+          currentClient: updatedCurrentClient
+        });
+        return undefined;
+      },
+      {
+        optimisticUpdate: () => {
+          const optimisticClients = clients.map(client => 
+            client.id === id ? { ...client, ...updates } : client
+          );
+          const optimisticCurrent = currentClient?.id === id 
+            ? { ...currentClient, ...updates } 
+            : currentClient;
+          set({ 
+            clients: optimisticClients, 
+            currentClient: optimisticCurrent,
+            loading: true, 
+            error: null 
+          });
+          return { clients, currentClient }; // Return for rollback
+        },
+        rollback: (data) => {
+          if (data) {
+            set({ clients: data.clients, currentClient: data.currentClient });
+          }
+        },
+        onError: (error) => {
+          set({ 
+            error: error.message || 'Failed to update client',
+            loading: false 
+          });
+        },
+        onSuccess: () => {
+          set({ loading: false });
+        }
+      }
+    );
   },
 
   deleteClient: async (id) => {
-    set({ loading: true, error: null });
-    try {
-      await softDeleteClient(id);
-      
-      // Update local state
-      const { clients, currentClient, includeDeleted } = get();
-      
-      if (includeDeleted) {
-        // Mark as deleted in local state
-        const updatedClients = clients.map(client => 
-          client.id === id ? { ...client, isDeleted: true } : client
-        );
-        set({ clients: updatedClients });
-      } else {
-        // Remove from local state
-        const filteredClients = clients.filter(client => client.id !== id);
-        set({ clients: filteredClients });
+    const { clients, currentClient, includeDeleted } = get();
+    const deletedClient = clients.find(c => c.id === id);
+    
+    return executeMutation(
+      async () => {
+        await softDeleteClient(id);
+        
+        // Update local state
+        if (includeDeleted) {
+          // Mark as deleted in local state
+          const updatedClients = clients.map(client => 
+            client.id === id ? { ...client, isDeleted: true } : client
+          );
+          set({ clients: updatedClients });
+        } else {
+          // Remove from local state
+          const filteredClients = clients.filter(client => client.id !== id);
+          set({ clients: filteredClients });
+        }
+        
+        // Clear current client if it's the one being deleted
+        if (currentClient?.id === id) {
+          set({ currentClient: null });
+        }
+        return undefined;
+      },
+      {
+        optimisticUpdate: () => {
+          if (includeDeleted) {
+            const optimistic = clients.map(client => 
+              client.id === id ? { ...client, isDeleted: true } : client
+            );
+            set({ clients: optimistic, loading: true, error: null });
+          } else {
+            const optimistic = clients.filter(client => client.id !== id);
+            set({ clients: optimistic, loading: true, error: null });
+          }
+          if (currentClient?.id === id) {
+            set({ currentClient: null });
+          }
+          return { clients, currentClient }; // Return for rollback
+        },
+        rollback: (data) => {
+          if (data) {
+            set({ clients: data.clients, currentClient: data.currentClient });
+          }
+        },
+        onError: (error) => {
+          set({ 
+            error: error.message || 'Failed to delete client',
+            loading: false 
+          });
+        },
+        onSuccess: () => {
+          set({ loading: false });
+        }
       }
-      
-      // Clear current client if it's the one being deleted
-      if (currentClient?.id === id) {
-        set({ currentClient: null });
-      }
-      
-      set({ loading: false });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to delete client',
-        loading: false 
-      });
-      throw error;
-    }
+    );
   },
 
   permanentDeleteClient: async (id) => {
