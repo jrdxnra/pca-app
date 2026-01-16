@@ -2,7 +2,7 @@
 
 ## Current Setup
 
-**Auto-deploy on push to main** - Every code change triggers a deployment.
+**Manual deployment only** - Deploy via GitHub Actions UI when ready.
 
 ### Pros:
 - ✅ Always up-to-date
