@@ -157,7 +157,15 @@ export function ModernCalendarView({
                 });
                 
                 // Combine: workouts outside range + fresh workouts from fetch
-                return [...workoutsOutsideRange, ...freshWorkouts];
+                const newWorkouts = [...workoutsOutsideRange, ...freshWorkouts];
+                
+                // Only update if the data actually changed (prevent infinite loops)
+                if (prev.length === newWorkouts.length && 
+                    prev.every((w, i) => w.id === newWorkouts[i]?.id)) {
+                  return prev; // Return same reference if nothing changed
+                }
+                
+                return newWorkouts;
               });
             })
             .catch(error => {
@@ -184,7 +192,15 @@ export function ModernCalendarView({
                 });
                 
                 // Combine: workouts outside range + fresh workouts from fetch
-                return [...workoutsOutsideRange, ...freshWorkouts];
+                const newWorkouts = [...workoutsOutsideRange, ...freshWorkouts];
+                
+                // Only update if the data actually changed (prevent infinite loops)
+                if (prev.length === newWorkouts.length && 
+                    prev.every((w, i) => w.id === newWorkouts[i]?.id)) {
+                  return prev; // Return same reference if nothing changed
+                }
+                
+                return newWorkouts;
               });
             })
             .catch(error => {
@@ -240,19 +256,35 @@ export function ModernCalendarView({
 
   // Filter allWorkouts for current client and date range
   // Use useMemo with proper dependencies to prevent excessive re-computation
+  // IMPORTANT: Use JSON.stringify for stable comparison of dateRange to prevent infinite loops
+  const dateRangeKey = React.useMemo(() => {
+    if (!dateRange) return null;
+    return `${dateRange.start.getTime()}-${dateRange.end.getTime()}`;
+  }, [dateRange?.start.getTime(), dateRange?.end.getTime()]);
+
+  // Filter workouts - use useMemo with stable dependencies
+  // CRITICAL FIX: Access allWorkouts directly but use stable comparison
+  // The key is to ensure dateRangeKey is truly stable (which we fixed above)
   const filteredWorkouts = React.useMemo(() => {
     // Early return if no workouts to avoid unnecessary computation
-    if (allWorkouts.length === 0 || !dateRange) return [];
+    if (!allWorkouts || allWorkouts.length === 0 || !dateRange) return [];
     
-    return allWorkouts.filter(workout => {
-      // If a specific client is selected, filter by that client
-      if (selectedClient && workout.clientId !== selectedClient) return false;
-      
-      const workoutDate = safeToDate(workout.date);
-      
-      return workoutDate >= dateRange.start && workoutDate <= dateRange.end;
-    });
-  }, [allWorkouts, selectedClient, calendarDateKey]); // Use stable key instead of dateRange object
+    try {
+      return allWorkouts.filter(workout => {
+        // If a specific client is selected, filter by that client
+        if (selectedClient && workout.clientId !== selectedClient) return false;
+        
+        const workoutDate = safeToDate(workout.date);
+        
+        return workoutDate >= dateRange.start && workoutDate <= dateRange.end;
+      });
+    } catch (error) {
+      console.error('Error filtering workouts:', error);
+      return [];
+    }
+    // Depend on allWorkouts array directly - React will handle reference comparison
+    // The key is that dateRangeKey is stable, so this won't run infinitely
+  }, [allWorkouts, selectedClient, dateRangeKey]);
 
   // Helper to get calendar events for a specific date
   const getCalendarEventsForDate = (date: Date): GoogleCalendarEvent[] => {
