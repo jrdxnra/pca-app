@@ -16,26 +16,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check-deploy:
-    runs-on: ubuntu-latest
-    outputs:
-      should-deploy: ${{ steps.check.outputs.should-deploy }}
-    steps:
-      - name: Check if deployment is needed
-        id: check
-        run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          if echo "$COMMIT_MSG" | grep -q "\[deploy\]"; then
-            echo "should-deploy=true" >> $GITHUB_OUTPUT
-            echo "✅ Commit message contains [deploy], will deploy"
-          else
-            echo "should-deploy=false" >> $GITHUB_OUTPUT
-            echo "⏭️  Commit message doesn't contain [deploy], skipping deployment"
-          fi
-
   deploy:
-    needs: check-deploy
-    if: needs.check-deploy.outputs.should-deploy == 'true' || github.event_name == 'workflow_dispatch'
+    # Only run if commit message contains [deploy] OR manually triggered
+    if: contains(github.event.head_commit.message, '[deploy]') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     
     steps:
