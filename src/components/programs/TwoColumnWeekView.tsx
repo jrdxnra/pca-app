@@ -173,6 +173,13 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   };
 
   // Memoize week calculation to prevent unnecessary recalculations
+  // Use getTime() for stable comparison to prevent infinite loops
+  const calendarDateTimestamp = calendarDate ? (() => {
+    const normalized = new Date(calendarDate);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized.getTime();
+  })() : 0;
+  
   const { weekStart, weekDays } = useMemo(() => {
     // Use UTC-based calculation to avoid timezone issues between server and client
     // Extract year, month, day from calendarDate to create a consistent local date
@@ -203,7 +210,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     }
     
     return { weekStart: start, weekDays: days };
-  }, [calendarDate, includeWeekends]);
+  }, [calendarDateTimestamp, includeWeekends]); // Use stable timestamp instead of Date object
   
   // Ensure weekDays is properly populated
   React.useEffect(() => {
