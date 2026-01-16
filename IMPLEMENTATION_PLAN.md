@@ -618,9 +618,11 @@ This plan breaks down the architectural improvements into manageable, trackable 
 
 **Current Phase:** Phase 1.3 - Add Code Splitting
 
-**Completed Tasks:** 8 / 50+
+**Completed Tasks:** 12 / 50+
 - ✅ Phase 1.1: React Query Setup (QueryProvider, queryKeys)
-- ✅ Phase 1.2: Movements migrated to React Query (hooks created, WorkoutEditor updated)
+- ✅ Phase 1.2: Movements migrated to React Query (hooks created, WorkoutEditor updated with loading skeleton)
+- ✅ Phase 1.3: Code Splitting (lazy load heavy components, page skeletons)
+- ✅ Phase 1.4: Navigation Loading States (NavigationLoader component)
 
 **Blockers:** None
 
