@@ -1,6 +1,12 @@
 # How to Deploy to Firebase
 
-## Quick Deploy
+## Automatic Deployment (Recommended)
+
+**Just ask me to deploy!** I'll add `[deploy]` to the commit message and it will deploy automatically.
+
+Example: "Please deploy to Firebase" → I commit with message "Your changes [deploy]"
+
+## Manual Deployment (Alternative)
 
 1. Go to: https://github.com/jrdxnra/pca-app/actions
 2. Click **"Deploy to Firebase"** workflow (left sidebar)
@@ -8,7 +14,11 @@
 4. Select branch: **`main`**
 5. Click **"Run workflow"**
 
-That's it! Deployment will start.
+## How It Works
+
+- **Normal commits** (without `[deploy]`) = No deployment (saves resources)
+- **Commits with `[deploy]`** = Automatic deployment
+- **Manual trigger** = Always deploys (via GitHub Actions UI)
 
 ## What Happens
 
