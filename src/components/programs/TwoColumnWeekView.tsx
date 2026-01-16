@@ -122,7 +122,8 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Get app timezone (defaults to Pacific)
   const appTimezone = getAppTimezone();
 
-  // Filter events by client at the component level BEFORE any time slot processing
+  // Filter events by client - use length to detect changes, access array from closure
+  // This prevents infinite loops from array reference changes
   const calendarEvents = React.useMemo(() => {
     if (!selectedClient) {
       // "All Clients" - show ALL events so coach can see their full schedule
@@ -135,7 +136,8 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
         return String(eventClientId).trim() === String(selectedClient).trim();
       });
     }
-  }, [allCalendarEvents, selectedClient]);
+    // Use length instead of array reference to prevent infinite loops
+  }, [allCalendarEvents.length, selectedClient]);
   
   // Track when component is mounted to avoid hydration mismatch with dates
   useEffect(() => {
