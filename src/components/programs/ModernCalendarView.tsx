@@ -226,7 +226,11 @@ export function ModernCalendarView({
   };
 
   // Filter allWorkouts for current client and date range
+  // Use useMemo with proper dependencies to prevent excessive re-computation
   const filteredWorkouts = React.useMemo(() => {
+    // Early return if no workouts to avoid unnecessary computation
+    if (allWorkouts.length === 0) return [];
+    
     const { start, end } = getCurrentDateRange();
     
     return allWorkouts.filter(workout => {

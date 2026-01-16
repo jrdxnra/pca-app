@@ -222,21 +222,8 @@ export default function ProgramsPage() {
   const lastFetchTimeRef = React.useRef(0); // Use ref instead of state to avoid re-renders
   
   // Fetch calendar events when calendar date changes or when navigating to this page
-  useEffect(() => {
-    if (!calendarDate) return;
-
-    // Get week range for the calendar view
-    const startDate = new Date(calendarDate);
-    startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
-
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
-
-    fetchEvents({ start: startDate, end: endDate });
-    lastFetchTimeRef.current = Date.now(); // Update ref instead of state
-  }, [calendarDate, fetchEvents]);
+  // REMOVED: ModernCalendarView now handles its own event fetching to avoid duplicate requests
+  // This prevents the double-fetch that was causing performance issues
   
   // Force refresh when page becomes visible or receives focus (user navigates back)
   useEffect(() => {
@@ -1548,7 +1535,8 @@ export default function ProgramsPage() {
   };
 
   // Prevent rendering if critical data isn't ready (prevents freeze)
-  if (!mounted) {
+  // Also wait for initial data to load before rendering calendar
+  if (!mounted || (clientProgramsLoading && clientPrograms.length === 0)) {
     return <PageSkeleton />;
   }
 
