@@ -172,28 +172,25 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
   },
 
   removeMovement: async (id) => {
+    const { movements } = get();
+    const removedMovement = movements.find(m => m.id === id);
+    
     return executeMutation(
       async () => {
         await deleteMovement(id);
         
-        const { movements } = get();
         const filteredMovements = movements.filter(movement => movement.id !== id);
-        
         set({ movements: filteredMovements });
         return undefined;
       },
       {
         optimisticUpdate: () => {
-          const { movements } = get();
-          const removed = movements.find(m => m.id === id);
           const filtered = movements.filter(movement => movement.id !== id);
           set({ movements: filtered, loading: true, error: null });
-          return removed; // Return for rollback
         },
-        rollback: (removed) => {
-          if (removed) {
-            const { movements } = get();
-            set({ movements: [...movements, removed] });
+        rollback: () => {
+          if (removedMovement) {
+            set({ movements: [...movements] });
           }
         },
         onError: (error) => {

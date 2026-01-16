@@ -6,8 +6,8 @@
 export interface MutationOptions<T> {
   onSuccess?: (result: T) => void;
   onError?: (error: Error) => void;
-  optimisticUpdate?: () => void;
-  rollback?: () => void;
+  optimisticUpdate?: () => void | any; // Can return data for rollback
+  rollback?: (data?: any) => void; // Receives data from optimisticUpdate if returned
   showError?: boolean;
 }
 
@@ -21,8 +21,9 @@ export async function executeMutation<T>(
   const { optimisticUpdate, rollback, onSuccess, onError, showError = true } = options;
 
   // Apply optimistic update if provided
+  let rollbackData: any = undefined;
   if (optimisticUpdate) {
-    optimisticUpdate();
+    rollbackData = optimisticUpdate();
   }
 
   try {
@@ -36,7 +37,7 @@ export async function executeMutation<T>(
   } catch (error) {
     // Rollback optimistic update on error
     if (rollback) {
-      rollback();
+      rollback(rollbackData);
     }
     
     const errorObj = error instanceof Error ? error : new Error(String(error));
