@@ -108,6 +108,7 @@ function getTemplateAbbreviationList(template: WorkoutStructureTemplate, workout
       };
     });
 }
+import { useMovements } from '@/hooks/queries/useMovements';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
@@ -116,6 +117,7 @@ import { WarmupEditor } from './WarmupEditor';
 import { RoundEditor } from './RoundEditor';
 import { MovementUsageRow } from './MovementUsageRow';
 import { ColumnVisibilityToggle } from './ColumnVisibilityToggle';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const DEFAULT_TARGET_WORKLOAD: ClientWorkoutTargetWorkload = {
   useWeight: false,
@@ -223,7 +225,8 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   onDelete,
   draftKey
 }, ref) {
-  const { movements, fetchMovements } = useMovementStore();
+  // Use React Query for movements (with caching and deduplication)
+  const { data: movements = [], isLoading: movementsLoading } = useMovements(true); // includeCategory = true
   const { categories, fetchCategories } = useMovementCategoryStore();
   const { workoutStructureTemplates, workoutTypes, fetchWorkoutTypes } = useConfigurationStore();
   const { events, updateEvent } = useCalendarStore();
@@ -301,11 +304,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     });
   });
 
-  // Load data on mount - ALWAYS fetch all movements to ensure we have the full list
-  // (movements page may have filtered to single category)
+  // Load data on mount - React Query handles movements fetching automatically
+  // Only fetch categories and workout types if not already loaded
   useEffect(() => {
-    console.log('[WorkoutEditor] Mounting, fetching all movements...');
-    fetchMovements(); // Always fetch to ensure we have ALL movements, not just a filtered subset
+    console.log('[WorkoutEditor] Mounting, movements will load via React Query...');
     if (categories.length === 0) fetchCategories();
     if (workoutTypes.length === 0) fetchWorkoutTypes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -313,8 +315,8 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   
   // Debug: Log when movements change
   useEffect(() => {
-    console.log('[WorkoutEditor] Movements updated:', movements.length, 'categories in movements:', [...new Set(movements.map(m => m.categoryId))]);
-  }, [movements]);
+    console.log('[WorkoutEditor] Movements updated:', movements.length, 'categories in movements:', [...new Set(movements.map(m => m.categoryId))], 'loading:', movementsLoading);
+  }, [movements, movementsLoading]);
 
   // Initialize form when workout changes (only when workout ID actually changes)
   useEffect(() => {
@@ -878,6 +880,20 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
         {/* Content */}
         <div className="space-y-0">
+          {/* Loading skeleton while movements load */}
+          {movementsLoading && movements.length === 0 && (
+            <div className="p-4 space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            </div>
+          )}
+
           {/* General Error */}
           {errors.general && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-2 py-0.5 rounded">
