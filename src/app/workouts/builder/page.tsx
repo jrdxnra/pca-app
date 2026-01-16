@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from 'next/dynamic';
 import React, { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -27,10 +28,20 @@ import {
   Plus
 } from 'lucide-react';
 import { Client, Program, ScheduledWorkout, ClientProgramPeriod, WorkoutStructureTemplate, ClientWorkoutRound, ClientWorkout } from '@/lib/types';
-import { ModernCalendarView } from '@/components/programs/ModernCalendarView';
-import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
-import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBuilderDialog';
-import { WorkoutEditor, WorkoutEditorHandle } from '@/components/workouts/WorkoutEditor';
+// Lazy load heavy components for code splitting
+const ModernCalendarView = dynamic(() => import('@/components/programs/ModernCalendarView'), {
+  loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
+});
+
+const PeriodAssignmentDialog = dynamic(() => import('@/components/programs/PeriodAssignmentDialog'));
+
+const QuickWorkoutBuilderDialog = dynamic(() => import('@/components/programs/QuickWorkoutBuilderDialog'));
+
+const WorkoutEditor = dynamic(() => import('@/components/workouts/WorkoutEditor'), {
+  loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
+});
+
+import type { WorkoutEditorHandle } from '@/components/workouts/WorkoutEditor';
 import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
 import { CategoryFilter } from '@/components/workouts/CategoryFilter';
 import { Timestamp } from 'firebase/firestore';

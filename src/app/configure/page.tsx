@@ -1,5 +1,8 @@
 "use client";
 
+import dynamic from 'next/dynamic';
+import { PageSkeleton } from '@/components/ui/PageSkeleton';
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

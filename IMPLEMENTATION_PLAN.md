@@ -612,13 +612,15 @@ This plan breaks down the architectural improvements into manageable, trackable 
 
 ## Progress Tracking
 
-### Current Status: ⬜ Not Started
+### Current Status: 🟡 In Progress
 
-**Last Updated:** [Date will be updated as we progress]
+**Last Updated:** 2026-01-15
 
-**Current Phase:** Phase 1.1 - Add React Query Setup
+**Current Phase:** Phase 1.3 - Add Code Splitting
 
-**Completed Tasks:** 0 / 50+
+**Completed Tasks:** 8 / 50+
+- ✅ Phase 1.1: React Query Setup (QueryProvider, queryKeys)
+- ✅ Phase 1.2: Movements migrated to React Query (hooks created, WorkoutEditor updated)
 
 **Blockers:** None
 

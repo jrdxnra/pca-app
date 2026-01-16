@@ -1,5 +1,8 @@
 "use client";
 
+import dynamic from 'next/dynamic';
+import { PageSkeleton } from '@/components/ui/PageSkeleton';
+
 import { useEffect, useState, useCallback } from 'react';
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
