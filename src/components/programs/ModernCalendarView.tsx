@@ -268,19 +268,19 @@ export function ModernCalendarView({
     };
   }, [calendarDateKey]); // Use stable key
 
-  // Filter workouts - COMPUTE DIRECTLY to prevent React error #310 infinite loops
-  // Removed useMemo because array dependencies cause infinite re-renders
+  // Filter workouts - COMPUTE DIRECTLY (no useMemo) to prevent React error #310
+  // Removed useMemo entirely because array dependencies cause infinite re-renders
   // The filtering is fast enough that memoization isn't critical
-  const startDate = dateRangeTimestamps.startTime > 0 ? new Date(dateRangeTimestamps.startTime) : null;
-  const endDate = dateRangeTimestamps.endTime > 0 ? new Date(dateRangeTimestamps.endTime) : null;
-  
-  const filteredWorkouts = React.useMemo(() => {
-    // Early return if no workouts or invalid date range
-    if (!allWorkouts || allWorkouts.length === 0 || !startDate || !endDate) {
+  const filteredWorkouts = (() => {
+    // Early return if no workouts
+    if (!allWorkouts || allWorkouts.length === 0 || dateRangeTimestamps.startTime === 0) {
       return [];
     }
     
     try {
+      const startDate = new Date(dateRangeTimestamps.startTime);
+      const endDate = new Date(dateRangeTimestamps.endTime);
+      
       return allWorkouts.filter(workout => {
         // If a specific client is selected, filter by that client
         if (selectedClient && workout.clientId !== selectedClient) return false;
@@ -293,9 +293,7 @@ export function ModernCalendarView({
       console.error('Error filtering workouts:', error);
       return [];
     }
-    // CRITICAL: Only depend on primitives - access allWorkouts from closure
-    // This prevents infinite loops from array reference changes
-  }, [selectedClient, dateRangeTimestamps.startTime, dateRangeTimestamps.endTime, allWorkouts.length]);
+  })();
 
   // Helper to get calendar events for a specific date
   const getCalendarEventsForDate = (date: Date): GoogleCalendarEvent[] => {
