@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Providers } from "@/components/Providers";
+import { NavigationLoader } from "@/components/NavigationLoader";
 
 // This layout injects runtime config (from Cloud Run env vars) for the client.
 // Force dynamic rendering so we don't bake empty env vars into a prerendered HTML file.
@@ -45,6 +46,7 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased" suppressHydrationWarning>
         <Providers>
+          <NavigationLoader />
           <div className="min-h-screen bg-background">
             <Header />
             <main>
