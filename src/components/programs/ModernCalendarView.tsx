@@ -160,9 +160,14 @@ export function ModernCalendarView({
                 const newWorkouts = [...workoutsOutsideRange, ...freshWorkouts];
                 
                 // Only update if the data actually changed (prevent infinite loops)
-                if (prev.length === newWorkouts.length && 
-                    prev.every((w, i) => w.id === newWorkouts[i]?.id)) {
-                  return prev; // Return same reference if nothing changed
+                // Compare by creating a set of IDs for efficient comparison
+                const prevIds = new Set(prev.map(w => w.id));
+                const newIds = new Set(newWorkouts.map(w => w.id));
+                
+                if (prevIds.size === newIds.size && 
+                    Array.from(prevIds).every(id => newIds.has(id))) {
+                  // Same workouts, return previous reference to prevent re-render
+                  return prev;
                 }
                 
                 return newWorkouts;
@@ -195,9 +200,14 @@ export function ModernCalendarView({
                 const newWorkouts = [...workoutsOutsideRange, ...freshWorkouts];
                 
                 // Only update if the data actually changed (prevent infinite loops)
-                if (prev.length === newWorkouts.length && 
-                    prev.every((w, i) => w.id === newWorkouts[i]?.id)) {
-                  return prev; // Return same reference if nothing changed
+                // Compare by creating a set of IDs for efficient comparison
+                const prevIds = new Set(prev.map(w => w.id));
+                const newIds = new Set(newWorkouts.map(w => w.id));
+                
+                if (prevIds.size === newIds.size && 
+                    Array.from(prevIds).every(id => newIds.has(id))) {
+                  // Same workouts, return previous reference to prevent re-render
+                  return prev;
                 }
                 
                 return newWorkouts;
