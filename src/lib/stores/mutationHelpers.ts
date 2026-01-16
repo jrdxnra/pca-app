@@ -9,16 +9,44 @@ export interface MutationOptions<T> {
   optimisticUpdate?: () => void | any; // Can return data for rollback
   rollback?: (data?: any) => void; // Receives data from optimisticUpdate if returned
   showError?: boolean;
+  retry?: boolean; // Enable retry on network errors
+  maxRetries?: number; // Max retry attempts (default: 3)
 }
 
 /**
  * Execute a mutation with optimistic updates and error handling
  */
+/**
+ * Check if error is retryable (network errors, timeouts, 5xx errors)
+ */
+function isRetryableError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  const retryablePatterns = [
+    'network',
+    'timeout',
+    'fetch',
+    'connection',
+    'econnreset',
+    'etimedout',
+    'enotfound'
+  ];
+  
+  return retryablePatterns.some(pattern => message.includes(pattern));
+}
+
 export async function executeMutation<T>(
   mutationFn: () => Promise<T>,
   options: MutationOptions<T> = {}
 ): Promise<T> {
-  const { optimisticUpdate, rollback, onSuccess, onError, showError = true } = options;
+  const { 
+    optimisticUpdate, 
+    rollback, 
+    onSuccess, 
+    onError, 
+    showError = true,
+    retry = false,
+    maxRetries = 3
+  } = options;
 
   // Apply optimistic update if provided
   let rollbackData: any = undefined;
@@ -26,8 +54,12 @@ export async function executeMutation<T>(
     rollbackData = optimisticUpdate();
   }
 
+  const executeWithRetry = retry 
+    ? () => retryMutation(mutationFn, maxRetries)
+    : mutationFn;
+
   try {
-    const result = await mutationFn();
+    const result = await executeWithRetry();
     
     if (onSuccess) {
       onSuccess(result);
@@ -56,6 +88,7 @@ export async function executeMutation<T>(
 
 /**
  * Retry a mutation with exponential backoff
+ * Only retries on network/connection errors, not validation errors
  */
 export async function retryMutation<T>(
   mutationFn: () => Promise<T>,
@@ -70,6 +103,11 @@ export async function retryMutation<T>(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
+      // Don't retry if error is not retryable (validation errors, etc.)
+      if (!isRetryableError(lastError)) {
+        throw lastError;
+      }
+      
       // Don't retry on last attempt
       if (attempt === maxRetries) {
         throw lastError;
@@ -77,6 +115,7 @@ export async function retryMutation<T>(
       
       // Exponential backoff: 1s, 2s, 4s
       const delay = initialDelay * Math.pow(2, attempt);
+      console.warn(`Mutation failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
