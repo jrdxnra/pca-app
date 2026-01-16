@@ -236,7 +236,7 @@ export function ModernCalendarView({
     const normalizedDate = new Date(calendarDate);
     normalizedDate.setHours(0, 0, 0, 0);
     return normalizedDate.getTime().toString();
-  }, [calendarDate?.getTime()]); // Use getTime() for stable comparison
+  }, [calendarDate ? calendarDate.getTime() : null]); // Use getTime() for stable comparison
 
   const dateRange = React.useMemo(() => {
     if (!calendarDate) return { start: new Date(), end: new Date() };
