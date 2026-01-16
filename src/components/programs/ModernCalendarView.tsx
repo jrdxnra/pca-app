@@ -238,8 +238,9 @@ export function ModernCalendarView({
     return normalizedDate.getTime().toString();
   }, [calendarDate ? calendarDate.getTime() : null]); // Use getTime() for stable comparison
 
-  const dateRange = React.useMemo(() => {
-    if (!calendarDate) return { start: new Date(), end: new Date() };
+  // Calculate date range timestamps directly (avoid object recreation)
+  const dateRangeTimestamps = React.useMemo(() => {
+    if (!calendarDate) return { startTime: 0, endTime: 0 };
     
     const currentWeekStart = new Date(calendarDate);
     currentWeekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -251,40 +252,35 @@ export function ModernCalendarView({
     previousWeekStart.setHours(0, 0, 0, 0);
     nextWeekEnd.setHours(23, 59, 59, 999);
     
-    return { start: previousWeekStart, end: nextWeekEnd };
-  }, [calendarDateKey]); // Use stable key instead of Date object
+    return { 
+      startTime: previousWeekStart.getTime(), 
+      endTime: nextWeekEnd.getTime() 
+    };
+  }, [calendarDateKey]); // Use stable key
 
-  // Filter allWorkouts for current client and date range
-  // Use useMemo with proper dependencies to prevent excessive re-computation
-  // IMPORTANT: Use JSON.stringify for stable comparison of dateRange to prevent infinite loops
-  const dateRangeKey = React.useMemo(() => {
-    if (!dateRange) return null;
-    return `${dateRange.start.getTime()}-${dateRange.end.getTime()}`;
-  }, [dateRange?.start.getTime(), dateRange?.end.getTime()]);
-
-  // Filter workouts - use useMemo with stable dependencies
-  // CRITICAL FIX: Access allWorkouts directly but use stable comparison
-  // The key is to ensure dateRangeKey is truly stable (which we fixed above)
+  // Filter workouts - CRITICAL: Use timestamps instead of Date objects to prevent infinite loops
   const filteredWorkouts = React.useMemo(() => {
     // Early return if no workouts to avoid unnecessary computation
-    if (!allWorkouts || allWorkouts.length === 0 || !dateRange) return [];
+    if (!allWorkouts || allWorkouts.length === 0 || dateRangeTimestamps.startTime === 0) return [];
     
     try {
+      const startDate = new Date(dateRangeTimestamps.startTime);
+      const endDate = new Date(dateRangeTimestamps.endTime);
+      
       return allWorkouts.filter(workout => {
         // If a specific client is selected, filter by that client
         if (selectedClient && workout.clientId !== selectedClient) return false;
         
         const workoutDate = safeToDate(workout.date);
         
-        return workoutDate >= dateRange.start && workoutDate <= dateRange.end;
+        return workoutDate >= startDate && workoutDate <= endDate;
       });
     } catch (error) {
       console.error('Error filtering workouts:', error);
       return [];
     }
-    // Depend on allWorkouts array directly - React will handle reference comparison
-    // The key is that dateRangeKey is stable, so this won't run infinitely
-  }, [allWorkouts, selectedClient, dateRangeKey]);
+    // Use timestamps and array length - avoid object references in dependencies
+  }, [allWorkouts.length, selectedClient, dateRangeTimestamps.startTime, dateRangeTimestamps.endTime]);
 
   // Helper to get calendar events for a specific date
   const getCalendarEventsForDate = (date: Date): GoogleCalendarEvent[] => {
