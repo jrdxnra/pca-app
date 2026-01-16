@@ -1503,15 +1503,21 @@ export default function BuilderPage() {
                     <Users className="h-4 w-4 icon-clients" />
                     <label className="text-sm font-medium">Client:</label>
                   </div>
-                  <Select value={clientIdImmediate || ''} onValueChange={handleClientChange} disabled={loading}>
+                  <Select 
+                    value={clientIdImmediate || undefined} 
+                    onValueChange={handleClientChange} 
+                    disabled={loading}
+                  >
                     <SelectTrigger className="w-[200px]">
                       <SelectValue placeholder="Select client" />
                     </SelectTrigger>
                     <SelectContent>
                       {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
+                        client.id && (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.name}
+                          </SelectItem>
+                        )
                       ))}
                     </SelectContent>
                   </Select>
@@ -2181,15 +2187,17 @@ export default function BuilderPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {workoutCategories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.name}>
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
-                                style={{ backgroundColor: cat.color }}
-                              />
-                              {cat.name}
-                            </div>
-                          </SelectItem>
+                          cat.name && (
+                            <SelectItem key={cat.id} value={cat.name}>
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  className="w-3 h-3 rounded-full" 
+                                  style={{ backgroundColor: cat.color }}
+                                />
+                                {cat.name}
+                              </div>
+                            </SelectItem>
+                          )
                         ))}
                       </SelectContent>
                     </Select>
