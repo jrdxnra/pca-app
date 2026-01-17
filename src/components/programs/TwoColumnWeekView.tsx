@@ -122,13 +122,8 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Get app timezone (defaults to Pacific)
   const appTimezone = getAppTimezone();
 
-  // Filter events by client - use ref to track previous array to detect actual changes
-  // This prevents infinite loops from array reference changes
-  const prevEventsRef = useRef<GoogleCalendarEvent[]>([]);
-  const prevSelectedClientRef = useRef<string | null>(null);
-  const prevAllEventsRef = useRef<GoogleCalendarEvent[]>([]);
-  
   // Use length and selectedClient for stable dependencies instead of array reference
+  // This prevents React error #310 from unstable array dependencies
   const allEventsLength = allCalendarEvents.length;
   const eventsKey = `${allEventsLength}-${selectedClient || 'all'}`;
   
@@ -156,11 +151,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   }, []);
   
   // Separate all-day events from timed events
-  // Use ref to track previous result to avoid unnecessary recalculations
-  const prevSeparatedRef = useRef<{ allDayEvents: GoogleCalendarEvent[]; timedEvents: GoogleCalendarEvent[] } | null>(null);
-  const prevCalendarEventsRef = useRef<GoogleCalendarEvent[]>([]);
-  
-  // Use length for stable dependency instead of array reference
+  // Use length for stable dependency instead of array reference to prevent React error #310
   const eventsLength = calendarEvents.length;
   
   const { allDayEvents, timedEvents } = useMemo(() => {
