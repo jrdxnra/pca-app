@@ -157,9 +157,10 @@ export default function ProgramsPage() {
 
   // Calendar events with React Query - calculate date range for current week view
   
-  // Calculate date range directly - no need for separate state
-  // Use useMemo to create stable Date objects that only change when calendarDate actually changes
-  const calendarDateRange = React.useMemo(() => {
+  // Calculate date range directly - CRITICAL: Do NOT use useMemo here
+  // useMemo causes React error #310 during rapid re-renders
+  // This calculation is fast enough (< 1ms) and doesn't need memoization
+  const calendarDateRange = (() => {
     if (!calendarDate) return null;
     const startDate = new Date(calendarDate);
     startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -168,7 +169,7 @@ export default function ProgramsPage() {
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
     return { start: startDate, end: endDate };
-  }, [calendarDate?.getTime()]); // Use timestamp for stable comparison - only recalc when date actually changes
+  })();
 
   console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
     start: calendarDateRange?.start?.toISOString(),
