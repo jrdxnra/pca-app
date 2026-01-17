@@ -92,4 +92,22 @@ For simple array operations (filter, find, map), direct calculation is better th
 ## Related Files
 
 - `src/app/programs/page.tsx` - Main component where we fixed the issue
+- `src/components/programs/TwoColumnWeekView.tsx` - Removed all useMemo calls
+- `src/components/programs/PeriodListDialog.tsx` - Removed useMemo calls
 - `src/hooks/useClientPrograms.ts` - Hook where we fixed useEffect dependencies
+
+## The Golden Rule
+
+**NEVER use useMemo in schedule/schedule-related components for ANY calculations, no matter how "optimized" it seems.**
+
+Simple array operations (filter, find, map) are fast enough (< 1ms for hundreds of items) and don't need memoization. The risk of breaking the app with React error #310 is MUCH higher than any performance gain.
+
+## What We Did Wrong (Summary)
+
+1. ✅ **Fixed**: Removed useMemo from periods calculation
+2. ✅ **Fixed**: Removed useMemo from calendarEventsCount calculation  
+3. ✅ **Fixed**: Removed useMemo from calendarDateRange calculation
+4. ✅ **Fixed**: Removed ALL useMemo from TwoColumnWeekView
+5. ✅ **Fixed**: Removed useMemo from PeriodListDialog
+
+**The working solution:** Calculate everything directly. No useMemo. Period.
