@@ -290,11 +290,13 @@ export const DayEventList = React.memo(function DayEventList({
   );
 }, (prevProps, nextProps) => {
   // Only re-render if these props actually change
-  return (
-    prevProps.selectedDate?.getTime() === nextProps.selectedDate?.getTime() &&
-    prevProps.events.length === nextProps.events.length &&
-    prevProps.selectedClientId === nextProps.selectedClientId &&
-    prevProps.events.every((e, i) => e.id === nextProps.events[i]?.id)
-  );
+  // Return false to allow re-render, true to skip
+  const dateChanged = prevProps.selectedDate?.getTime() !== nextProps.selectedDate?.getTime();
+  const eventsChanged = prevProps.events.length !== nextProps.events.length ||
+    !prevProps.events.every((e, i) => e.id === nextProps.events[i]?.id);
+  const clientChanged = prevProps.selectedClientId !== nextProps.selectedClientId;
+  
+  // Skip re-render only if nothing changed
+  return !dateChanged && !eventsChanged && !clientChanged;
 });
 

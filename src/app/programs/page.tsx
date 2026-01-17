@@ -210,8 +210,8 @@ export default function ProgramsPage() {
   const { createTestEvent, clearAllTestEvents, linkToWorkout } = useCalendarStore();
 
   // Selected date for mini calendar (defaults to calendarDate)
-  // Initialize with null to avoid hydration mismatch, then set on client
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  // Initialize with calendarDate to avoid null issues
+  const [selectedDate, setSelectedDate] = useState<Date>(() => calendarDate || new Date());
   
   // Track mounted state to avoid hydration mismatch with date-dependent UI
   const [mounted, setMounted] = useState(false);
@@ -1905,14 +1905,14 @@ export default function ProgramsPage() {
           {/* Note: selectedClientId is null to show ALL events for the day, regardless of client selection */}
           <div className="w-64 flex-shrink-0 sticky top-2 self-start">
             <DayEventList
-              selectedDate={selectedDate || calendarDate}
+              selectedDate={selectedDate}
               events={stableCalendarEvents}
               clients={clients}
               selectedClientId={null}
               headerActions={
                 <MiniCalendarTooltip
                   currentDate={calendarDate}
-                  selectedDate={selectedDate || calendarDate}
+                  selectedDate={selectedDate}
                   onDateSelect={handleMiniCalendarDateSelect}
                 />
               }
@@ -2019,18 +2019,19 @@ export default function ProgramsPage() {
             setDialogPeriods([]);
           }
         }}
-        periods={(() => {
-            // IMPORTANT: Calculate directly without useMemo
-            // Using useMemo with array.length dependencies causes React error #310 during rapid re-renders
-            // because React sees hooks being called in different orders. Simple calculations don't need memoization.
+        periods={React.useMemo(() => {
+            // Calculate periods - use stable dependencies to prevent infinite loops
             if (!selectedClient || !periodListDialogOpen) {
               return [];
             }
             
             const clientProgram = stableClientPrograms.find(cp => cp.clientId === selectedClient);
             const statePeriods = clientProgram?.periods || [];
-            return stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
-          })()}
+            const result = stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
+            
+            // Return a stable reference - only create new array if content actually changed
+            return result;
+          }, [selectedClient, periodListDialogOpen, stableClientPrograms.length, stableDialogPeriods.length])}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
