@@ -42,28 +42,27 @@ export function useUpdateCalendarEvent() {
     onMutate: async ({ id, updates }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.calendarEvents.all });
       
-      // Get all matching queries and snapshot their data
-      const queryCache = queryClient.getQueryCache();
-      const queries = queryCache.findAll({ queryKey: queryKeys.calendarEvents.all });
-      const previousEvents = queries.map(query => [query.queryKey, query.state.data] as const);
-
-      // Optimistically update all event queries
-      queries.forEach(query => {
-        const oldData = query.state.data as GoogleCalendarEvent[] | undefined;
-        if (oldData) {
-          queryClient.setQueryData<GoogleCalendarEvent[]>(
-            query.queryKey,
-            oldData.map(event => event.id === id ? { ...event, ...updates } : event)
+      // Snapshot previous data for rollback
+      const previousData: Array<[unknown[], GoogleCalendarEvent[] | undefined]> = [];
+      
+      // Update all matching queries optimistically
+      queryClient.getQueriesData({ queryKey: queryKeys.calendarEvents.all }).forEach(([queryKey, data]) => {
+        previousData.push([queryKey, data as GoogleCalendarEvent[] | undefined]);
+        
+        if (data) {
+          const updatedData = (data as GoogleCalendarEvent[]).map(event => 
+            event.id === id ? { ...event, ...updates } : event
           );
+          queryClient.setQueryData(queryKey, updatedData);
         }
       });
 
-      return { previousEvents };
+      return { previousData };
     },
     onError: (error, variables, context) => {
       // Rollback on error
-      if (context?.previousEvents) {
-        context.previousEvents.forEach(([queryKey, data]) => {
+      if (context?.previousData) {
+        context.previousData.forEach(([queryKey, data]) => {
           if (data !== undefined) {
             queryClient.setQueryData(queryKey, data);
           }
@@ -92,28 +91,25 @@ export function useDeleteCalendarEvent() {
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.calendarEvents.all });
       
-      // Get all matching queries and snapshot their data
-      const queryCache = queryClient.getQueryCache();
-      const queries = queryCache.findAll({ queryKey: queryKeys.calendarEvents.all });
-      const previousEvents = queries.map(query => [query.queryKey, query.state.data] as const);
-
-      // Optimistically remove from all event queries
-      queries.forEach(query => {
-        const oldData = query.state.data as GoogleCalendarEvent[] | undefined;
-        if (oldData) {
-          queryClient.setQueryData<GoogleCalendarEvent[]>(
-            query.queryKey,
-            oldData.filter(event => event.id !== id)
-          );
+      // Snapshot previous data for rollback
+      const previousData: Array<[unknown[], GoogleCalendarEvent[] | undefined]> = [];
+      
+      // Update all matching queries optimistically
+      queryClient.getQueriesData({ queryKey: queryKeys.calendarEvents.all }).forEach(([queryKey, data]) => {
+        previousData.push([queryKey, data as GoogleCalendarEvent[] | undefined]);
+        
+        if (data) {
+          const updatedData = (data as GoogleCalendarEvent[]).filter(event => event.id !== id);
+          queryClient.setQueryData(queryKey, updatedData);
         }
       });
 
-      return { previousEvents };
+      return { previousData };
     },
     onError: (error, variables, context) => {
       // Rollback on error
-      if (context?.previousEvents) {
-        context.previousEvents.forEach(([queryKey, data]) => {
+      if (context?.previousData) {
+        context.previousData.forEach(([queryKey, data]) => {
           if (data !== undefined) {
             queryClient.setQueryData(queryKey, data);
           }
