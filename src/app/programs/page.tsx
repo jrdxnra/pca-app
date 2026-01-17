@@ -98,13 +98,13 @@ export default function ProgramsPage() {
 
   // Data fetching with React Query
   const { data: clients = [], isLoading: clientsLoading } = useClients(false);
-  const { data: programs = [], isLoading: programsLoading } = usePrograms();
+  const { data: allPrograms = [], isLoading: programsLoading } = usePrograms();
   const { data: programsByClient = [], isLoading: programsByClientLoading } = useProgramsByClient(selectedClient);
   const { data: scheduledWorkoutsByClient = [], isLoading: scheduledWorkoutsByClientLoading } = useScheduledWorkoutsByClient(selectedClient);
   const { data: allScheduledWorkouts = [], isLoading: allScheduledWorkoutsLoading } = useScheduledWorkouts();
   
   // Use client-specific or all data based on selectedClient
-  const programs = selectedClient ? programsByClient : programs;
+  const programs = selectedClient ? programsByClient : allPrograms;
   const scheduledWorkouts = selectedClient ? scheduledWorkoutsByClient : allScheduledWorkouts;
   const loading = programsLoading || programsByClientLoading || scheduledWorkoutsByClientLoading || allScheduledWorkoutsLoading || clientsLoading;
 
