@@ -2043,8 +2043,6 @@ export default function ProgramsPage() {
               selectedClient, 
               periodListDialogOpen,
               clientProgramsLength: stableClientPrograms.length,
-              dialogPeriodsLength: stableDialogPeriods.length,
-              clientProgramsLength: stableClientPrograms.length,
               dialogPeriodsLength: stableDialogPeriods.length
             });
             
