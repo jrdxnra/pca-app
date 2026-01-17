@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -300,7 +300,8 @@ function SortableMovementItem({
   );
 }
 
-export function MovementList({ movements, categoryId, categoryColor, loading }: MovementListProps) {
+// Memoize MovementList to prevent unnecessary re-renders when parent re-renders
+export const MovementList = React.memo(function MovementList({ movements, categoryId, categoryColor, loading }: MovementListProps) {
   const [expandedMovements, setExpandedMovements] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -548,4 +549,13 @@ export function MovementList({ movements, categoryId, categoryColor, loading }: 
       </DragOverlay>
     </DndContext>
   );
-}
+}, (prevProps, nextProps) => {
+  // Only re-render if these props actually change
+  return (
+    prevProps.movements.length === nextProps.movements.length &&
+    prevProps.categoryId === nextProps.categoryId &&
+    prevProps.categoryColor === nextProps.categoryColor &&
+    prevProps.loading === nextProps.loading &&
+    prevProps.movements.every((m, i) => m.id === nextProps.movements[i]?.id)
+  );
+});

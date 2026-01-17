@@ -285,24 +285,29 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   };
 
   // Calculate available columns across all rounds for the toggle
-  const availableColumns = {
-    tempo: false,
-    distance: false,
-    rpe: false,
-    percentage: false
-  };
+  // Memoize to prevent recalculation on every render
+  const availableColumns = React.useMemo(() => {
+    const columns = {
+      tempo: false,
+      distance: false,
+      rpe: false,
+      percentage: false
+    };
 
-  rounds.forEach(round => {
-    round.movementUsages?.forEach(usage => {
-      const movement = movements.find(m => m.id === usage.movementId);
-      if (movement?.configuration) {
-        if (movement.configuration.use_tempo) availableColumns.tempo = true;
-        if (movement.configuration.use_distance) availableColumns.distance = true;
-        if (movement.configuration.use_rpe) availableColumns.rpe = true;
-        if (movement.configuration.use_percentage) availableColumns.percentage = true;
-      }
+    rounds.forEach(round => {
+      round.movementUsages?.forEach(usage => {
+        const movement = movements.find(m => m.id === usage.movementId);
+        if (movement?.configuration) {
+          if (movement.configuration.use_tempo) columns.tempo = true;
+          if (movement.configuration.use_distance) columns.distance = true;
+          if (movement.configuration.use_rpe) columns.rpe = true;
+          if (movement.configuration.use_percentage) columns.percentage = true;
+        }
+      });
     });
-  });
+
+    return columns;
+  }, [rounds, movements.length]); // Only recalculate when rounds or movements change
 
   // Load data on mount - React Query handles movements fetching automatically
   // Only fetch categories and workout types if not already loaded

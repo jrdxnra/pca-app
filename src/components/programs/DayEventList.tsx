@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import { Client } from '@/lib/types';
@@ -17,7 +17,8 @@ interface DayEventListProps {
   headerActions?: React.ReactNode; // Icons/actions to display in top right
 }
 
-export function DayEventList({
+// Memoize to prevent unnecessary re-renders when parent re-renders
+export const DayEventList = React.memo(function DayEventList({
   selectedDate,
   events,
   clients,
@@ -287,5 +288,13 @@ export function DayEventList({
       </CardContent>
     </Card>
   );
-}
+}, (prevProps, nextProps) => {
+  // Only re-render if these props actually change
+  return (
+    prevProps.selectedDate?.getTime() === nextProps.selectedDate?.getTime() &&
+    prevProps.events.length === nextProps.events.length &&
+    prevProps.selectedClientId === nextProps.selectedClientId &&
+    prevProps.events.every((e, i) => e.id === nextProps.events[i]?.id)
+  );
+});
 
