@@ -2026,8 +2026,11 @@ export default function ProgramsPage() {
             setDialogPeriods([]);
           }
         }}
-        periods={React.useMemo(() => {
-            // Calculate periods - use stable primitive dependencies
+        periods={(() => {
+            // CRITICAL: Do NOT use useMemo here - it causes React error #310
+            // During rapid re-renders, useMemo with array.length dependencies causes
+            // React to see hooks being called in different orders, triggering error #310
+            // Simple calculations like this don't need memoization - they're fast enough
             if (!selectedClient || !periodListDialogOpen) {
               return [];
             }
@@ -2035,7 +2038,7 @@ export default function ProgramsPage() {
             const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
             const statePeriods = clientProgram?.periods || [];
             return dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
-          }, [selectedClient, periodListDialogOpen, clientPrograms.length, dialogPeriods.length])}
+          })()}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
@@ -2043,13 +2046,14 @@ export default function ProgramsPage() {
           onClearAllCalendarEvents={handleClearAllCalendarEvents}
           onForceClearLocalEvents={handleForceClearLocalEvents}
           calendarEventsCount={(() => {
-            // IMPORTANT: Calculate directly without useMemo
-            // Using useMemo with array.length dependencies causes React error #310 during rapid re-renders
-            // because React sees hooks being called in different orders. Simple calculations don't need memoization.
+            // CRITICAL: Do NOT use useMemo here - it causes React error #310
+            // During rapid re-renders, useMemo with array.length dependencies causes
+            // React to see hooks being called in different orders, triggering error #310
+            // Simple calculations like this don't need memoization - they're fast enough
             if (!selectedClient) return 0;
             
             const clientName = selectedClientData?.name;
-            return stableCalendarEvents.filter(event => {
+            return calendarEvents.filter(event => {
               const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
                 event.description?.includes(`client=${selectedClient},`) ||
                 event.preConfiguredClient === selectedClient;
