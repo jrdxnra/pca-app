@@ -209,10 +209,34 @@ export default function ProgramsPage() {
     calendarEventsRef.current = calendarEvents;
   }
   
+  // Create a stable hash of event IDs to detect actual content changes
+  // This prevents infinite loops from reference changes
+  // Calculate hash directly without useMemo to avoid circular dependencies
+  const calendarEventsHashRef = React.useRef<string>('');
+  const calendarEventsIdsString = calendarEvents.map(e => e.id).sort().join(',');
+  const calendarEventsHash = calendarEventsIdsString;
+  
+  // Only update ref if hash actually changed
+  const hashChanged = calendarEventsHashRef.current !== calendarEventsHash;
+  if (hashChanged) {
+    calendarEventsHashRef.current = calendarEventsHash;
+  }
+  
+  // Memoize the actual calendarEvents array to prevent reference changes
+  // Only update when the hash (content) actually changes
+  const stableCalendarEvents = React.useMemo(() => {
+    console.log('[ProgramsPage] Creating stableCalendarEvents', {
+      hash: calendarEventsHash.substring(0, 50) + '...',
+      eventsCount: calendarEvents.length
+    });
+    return calendarEvents;
+  }, [calendarEventsHash]);
+  
   console.log('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
     isLoading: calendarEventsLoading,
-    referenceChanged: calendarEventsChanged
+    referenceChanged: calendarEventsChanged,
+    eventsHash: calendarEventsHash.substring(0, 50) + '...'
   });
 
   // Query client for invalidating queries
@@ -339,10 +363,28 @@ export default function ProgramsPage() {
     clientProgramsRef.current = clientPrograms;
   }
   
+  // Create stable hash for clientPrograms to prevent infinite loops
+  const clientProgramsHash = clientPrograms.map(cp => cp.id).sort().join(',');
+  const clientProgramsHashRef = React.useRef<string>('');
+  const clientProgramsHashChanged = clientProgramsHashRef.current !== clientProgramsHash;
+  if (clientProgramsHashChanged) {
+    clientProgramsHashRef.current = clientProgramsHash;
+  }
+  
+  // Memoize clientPrograms to prevent reference changes
+  const stableClientPrograms = React.useMemo(() => {
+    console.log('[ProgramsPage] Creating stableClientPrograms', {
+      hash: clientProgramsHash.substring(0, 50) + '...',
+      programsCount: clientPrograms.length
+    });
+    return clientPrograms;
+  }, [clientProgramsHash]);
+  
   console.log('[ProgramsPage] useClientPrograms result:', {
     clientProgramsCount: clientPrograms.length,
     isLoading: clientProgramsLoading,
-    referenceChanged: clientProgramsChanged
+    referenceChanged: clientProgramsChanged,
+    hashChanged: clientProgramsHashChanged
   });
 
   const [selectedPeriod, setSelectedPeriod] = useState<ClientProgramPeriod | null>(null);
@@ -1929,7 +1971,7 @@ export default function ProgramsPage() {
                   selectedClient={selectedClient}
                   programs={programs}
                   clients={clients}
-                  clientPrograms={clientPrograms}
+                  clientPrograms={stableClientPrograms}
                   includeWeekends={includeWeekends}
                   refreshKey={calendarKey}
                   onPeriodClick={handlePeriodClick}
@@ -1956,7 +1998,7 @@ export default function ProgramsPage() {
           <div className="w-64 flex-shrink-0 sticky top-2 self-start">
             <DayEventList
               selectedDate={selectedDate || calendarDate}
-              events={calendarEvents}
+              events={stableCalendarEvents}
               clients={clients}
               selectedClientId={null}
               headerActions={
@@ -2073,12 +2115,9 @@ export default function ProgramsPage() {
             console.log(`[ProgramsPage] periods useMemo called (render #${renderCount})`, { 
               selectedClient, 
               periodListDialogOpen,
-              clientProgramsLength: clientPrograms.length,
+              clientProgramsLength: stableClientPrograms.length,
               dialogPeriodsLength: dialogPeriods.length,
-              clientProgramsRef: clientPrograms,
-              dialogPeriodsRef: dialogPeriods,
-              clientPrograms: clientPrograms.map(cp => ({ id: cp.id, clientId: cp.clientId, periodsCount: cp.periods?.length || 0 })),
-              dialogPeriods: dialogPeriods.map(p => ({ id: p.id, periodName: p.periodName }))
+              clientProgramsHash: clientProgramsHash.substring(0, 50) + '...'
             });
             
             try {
@@ -2089,7 +2128,7 @@ export default function ProgramsPage() {
                 return [];
               }
               
-              const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
+              const clientProgram = stableClientPrograms.find(cp => cp.clientId === selectedClient);
               console.log('[ProgramsPage] periods useMemo - found clientProgram:', {
                 found: !!clientProgram,
                 clientProgramId: clientProgram?.id,
@@ -2107,8 +2146,7 @@ export default function ProgramsPage() {
               });
 
               console.log('[ProgramsPage] periods useMemo result', { 
-                periodsCount: periodsToUse.length,
-                periods: periodsToUse.map(p => ({ id: p.id, periodName: p.periodName }))
+                periodsCount: periodsToUse.length
               });
 
               return periodsToUse;
@@ -2116,7 +2154,7 @@ export default function ProgramsPage() {
               console.error('[ProgramsPage] periods useMemo ERROR:', error);
               throw error;
             }
-          }, [selectedClient, clientPrograms, dialogPeriods, periodListDialogOpen])}
+          }, [selectedClient, clientProgramsHash, dialogPeriods.length, periodListDialogOpen, stableClientPrograms])}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
@@ -2126,15 +2164,9 @@ export default function ProgramsPage() {
           calendarEventsCount={React.useMemo(() => {
             console.log(`[ProgramsPage] calendarEventsCount useMemo called (render #${renderCount})`, { 
               selectedClient,
-              calendarEventsLength: calendarEvents.length,
+              calendarEventsLength: stableCalendarEvents.length,
               selectedClientDataName: selectedClientData?.name,
-              calendarEventsRef: calendarEvents,
-              calendarEvents: calendarEvents.map(e => ({
-                id: e.id,
-                summary: e.summary,
-                preConfiguredClient: e.preConfiguredClient,
-                hasDescription: !!e.description
-              }))
+              eventsHash: calendarEventsHash.substring(0, 50) + '...'
             });
             
             try {
@@ -2144,15 +2176,15 @@ export default function ProgramsPage() {
               }
               
               const clientName = selectedClientData?.name;
-              // Use length for stable dependency instead of array reference
-              const eventsLength = calendarEvents.length;
+              // Use stable calendarEvents reference
+              const eventsLength = stableCalendarEvents.length;
               console.log('[ProgramsPage] calendarEventsCount useMemo - filtering events', {
                 eventsLength,
                 clientName,
                 selectedClient
               });
               
-              const matchingEvents = calendarEvents.filter(event => {
+              const matchingEvents = stableCalendarEvents.filter(event => {
                 const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
                   event.description?.includes(`client=${selectedClient},`) ||
                   event.preConfiguredClient === selectedClient;
@@ -2170,11 +2202,7 @@ export default function ProgramsPage() {
               
               console.log('[ProgramsPage] calendarEventsCount useMemo result', { 
                 count,
-                matchingEvents: matchingEvents.map(e => ({
-                  id: e.id,
-                  summary: e.summary,
-                  preConfiguredClient: e.preConfiguredClient
-                }))
+                matchingEventsCount: matchingEvents.length
               });
               
               return count;
@@ -2182,7 +2210,7 @@ export default function ProgramsPage() {
               console.error('[ProgramsPage] calendarEventsCount useMemo ERROR:', error);
               throw error;
             }
-          }, [selectedClient, calendarEvents.length, selectedClientData?.name])}
+          }, [selectedClient, calendarEventsHash, selectedClientData?.name, stableCalendarEvents])}
         />
 
       {/* Schedule Event Edit Dialog */}
@@ -2204,7 +2232,7 @@ export default function ProgramsPage() {
           onOpenChange={setEventActionDialogOpen}
           event={selectedEventForAction}
           clientId={selectedClient || undefined}
-          allEvents={calendarEvents}
+          allEvents={stableCalendarEvents}
           clients={clients}
           clientPrograms={clientPrograms}
           fetchEvents={async (dateRange: { start: Date; end: Date }) => {
