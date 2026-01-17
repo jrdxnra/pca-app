@@ -56,10 +56,8 @@ export function PeriodListDialog({
 
   // Update local periods when prop changes
   // Use ref to track previous periods IDs to prevent unnecessary updates
-  const periodsIdsString = React.useMemo(() => 
-    periods.map(p => p.id).sort().join(',')
-  , [periods.length, periods.map(p => p.id).join(',')]);
-  
+  // CRITICAL: Do NOT use useMemo here - it causes React error #310
+  const periodsIdsString = periods.map(p => p.id).sort().join(',');
   const previousPeriodsIdsStringRef = React.useRef<string>(periodsIdsString);
   
   useEffect(() => {
