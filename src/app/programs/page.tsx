@@ -79,6 +79,18 @@ import { getAppTimezone, setAppTimezone, getBrowserTimezone, hasTimezoneChanged,
 import { toastSuccess } from '@/components/ui/toaster';
 
 export default function ProgramsPage() {
+  // Track render count to detect infinite loops
+  const renderCountRef = React.useRef(0);
+  renderCountRef.current += 1;
+  const renderCount = renderCountRef.current;
+  
+  console.log(`[ProgramsPage] Component rendering (render #${renderCount})`);
+  
+  // Warn if we're rendering too many times
+  if (renderCount > 10) {
+    console.warn(`[ProgramsPage] WARNING: Component has rendered ${renderCount} times - possible infinite loop!`);
+  }
+  
   const router = useRouter();
 
   // UI State from stores (keeping for now)
@@ -98,18 +110,45 @@ export default function ProgramsPage() {
     clearError,
     initializeSelectedClient,
   } = useProgramStore();
+  
+  console.log('[ProgramsPage] Store state:', {
+    selectedClient,
+    viewMode,
+    calendarDate: calendarDate?.toISOString(),
+    hasError: !!error
+  });
 
   // Data fetching with React Query
+  console.log('[ProgramsPage] Calling React Query hooks...');
   const { data: clients = [], isLoading: clientsLoading } = useClients(false);
   const { data: allPrograms = [], isLoading: programsLoading } = usePrograms();
   const { data: programsByClient = [], isLoading: programsByClientLoading } = useProgramsByClient(selectedClient);
   const { data: scheduledWorkoutsByClient = [], isLoading: scheduledWorkoutsByClientLoading } = useScheduledWorkoutsByClient(selectedClient);
   const { data: allScheduledWorkouts = [], isLoading: allScheduledWorkoutsLoading } = useScheduledWorkouts();
   
+  console.log('[ProgramsPage] React Query data loaded:', {
+    clientsCount: clients.length,
+    allProgramsCount: allPrograms.length,
+    programsByClientCount: programsByClient.length,
+    scheduledWorkoutsByClientCount: scheduledWorkoutsByClient.length,
+    allScheduledWorkoutsCount: allScheduledWorkouts.length,
+    clientsLoading,
+    programsLoading,
+    programsByClientLoading,
+    scheduledWorkoutsByClientLoading,
+    allScheduledWorkoutsLoading
+  });
+  
   // Use client-specific or all data based on selectedClient
   const programs = selectedClient ? programsByClient : allPrograms;
   const scheduledWorkouts = selectedClient ? scheduledWorkoutsByClient : allScheduledWorkouts;
   const loading = programsLoading || programsByClientLoading || scheduledWorkoutsByClientLoading || allScheduledWorkoutsLoading || clientsLoading;
+  
+  console.log('[ProgramsPage] Computed data:', {
+    programsCount: programs.length,
+    scheduledWorkoutsCount: scheduledWorkouts.length,
+    loading
+  });
 
   // Configuration data with React Query
   const { data: periods = [] } = usePeriods();
@@ -119,7 +158,15 @@ export default function ProgramsPage() {
   // Calendar events with React Query - calculate date range for current week view
   const [calendarDateRange, setCalendarDateRange] = useState<{ start: Date; end: Date } | null>(null);
   
+  console.log('[ProgramsPage] calendarDateRange state:', calendarDateRange ? {
+    start: calendarDateRange.start.toISOString(),
+    end: calendarDateRange.end.toISOString()
+  } : null);
+  
   useEffect(() => {
+    console.log('[ProgramsPage] calendarDate changed, updating date range', {
+      calendarDate: calendarDate?.toISOString()
+    });
     if (calendarDate) {
       const startDate = new Date(calendarDate);
       startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -127,14 +174,73 @@ export default function ProgramsPage() {
       endDate.setDate(startDate.getDate() + 6);
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(23, 59, 59, 999);
-      setCalendarDateRange({ start: startDate, end: endDate });
+      const newRange = { start: startDate, end: endDate };
+      console.log('[ProgramsPage] Setting calendarDateRange:', {
+        start: newRange.start.toISOString(),
+        end: newRange.end.toISOString()
+      });
+      setCalendarDateRange(newRange);
+    } else {
+      console.log('[ProgramsPage] calendarDate is null, clearing date range');
+      setCalendarDateRange(null);
     }
   }, [calendarDate]);
 
+  console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
+    start: calendarDateRange?.start?.toISOString(),
+    end: calendarDateRange?.end?.toISOString()
+  });
+  
   const { data: calendarEvents = [], isLoading: calendarEventsLoading } = useCalendarEvents(
     calendarDateRange?.start,
     calendarDateRange?.end
   );
+  
+  // Track calendarEvents reference to detect if it's changing on every render
+  const calendarEventsRef = React.useRef(calendarEvents);
+  const calendarEventsChanged = calendarEventsRef.current !== calendarEvents;
+  if (calendarEventsChanged) {
+    console.log('[ProgramsPage] calendarEvents reference changed!', {
+      oldLength: calendarEventsRef.current.length,
+      newLength: calendarEvents.length,
+      oldIds: calendarEventsRef.current.map(e => e.id),
+      newIds: calendarEvents.map(e => e.id)
+    });
+    calendarEventsRef.current = calendarEvents;
+  }
+  
+  // Create a stable hash of event IDs to detect actual content changes
+  // Use ref to track previous hash and only update when content actually changes
+  const calendarEventsHashRef = React.useRef<string>('');
+  const calendarEventsStableRef = React.useRef(calendarEvents);
+  const calendarEventsVersionRef = React.useRef<number>(0);
+  
+  // Calculate current hash
+  const currentHash = calendarEvents.map(e => e.id).sort().join(',');
+  
+  // Only update if hash actually changed (content changed, not just reference)
+  if (currentHash !== calendarEventsHashRef.current) {
+    console.log('[ProgramsPage] calendarEvents content changed', {
+      oldHash: calendarEventsHashRef.current.substring(0, 50) + '...',
+      newHash: currentHash.substring(0, 50) + '...',
+      eventsCount: calendarEvents.length
+    });
+    calendarEventsHashRef.current = currentHash;
+    calendarEventsStableRef.current = calendarEvents;
+    calendarEventsVersionRef.current += 1; // Increment version counter
+  }
+  
+  // Use stable reference that only changes when content changes
+  const stableCalendarEvents = calendarEventsStableRef.current;
+  const calendarEventsVersion = calendarEventsVersionRef.current;
+  
+  console.log('[ProgramsPage] Calendar events loaded:', {
+    eventsCount: calendarEvents.length,
+    isLoading: calendarEventsLoading,
+    referenceChanged: calendarEventsChanged,
+    eventsHash: calendarEventsHashRef.current.substring(0, 50) + '...',
+    stableEventsCount: stableCalendarEvents.length
+  });
 
   // Query client for invalidating queries
   const queryClient = useQueryClient();
@@ -163,44 +269,73 @@ export default function ProgramsPage() {
   // Track mounted state to avoid hydration mismatch with date-dependent UI
   const [mounted, setMounted] = useState(false);
   
+  console.log('[ProgramsPage] mounted state:', mounted);
+  
   // Timezone notification state
   const [appTimezone, setAppTimezoneState] = useState<string>(() => {
+    console.log('[ProgramsPage] Initializing appTimezone state');
     if (typeof window !== 'undefined') {
-      return getAppTimezone();
+      const tz = getAppTimezone();
+      console.log('[ProgramsPage] Got appTimezone from storage:', tz);
+      return tz;
     }
+    console.log('[ProgramsPage] window undefined, using default timezone');
     return 'America/Los_Angeles';
   });
   const [showTimezonePrompt, setShowTimezonePrompt] = useState(false);
   const TIMEZONE_DISMISS_KEY = 'pca-timezone-prompt-dismissed';
   
   useEffect(() => {
+    console.log('[ProgramsPage] Mount effect running');
     setMounted(true);
+    console.log('[ProgramsPage] Set mounted to true');
     
     // Check if timezone prompt was dismissed
     const wasDismissed = typeof window !== 'undefined' 
       ? localStorage.getItem(TIMEZONE_DISMISS_KEY) === 'true'
       : false;
     
+    console.log('[ProgramsPage] Timezone prompt dismissed?', wasDismissed);
+    
     // Check if browser timezone differs from app timezone
     if (!wasDismissed && hasTimezoneChanged()) {
       const savedTimezone = getAppTimezone();
       const browserTimezone = getBrowserTimezone();
+      console.log('[ProgramsPage] Timezone check:', {
+        savedTimezone,
+        browserTimezone,
+        hasChanged: hasTimezoneChanged()
+      });
       // Only show prompt if timezone was previously set (not default)
       if (savedTimezone !== 'America/Los_Angeles' || browserTimezone !== 'America/Los_Angeles') {
+        console.log('[ProgramsPage] Showing timezone prompt');
         setShowTimezonePrompt(true);
       }
     }
+    
+    return () => {
+      console.log('[ProgramsPage] Mount effect cleanup');
+    };
   }, []);
 
   // Sync selectedDate with calendarDate when it changes (e.g., from dashboard)
   // Only set on client side to avoid hydration mismatch
   useEffect(() => {
+    console.log('[ProgramsPage] calendarDate changed, syncing selectedDate', {
+      calendarDate: calendarDate?.toISOString(),
+      currentSelectedDate: selectedDate?.toISOString()
+    });
     setSelectedDate(calendarDate);
   }, [calendarDate]);
   
   // Initialize on mount (client-side only)
   useEffect(() => {
+    console.log('[ProgramsPage] Initialization effect running', {
+      selectedDate: selectedDate?.toISOString(),
+      calendarDate: calendarDate?.toISOString()
+    });
     if (selectedDate === null && calendarDate) {
+      console.log('[ProgramsPage] Setting selectedDate from calendarDate');
       setSelectedDate(calendarDate);
     }
   }, []);
@@ -208,6 +343,7 @@ export default function ProgramsPage() {
   const [includeWeekends, setIncludeWeekends] = useState(false);
 
   // Use the shared client programs hook - replaces local state and fetchClientPrograms function
+  console.log('[ProgramsPage] Calling useClientPrograms hook with selectedClient:', selectedClient);
   const {
     clientPrograms,
     isLoading: clientProgramsLoading,
@@ -216,6 +352,51 @@ export default function ProgramsPage() {
     clearAllPeriods: hookClearAllPeriods,
     fetchClientPrograms
   } = useClientPrograms(selectedClient);
+  
+  // Track clientPrograms reference to detect if it's changing on every render
+  const clientProgramsRef = React.useRef(clientPrograms);
+  const clientProgramsChanged = clientProgramsRef.current !== clientPrograms;
+  if (clientProgramsChanged) {
+    console.log('[ProgramsPage] clientPrograms reference changed!', {
+      oldLength: clientProgramsRef.current.length,
+      newLength: clientPrograms.length,
+      oldIds: clientProgramsRef.current.map(cp => cp.id),
+      newIds: clientPrograms.map(cp => cp.id)
+    });
+    clientProgramsRef.current = clientPrograms;
+  }
+  
+  // Create stable hash for clientPrograms to prevent infinite loops
+  // Use ref to track previous hash and only update when content actually changes
+  const clientProgramsHashRef = React.useRef<string>('');
+  const clientProgramsStableRef = React.useRef(clientPrograms);
+  const clientProgramsVersionRef = React.useRef<number>(0);
+  
+  // Calculate current hash
+  const currentClientProgramsHash = clientPrograms.map(cp => cp.id).sort().join(',');
+  
+  // Only update if hash actually changed (content changed, not just reference)
+  if (currentClientProgramsHash !== clientProgramsHashRef.current) {
+    console.log('[ProgramsPage] clientPrograms content changed', {
+      oldHash: clientProgramsHashRef.current.substring(0, 50) + '...',
+      newHash: currentClientProgramsHash.substring(0, 50) + '...',
+      programsCount: clientPrograms.length
+    });
+    clientProgramsHashRef.current = currentClientProgramsHash;
+    clientProgramsStableRef.current = clientPrograms;
+    clientProgramsVersionRef.current += 1; // Increment version counter
+  }
+  
+  // Use stable reference that only changes when content changes
+  const stableClientPrograms = clientProgramsStableRef.current;
+  const clientProgramsVersion = clientProgramsVersionRef.current;
+  
+  console.log('[ProgramsPage] useClientPrograms result:', {
+    clientProgramsCount: clientPrograms.length,
+    isLoading: clientProgramsLoading,
+    referenceChanged: clientProgramsChanged,
+    stableProgramsCount: stableClientPrograms.length
+  });
 
   const [selectedPeriod, setSelectedPeriod] = useState<ClientProgramPeriod | null>(null);
   const [periodPanelOpen, setPeriodPanelOpen] = useState(false);
@@ -228,6 +409,39 @@ export default function ProgramsPage() {
   const [createEventTime, setCreateEventTime] = useState<Date | null>(null);
   const [periodListDialogOpen, setPeriodListDialogOpen] = useState(false);
   const [dialogPeriods, setDialogPeriods] = useState<ClientProgramPeriod[]>([]);
+  
+  // Track dialogPeriods reference to detect if it's changing on every render
+  const dialogPeriodsRef = React.useRef(dialogPeriods);
+  const dialogPeriodsChanged = dialogPeriodsRef.current !== dialogPeriods;
+  if (dialogPeriodsChanged) {
+    console.log('[ProgramsPage] dialogPeriods reference changed!', {
+      oldLength: dialogPeriodsRef.current.length,
+      newLength: dialogPeriods.length,
+      oldIds: dialogPeriodsRef.current.map(p => p.id),
+      newIds: dialogPeriods.map(p => p.id)
+    });
+    dialogPeriodsRef.current = dialogPeriods;
+  }
+  
+  // Create stable hash for dialogPeriods
+  // Use ref to track previous hash and only update when content actually changes
+  const dialogPeriodsHashRef = React.useRef<string>('');
+  const dialogPeriodsStableRef = React.useRef(dialogPeriods);
+  const dialogPeriodsVersionRef = React.useRef<number>(0);
+  
+  // Calculate current hash
+  const currentDialogPeriodsHash = dialogPeriods.map(p => p.id).sort().join(',');
+  
+  // Only update if hash actually changed (content changed, not just reference)
+  if (currentDialogPeriodsHash !== dialogPeriodsHashRef.current) {
+    dialogPeriodsHashRef.current = currentDialogPeriodsHash;
+    dialogPeriodsStableRef.current = dialogPeriods;
+    dialogPeriodsVersionRef.current += 1; // Increment version counter
+  }
+  
+  // Use stable reference that only changes when content changes
+  const stableDialogPeriods = dialogPeriodsStableRef.current;
+  const dialogPeriodsVersion = dialogPeriodsVersionRef.current;
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
   const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
@@ -237,7 +451,9 @@ export default function ProgramsPage() {
 
   // Fetch configuration data on mount
   useEffect(() => {
+    console.log('[ProgramsPage] Fetching all config');
     fetchAllConfig();
+    console.log('[ProgramsPage] Config fetch initiated');
   }, [fetchAllConfig]);
 
   // Calendar date is now managed by the store with localStorage persistence
@@ -245,7 +461,9 @@ export default function ProgramsPage() {
 
   // Initialize selected client from localStorage after hydration
   useEffect(() => {
+    console.log('[ProgramsPage] Initializing selected client from localStorage');
     initializeSelectedClient();
+    console.log('[ProgramsPage] Selected client initialized');
   }, [initializeSelectedClient]);
 
   // React Query handles data fetching automatically based on selectedClient
@@ -1784,7 +2002,7 @@ export default function ProgramsPage() {
                   selectedClient={selectedClient}
                   programs={programs}
                   clients={clients}
-                  clientPrograms={clientPrograms}
+                  clientPrograms={stableClientPrograms}
                   includeWeekends={includeWeekends}
                   refreshKey={calendarKey}
                   onPeriodClick={handlePeriodClick}
@@ -1811,7 +2029,7 @@ export default function ProgramsPage() {
           <div className="w-64 flex-shrink-0 sticky top-2 self-start">
             <DayEventList
               selectedDate={selectedDate || calendarDate}
-              events={calendarEvents}
+              events={stableCalendarEvents}
               clients={clients}
               selectedClientId={null}
               headerActions={
@@ -1925,29 +2143,50 @@ export default function ProgramsPage() {
           }
         }}
         periods={React.useMemo(() => {
-            console.log('[ProgramsPage] periods useMemo called', { 
+            console.log(`[ProgramsPage] periods useMemo called (render #${renderCount})`, { 
               selectedClient, 
               periodListDialogOpen,
-              clientProgramsLength: clientPrograms.length,
-              dialogPeriodsLength: dialogPeriods.length 
+              clientProgramsLength: stableClientPrograms.length,
+              dialogPeriodsLength: stableDialogPeriods.length,
+              clientProgramsHash: clientProgramsHashRef.current.substring(0, 50) + '...',
+              dialogPeriodsHash: dialogPeriodsHashRef.current.substring(0, 50) + '...'
             });
             
-            // Only calculate periods when dialog is open or when we have a selected client
-            // This prevents unnecessary calculations on every render
-            if (!selectedClient || !periodListDialogOpen) return [];
-            
-            const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
-            const statePeriods = clientProgram?.periods || [];
+            try {
+              // Only calculate periods when dialog is open or when we have a selected client
+              // This prevents unnecessary calculations on every render
+              if (!selectedClient || !periodListDialogOpen) {
+                console.log('[ProgramsPage] periods useMemo early return - no selectedClient or dialog closed');
+                return [];
+              }
+              
+              const clientProgram = stableClientPrograms.find(cp => cp.clientId === selectedClient);
+              console.log('[ProgramsPage] periods useMemo - found clientProgram:', {
+                found: !!clientProgram,
+                clientProgramId: clientProgram?.id,
+                statePeriodsCount: clientProgram?.periods?.length || 0
+              });
+              
+              const statePeriods = clientProgram?.periods || [];
 
-            // Use dialogPeriods if it has data, otherwise use state
-            const periodsToUse = dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
+              // Use dialogPeriods if it has data, otherwise use state
+              const periodsToUse = stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
+              
+              console.log('[ProgramsPage] periods useMemo - choosing periods:', {
+                usingDialogPeriods: stableDialogPeriods.length > 0,
+                periodsToUseCount: periodsToUse.length
+              });
 
-            console.log('[ProgramsPage] periods useMemo result', { 
-              periodsCount: periodsToUse.length 
-            });
+              console.log('[ProgramsPage] periods useMemo result', { 
+                periodsCount: periodsToUse.length
+              });
 
-            return periodsToUse;
-          }, [selectedClient, clientPrograms, dialogPeriods, periodListDialogOpen])}
+              return periodsToUse;
+            } catch (error) {
+              console.error('[ProgramsPage] periods useMemo ERROR:', error);
+              throw error;
+            }
+          }, [selectedClient, clientProgramsVersion, dialogPeriodsVersion, periodListDialogOpen])}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
@@ -1955,36 +2194,55 @@ export default function ProgramsPage() {
           onClearAllCalendarEvents={handleClearAllCalendarEvents}
           onForceClearLocalEvents={handleForceClearLocalEvents}
           calendarEventsCount={React.useMemo(() => {
-            console.log('[ProgramsPage] calendarEventsCount useMemo called', { 
+            console.log(`[ProgramsPage] calendarEventsCount useMemo called (render #${renderCount})`, { 
               selectedClient,
-              calendarEventsLength: calendarEvents.length,
-              selectedClientDataName: selectedClientData?.name 
+              calendarEventsLength: stableCalendarEvents.length,
+              selectedClientDataName: selectedClientData?.name,
+              eventsHash: calendarEventsHashRef.current.substring(0, 50) + '...'
             });
             
-            if (!selectedClient) return 0;
-            const clientName = selectedClientData?.name;
-            // Use length for stable dependency instead of array reference
-            const eventsLength = calendarEvents.length;
-            const count = calendarEvents.filter(event => {
-              const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
-                event.description?.includes(`client=${selectedClient},`) ||
-                event.preConfiguredClient === selectedClient;
-
-              if (hasMatchingClient) return true;
-
-              if (clientName && event.summary && event.summary.includes(clientName)) {
-                return true;
+            try {
+              if (!selectedClient) {
+                console.log('[ProgramsPage] calendarEventsCount useMemo early return - no selectedClient');
+                return 0;
               }
+              
+              const clientName = selectedClientData?.name;
+              // Use stable calendarEvents reference
+              const eventsLength = stableCalendarEvents.length;
+              console.log('[ProgramsPage] calendarEventsCount useMemo - filtering events', {
+                eventsLength,
+                clientName,
+                selectedClient
+              });
+              
+              const matchingEvents = stableCalendarEvents.filter(event => {
+                const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
+                  event.description?.includes(`client=${selectedClient},`) ||
+                  event.preConfiguredClient === selectedClient;
 
-              return false;
-            }).length;
-            
-            console.log('[ProgramsPage] calendarEventsCount useMemo result', { 
-              count 
-            });
-            
-            return count;
-          }, [selectedClient, calendarEvents.length, selectedClientData?.name])}
+                if (hasMatchingClient) return true;
+
+                if (clientName && event.summary && event.summary.includes(clientName)) {
+                  return true;
+                }
+
+                return false;
+              });
+              
+              const count = matchingEvents.length;
+              
+              console.log('[ProgramsPage] calendarEventsCount useMemo result', { 
+                count,
+                matchingEventsCount: matchingEvents.length
+              });
+              
+              return count;
+            } catch (error) {
+              console.error('[ProgramsPage] calendarEventsCount useMemo ERROR:', error);
+              throw error;
+            }
+          }, [selectedClient, calendarEventsVersion, selectedClientData?.name])}
         />
 
       {/* Schedule Event Edit Dialog */}
@@ -2006,7 +2264,7 @@ export default function ProgramsPage() {
           onOpenChange={setEventActionDialogOpen}
           event={selectedEventForAction}
           clientId={selectedClient || undefined}
-          allEvents={calendarEvents}
+          allEvents={stableCalendarEvents}
           clients={clients}
           clientPrograms={clientPrograms}
           fetchEvents={async (dateRange: { start: Date; end: Date }) => {
