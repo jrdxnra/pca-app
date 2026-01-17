@@ -163,28 +163,24 @@ export default function ProgramsPage() {
     end: calendarDateRange.end.toISOString()
   } : null);
   
+  // Memoize date range calculation to prevent creating new objects on every render
+  const memoizedDateRange = React.useMemo(() => {
+    if (!calendarDate) return null;
+    const startDate = new Date(calendarDate);
+    startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+    return { start: startDate, end: endDate };
+  }, [calendarDate?.getTime()]); // Use timestamp for stable comparison
+  
   useEffect(() => {
     console.log('[ProgramsPage] calendarDate changed, updating date range', {
       calendarDate: calendarDate?.toISOString()
     });
-    if (calendarDate) {
-      const startDate = new Date(calendarDate);
-      startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
-      const endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(23, 59, 59, 999);
-      const newRange = { start: startDate, end: endDate };
-      console.log('[ProgramsPage] Setting calendarDateRange:', {
-        start: newRange.start.toISOString(),
-        end: newRange.end.toISOString()
-      });
-      setCalendarDateRange(newRange);
-    } else {
-      console.log('[ProgramsPage] calendarDate is null, clearing date range');
-      setCalendarDateRange(null);
-    }
-  }, [calendarDate]);
+    setCalendarDateRange(memoizedDateRange);
+  }, [memoizedDateRange]);
 
   console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
     start: calendarDateRange?.start?.toISOString(),
@@ -2039,7 +2035,7 @@ export default function ProgramsPage() {
           }
         }}
         periods={React.useMemo(() => {
-            console.log(`[ProgramsPage] periods useMemo called (render #${renderCount})`, { 
+            console.log('[ProgramsPage] periods useMemo called', { 
               selectedClient, 
               periodListDialogOpen,
               clientProgramsLength: stableClientPrograms.length,
@@ -2088,7 +2084,7 @@ export default function ProgramsPage() {
           onClearAllCalendarEvents={handleClearAllCalendarEvents}
           onForceClearLocalEvents={handleForceClearLocalEvents}
           calendarEventsCount={React.useMemo(() => {
-            console.log(`[ProgramsPage] calendarEventsCount useMemo called (render #${renderCount})`, { 
+            console.log('[ProgramsPage] calendarEventsCount useMemo called', { 
               selectedClient,
               calendarEventsLength: stableCalendarEvents.length,
               selectedClientDataName: selectedClientData?.name,
