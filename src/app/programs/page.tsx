@@ -411,6 +411,19 @@ export default function ProgramsPage() {
     });
     dialogPeriodsRef.current = dialogPeriods;
   }
+  
+  // Create stable hash for dialogPeriods
+  const dialogPeriodsHash = dialogPeriods.map(p => p.id).sort().join(',');
+  const dialogPeriodsHashRef = React.useRef<string>('');
+  const dialogPeriodsHashChanged = dialogPeriodsHashRef.current !== dialogPeriodsHash;
+  if (dialogPeriodsHashChanged) {
+    dialogPeriodsHashRef.current = dialogPeriodsHash;
+  }
+  
+  // Memoize dialogPeriods to prevent reference changes
+  const stableDialogPeriods = React.useMemo(() => {
+    return dialogPeriods;
+  }, [dialogPeriodsHash]);
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
   const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
@@ -2116,8 +2129,9 @@ export default function ProgramsPage() {
               selectedClient, 
               periodListDialogOpen,
               clientProgramsLength: stableClientPrograms.length,
-              dialogPeriodsLength: dialogPeriods.length,
-              clientProgramsHash: clientProgramsHash.substring(0, 50) + '...'
+              dialogPeriodsLength: stableDialogPeriods.length,
+              clientProgramsHash: clientProgramsHash.substring(0, 50) + '...',
+              dialogPeriodsHash: dialogPeriodsHash.substring(0, 50) + '...'
             });
             
             try {
@@ -2138,10 +2152,10 @@ export default function ProgramsPage() {
               const statePeriods = clientProgram?.periods || [];
 
               // Use dialogPeriods if it has data, otherwise use state
-              const periodsToUse = dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
+              const periodsToUse = stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
               
               console.log('[ProgramsPage] periods useMemo - choosing periods:', {
-                usingDialogPeriods: dialogPeriods.length > 0,
+                usingDialogPeriods: stableDialogPeriods.length > 0,
                 periodsToUseCount: periodsToUse.length
               });
 
@@ -2154,7 +2168,7 @@ export default function ProgramsPage() {
               console.error('[ProgramsPage] periods useMemo ERROR:', error);
               throw error;
             }
-          }, [selectedClient, clientProgramsHash, dialogPeriods.length, periodListDialogOpen, stableClientPrograms])}
+          }, [selectedClient, clientProgramsHash, dialogPeriodsHash, periodListDialogOpen, stableClientPrograms, stableDialogPeriods])}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
