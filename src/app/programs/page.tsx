@@ -209,41 +209,16 @@ export default function ProgramsPage() {
     calendarEventsRef.current = calendarEvents;
   }
   
-  // Create stable references using refs and useEffect to avoid render-time calculations
-  const calendarEventsStableRef = React.useRef(calendarEvents);
-  const calendarEventsVersionRef = React.useRef<number>(0);
-  const calendarEventsLengthRef = React.useRef<number>(calendarEvents.length);
-  const calendarEventsIdsRef = React.useRef<string>('');
-  
-  // Update stable reference in useEffect to avoid render-time side effects
-  React.useEffect(() => {
-    const currentIds = calendarEvents.map(e => e.id).sort().join(',');
-    const currentLength = calendarEvents.length;
-    
-    // Only update if content actually changed
-    if (currentIds !== calendarEventsIdsRef.current || currentLength !== calendarEventsLengthRef.current) {
-      console.log('[ProgramsPage] calendarEvents content changed', {
-        oldIds: calendarEventsIdsRef.current.substring(0, 50) + '...',
-        newIds: currentIds.substring(0, 50) + '...',
-        oldLength: calendarEventsLengthRef.current,
-        newLength: currentLength
-      });
-      calendarEventsIdsRef.current = currentIds;
-      calendarEventsLengthRef.current = currentLength;
-      calendarEventsStableRef.current = calendarEvents;
-      calendarEventsVersionRef.current += 1;
-    }
-  }, [calendarEvents]);
-  
-  // Use stable reference that only changes when content changes
-  const stableCalendarEvents = calendarEventsStableRef.current;
-  const calendarEventsVersion = calendarEventsVersionRef.current;
+  // Simply use calendarEvents directly - React Query handles memoization
+  // The infinite loop was caused by trying to stabilize arrays that React Query already handles
+  const stableCalendarEvents = calendarEvents;
+  const calendarEventsVersion = calendarEvents.length;
   
   console.log('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
     isLoading: calendarEventsLoading,
     referenceChanged: calendarEventsChanged,
-    eventsHash: calendarEventsIdsRef.current.substring(0, 50) + '...',
+    eventsCount: calendarEvents.length,
     stableEventsCount: stableCalendarEvents.length
   });
 
@@ -371,35 +346,9 @@ export default function ProgramsPage() {
     clientProgramsRef.current = clientPrograms;
   }
   
-  // Create stable references using refs and useEffect to avoid render-time calculations
-  const clientProgramsStableRef = React.useRef(clientPrograms);
-  const clientProgramsVersionRef = React.useRef<number>(0);
-  const clientProgramsLengthRef = React.useRef<number>(clientPrograms.length);
-  const clientProgramsIdsRef = React.useRef<string>('');
-  
-  // Update stable reference in useEffect to avoid render-time side effects
-  React.useEffect(() => {
-    const currentIds = clientPrograms.map(cp => cp.id).sort().join(',');
-    const currentLength = clientPrograms.length;
-    
-    // Only update if content actually changed
-    if (currentIds !== clientProgramsIdsRef.current || currentLength !== clientProgramsLengthRef.current) {
-      console.log('[ProgramsPage] clientPrograms content changed', {
-        oldIds: clientProgramsIdsRef.current.substring(0, 50) + '...',
-        newIds: currentIds.substring(0, 50) + '...',
-        oldLength: clientProgramsLengthRef.current,
-        newLength: currentLength
-      });
-      clientProgramsIdsRef.current = currentIds;
-      clientProgramsLengthRef.current = currentLength;
-      clientProgramsStableRef.current = clientPrograms;
-      clientProgramsVersionRef.current += 1;
-    }
-  }, [clientPrograms]);
-  
-  // Use stable reference that only changes when content changes
-  const stableClientPrograms = clientProgramsStableRef.current;
-  const clientProgramsVersion = clientProgramsVersionRef.current;
+  // Simply use clientPrograms directly
+  const stableClientPrograms = clientPrograms;
+  const clientProgramsVersion = clientPrograms.length;
   
   console.log('[ProgramsPage] useClientPrograms result:', {
     clientProgramsCount: clientPrograms.length,
@@ -433,29 +382,9 @@ export default function ProgramsPage() {
     dialogPeriodsRef.current = dialogPeriods;
   }
   
-  // Create stable references using refs and useEffect to avoid render-time calculations
-  const dialogPeriodsStableRef = React.useRef(dialogPeriods);
-  const dialogPeriodsVersionRef = React.useRef<number>(0);
-  const dialogPeriodsLengthRef = React.useRef<number>(dialogPeriods.length);
-  const dialogPeriodsIdsRef = React.useRef<string>('');
-  
-  // Update stable reference in useEffect to avoid render-time side effects
-  React.useEffect(() => {
-    const currentIds = dialogPeriods.map(p => p.id).sort().join(',');
-    const currentLength = dialogPeriods.length;
-    
-    // Only update if content actually changed
-    if (currentIds !== dialogPeriodsIdsRef.current || currentLength !== dialogPeriodsLengthRef.current) {
-      dialogPeriodsIdsRef.current = currentIds;
-      dialogPeriodsLengthRef.current = currentLength;
-      dialogPeriodsStableRef.current = dialogPeriods;
-      dialogPeriodsVersionRef.current += 1;
-    }
-  }, [dialogPeriods]);
-  
-  // Use stable reference that only changes when content changes
-  const stableDialogPeriods = dialogPeriodsStableRef.current;
-  const dialogPeriodsVersion = dialogPeriodsVersionRef.current;
+  // Simply use dialogPeriods directly
+  const stableDialogPeriods = dialogPeriods;
+  const dialogPeriodsVersion = dialogPeriods.length;
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
   const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
@@ -2162,8 +2091,8 @@ export default function ProgramsPage() {
               periodListDialogOpen,
               clientProgramsLength: stableClientPrograms.length,
               dialogPeriodsLength: stableDialogPeriods.length,
-              clientProgramsHash: clientProgramsIdsRef.current.substring(0, 50) + '...',
-              dialogPeriodsHash: dialogPeriodsIdsRef.current.substring(0, 50) + '...'
+              clientProgramsLength: stableClientPrograms.length,
+              dialogPeriodsLength: stableDialogPeriods.length
             });
             
             try {
@@ -2200,7 +2129,7 @@ export default function ProgramsPage() {
               console.error('[ProgramsPage] periods useMemo ERROR:', error);
               throw error;
             }
-          }, [selectedClient, clientProgramsVersion, dialogPeriodsVersion, periodListDialogOpen])}
+          }, [selectedClient, clientPrograms.length, dialogPeriods.length, periodListDialogOpen])}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
@@ -2212,7 +2141,7 @@ export default function ProgramsPage() {
               selectedClient,
               calendarEventsLength: stableCalendarEvents.length,
               selectedClientDataName: selectedClientData?.name,
-              eventsHash: calendarEventsIdsRef.current.substring(0, 50) + '...'
+              eventsCount: stableCalendarEvents.length
             });
             
             try {
@@ -2256,7 +2185,7 @@ export default function ProgramsPage() {
               console.error('[ProgramsPage] calendarEventsCount useMemo ERROR:', error);
               throw error;
             }
-          }, [selectedClient, calendarEventsVersion, selectedClientData?.name])}
+          }, [selectedClient, calendarEvents.length, selectedClientData?.name])}
         />
 
       {/* Schedule Event Edit Dialog */}
