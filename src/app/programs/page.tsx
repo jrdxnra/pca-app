@@ -213,6 +213,7 @@ export default function ProgramsPage() {
   // Use ref to track previous hash and only update when content actually changes
   const calendarEventsHashRef = React.useRef<string>('');
   const calendarEventsStableRef = React.useRef(calendarEvents);
+  const calendarEventsVersionRef = React.useRef<number>(0);
   
   // Calculate current hash
   const currentHash = calendarEvents.map(e => e.id).sort().join(',');
@@ -226,16 +227,18 @@ export default function ProgramsPage() {
     });
     calendarEventsHashRef.current = currentHash;
     calendarEventsStableRef.current = calendarEvents;
+    calendarEventsVersionRef.current += 1; // Increment version counter
   }
   
   // Use stable reference that only changes when content changes
   const stableCalendarEvents = calendarEventsStableRef.current;
+  const calendarEventsVersion = calendarEventsVersionRef.current;
   
   console.log('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
     isLoading: calendarEventsLoading,
     referenceChanged: calendarEventsChanged,
-    eventsHash: currentHash.substring(0, 50) + '...',
+    eventsHash: calendarEventsHashRef.current.substring(0, 50) + '...',
     stableEventsCount: stableCalendarEvents.length
   });
 
@@ -367,6 +370,7 @@ export default function ProgramsPage() {
   // Use ref to track previous hash and only update when content actually changes
   const clientProgramsHashRef = React.useRef<string>('');
   const clientProgramsStableRef = React.useRef(clientPrograms);
+  const clientProgramsVersionRef = React.useRef<number>(0);
   
   // Calculate current hash
   const currentClientProgramsHash = clientPrograms.map(cp => cp.id).sort().join(',');
@@ -380,10 +384,12 @@ export default function ProgramsPage() {
     });
     clientProgramsHashRef.current = currentClientProgramsHash;
     clientProgramsStableRef.current = clientPrograms;
+    clientProgramsVersionRef.current += 1; // Increment version counter
   }
   
   // Use stable reference that only changes when content changes
   const stableClientPrograms = clientProgramsStableRef.current;
+  const clientProgramsVersion = clientProgramsVersionRef.current;
   
   console.log('[ProgramsPage] useClientPrograms result:', {
     clientProgramsCount: clientPrograms.length,
@@ -421,6 +427,7 @@ export default function ProgramsPage() {
   // Use ref to track previous hash and only update when content actually changes
   const dialogPeriodsHashRef = React.useRef<string>('');
   const dialogPeriodsStableRef = React.useRef(dialogPeriods);
+  const dialogPeriodsVersionRef = React.useRef<number>(0);
   
   // Calculate current hash
   const currentDialogPeriodsHash = dialogPeriods.map(p => p.id).sort().join(',');
@@ -429,10 +436,12 @@ export default function ProgramsPage() {
   if (currentDialogPeriodsHash !== dialogPeriodsHashRef.current) {
     dialogPeriodsHashRef.current = currentDialogPeriodsHash;
     dialogPeriodsStableRef.current = dialogPeriods;
+    dialogPeriodsVersionRef.current += 1; // Increment version counter
   }
   
   // Use stable reference that only changes when content changes
   const stableDialogPeriods = dialogPeriodsStableRef.current;
+  const dialogPeriodsVersion = dialogPeriodsVersionRef.current;
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
   const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
@@ -2139,8 +2148,8 @@ export default function ProgramsPage() {
               periodListDialogOpen,
               clientProgramsLength: stableClientPrograms.length,
               dialogPeriodsLength: stableDialogPeriods.length,
-              clientProgramsHash: currentClientProgramsHash.substring(0, 50) + '...',
-              dialogPeriodsHash: currentDialogPeriodsHash.substring(0, 50) + '...'
+              clientProgramsHash: clientProgramsHashRef.current.substring(0, 50) + '...',
+              dialogPeriodsHash: dialogPeriodsHashRef.current.substring(0, 50) + '...'
             });
             
             try {
@@ -2177,7 +2186,7 @@ export default function ProgramsPage() {
               console.error('[ProgramsPage] periods useMemo ERROR:', error);
               throw error;
             }
-          }, [selectedClient, currentClientProgramsHash, currentDialogPeriodsHash, periodListDialogOpen])}
+          }, [selectedClient, clientProgramsVersion, dialogPeriodsVersion, periodListDialogOpen])}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
@@ -2189,7 +2198,7 @@ export default function ProgramsPage() {
               selectedClient,
               calendarEventsLength: stableCalendarEvents.length,
               selectedClientDataName: selectedClientData?.name,
-              eventsHash: currentHash.substring(0, 50) + '...'
+              eventsHash: calendarEventsHashRef.current.substring(0, 50) + '...'
             });
             
             try {
@@ -2233,7 +2242,7 @@ export default function ProgramsPage() {
               console.error('[ProgramsPage] calendarEventsCount useMemo ERROR:', error);
               throw error;
             }
-          }, [selectedClient, currentHash, selectedClientData?.name])}
+          }, [selectedClient, calendarEventsVersion, selectedClientData?.name])}
         />
 
       {/* Schedule Event Edit Dialog */}
