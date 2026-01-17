@@ -28,6 +28,7 @@ import { DayEventList } from '@/components/programs/DayEventList';
 import { MiniCalendarTooltip } from '@/components/programs/MiniCalendarTooltip';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import { getEventCategory } from '@/lib/utils/event-patterns';
+import { useCalendarEvents } from '@/hooks/queries/useCalendarEvents';
 
 export default function HomePage() {
   const {
@@ -42,7 +43,8 @@ export default function HomePage() {
   } = useDashboardStore();
 
   const { clients, fetchClients } = useClientStore();
-  const { events: calendarEvents, fetchEvents } = useCalendarStore();
+  // Keep useCalendarStore only for utility functions (getLocationDisplay, etc.)
+  const { getLocationDisplay } = useCalendarStore();
   const { calendarDate, setCalendarDate } = useProgramStore();
   const { workoutCategories, fetchWorkoutCategories } = useConfigurationStore();
 
@@ -70,31 +72,31 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount - fetchDashboardData is stable from Zustand store
 
-  // Fetch calendar events for current month (for analytics) and week (for sidebar)
-  useEffect(() => {
-    if (!calendarDate) return;
+  // Calculate date range for calendar events (month + week for analytics and sidebar)
+  const today = new Date();
+  const currentDate = calendarDate || today;
+  
+  // Get week range for the calendar sidebar
+  const weekStart = new Date(currentDate);
+  weekStart.setDate(currentDate.getDate() - currentDate.getDay());
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekStart.setHours(0, 0, 0, 0);
+  weekEnd.setHours(23, 59, 59, 999);
 
-    const today = new Date();
-    
-    // Get week range for the calendar sidebar
-    const startDate = new Date(calendarDate);
-    startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
+  // Get current month range for analytics
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+  
+  // Fetch the broader range (month) to cover both analytics and sidebar
+  const fetchStart = monthStart < weekStart ? monthStart : weekStart;
+  const fetchEnd = monthEnd > weekEnd ? monthEnd : weekEnd;
 
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
-
-    // Get current month range for analytics
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-    
-    // Fetch the broader range (month) to cover both analytics and sidebar
-    const fetchStart = monthStart < startDate ? monthStart : startDate;
-    const fetchEnd = monthEnd > endDate ? monthEnd : endDate;
-    
-    fetchEvents({ start: fetchStart, end: fetchEnd });
-  }, [calendarDate, fetchEvents]);
+  // Use React Query for calendar events (same as schedule page) - single source of truth
+  const { data: calendarEvents = [], isLoading: calendarEventsLoading } = useCalendarEvents(
+    fetchStart,
+    fetchEnd
+  );
 
   // Handle mini calendar date selection
   const handleMiniCalendarDateSelect = (date: Date) => {
