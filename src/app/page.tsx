@@ -73,7 +73,12 @@ export default function HomePage() {
   }, []); // Only run once on mount - fetchDashboardData is stable from Zustand store
 
   // Calculate date range for calendar events (month + week for analytics and sidebar)
+  // Use normalized today for analytics calculations
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+  
   const currentDate = calendarDate || today;
   
   // Get week range for the calendar sidebar
@@ -84,7 +89,7 @@ export default function HomePage() {
   weekStart.setHours(0, 0, 0, 0);
   weekEnd.setHours(23, 59, 59, 999);
 
-  // Get current month range for analytics
+  // Get current month range for analytics and event fetching
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
   
@@ -115,21 +120,11 @@ export default function HomePage() {
     window.location.href = `/workouts/builder?${clientParam}date=${dateParam}`;
   };
 
-  // Calculate analytics
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(today);
-  todayEnd.setHours(23, 59, 59, 999);
-
   // Count today's sessions (all events for today)
   const todaysSessions = calendarEvents.filter(event => {
     const eventDate = new Date(event.start.dateTime);
     return eventDate >= today && eventDate <= todayEnd;
   }).length;
-
-  // Get current month range
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
 
   // Get workout category names from configuration
   const workoutCategoryNames = workoutCategories.map(cat => cat.name);
