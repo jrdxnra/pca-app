@@ -209,26 +209,31 @@ export default function ProgramsPage() {
     calendarEventsRef.current = calendarEvents;
   }
   
-  // Create a stable hash of event IDs to detect actual content changes
-  // Use ref to track previous hash and only update when content actually changes
-  const calendarEventsHashRef = React.useRef<string>('');
+  // Create stable references using refs and useEffect to avoid render-time calculations
   const calendarEventsStableRef = React.useRef(calendarEvents);
   const calendarEventsVersionRef = React.useRef<number>(0);
+  const calendarEventsLengthRef = React.useRef<number>(calendarEvents.length);
+  const calendarEventsIdsRef = React.useRef<string>('');
   
-  // Calculate current hash
-  const currentHash = calendarEvents.map(e => e.id).sort().join(',');
-  
-  // Only update if hash actually changed (content changed, not just reference)
-  if (currentHash !== calendarEventsHashRef.current) {
-    console.log('[ProgramsPage] calendarEvents content changed', {
-      oldHash: calendarEventsHashRef.current.substring(0, 50) + '...',
-      newHash: currentHash.substring(0, 50) + '...',
-      eventsCount: calendarEvents.length
-    });
-    calendarEventsHashRef.current = currentHash;
-    calendarEventsStableRef.current = calendarEvents;
-    calendarEventsVersionRef.current += 1; // Increment version counter
-  }
+  // Update stable reference in useEffect to avoid render-time side effects
+  React.useEffect(() => {
+    const currentIds = calendarEvents.map(e => e.id).sort().join(',');
+    const currentLength = calendarEvents.length;
+    
+    // Only update if content actually changed
+    if (currentIds !== calendarEventsIdsRef.current || currentLength !== calendarEventsLengthRef.current) {
+      console.log('[ProgramsPage] calendarEvents content changed', {
+        oldIds: calendarEventsIdsRef.current.substring(0, 50) + '...',
+        newIds: currentIds.substring(0, 50) + '...',
+        oldLength: calendarEventsLengthRef.current,
+        newLength: currentLength
+      });
+      calendarEventsIdsRef.current = currentIds;
+      calendarEventsLengthRef.current = currentLength;
+      calendarEventsStableRef.current = calendarEvents;
+      calendarEventsVersionRef.current += 1;
+    }
+  }, [calendarEvents]);
   
   // Use stable reference that only changes when content changes
   const stableCalendarEvents = calendarEventsStableRef.current;
@@ -238,7 +243,7 @@ export default function ProgramsPage() {
     eventsCount: calendarEvents.length,
     isLoading: calendarEventsLoading,
     referenceChanged: calendarEventsChanged,
-    eventsHash: calendarEventsHashRef.current.substring(0, 50) + '...',
+    eventsHash: calendarEventsIdsRef.current.substring(0, 50) + '...',
     stableEventsCount: stableCalendarEvents.length
   });
 
@@ -366,26 +371,31 @@ export default function ProgramsPage() {
     clientProgramsRef.current = clientPrograms;
   }
   
-  // Create stable hash for clientPrograms to prevent infinite loops
-  // Use ref to track previous hash and only update when content actually changes
-  const clientProgramsHashRef = React.useRef<string>('');
+  // Create stable references using refs and useEffect to avoid render-time calculations
   const clientProgramsStableRef = React.useRef(clientPrograms);
   const clientProgramsVersionRef = React.useRef<number>(0);
+  const clientProgramsLengthRef = React.useRef<number>(clientPrograms.length);
+  const clientProgramsIdsRef = React.useRef<string>('');
   
-  // Calculate current hash
-  const currentClientProgramsHash = clientPrograms.map(cp => cp.id).sort().join(',');
-  
-  // Only update if hash actually changed (content changed, not just reference)
-  if (currentClientProgramsHash !== clientProgramsHashRef.current) {
-    console.log('[ProgramsPage] clientPrograms content changed', {
-      oldHash: clientProgramsHashRef.current.substring(0, 50) + '...',
-      newHash: currentClientProgramsHash.substring(0, 50) + '...',
-      programsCount: clientPrograms.length
-    });
-    clientProgramsHashRef.current = currentClientProgramsHash;
-    clientProgramsStableRef.current = clientPrograms;
-    clientProgramsVersionRef.current += 1; // Increment version counter
-  }
+  // Update stable reference in useEffect to avoid render-time side effects
+  React.useEffect(() => {
+    const currentIds = clientPrograms.map(cp => cp.id).sort().join(',');
+    const currentLength = clientPrograms.length;
+    
+    // Only update if content actually changed
+    if (currentIds !== clientProgramsIdsRef.current || currentLength !== clientProgramsLengthRef.current) {
+      console.log('[ProgramsPage] clientPrograms content changed', {
+        oldIds: clientProgramsIdsRef.current.substring(0, 50) + '...',
+        newIds: currentIds.substring(0, 50) + '...',
+        oldLength: clientProgramsLengthRef.current,
+        newLength: currentLength
+      });
+      clientProgramsIdsRef.current = currentIds;
+      clientProgramsLengthRef.current = currentLength;
+      clientProgramsStableRef.current = clientPrograms;
+      clientProgramsVersionRef.current += 1;
+    }
+  }, [clientPrograms]);
   
   // Use stable reference that only changes when content changes
   const stableClientPrograms = clientProgramsStableRef.current;
@@ -423,21 +433,25 @@ export default function ProgramsPage() {
     dialogPeriodsRef.current = dialogPeriods;
   }
   
-  // Create stable hash for dialogPeriods
-  // Use ref to track previous hash and only update when content actually changes
-  const dialogPeriodsHashRef = React.useRef<string>('');
+  // Create stable references using refs and useEffect to avoid render-time calculations
   const dialogPeriodsStableRef = React.useRef(dialogPeriods);
   const dialogPeriodsVersionRef = React.useRef<number>(0);
+  const dialogPeriodsLengthRef = React.useRef<number>(dialogPeriods.length);
+  const dialogPeriodsIdsRef = React.useRef<string>('');
   
-  // Calculate current hash
-  const currentDialogPeriodsHash = dialogPeriods.map(p => p.id).sort().join(',');
-  
-  // Only update if hash actually changed (content changed, not just reference)
-  if (currentDialogPeriodsHash !== dialogPeriodsHashRef.current) {
-    dialogPeriodsHashRef.current = currentDialogPeriodsHash;
-    dialogPeriodsStableRef.current = dialogPeriods;
-    dialogPeriodsVersionRef.current += 1; // Increment version counter
-  }
+  // Update stable reference in useEffect to avoid render-time side effects
+  React.useEffect(() => {
+    const currentIds = dialogPeriods.map(p => p.id).sort().join(',');
+    const currentLength = dialogPeriods.length;
+    
+    // Only update if content actually changed
+    if (currentIds !== dialogPeriodsIdsRef.current || currentLength !== dialogPeriodsLengthRef.current) {
+      dialogPeriodsIdsRef.current = currentIds;
+      dialogPeriodsLengthRef.current = currentLength;
+      dialogPeriodsStableRef.current = dialogPeriods;
+      dialogPeriodsVersionRef.current += 1;
+    }
+  }, [dialogPeriods]);
   
   // Use stable reference that only changes when content changes
   const stableDialogPeriods = dialogPeriodsStableRef.current;
@@ -2148,8 +2162,8 @@ export default function ProgramsPage() {
               periodListDialogOpen,
               clientProgramsLength: stableClientPrograms.length,
               dialogPeriodsLength: stableDialogPeriods.length,
-              clientProgramsHash: clientProgramsHashRef.current.substring(0, 50) + '...',
-              dialogPeriodsHash: dialogPeriodsHashRef.current.substring(0, 50) + '...'
+              clientProgramsHash: clientProgramsIdsRef.current.substring(0, 50) + '...',
+              dialogPeriodsHash: dialogPeriodsIdsRef.current.substring(0, 50) + '...'
             });
             
             try {
@@ -2198,7 +2212,7 @@ export default function ProgramsPage() {
               selectedClient,
               calendarEventsLength: stableCalendarEvents.length,
               selectedClientDataName: selectedClientData?.name,
-              eventsHash: calendarEventsHashRef.current.substring(0, 50) + '...'
+              eventsHash: calendarEventsIdsRef.current.substring(0, 50) + '...'
             });
             
             try {
