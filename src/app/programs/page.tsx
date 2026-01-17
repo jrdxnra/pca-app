@@ -1946,6 +1946,8 @@ export default function ProgramsPage() {
           calendarEventsCount={React.useMemo(() => {
             if (!selectedClient) return 0;
             const clientName = selectedClientData?.name;
+            // Use length for stable dependency instead of array reference
+            const eventsLength = calendarEvents.length;
             return calendarEvents.filter(event => {
               const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
                 event.description?.includes(`client=${selectedClient},`) ||
@@ -1959,7 +1961,7 @@ export default function ProgramsPage() {
 
               return false;
             }).length;
-          }, [selectedClient, calendarEvents, clientPrograms.find(c => c.id === selectedClient)?.clientId, selectedClientData?.name])}
+          }, [selectedClient, calendarEvents.length, selectedClientData?.name])}
         />
 
       {/* Schedule Event Edit Dialog */}

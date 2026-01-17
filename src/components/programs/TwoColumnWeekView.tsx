@@ -128,16 +128,11 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   const prevSelectedClientRef = useRef<string | null>(null);
   const prevAllEventsRef = useRef<GoogleCalendarEvent[]>([]);
   
+  // Use length and selectedClient for stable dependencies instead of array reference
+  const allEventsLength = allCalendarEvents.length;
+  const eventsKey = `${allEventsLength}-${selectedClient || 'all'}`;
+  
   const calendarEvents = React.useMemo(() => {
-    // Check if inputs actually changed
-    const eventsChanged = prevAllEventsRef.current !== allCalendarEvents;
-    const clientChanged = prevSelectedClientRef.current !== selectedClient;
-    
-    // If nothing changed, return cached result
-    if (!eventsChanged && !clientChanged && prevEventsRef.current.length >= 0) {
-      return prevEventsRef.current;
-    }
-    
     // Recalculate
     let result: GoogleCalendarEvent[];
     if (!selectedClient) {
@@ -152,13 +147,8 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
       });
     }
     
-    // Update refs
-    prevEventsRef.current = result;
-    prevSelectedClientRef.current = selectedClient;
-    prevAllEventsRef.current = allCalendarEvents;
-    
     return result;
-  }, [allCalendarEvents, selectedClient]);
+  }, [eventsKey, allCalendarEvents, selectedClient]);
   
   // Track when component is mounted to avoid hydration mismatch with dates
   useEffect(() => {
@@ -170,12 +160,10 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   const prevSeparatedRef = useRef<{ allDayEvents: GoogleCalendarEvent[]; timedEvents: GoogleCalendarEvent[] } | null>(null);
   const prevCalendarEventsRef = useRef<GoogleCalendarEvent[]>([]);
   
+  // Use length for stable dependency instead of array reference
+  const eventsLength = calendarEvents.length;
+  
   const { allDayEvents, timedEvents } = useMemo(() => {
-    // If calendarEvents reference hasn't changed, return cached result
-    if (prevCalendarEventsRef.current === calendarEvents && prevSeparatedRef.current) {
-      return prevSeparatedRef.current;
-    }
-    
     const allDay: GoogleCalendarEvent[] = [];
     const timed: GoogleCalendarEvent[] = [];
     
@@ -187,12 +175,8 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
       }
     });
     
-    const result = { allDayEvents: allDay, timedEvents: timed };
-    prevSeparatedRef.current = result;
-    prevCalendarEventsRef.current = calendarEvents;
-    
-    return result;
-  }, [calendarEvents]);
+    return { allDayEvents: allDay, timedEvents: timed };
+  }, [eventsLength, calendarEvents]);
   
   const dayColumnsRef = useRef<HTMLDivElement>(null);
 
