@@ -180,9 +180,9 @@ export default function ProgramsPage() {
     calendarDateRange?.end
   );
   
-  // Simply use calendarEvents directly - React Query handles memoization
-  // Use length as stable dependency for useMemo to prevent infinite loops
-  const stableCalendarEvents = calendarEvents;
+  // Memoize calendarEvents to prevent new references on every render
+  // React Query returns new array references, so we need to stabilize them
+  const stableCalendarEvents = React.useMemo(() => calendarEvents, [calendarEvents.length]);
   
   console.log('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
@@ -300,8 +300,8 @@ export default function ProgramsPage() {
     fetchClientPrograms
   } = useClientPrograms(selectedClient);
   
-  // Simply use clientPrograms directly
-  const stableClientPrograms = clientPrograms;
+  // Memoize clientPrograms to prevent new references on every render
+  const stableClientPrograms = React.useMemo(() => clientPrograms, [clientPrograms.length]);
   
   console.log('[ProgramsPage] useClientPrograms result:', {
     clientProgramsCount: clientPrograms.length,
@@ -320,8 +320,8 @@ export default function ProgramsPage() {
   const [periodListDialogOpen, setPeriodListDialogOpen] = useState(false);
   const [dialogPeriods, setDialogPeriods] = useState<ClientProgramPeriod[]>([]);
   
-  // Simply use dialogPeriods directly
-  const stableDialogPeriods = dialogPeriods;
+  // Memoize dialogPeriods to prevent new references on every render
+  const stableDialogPeriods = React.useMemo(() => dialogPeriods, [dialogPeriods.length]);
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
   const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
@@ -2027,11 +2027,8 @@ export default function ProgramsPage() {
             
             const clientProgram = stableClientPrograms.find(cp => cp.clientId === selectedClient);
             const statePeriods = clientProgram?.periods || [];
-            const result = stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
-            
-            // Return a stable reference - only create new array if content actually changed
-            return result;
-          }, [selectedClient, periodListDialogOpen, stableClientPrograms.length, stableDialogPeriods.length])}
+            return stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
+          }, [selectedClient, periodListDialogOpen, stableClientPrograms, stableDialogPeriods])}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
