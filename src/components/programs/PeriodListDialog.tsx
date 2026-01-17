@@ -55,10 +55,11 @@ export function PeriodListDialog({
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
 
   // Update local periods when prop changes
-  // Use ref to track previous periods to prevent unnecessary updates
-  const previousPeriodsRef = React.useRef<ClientProgramPeriod[]>(periods);
-  const previousPeriodsLengthRef = React.useRef<number>(periods.length);
-  const periodsIdsString = periods.map(p => p.id).sort().join(',');
+  // Use ref to track previous periods IDs to prevent unnecessary updates
+  const periodsIdsString = React.useMemo(() => 
+    periods.map(p => p.id).sort().join(',')
+  , [periods.length, periods.map(p => p.id).join(',')]);
+  
   const previousPeriodsIdsStringRef = React.useRef<string>(periodsIdsString);
   
   useEffect(() => {
@@ -69,8 +70,6 @@ export function PeriodListDialog({
         periods: periods.map(p => ({ id: p.id, name: p.periodName }))
       });
       setLocalPeriods(periods);
-      previousPeriodsRef.current = periods;
-      previousPeriodsLengthRef.current = periods.length;
       previousPeriodsIdsStringRef.current = periodsIdsString;
       // Clear selection when periods change
       setSelectedPeriods(new Set());

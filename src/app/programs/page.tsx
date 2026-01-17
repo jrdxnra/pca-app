@@ -180,9 +180,12 @@ export default function ProgramsPage() {
     calendarDateRange?.end
   );
   
-  // Memoize calendarEvents to prevent new references on every render
-  // React Query returns new array references, so we need to stabilize them
-  const stableCalendarEvents = React.useMemo(() => calendarEvents, [calendarEvents.length]);
+  // Use ref to track stable calendarEvents reference
+  const calendarEventsRef = React.useRef(calendarEvents);
+  if (calendarEvents.length !== calendarEventsRef.current.length) {
+    calendarEventsRef.current = calendarEvents;
+  }
+  const stableCalendarEvents = calendarEventsRef.current;
   
   console.log('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
@@ -300,8 +303,12 @@ export default function ProgramsPage() {
     fetchClientPrograms
   } = useClientPrograms(selectedClient);
   
-  // Memoize clientPrograms to prevent new references on every render
-  const stableClientPrograms = React.useMemo(() => clientPrograms, [clientPrograms.length]);
+  // Use ref to track stable clientPrograms reference
+  const clientProgramsRef = React.useRef(clientPrograms);
+  if (clientPrograms.length !== clientProgramsRef.current.length) {
+    clientProgramsRef.current = clientPrograms;
+  }
+  const stableClientPrograms = clientProgramsRef.current;
   
   console.log('[ProgramsPage] useClientPrograms result:', {
     clientProgramsCount: clientPrograms.length,
@@ -320,8 +327,8 @@ export default function ProgramsPage() {
   const [periodListDialogOpen, setPeriodListDialogOpen] = useState(false);
   const [dialogPeriods, setDialogPeriods] = useState<ClientProgramPeriod[]>([]);
   
-  // Memoize dialogPeriods to prevent new references on every render
-  const stableDialogPeriods = React.useMemo(() => dialogPeriods, [dialogPeriods.length]);
+  // Use dialogPeriods directly
+  const stableDialogPeriods = dialogPeriods;
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
   const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
@@ -2020,15 +2027,15 @@ export default function ProgramsPage() {
           }
         }}
         periods={React.useMemo(() => {
-            // Calculate periods - use stable dependencies to prevent infinite loops
+            // Calculate periods - use stable primitive dependencies
             if (!selectedClient || !periodListDialogOpen) {
               return [];
             }
             
-            const clientProgram = stableClientPrograms.find(cp => cp.clientId === selectedClient);
+            const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
             const statePeriods = clientProgram?.periods || [];
-            return stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
-          }, [selectedClient, periodListDialogOpen, stableClientPrograms, stableDialogPeriods])}
+            return dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
+          }, [selectedClient, periodListDialogOpen, clientPrograms.length, dialogPeriods.length])}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
