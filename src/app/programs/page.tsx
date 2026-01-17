@@ -2020,7 +2020,9 @@ export default function ProgramsPage() {
           }
         }}
         periods={(() => {
-            // Calculate directly without useMemo to avoid dependency issues
+            // IMPORTANT: Calculate directly without useMemo
+            // Using useMemo with array.length dependencies causes React error #310 during rapid re-renders
+            // because React sees hooks being called in different orders. Simple calculations don't need memoization.
             if (!selectedClient || !periodListDialogOpen) {
               return [];
             }
@@ -2036,7 +2038,9 @@ export default function ProgramsPage() {
           onClearAllCalendarEvents={handleClearAllCalendarEvents}
           onForceClearLocalEvents={handleForceClearLocalEvents}
           calendarEventsCount={(() => {
-            // Calculate directly without useMemo to avoid dependency issues
+            // IMPORTANT: Calculate directly without useMemo
+            // Using useMemo with array.length dependencies causes React error #310 during rapid re-renders
+            // because React sees hooks being called in different orders. Simple calculations don't need memoization.
             if (!selectedClient) return 0;
             
             const clientName = selectedClientData?.name;
