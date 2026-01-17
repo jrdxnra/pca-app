@@ -1915,6 +1915,7 @@ export default function ProgramsPage() {
           onForceClearLocalEvents={handleForceClearLocalEvents}
           calendarEventsCount={React.useMemo(() => {
             if (!selectedClient) return 0;
+            const clientName = selectedClientData?.name;
             return calendarEvents.filter(event => {
               const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
                 event.description?.includes(`client=${selectedClient},`) ||
@@ -1922,14 +1923,13 @@ export default function ProgramsPage() {
 
               if (hasMatchingClient) return true;
 
-              const clientName = selectedClientData?.name;
               if (clientName && event.summary && event.summary.includes(clientName)) {
                 return true;
               }
 
               return false;
             }).length;
-          }, [selectedClient, calendarEvents, selectedClientData?.name])}
+          }, [selectedClient, calendarEvents, clientPrograms.find(c => c.id === selectedClient)?.clientId, selectedClientData?.name])}
         />
 
       {/* Schedule Event Edit Dialog */}
