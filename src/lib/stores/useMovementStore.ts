@@ -109,13 +109,8 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
       async () => {
         await updateMovement(id, updates);
         
-        // Update local state
-        const { movements } = get();
-        const updatedMovements = movements.map(movement => 
-          movement.id === id ? { ...movement, ...updates, updatedAt: new Date() } : movement
-        );
-        
-        set({ movements: updatedMovements });
+        // Refresh movements from server to get correct Timestamp
+        await get().fetchMovements();
         return undefined;
       },
       {

@@ -436,7 +436,7 @@ export function BuilderWeekCard({
                           isOpen={true}
                           onClose={() => onCloseEditor(dateKey, workout?.id)}
                           onSave={(workoutData) => onSaveWorkout(workoutData, dateKey)}
-                          onDelete={() => onDeleteWorkout(workout?.id, dateKey)}
+                          onDelete={async () => await onDeleteWorkout(workout?.id, dateKey)}
                           isCreating={!isEditing}
                           expandedInline={true}
                           hideTopActionBar={true}
