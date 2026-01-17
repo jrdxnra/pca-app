@@ -48,84 +48,73 @@ export const DayEventList = React.memo(function DayEventList({
   const safeSelectedDate = selectedDate || new Date(2024, 0, 1); // Stable fallback for SSR
   console.log('[DayEventList] safeSelectedDate:', safeSelectedDate.toISOString());
 
-  // Get events for the selected date with deduplication
-  const dayEvents = React.useMemo(() => {
-    console.log('[DayEventList] dayEvents useMemo called', {
-      eventsCount: events.length,
-      safeSelectedDate: safeSelectedDate.toISOString(),
-      selectedClientId
-    });
-    const filteredEvents = events.filter(event => {
-      try {
-        const eventDate = new Date(event.start.dateTime);
-        // Normalize both dates to start of day for comparison
-        const normalizedEventDate = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-        const normalizedSelectedDate = new Date(safeSelectedDate.getFullYear(), safeSelectedDate.getMonth(), safeSelectedDate.getDate());
-        
-        const dateMatches = normalizedEventDate.getTime() === normalizedSelectedDate.getTime();
-        
-        if (!dateMatches) return false;
-        
-        // If a client is selected, filter by client
-        if (selectedClientId) {
-          // Check preConfiguredClient
-          if (event.preConfiguredClient) {
-            return event.preConfiguredClient === selectedClientId;
-          }
-          
-          // Check description metadata
-          if (event.description) {
-            const clientMatch = event.description.match(/\[Metadata:.*client=([^,}]+)/);
-            if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
-              return clientMatch[1].trim() === selectedClientId;
-            }
-          }
-          
-          // Check extended properties (from Google Calendar API)
-          if ((event as any).extendedProperties?.private?.pcaClientId) {
-            return (event as any).extendedProperties.private.pcaClientId === selectedClientId;
-          }
-          
-          // If event has no client info and we're viewing a specific client, don't show it
-          // (Only show events that belong to the selected client)
-          return false;
+  // CRITICAL: Do NOT use useMemo here - it causes React error #310
+  // Calculate directly - filtering is fast enough
+  const filteredEvents = events.filter(event => {
+    try {
+      const eventDate = new Date(event.start.dateTime);
+      // Normalize both dates to start of day for comparison
+      const normalizedEventDate = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+      const normalizedSelectedDate = new Date(safeSelectedDate.getFullYear(), safeSelectedDate.getMonth(), safeSelectedDate.getDate());
+      
+      const dateMatches = normalizedEventDate.getTime() === normalizedSelectedDate.getTime();
+      
+      if (!dateMatches) return false;
+      
+      // If a client is selected, filter by client
+      if (selectedClientId) {
+        // Check preConfiguredClient
+        if (event.preConfiguredClient) {
+          return event.preConfiguredClient === selectedClientId;
         }
         
-        // If no client is selected, show all events for the date
-        return true;
-      } catch (error) {
-        console.warn('Error filtering event in DayEventList:', event, error);
+        // Check description metadata
+        if (event.description) {
+          const clientMatch = event.description.match(/\[Metadata:.*client=([^,}]+)/);
+          if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
+            return clientMatch[1].trim() === selectedClientId;
+          }
+        }
+        
+        // Check extended properties (from Google Calendar API)
+        if ((event as any).extendedProperties?.private?.pcaClientId) {
+          return (event as any).extendedProperties.private.pcaClientId === selectedClientId;
+        }
+        
+        // If event has no client info and we're viewing a specific client, don't show it
         return false;
       }
-    });
-    
-    // Deduplicate by ID first, then by time+summary combination
-    const seenIds = new Set<string>();
-    const seenKeys = new Set<string>();
-    
-    return filteredEvents.filter(event => {
-      // Skip if we've seen this ID
-      if (seenIds.has(event.id)) return false;
-      seenIds.add(event.id);
       
-      // Also dedupe by time + summary (in case same event was created multiple times)
-      const key = `${event.start.dateTime}-${event.summary}`;
-      if (seenKeys.has(key)) return false;
-      seenKeys.add(key);
-      
+      // If no client is selected, show all events for the date
       return true;
-    });
-    
-    console.log('[DayEventList] dayEvents useMemo result', {
-      filteredCount: filteredEvents.length,
-      deduplicatedCount: filteredEvents.length
-    });
-    
-    return filteredEvents;
-  }, [events, safeSelectedDate, selectedClientId]);
+    } catch (error) {
+      console.warn('Error filtering event in DayEventList:', event, error);
+      return false;
+    }
+  });
   
-  console.log('[DayEventList] dayEvents after useMemo:', {
-    dayEventsCount: dayEvents.length
+  // Deduplicate by ID first, then by time+summary combination
+  const seenIds = new Set<string>();
+  const seenKeys = new Set<string>();
+  
+  const dayEvents = filteredEvents.filter(event => {
+    // Skip if we've seen this ID
+    if (seenIds.has(event.id)) return false;
+    seenIds.add(event.id);
+    
+    // Also dedupe by time + summary (in case same event was created multiple times)
+    const key = `${event.start.dateTime}-${event.summary}`;
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    
+    return true;
+  });
+  
+  console.log('[DayEventList] dayEvents calculated:', {
+    dayEventsCount: dayEvents.length,
+    eventsCount: events.length,
+    selectedDate: safeSelectedDate.toISOString(),
+    selectedClientId
   });
 
   // Sort events by time

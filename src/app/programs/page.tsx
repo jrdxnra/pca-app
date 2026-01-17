@@ -214,8 +214,12 @@ export default function ProgramsPage() {
   const { createTestEvent, clearAllTestEvents, linkToWorkout } = useCalendarStore();
 
   // Selected date for mini calendar (defaults to calendarDate)
-  // Initialize with calendarDate to avoid null issues
-  const [selectedDate, setSelectedDate] = useState<Date>(() => calendarDate || new Date());
+  // Initialize with calendarDate, fallback to today if null
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    if (calendarDate) return calendarDate;
+    // Fallback to today if calendarDate is null
+    return new Date();
+  });
   
   // Track mounted state to avoid hydration mismatch with date-dependent UI
   const [mounted, setMounted] = useState(false);
