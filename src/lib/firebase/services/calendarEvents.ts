@@ -14,6 +14,8 @@ import {
 } from 'firebase/firestore';
 import { db, getDb } from '../config';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
+import { fetchCalendarEvents as fetchGoogleCalendarEvents, checkGoogleCalendarAuth } from '@/lib/google-calendar/api-client';
+import { getCalendarSyncConfig } from './calendarConfig';
 
 const COLLECTION_NAME = 'calendarEvents';
 
@@ -92,11 +94,81 @@ export async function createCalendarEvent(
 
 /**
  * Get calendar events for a date range
+ * Tries Google Calendar API first if connected, then falls back to Firebase
  */
 export async function getCalendarEventsByDateRange(
   startDate: Date,
   endDate: Date
 ): Promise<GoogleCalendarEvent[]> {
+  let events: GoogleCalendarEvent[] = [];
+
+  // Check if Google Calendar is connected
+  try {
+    const isGoogleCalendarConnected = await checkGoogleCalendarAuth();
+    
+    if (isGoogleCalendarConnected) {
+      try {
+        // Get calendar config to know which calendar to use
+        const config = await getCalendarSyncConfig({
+          selectedCalendarId: 'primary',
+          coachingKeywords: [],
+          classKeywords: [],
+        });
+        
+        const calendarId = config.selectedCalendarId || 'primary';
+        
+        // Try Google Calendar API first
+        const googleEvents = await fetchGoogleCalendarEvents(
+          startDate,
+          endDate,
+          calendarId
+        );
+        
+        // Convert Google Calendar API format to our format
+        events = googleEvents.map((event: any) => {
+          const clientId = event.extendedProperties?.private?.pcaClientId;
+          const category = event.extendedProperties?.private?.pcaCategory;
+          
+          return {
+            id: event.id,
+            summary: event.summary || '',
+            description: event.description || '',
+            start: {
+              dateTime: event.start?.dateTime || event.start?.date || '',
+              timeZone: event.start?.timeZone || 'America/Los_Angeles',
+            },
+            end: {
+              dateTime: event.end?.dateTime || event.end?.date || '',
+              timeZone: event.end?.timeZone || 'America/Los_Angeles',
+            },
+            location: event.location,
+            htmlLink: event.htmlLink,
+            creator: event.creator,
+            attendees: event.attendees,
+            // Extract metadata from extended properties
+            preConfiguredClient: clientId,
+            preConfiguredCategory: category,
+            linkedWorkoutId: event.extendedProperties?.private?.pcaWorkoutId,
+            // Mark as coaching session if it has a client ID (from our app)
+            isCoachingSession: clientId ? true : undefined,
+          };
+        });
+        
+        // If we got events from Google Calendar, return them
+        if (events.length > 0) {
+          return events;
+        }
+      } catch (googleError) {
+        console.warn('Failed to fetch from Google Calendar, falling back to Firebase:', googleError);
+        // Fall through to Firebase
+      }
+    }
+  } catch (error) {
+    console.warn('Error checking Google Calendar connection, falling back to Firebase:', error);
+    // Fall through to Firebase
+  }
+
+  // Fallback to Firebase if Google Calendar not connected or failed
   const startTimestamp = Timestamp.fromDate(startDate);
   const endTimestamp = Timestamp.fromDate(endDate);
 
@@ -108,7 +180,22 @@ export async function getCalendarEventsByDateRange(
   );
 
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => firestoreToEvent(doc.id, doc.data()));
+  const firebaseEvents = snapshot.docs.map(doc => firestoreToEvent(doc.id, doc.data()));
+  
+  // Merge Google Calendar events (if any) with Firebase events, deduplicating by ID
+  const eventMap = new Map<string, GoogleCalendarEvent>();
+  
+  // Add Firebase events first
+  firebaseEvents.forEach(event => {
+    eventMap.set(event.id, event);
+  });
+  
+  // Add Google Calendar events (will overwrite Firebase if same ID)
+  events.forEach(event => {
+    eventMap.set(event.id, event);
+  });
+  
+  return Array.from(eventMap.values());
 }
 
 /**

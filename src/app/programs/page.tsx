@@ -156,11 +156,8 @@ export default function ProgramsPage() {
   const { weekTemplates, workoutStructureTemplates, fetchAll: fetchAllConfig } = useConfigurationStore();
 
   // Calendar events with React Query - calculate date range for current week view
-  
-  // Calculate date range directly - CRITICAL: Do NOT use useMemo here
-  // useMemo causes React error #310 during rapid re-renders
-  // This calculation is fast enough (< 1ms) and doesn't need memoization
-  const calendarDateRange = (() => {
+  // Use useMemo with stable timestamp dependency to prevent infinite loops
+  const calendarDateRange = React.useMemo(() => {
     if (!calendarDate) return null;
     const startDate = new Date(calendarDate);
     startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -169,7 +166,7 @@ export default function ProgramsPage() {
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
     return { start: startDate, end: endDate };
-  })();
+  }, [calendarDate?.getTime()]); // Use timestamp for stable comparison
 
   console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
     start: calendarDateRange?.start?.toISOString(),
@@ -181,12 +178,8 @@ export default function ProgramsPage() {
     calendarDateRange?.end
   );
   
-  // Use ref to track stable calendarEvents reference
-  const calendarEventsRef = React.useRef(calendarEvents);
-  if (calendarEvents.length !== calendarEventsRef.current.length) {
-    calendarEventsRef.current = calendarEvents;
-  }
-  const stableCalendarEvents = calendarEventsRef.current;
+  // Simply use calendarEvents directly - React Query handles memoization
+  const stableCalendarEvents = calendarEvents;
   
   console.log('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
