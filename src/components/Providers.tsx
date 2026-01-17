@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Toaster } from '@/components/ui/toaster';
+import { QueryProvider } from '@/lib/react-query/QueryProvider';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -10,13 +11,15 @@ interface ProvidersProps {
 
 /**
  * Client-side providers wrapper for the app.
- * Includes Error Boundary and Toast notifications.
+ * Includes Error Boundary, React Query, and Toast notifications.
  */
 export function Providers({ children }: ProvidersProps) {
   return (
     <ErrorBoundary>
-      {children}
-      <Toaster />
+      <QueryProvider>
+        {children}
+        <Toaster />
+      </QueryProvider>
     </ErrorBoundary>
   );
 }

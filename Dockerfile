@@ -8,7 +8,10 @@ WORKDIR /app
 
 # Copy package files
 COPY package.json package-lock.json* ./
-RUN npm ci
+
+# Install dependencies
+# Note: Docker layer caching will cache this if package.json doesn't change
+RUN npm ci --prefer-offline --no-audit
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -36,6 +39,7 @@ ENV NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SEN
 ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
 
 # Build Next.js
+# Note: Docker layer caching will help, but Next.js builds are inherently slow
 RUN npm run build
 
 # Production image, copy all the files and run next

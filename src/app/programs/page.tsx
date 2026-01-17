@@ -1,5 +1,9 @@
 "use client";
 
+import dynamic from 'next/dynamic';
+import { PageSkeleton } from '@/components/ui/PageSkeleton';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+
 import { useEffect, useState, useCallback } from 'react';
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
@@ -29,7 +33,14 @@ import {
 import { useProgramStore } from '@/lib/stores/useProgramStore';
 import { useClientStore } from '@/lib/stores/useClientStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
-import { ModernCalendarView } from '@/components/programs/ModernCalendarView';
+// Lazy load ModernCalendarView to prevent blocking initial render
+const ModernCalendarView = dynamic(
+  () => import('@/components/programs/ModernCalendarView').then(mod => ({ default: mod.ModernCalendarView })),
+  {
+    loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
+    ssr: false // Disable SSR for this heavy component
+  }
+);
 import { CreateProgramDialog } from '@/components/programs/CreateProgramDialog';
 import { PeriodManagementPanel } from '@/components/programs/PeriodManagementPanel';
 import { WeekViewScheduleManager } from '@/components/programs/WeekViewScheduleManager';
@@ -208,32 +219,21 @@ export default function ProgramsPage() {
 
 // Track navigation to force refresh when returning to this page
   const pathname = usePathname();
-  const [lastFetchTime, setLastFetchTime] = useState(0);
+  const lastFetchTimeRef = React.useRef(0); // Use ref instead of state to avoid re-renders
   
   // Fetch calendar events when calendar date changes or when navigating to this page
-  useEffect(() => {
-    if (!calendarDate) return;
-
-    // Get week range for the calendar view
-    const startDate = new Date(calendarDate);
-    startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
-
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
-
-    fetchEvents({ start: startDate, end: endDate });
-    setLastFetchTime(Date.now());
-  }, [calendarDate, fetchEvents]);
+  // REMOVED: ModernCalendarView now handles its own event fetching to avoid duplicate requests
+  // This prevents the double-fetch that was causing performance issues
   
   // Force refresh when page becomes visible or receives focus (user navigates back)
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     const refreshEvents = () => {
       if (!calendarDate) return;
       
       // Only refresh if it's been more than 1 second since last fetch (debounce)
-      if (Date.now() - lastFetchTime < 1000) return;
+      if (Date.now() - lastFetchTimeRef.current < 1000) return;
       
       const startDate = new Date(calendarDate);
       startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -244,13 +244,15 @@ export default function ProgramsPage() {
       endDate.setHours(23, 59, 59, 999);
 
       fetchEvents({ start: startDate, end: endDate });
-      setLastFetchTime(Date.now());
+      lastFetchTimeRef.current = Date.now(); // Update ref instead of state
     };
     
     // Refresh on visibility change (tab switch) and focus (window focus)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        refreshEvents();
+        // Debounce visibility refresh
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(refreshEvents, 100);
       }
     };
     
@@ -258,13 +260,15 @@ export default function ProgramsPage() {
     window.addEventListener('focus', refreshEvents);
     
     // Also refresh immediately on mount (handles Next.js navigation)
-    refreshEvents();
+    // Use a small delay to avoid blocking initial render
+    timeoutId = setTimeout(refreshEvents, 50);
     
     return () => {
+      if (timeoutId) clearTimeout(timeoutId);
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', refreshEvents);
     };
-  }, [pathname, calendarDate, fetchEvents, lastFetchTime]);
+  }, [pathname, calendarDate, fetchEvents]); // Removed lastFetchTime from dependencies to prevent infinite loop
 
   // Update dialog periods when clientPrograms state changes
   useEffect(() => {
@@ -1530,6 +1534,12 @@ export default function ProgramsPage() {
     await fetchEvents({ start: startDate, end: endDate });
   };
 
+  // Prevent rendering if critical data isn't ready (prevents freeze)
+  // Also wait for initial data to load before rendering calendar
+  if (!mounted || (clientProgramsLoading && clientPrograms.length === 0)) {
+    return <PageSkeleton />;
+  }
+
   return (
     <div className="w-full px-1 pt-1 pb-4 space-y-2">
       {/* Timezone Change Notification */}
@@ -1735,31 +1745,35 @@ export default function ProgramsPage() {
         <div className="flex gap-1 mt-1">
           {/* Week View - Scrollable, constrained to leave space for sidebar */}
           <div className="flex-1 min-w-0 overflow-x-auto" style={{ maxWidth: 'calc(100% - 272px)' }}>
-              <ModernCalendarView
-                viewMode="week"
-                calendarDate={calendarDate}
-                scheduledWorkouts={scheduledWorkouts}
-                selectedClient={selectedClient}
-                programs={programs}
-                clients={clients}
-                clientPrograms={clientPrograms}
-                includeWeekends={includeWeekends}
-                refreshKey={calendarKey}
-                onPeriodClick={handlePeriodClick}
-                onDateClick={handleDateClick}
-                onScheduleCellClick={handleWeekCellClick}
-                onWorkoutCellClick={(date: Date, timeSlot: Date, period?: ClientProgramPeriod) => {
-                  // When clicking workout cell, navigate to builder
-                  const dateParam = format(date, 'yyyy-MM-dd');
-                  const clientParam = selectedClient ? `client=${selectedClient}&` : '';
+            <ErrorBoundary fallback={<div className="p-4 text-center text-destructive">Error loading calendar. Please refresh the page.</div>}>
+              <React.Suspense fallback={<PageSkeleton />}>
+                <ModernCalendarView
+                  viewMode="week"
+                  calendarDate={calendarDate}
+                  scheduledWorkouts={scheduledWorkouts}
+                  selectedClient={selectedClient}
+                  programs={programs}
+                  clients={clients}
+                  clientPrograms={clientPrograms}
+                  includeWeekends={includeWeekends}
+                  refreshKey={calendarKey}
+                  onPeriodClick={handlePeriodClick}
+                  onDateClick={handleDateClick}
+                  onScheduleCellClick={handleWeekCellClick}
+                  onWorkoutCellClick={(date: Date, timeSlot: Date, period?: ClientProgramPeriod) => {
+                    // When clicking workout cell, navigate to builder
+                    const dateParam = format(date, 'yyyy-MM-dd');
+                    const clientParam = selectedClient ? `client=${selectedClient}&` : '';
 
-                  // Navigate to builder - if there's a period, the builder will handle it
-                  const buildWorkoutUrl = `/workouts/builder?${clientParam}date=${dateParam}`;
-                  window.location.href = buildWorkoutUrl;
-                }}
-                onMoveWorkoutCategory={handleMoveWorkoutCategory}
-                onEventClick={handleScheduleEventClick}
-              />
+                    // Navigate to builder - if there's a period, the builder will handle it
+                    const buildWorkoutUrl = `/workouts/builder?${clientParam}date=${dateParam}`;
+                    window.location.href = buildWorkoutUrl;
+                  }}
+                  onMoveWorkoutCategory={handleMoveWorkoutCategory}
+                  onEventClick={handleScheduleEventClick}
+                />
+              </React.Suspense>
+            </ErrorBoundary>
           </div>
 
           {/* Current Day Schedule - Side view - Always visible, fixed width */}

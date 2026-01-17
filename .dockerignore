@@ -12,3 +12,23 @@ Dockerfile
 .dockerignore
 firebase-debug.log
 .vercel
+# Ignore documentation files to reduce build context
+DEPLOYMENT*.md
+ARCHITECTURAL*.md
+IMPLEMENTATION*.md
+PROGRESS*.md
+PERFORMANCE*.md
+FIX_*.md
+HOW_TO*.md
+COST_BREAKDOWN.md
+TROUBLESHOOTING.md
+# Ignore test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+# Ignore development files
+.vscode
+.idea
+*.swp
+*.swo

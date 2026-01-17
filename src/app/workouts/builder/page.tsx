@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from 'next/dynamic';
 import React, { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -15,9 +16,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  ChevronLeft,
-  ChevronRight,
-  Users,
   Layers,
   Grid3X3,
   List,
@@ -27,12 +25,34 @@ import {
   Plus
 } from 'lucide-react';
 import { Client, Program, ScheduledWorkout, ClientProgramPeriod, WorkoutStructureTemplate, ClientWorkoutRound, ClientWorkout } from '@/lib/types';
-import { ModernCalendarView } from '@/components/programs/ModernCalendarView';
-import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
-import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBuilderDialog';
-import { WorkoutEditor, WorkoutEditorHandle } from '@/components/workouts/WorkoutEditor';
+// Lazy load heavy components for code splitting
+const ModernCalendarView = dynamic(
+  () => import('@/components/programs/ModernCalendarView').then(mod => ({ default: mod.ModernCalendarView })),
+  {
+    loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
+  }
+);
+
+const PeriodAssignmentDialog = dynamic(
+  () => import('@/components/programs/PeriodAssignmentDialog').then(mod => ({ default: mod.PeriodAssignmentDialog }))
+);
+
+const QuickWorkoutBuilderDialog = dynamic(
+  () => import('@/components/programs/QuickWorkoutBuilderDialog').then(mod => ({ default: mod.QuickWorkoutBuilderDialog }))
+);
+
+const WorkoutEditor = dynamic(
+  () => import('@/components/workouts/WorkoutEditor').then(mod => ({ default: mod.WorkoutEditor })),
+  {
+    loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
+  }
+);
+
+import type { WorkoutEditorHandle } from '@/components/workouts/WorkoutEditor';
 import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
 import { CategoryFilter } from '@/components/workouts/CategoryFilter';
+import { BuilderHeader } from '@/components/workouts/builder/BuilderHeader';
+import { BuilderFilters } from '@/components/workouts/builder/BuilderFilters';
 import { Timestamp } from 'firebase/firestore';
 import { createClientWorkout, updateClientWorkout, deleteClientWorkout, getClientWorkout, fetchWorkoutsByDateRange } from '@/lib/firebase/services/clientWorkouts';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
@@ -1475,72 +1495,25 @@ export default function BuilderPage() {
           <Card className="py-2">
             <CardContent className="py-1 px-2">
               {/* Navigation */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                {/* Left aligned - Client Selector */}
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 icon-clients" />
-                    <label className="text-sm font-medium">Client:</label>
-                  </div>
-                  <Select value={clientIdImmediate || ''} onValueChange={handleClientChange} disabled={loading}>
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Select client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {clientId && (
-                    <QuickWorkoutBuilderDialog
-                      clientId={clientId}
-                      clientName={clients.find(c => c.id === clientId)?.name || 'Unknown Client'}
-                      onWorkoutCreated={() => {
-                        // Force re-fetch by updating calendarDate (triggers useEffect)
-                        setCalendarDate(new Date(calendarDate));
-                      }}
-                    />
-                  )}
-                  <PeriodAssignmentDialog
-                    clientId={clientId || ''}
-                    clientName={clientId ? (clients.find(c => c.id === clientId)?.name || 'Unknown Client') : ''}
-                    periods={periods}
-                    workoutCategories={workoutCategories}
-                    weekTemplates={weekTemplates}
-                    onAssignPeriod={handleAssignPeriod}
-                    existingAssignments={clientId ? (clientPrograms.find(cp => cp.clientId === clientId)?.periods || []) : []}
-                  />
-                </div>
-
-                {/* Right aligned - Week Selector (matches Schedule page) */}
-                <div className="flex items-center gap-1 md:gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleNavigate('today')} className="text-xs md:text-sm px-2">
-                    Today
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleNavigate('prev')}
-                    className="p-1 md:p-2"
-                  >
-                    <ChevronLeft className="h-3 w-3 md:h-4 md:w-4 icon-builder" />
-                  </Button>
-                  <div className="min-w-[110px] md:min-w-[140px] text-center font-medium text-sm">
-                    {getNavigationLabel()}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleNavigate('next')}
-                    className="p-1 md:p-2"
-                  >
-                    <ChevronRight className="h-3 w-3 md:h-4 md:w-4 icon-builder" />
-                  </Button>
-                </div>
-              </div>
+              <BuilderHeader
+                clients={clients}
+                clientId={clientId}
+                clientIdImmediate={clientIdImmediate}
+                onClientChange={handleClientChange}
+                loading={loading}
+                calendarDate={calendarDate}
+                onNavigate={handleNavigate}
+                navigationLabel={getNavigationLabel()}
+                periods={periods}
+                workoutCategories={workoutCategories}
+                weekTemplates={weekTemplates}
+                clientPrograms={clientPrograms}
+                onAssignPeriod={handleAssignPeriod}
+                onWorkoutCreated={() => {
+                  // Force re-fetch by updating calendarDate (triggers useEffect)
+                  setCalendarDate(new Date(calendarDate));
+                }}
+              />
 
               {/* Workout Building Actions */}
               {!clientId && (
@@ -1550,48 +1523,16 @@ export default function BuilderPage() {
               )}
 
               {/* Second Row - Column Toggle, Category Filter, Week Order */}
-              <div className="flex flex-wrap items-center justify-between gap-3 mt-2">
-                {/* Left side - Column Toggle and Category Filter */}
-                <div className="flex items-center gap-2">
-                  <ColumnVisibilityToggle
-                    visibleColumns={visibleColumns}
-                    availableColumns={{
-                      tempo: true,
-                      distance: true,
-                      rpe: true,
-                      percentage: true
-                    }}
-                    onToggle={handleColumnVisibilityChange}
-                  />
-                  {viewMode === 'day' && workoutCategories.length > 0 && (
-                    <CategoryFilter
-                      categories={workoutCategories}
-                      selectedCategories={selectedCategories}
-                      onSelectionChange={setSelectedCategories}
-                    />
-                  )}
-                </div>
-
-                {/* Right side - Week Order */}
-                <div className="flex items-center gap-2">
-                  <label htmlFor="weekOrder" className="text-sm font-medium">Week order:</label>
-                  <Select 
-                    value={weekSettings.weekOrder} 
-                    onValueChange={(value) => setWeekSettings(prev => ({
-                      ...prev,
-                      weekOrder: value as 'ascending' | 'descending'
-                    }))}
-                  >
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ascending">Ascending</SelectItem>
-                      <SelectItem value="descending">Descending</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              <BuilderFilters
+                visibleColumns={visibleColumns}
+                onColumnVisibilityChange={handleColumnVisibilityChange}
+                viewMode={viewMode}
+                workoutCategories={workoutCategories}
+                selectedCategories={selectedCategories}
+                onCategorySelectionChange={setSelectedCategories}
+                weekOrder={weekSettings.weekOrder}
+                onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
+              />
             </CardContent>
           </Card>
 
@@ -2160,15 +2101,17 @@ export default function BuilderPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {workoutCategories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.name}>
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
-                                style={{ backgroundColor: cat.color }}
-                              />
-                              {cat.name}
-                            </div>
-                          </SelectItem>
+                          cat.name && (
+                            <SelectItem key={cat.id} value={cat.name}>
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  className="w-3 h-3 rounded-full" 
+                                  style={{ backgroundColor: cat.color }}
+                                />
+                                {cat.name}
+                              </div>
+                            </SelectItem>
+                          )
                         ))}
                       </SelectContent>
                     </Select>

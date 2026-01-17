@@ -27,9 +27,10 @@ function hasFirebaseConfig(): boolean {
 async function getDb() {
   if (!hasFirebaseConfig()) return null;
   try {
-    const { db } = await import('@/lib/firebase/config');
-    return db;
-  } catch {
+    const { getDbAsync } = await import('@/lib/firebase/config');
+    return await getDbAsync();
+  } catch (error) {
+    console.error('Error initializing Firestore in token-storage:', error);
     return null;
   }
 }

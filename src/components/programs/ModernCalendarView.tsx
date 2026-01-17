@@ -90,122 +90,211 @@ export function ModernCalendarView({
   React.useEffect(() => {
     if (viewMode !== 'week') return;
 
-    // Get current week range
-    const currentWeekStart = new Date(calendarDate);
-    currentWeekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
-    const currentWeekEnd = new Date(currentWeekStart);
-    currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+    let cancelled = false; // Request cancellation flag
+    let timeoutId: NodeJS.Timeout | null = null;
 
-    // Pre-fetch adjacent weeks for smoother navigation
-    const previousWeekStart = new Date(currentWeekStart);
-    previousWeekStart.setDate(currentWeekStart.getDate() - 7);
-    const previousWeekEnd = new Date(previousWeekStart);
-    previousWeekEnd.setDate(previousWeekStart.getDate() + 6);
+    const fetchData = () => {
+      if (cancelled) return;
 
-    const nextWeekStart = new Date(currentWeekStart);
-    nextWeekStart.setDate(currentWeekStart.getDate() + 7);
-    const nextWeekEnd = new Date(nextWeekStart);
-    nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
+      try {
+        // Get current week range
+        const currentWeekStart = new Date(calendarDate);
+        currentWeekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
+        const currentWeekEnd = new Date(currentWeekStart);
+        currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
 
-    // Normalize all dates
-    [currentWeekStart, currentWeekEnd, previousWeekStart, previousWeekEnd, nextWeekStart, nextWeekEnd].forEach(date => {
-      date.setHours(0, 0, 0, 0);
-    });
-    currentWeekEnd.setHours(23, 59, 59, 999);
-    previousWeekEnd.setHours(23, 59, 59, 999);
-    nextWeekEnd.setHours(23, 59, 59, 999);
+        // Pre-fetch adjacent weeks for smoother navigation
+        const previousWeekStart = new Date(currentWeekStart);
+        previousWeekStart.setDate(currentWeekStart.getDate() - 7);
+        const previousWeekEnd = new Date(previousWeekStart);
+        previousWeekEnd.setDate(previousWeekStart.getDate() + 6);
 
-    // Fetch events for all three weeks (pre-fetch adjacent weeks)
-    const expandedStart = previousWeekStart;
-    const expandedEnd = nextWeekEnd;
-    fetchEvents({ start: expandedStart, end: expandedEnd });
+        const nextWeekStart = new Date(currentWeekStart);
+        nextWeekStart.setDate(currentWeekStart.getDate() + 7);
+        const nextWeekEnd = new Date(nextWeekStart);
+        nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
 
-    // Fetch workouts for all three weeks
-    // Keep all workouts in persistent state, filter by client/date when rendering
-    if (selectedClient) {
-      // Specific client selected - fetch workouts for that client
-      fetchWorkoutsByDateRange(
-        selectedClient,
-        Timestamp.fromDate(expandedStart),
-        Timestamp.fromDate(expandedEnd)
-      )
-        .then(async (freshWorkouts) => {
-          // Replace workouts for this client in this date range (handles deletions properly)
-          setAllWorkouts(prev => {
-            // Remove old workouts for this client in the fetched date range
-            const workoutsOutsideRange = prev.filter(w => {
-              // Keep workouts from other clients
-              if (w.clientId !== selectedClient) return true;
-              
-              // Check if workout is outside the fetched date range
-              const workoutDate = safeToDate(w.date);
-              
-              // Keep workouts outside the fetched range (they haven't been re-fetched)
-              return workoutDate < expandedStart || workoutDate > expandedEnd;
-            });
-            
-            // Combine: workouts outside range + fresh workouts from fetch
-            return [...workoutsOutsideRange, ...freshWorkouts];
-          });
-        })
-        .catch(error => {
-          console.error('Error fetching workouts for client:', error);
+        // Normalize all dates
+        [currentWeekStart, currentWeekEnd, previousWeekStart, previousWeekEnd, nextWeekStart, nextWeekEnd].forEach(date => {
+          date.setHours(0, 0, 0, 0);
         });
-    } else {
-      // "All Clients" selected - fetch workouts for ALL clients in date range
-      fetchAllWorkoutsByDateRange(
-        Timestamp.fromDate(expandedStart),
-        Timestamp.fromDate(expandedEnd)
-      )
-        .then(async (freshWorkouts) => {
-          // Replace all workouts in this date range
-          setAllWorkouts(prev => {
-            // Remove old workouts in the fetched date range
-            const workoutsOutsideRange = prev.filter(w => {
-              const workoutDate = safeToDate(w.date);
+        currentWeekEnd.setHours(23, 59, 59, 999);
+        previousWeekEnd.setHours(23, 59, 59, 999);
+        nextWeekEnd.setHours(23, 59, 59, 999);
+
+        // Fetch events for all three weeks (pre-fetch adjacent weeks)
+        const expandedStart = previousWeekStart;
+        const expandedEnd = nextWeekEnd;
+        
+        if (!cancelled) {
+          fetchEvents({ start: expandedStart, end: expandedEnd });
+        }
+
+        // Fetch workouts for all three weeks
+        // Keep all workouts in persistent state, filter by client/date when rendering
+        if (selectedClient && !cancelled) {
+          // Specific client selected - fetch workouts for that client
+          fetchWorkoutsByDateRange(
+            selectedClient,
+            Timestamp.fromDate(expandedStart),
+            Timestamp.fromDate(expandedEnd)
+          )
+            .then(async (freshWorkouts) => {
+              if (cancelled) return; // Don't update state if cancelled
               
-              return workoutDate < expandedStart || workoutDate > expandedEnd;
+              // Replace workouts for this client in this date range (handles deletions properly)
+              setAllWorkouts(prev => {
+                // Remove old workouts for this client in the fetched date range
+                const workoutsOutsideRange = prev.filter(w => {
+                  // Keep workouts from other clients
+                  if (w.clientId !== selectedClient) return true;
+                  
+                  // Check if workout is outside the fetched date range
+                  const workoutDate = safeToDate(w.date);
+                  
+                  // Keep workouts outside the fetched range (they haven't been re-fetched)
+                  return workoutDate < expandedStart || workoutDate > expandedEnd;
+                });
+                
+                // Combine: workouts outside range + fresh workouts from fetch
+                const newWorkouts = [...workoutsOutsideRange, ...freshWorkouts];
+                
+                // Only update if the data actually changed (prevent infinite loops)
+                // Compare by creating a set of IDs for efficient comparison
+                const prevIds = new Set(prev.map(w => w.id));
+                const newIds = new Set(newWorkouts.map(w => w.id));
+                
+                if (prevIds.size === newIds.size && 
+                    Array.from(prevIds).every(id => newIds.has(id))) {
+                  // Same workouts, return previous reference to prevent re-render
+                  return prev;
+                }
+                
+                return newWorkouts;
+              });
+            })
+            .catch(error => {
+              if (!cancelled) {
+                console.error('Error fetching workouts for client:', error);
+              }
             });
-            
-            // Combine: workouts outside range + fresh workouts from fetch
-            return [...workoutsOutsideRange, ...freshWorkouts];
-          });
-        })
-        .catch(error => {
-          console.error('Error fetching all workouts:', error);
-        });
-    }
+        } else if (!selectedClient && !cancelled) {
+          // "All Clients" selected - fetch workouts for ALL clients in date range
+          fetchAllWorkoutsByDateRange(
+            Timestamp.fromDate(expandedStart),
+            Timestamp.fromDate(expandedEnd)
+          )
+            .then(async (freshWorkouts) => {
+              if (cancelled) return; // Don't update state if cancelled
+              
+              // Replace all workouts in this date range
+              setAllWorkouts(prev => {
+                // Remove old workouts in the fetched date range
+                const workoutsOutsideRange = prev.filter(w => {
+                  const workoutDate = safeToDate(w.date);
+                  
+                  return workoutDate < expandedStart || workoutDate > expandedEnd;
+                });
+                
+                // Combine: workouts outside range + fresh workouts from fetch
+                const newWorkouts = [...workoutsOutsideRange, ...freshWorkouts];
+                
+                // Only update if the data actually changed (prevent infinite loops)
+                // Compare by creating a set of IDs for efficient comparison
+                const prevIds = new Set(prev.map(w => w.id));
+                const newIds = new Set(newWorkouts.map(w => w.id));
+                
+                if (prevIds.size === newIds.size && 
+                    Array.from(prevIds).every(id => newIds.has(id))) {
+                  // Same workouts, return previous reference to prevent re-render
+                  return prev;
+                }
+                
+                return newWorkouts;
+              });
+            })
+            .catch(error => {
+              if (!cancelled) {
+                console.error('Error fetching all workouts:', error);
+              }
+            });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Error in fetchData:', error);
+        }
+      }
+    };
+
+    // Debounce to prevent rapid-fire requests
+    timeoutId = setTimeout(fetchData, 100);
+
+    return () => {
+      cancelled = true; // Cancel any pending operations
+      if (timeoutId) clearTimeout(timeoutId);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarDate, viewMode, selectedClient, refreshKey]);
 
   // Filter workouts for current view - get date range for current + adjacent weeks
-  const getCurrentDateRange = () => {
-    const currentWeekStart = new Date(calendarDate);
-    currentWeekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
+  // Calculate date range timestamps - use ref to prevent infinite loops
+  const dateRangeTimestampsRef = React.useRef<{ startTime: number; endTime: number }>({ startTime: 0, endTime: 0 });
+  const lastCalendarDateRef = React.useRef<number>(0);
+  
+  // Calculate stable timestamp from calendarDate - compute directly to avoid useMemo loops
+  const calendarDateTimestamp = calendarDate ? (() => {
+    const normalized = new Date(calendarDate);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized.getTime();
+  })() : 0;
+  
+  // Only recalculate if timestamp actually changed
+  if (calendarDateTimestamp !== lastCalendarDateRef.current && calendarDateTimestamp > 0) {
+    const currentWeekStart = new Date(calendarDate!);
+    currentWeekStart.setDate(calendarDate!.getDate() - calendarDate!.getDay());
     const previousWeekStart = new Date(currentWeekStart);
     previousWeekStart.setDate(currentWeekStart.getDate() - 7);
     const nextWeekEnd = new Date(currentWeekStart);
-    nextWeekEnd.setDate(currentWeekStart.getDate() + 13); // Current week + next week
+    nextWeekEnd.setDate(currentWeekStart.getDate() + 13);
     
     previousWeekStart.setHours(0, 0, 0, 0);
     nextWeekEnd.setHours(23, 59, 59, 999);
     
-    return { start: previousWeekStart, end: nextWeekEnd };
-  };
+    dateRangeTimestampsRef.current = {
+      startTime: previousWeekStart.getTime(),
+      endTime: nextWeekEnd.getTime()
+    };
+    lastCalendarDateRef.current = calendarDateTimestamp;
+  }
+  
+  const dateRangeTimestamps = dateRangeTimestampsRef.current;
 
-  // Filter allWorkouts for current client and date range
-  const filteredWorkouts = React.useMemo(() => {
-    const { start, end } = getCurrentDateRange();
+  // Filter workouts - COMPUTE DIRECTLY (no useMemo) to prevent React error #310
+  // Removed useMemo entirely because array dependencies cause infinite re-renders
+  // The filtering is fast enough that memoization isn't critical
+  const filteredWorkouts = (() => {
+    // Early return if no workouts
+    if (!allWorkouts || allWorkouts.length === 0 || dateRangeTimestamps.startTime === 0) {
+      return [];
+    }
     
-    return allWorkouts.filter(workout => {
-      // If a specific client is selected, filter by that client
-      if (selectedClient && workout.clientId !== selectedClient) return false;
+    try {
+      const startDate = new Date(dateRangeTimestamps.startTime);
+      const endDate = new Date(dateRangeTimestamps.endTime);
       
-      const workoutDate = safeToDate(workout.date);
-      
-      return workoutDate >= start && workoutDate <= end;
-    });
-  }, [allWorkouts, selectedClient, calendarDate]);
+      return allWorkouts.filter(workout => {
+        // If a specific client is selected, filter by that client
+        if (selectedClient && workout.clientId !== selectedClient) return false;
+        
+        const workoutDate = safeToDate(workout.date);
+        
+        return workoutDate >= startDate && workoutDate <= endDate;
+      });
+    } catch (error) {
+      console.error('Error filtering workouts:', error);
+      return [];
+    }
+  })();
 
   // Helper to get calendar events for a specific date
   const getCalendarEventsForDate = (date: Date): GoogleCalendarEvent[] => {
@@ -278,6 +367,16 @@ export function ModernCalendarView({
   const getEventCategoryColor = (event: GoogleCalendarEvent): string => {
     // Check if this is a class session
     if (event.isClassSession) {
+      if (calendarConfig.classColor) {
+        const colorMap: Record<string, string> = {
+          'blue': '#3b82f6',
+          'purple': '#a855f7',
+          'green': '#22c55e',
+          'orange': '#f97316',
+          'pink': '#ec4899',
+        };
+        return colorMap[calendarConfig.classColor] || calendarConfig.classColor;
+      }
       return '#a855f7'; // Purple for class sessions
     }
 
@@ -309,8 +408,37 @@ export function ModernCalendarView({
     // Priority 3: Default colors based on event type
     // Coaching sessions default to orange
     if (isCoaching) {
+      // Use configured coaching color if available, otherwise default to orange
+      if (calendarConfig.coachingColor) {
+        // Map simple color names to hex/tailwind colors if needed, or use as is
+        // For simplicity, we'll map the standard colors to their Tailwind hex values
+        const colorMap: Record<string, string> = {
+          'blue': '#3b82f6',
+          'purple': '#a855f7',
+          'green': '#22c55e',
+          'orange': '#f97316',
+          'pink': '#ec4899',
+        };
+        return colorMap[calendarConfig.coachingColor] || calendarConfig.coachingColor;
+      }
       return '#f97316'; // Orange for coaching sessions without category
     }
+    
+    // Class sessions default to purple
+    if (event.isClassSession) {
+      if (calendarConfig.classColor) {
+        const colorMap: Record<string, string> = {
+          'blue': '#3b82f6',
+          'purple': '#a855f7',
+          'green': '#22c55e',
+          'orange': '#f97316',
+          'pink': '#ec4899',
+        };
+        return colorMap[calendarConfig.classColor] || calendarConfig.classColor;
+      }
+      return '#a855f7';
+    }
+    
     return '#3b82f6'; // Blue for other events
   };
 

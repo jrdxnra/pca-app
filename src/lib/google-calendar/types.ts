@@ -52,7 +52,9 @@ export interface LocationAbbreviation {
 export interface CalendarSyncConfig {
   selectedCalendarId?: string; // If set, sync is enabled. If not set, sync is disabled.
   coachingKeywords: string[]; // Keywords to auto-detect coaching sessions
+  coachingColor?: string; // Color for coaching sessions (e.g. 'blue', 'purple')
   classKeywords: string[]; // Keywords to auto-detect class sessions
+  classColor?: string; // Color for class sessions
   locationAbbreviations?: LocationAbbreviation[]; // Location abbreviation mappings
   lastSyncTime?: Date;
 }

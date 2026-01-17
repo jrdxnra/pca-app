@@ -33,6 +33,7 @@ export function GoogleCalendarEventCard({
   onOpenInCalendar,
   compact = false
 }: GoogleCalendarEventCardProps) {
+  const { config } = useCalendarStore();
   const startTime = new Date(event.start.dateTime);
   const endTime = new Date(event.end.dateTime);
   
@@ -49,8 +50,26 @@ export function GoogleCalendarEventCard({
     if (event.linkedWorkoutId) {
       return 'bg-green-100 border-green-300 text-green-800'; // Linked to workout
     } else if (event.isClassSession) {
+      if (config.classColor) {
+        switch (config.classColor) {
+          case 'blue': return 'bg-blue-100 border-blue-300 text-blue-800';
+          case 'purple': return 'bg-purple-100 border-purple-300 text-purple-800';
+          case 'green': return 'bg-green-100 border-green-300 text-green-800';
+          case 'orange': return 'bg-orange-100 border-orange-300 text-orange-800';
+          case 'pink': return 'bg-pink-100 border-pink-300 text-pink-800';
+        }
+      }
       return 'bg-purple-100 border-purple-300 text-purple-800'; // Class session
     } else if (event.isCoachingSession) {
+      if (config.coachingColor) {
+        switch (config.coachingColor) {
+          case 'blue': return 'bg-blue-100 border-blue-300 text-blue-800';
+          case 'purple': return 'bg-purple-100 border-purple-300 text-purple-800';
+          case 'green': return 'bg-green-100 border-green-300 text-green-800';
+          case 'orange': return 'bg-orange-100 border-orange-300 text-orange-800';
+          case 'pink': return 'bg-pink-100 border-pink-300 text-pink-800';
+        }
+      }
       return 'bg-orange-100 border-orange-300 text-orange-800'; // Coaching session without workout
     } else {
       return 'bg-gray-100 border-gray-300 text-gray-600'; // Personal event
@@ -61,9 +80,29 @@ export function GoogleCalendarEventCard({
     if (event.linkedWorkoutId) {
       return <Badge variant="secondary" className="bg-green-100 text-green-800">Linked</Badge>;
     } else if (event.isClassSession) {
-      return <Badge variant="secondary" className="bg-purple-100 text-purple-800">Class</Badge>;
+      let colorClass = 'bg-purple-100 text-purple-800';
+      if (config.classColor) {
+        switch (config.classColor) {
+          case 'blue': colorClass = 'bg-blue-100 text-blue-800'; break;
+          case 'purple': colorClass = 'bg-purple-100 text-purple-800'; break;
+          case 'green': colorClass = 'bg-green-100 text-green-800'; break;
+          case 'orange': colorClass = 'bg-orange-100 text-orange-800'; break;
+          case 'pink': colorClass = 'bg-pink-100 text-pink-800'; break;
+        }
+      }
+      return <Badge variant="secondary" className={colorClass}>Class</Badge>;
     } else if (event.isCoachingSession) {
-      return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Coaching</Badge>;
+      let colorClass = 'bg-orange-100 text-orange-800';
+      if (config.coachingColor) {
+        switch (config.coachingColor) {
+          case 'blue': colorClass = 'bg-blue-100 text-blue-800'; break;
+          case 'purple': colorClass = 'bg-purple-100 text-purple-800'; break;
+          case 'green': colorClass = 'bg-green-100 text-green-800'; break;
+          case 'orange': colorClass = 'bg-orange-100 text-orange-800'; break;
+          case 'pink': colorClass = 'bg-pink-100 text-pink-800'; break;
+        }
+      }
+      return <Badge variant="secondary" className={colorClass}>Coaching</Badge>;
     } else {
       return <Badge variant="secondary" className="bg-gray-100 text-gray-600">Personal</Badge>;
     }

@@ -20,13 +20,40 @@ import {
 
 // Helper function to abbreviate workout type names
 function abbreviateWorkoutType(name: string): string {
-  const abbreviations: Record<string, string> = {
-    'power prep': 'PP',
-    'performance prep': 'PP',
-    'movement prep': 'MP',
-    'movement preparation': 'MP',
-    'ballistics': 'BAL',
-    'ballistic': 'BAL',
+  // Normalize the name: lowercase, trim, and replace multiple spaces with single space
+  const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
+  
+  // Check for exact matches first
+  const exactMatches: Record<string, string> = {
+    'power prep': 'PREP',
+    'performance prep': 'PREP',
+    'pp': 'PREP',
+    'movement prep': 'PREP',
+    'movement preparation': 'PREP',
+    'mp': 'PREP',
+    'ballistics': 'PREP',
+    'ballistic': 'PREP',
+    'warm-up': 'W/U',
+    'warmup': 'W/U',
+    'warm up': 'W/U',
+    'warm ups': 'W/U',
+    'w/u': 'W/U',
+    'round1': 'R1',
+    'round 1': 'R1',
+    'r1': 'R1',
+    'round2': 'R2',
+    'round 2': 'R2',
+    'r2': 'R2',
+    'amrap': 'AMRAP',
+    'emom': 'EMOM',
+    'cool-down': 'C/D',
+    'cooldown': 'C/D',
+    'cool down': 'C/D',
+    'c/d': 'C/D',
+    'pre-hab': 'PRE/HAB',
+    'prehab': 'PRE/HAB',
+    'pre - hab': 'PRE/HAB',
+    'pre hab': 'PRE/HAB',
     'strength 1': 'S1',
     'strength1': 'S1',
     'strength 2': 'S2',
@@ -36,14 +63,33 @@ function abbreviateWorkoutType(name: string): string {
     'conditioning': 'COND',
     'mobility': 'MOB',
     'activation': 'ACT',
-    'warm-up': 'WU',
-    'warmup': 'WU',
-    'cool-down': 'CD',
-    'cooldown': 'CD',
   };
   
-  const lowerName = name.toLowerCase().trim();
-  return abbreviations[lowerName] || name.substring(0, 3).toUpperCase();
+  if (exactMatches[normalized]) {
+    return exactMatches[normalized];
+  }
+  
+  // Check for partial matches (contains the key phrase)
+  if (normalized.includes('power prep') || normalized.includes('performance prep') || normalized.includes('movement prep') || normalized.includes('ballistic')) {
+    return 'PREP';
+  }
+  if (normalized.includes('warm up') || normalized.includes('warm-up')) {
+    return 'W/U';
+  }
+  if (normalized.includes('round 1') || normalized === 'round1') {
+    return 'R1';
+  }
+  if (normalized.includes('round 2') || normalized === 'round2') {
+    return 'R2';
+  }
+  if (normalized.includes('cool down') || normalized.includes('cool-down')) {
+    return 'C/D';
+  }
+  if (normalized.includes('pre-hab') || normalized.includes('pre hab')) {
+    return 'PRE/HAB';
+  }
+  
+  return name.substring(0, 3).toUpperCase();
 }
 
 // Helper function to get abbreviation list for a template with colors
@@ -62,6 +108,7 @@ function getTemplateAbbreviationList(template: WorkoutStructureTemplate, workout
       };
     });
 }
+import { useMovements } from '@/hooks/queries/useMovements';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
@@ -70,6 +117,7 @@ import { WarmupEditor } from './WarmupEditor';
 import { RoundEditor } from './RoundEditor';
 import { MovementUsageRow } from './MovementUsageRow';
 import { ColumnVisibilityToggle } from './ColumnVisibilityToggle';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const DEFAULT_TARGET_WORKLOAD: ClientWorkoutTargetWorkload = {
   useWeight: false,
@@ -177,7 +225,8 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   onDelete,
   draftKey
 }, ref) {
-  const { movements, fetchMovements } = useMovementStore();
+  // Use React Query for movements (with caching and deduplication)
+  const { data: movements = [], isLoading: movementsLoading } = useMovements(true); // includeCategory = true
   const { categories, fetchCategories } = useMovementCategoryStore();
   const { workoutStructureTemplates, workoutTypes, fetchWorkoutTypes } = useConfigurationStore();
   const { events, updateEvent } = useCalendarStore();
@@ -255,11 +304,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     });
   });
 
-  // Load data on mount - ALWAYS fetch all movements to ensure we have the full list
-  // (movements page may have filtered to single category)
+  // Load data on mount - React Query handles movements fetching automatically
+  // Only fetch categories and workout types if not already loaded
   useEffect(() => {
-    console.log('[WorkoutEditor] Mounting, fetching all movements...');
-    fetchMovements(); // Always fetch to ensure we have ALL movements, not just a filtered subset
+    console.log('[WorkoutEditor] Mounting, movements will load via React Query...');
     if (categories.length === 0) fetchCategories();
     if (workoutTypes.length === 0) fetchWorkoutTypes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -267,8 +315,8 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   
   // Debug: Log when movements change
   useEffect(() => {
-    console.log('[WorkoutEditor] Movements updated:', movements.length, 'categories in movements:', [...new Set(movements.map(m => m.categoryId))]);
-  }, [movements]);
+    console.log('[WorkoutEditor] Movements updated:', movements.length, 'categories in movements:', [...new Set(movements.map(m => m.categoryId))], 'loading:', movementsLoading);
+  }, [movements, movementsLoading]);
 
   // Initialize form when workout changes (only when workout ID actually changes)
   useEffect(() => {
@@ -832,6 +880,20 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
         {/* Content */}
         <div className="space-y-0">
+          {/* Loading skeleton while movements load */}
+          {movementsLoading && movements.length === 0 && (
+            <div className="p-4 space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            </div>
+          )}
+
           {/* General Error */}
           {errors.general && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-2 py-0.5 rounded">
@@ -890,7 +952,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                                 {abbrevList.map((item, idx) => (
                                   <span
                                     key={idx}
-                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white"
+                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
                                     style={{ backgroundColor: item.color }}
                                   >
                                     {item.abbrev}
@@ -1030,19 +1092,19 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                     <SelectItem key={template.id} value={template.id}>
                       <div className="flex items-center gap-2 w-full">
                         <span>{template.name}</span>
-                        {abbrevList.length > 0 && (
-                          <div className="flex items-center gap-1 ml-auto">
-                            {abbrevList.map((item, idx) => (
-                              <span
-                                key={idx}
-                                className="inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white"
-                                style={{ backgroundColor: item.color }}
-                              >
-                                {item.abbrev}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                            {abbrevList.length > 0 && (
+                              <div className="flex items-center gap-1 ml-auto">
+                                {abbrevList.map((item, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
+                                    style={{ backgroundColor: item.color }}
+                                  >
+                                    {item.abbrev}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                       </div>
                     </SelectItem>
                   );
@@ -1330,7 +1392,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                                 {abbrevList.map((item, idx) => (
                                   <span
                                     key={idx}
-                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white"
+                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
                                     style={{ backgroundColor: item.color }}
                                   >
                                     {item.abbrev}

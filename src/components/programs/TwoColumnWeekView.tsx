@@ -114,6 +114,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
 }: TwoColumnWeekViewProps) {
   // All hooks must be called first, in the same order every render
   const { workoutCategories: configWorkoutCategories, businessHours } = useConfigurationStore();
+  const { config: calendarConfig } = useCalendarStore();
   const router = useRouter();
   const [allDayCollapsed, setAllDayCollapsed] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -121,7 +122,8 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Get app timezone (defaults to Pacific)
   const appTimezone = getAppTimezone();
 
-  // Filter events by client at the component level BEFORE any time slot processing
+  // Filter events by client - use length to detect changes, access array from closure
+  // This prevents infinite loops from array reference changes
   const calendarEvents = React.useMemo(() => {
     if (!selectedClient) {
       // "All Clients" - show ALL events so coach can see their full schedule
@@ -134,7 +136,8 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
         return String(eventClientId).trim() === String(selectedClient).trim();
       });
     }
-  }, [allCalendarEvents, selectedClient]);
+    // Use length instead of array reference to prevent infinite loops
+  }, [allCalendarEvents.length, selectedClient]);
   
   // Track when component is mounted to avoid hydration mismatch with dates
   useEffect(() => {
@@ -170,6 +173,13 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   };
 
   // Memoize week calculation to prevent unnecessary recalculations
+  // Use getTime() for stable comparison to prevent infinite loops
+  const calendarDateTimestamp = calendarDate ? (() => {
+    const normalized = new Date(calendarDate);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized.getTime();
+  })() : 0;
+  
   const { weekStart, weekDays } = useMemo(() => {
     // Use UTC-based calculation to avoid timezone issues between server and client
     // Extract year, month, day from calendarDate to create a consistent local date
@@ -200,7 +210,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     }
     
     return { weekStart: start, weekDays: days };
-  }, [calendarDate, includeWeekends]);
+  }, [calendarDateTimestamp, includeWeekends]); // Use stable timestamp instead of Date object
   
   // Ensure weekDays is properly populated
   React.useEffect(() => {
@@ -603,6 +613,16 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   const getEventCategoryColor = (event: GoogleCalendarEvent): string => {
     // Check if this is a class session
     if (event.isClassSession) {
+      if (calendarConfig.classColor) {
+        const colorMap: Record<string, string> = {
+          'blue': '#3b82f6',
+          'purple': '#a855f7',
+          'green': '#22c55e',
+          'orange': '#f97316',
+          'pink': '#ec4899',
+        };
+        return colorMap[calendarConfig.classColor] || calendarConfig.classColor;
+      }
       return '#a855f7'; // Purple for class sessions
     }
 
@@ -630,8 +650,25 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
 
     // Priority 3: Default colors based on event type
     if (isCoaching) {
+      if (calendarConfig.coachingColor) {
+        const colorMap: Record<string, string> = {
+          'blue': '#3b82f6',
+          'purple': '#a855f7',
+          'green': '#22c55e',
+          'orange': '#f97316',
+          'pink': '#ec4899',
+        };
+        return colorMap[calendarConfig.coachingColor] || calendarConfig.coachingColor;
+      }
       return '#f97316'; // Orange for coaching sessions without category
     }
+    
+    // Check if this is a class session (after coaching check)
+    // Note: getEventCategoryColor logic in ModernCalendarView had class check first. 
+    // Here logic order was different in original code (class check at top), but I am replacing the END of the function.
+    // The original function had class check at the very top. I should leave that or update it if I can match the whole function.
+    // Let's stick to replacing the last part.
+    
     return '#3b82f6'; // Blue for other events
   };
   
