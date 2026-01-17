@@ -154,7 +154,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     });
     
     return result;
-  }, [eventsKey, allCalendarEvents, selectedClient]);
+  }, [eventsKey, selectedClient]); // Removed allCalendarEvents - using eventsKey instead
   
   // Track when component is mounted to avoid hydration mismatch with dates
   useEffect(() => {
@@ -188,7 +188,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     });
     
     return { allDayEvents: allDay, timedEvents: timed };
-  }, [eventsLength, calendarEvents]);
+  }, [eventsLength]); // Removed calendarEvents - using eventsLength instead
   
   const dayColumnsRef = useRef<HTMLDivElement>(null);
 
