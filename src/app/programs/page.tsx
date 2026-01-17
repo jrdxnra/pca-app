@@ -156,15 +156,10 @@ export default function ProgramsPage() {
   const { weekTemplates, workoutStructureTemplates, fetchAll: fetchAllConfig } = useConfigurationStore();
 
   // Calendar events with React Query - calculate date range for current week view
-  const [calendarDateRange, setCalendarDateRange] = useState<{ start: Date; end: Date } | null>(null);
   
-  console.log('[ProgramsPage] calendarDateRange state:', calendarDateRange ? {
-    start: calendarDateRange.start.toISOString(),
-    end: calendarDateRange.end.toISOString()
-  } : null);
-  
-  // Memoize date range calculation to prevent creating new objects on every render
-  const memoizedDateRange = React.useMemo(() => {
+  // Calculate date range directly - no need for separate state
+  // Use useMemo to create stable Date objects that only change when calendarDate actually changes
+  const calendarDateRange = React.useMemo(() => {
     if (!calendarDate) return null;
     const startDate = new Date(calendarDate);
     startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -173,14 +168,7 @@ export default function ProgramsPage() {
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
     return { start: startDate, end: endDate };
-  }, [calendarDate?.getTime()]); // Use timestamp for stable comparison
-  
-  useEffect(() => {
-    console.log('[ProgramsPage] calendarDate changed, updating date range', {
-      calendarDate: calendarDate?.toISOString()
-    });
-    setCalendarDateRange(memoizedDateRange);
-  }, [memoizedDateRange]);
+  }, [calendarDate?.getTime()]); // Use timestamp for stable comparison - only recalc when date actually changes
 
   console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
     start: calendarDateRange?.start?.toISOString(),
@@ -277,20 +265,21 @@ export default function ProgramsPage() {
     };
   }, []);
 
-  // Sync selectedDate with calendarDate when it changes (e.g., from dashboard)
-  // Only set on client side to avoid hydration mismatch
-  // Combine both effects into one to prevent conflicts
+  // Sync selectedDate with calendarDate when it changes
+  // Use ref to track if we've initialized to prevent unnecessary updates
+  const hasInitializedSelectedDate = React.useRef(false);
   useEffect(() => {
-    if (selectedDate === null && calendarDate) {
-      // Initialize on mount
+    if (!hasInitializedSelectedDate.current && calendarDate) {
+      // Initialize once on mount
       console.log('[ProgramsPage] Initializing selectedDate from calendarDate');
       setSelectedDate(calendarDate);
-    } else if (selectedDate && calendarDate && selectedDate.getTime() !== calendarDate.getTime()) {
-      // Sync when calendarDate changes (but not on initial mount)
+      hasInitializedSelectedDate.current = true;
+    } else if (hasInitializedSelectedDate.current && calendarDate && selectedDate?.getTime() !== calendarDate.getTime()) {
+      // Sync when calendarDate changes after initialization
       console.log('[ProgramsPage] Syncing selectedDate with calendarDate');
       setSelectedDate(calendarDate);
     }
-  }, [calendarDate]); // Only depend on calendarDate, not selectedDate to avoid loops
+  }, [calendarDate, selectedDate?.getTime()]);
 
   const [includeWeekends, setIncludeWeekends] = useState(false);
 
@@ -451,10 +440,7 @@ export default function ProgramsPage() {
     return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
   };
 
-  // Update selected date when calendar date changes
-  React.useEffect(() => {
-    setSelectedDate(calendarDate);
-  }, [calendarDate]);
+  // REMOVED: Duplicate useEffect - already handled above
 
   const handleMiniCalendarDateSelect = (date: Date) => {
     setSelectedDate(date);
