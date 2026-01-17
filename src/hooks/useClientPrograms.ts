@@ -99,9 +99,10 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
     }, []);
 
     // Auto-fetch when selected client changes
+    // Only depend on selectedClientId to prevent infinite loops
     useEffect(() => {
         fetchClientProgramsAsync(selectedClientId);
-    }, [selectedClientId, fetchClientProgramsAsync]);
+    }, [selectedClientId]); // Removed fetchClientProgramsAsync from deps - it's stable
 
     // Get a specific client's program
     const getClientProgramForClient = useCallback((clientId: string): ClientProgram | undefined => {

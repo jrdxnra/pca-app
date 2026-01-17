@@ -279,25 +279,18 @@ export default function ProgramsPage() {
 
   // Sync selectedDate with calendarDate when it changes (e.g., from dashboard)
   // Only set on client side to avoid hydration mismatch
+  // Combine both effects into one to prevent conflicts
   useEffect(() => {
-    console.log('[ProgramsPage] calendarDate changed, syncing selectedDate', {
-      calendarDate: calendarDate?.toISOString(),
-      currentSelectedDate: selectedDate?.toISOString()
-    });
-    setSelectedDate(calendarDate);
-  }, [calendarDate]);
-  
-  // Initialize on mount (client-side only)
-  useEffect(() => {
-    console.log('[ProgramsPage] Initialization effect running', {
-      selectedDate: selectedDate?.toISOString(),
-      calendarDate: calendarDate?.toISOString()
-    });
     if (selectedDate === null && calendarDate) {
-      console.log('[ProgramsPage] Setting selectedDate from calendarDate');
+      // Initialize on mount
+      console.log('[ProgramsPage] Initializing selectedDate from calendarDate');
+      setSelectedDate(calendarDate);
+    } else if (selectedDate && calendarDate && selectedDate.getTime() !== calendarDate.getTime()) {
+      // Sync when calendarDate changes (but not on initial mount)
+      console.log('[ProgramsPage] Syncing selectedDate with calendarDate');
       setSelectedDate(calendarDate);
     }
-  }, []);
+  }, [calendarDate]); // Only depend on calendarDate, not selectedDate to avoid loops
 
   const [includeWeekends, setIncludeWeekends] = useState(false);
 
