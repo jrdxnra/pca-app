@@ -268,18 +268,24 @@ export default function ProgramsPage() {
   // Sync selectedDate with calendarDate when it changes
   // Use ref to track if we've initialized to prevent unnecessary updates
   const hasInitializedSelectedDate = React.useRef(false);
+  const lastCalendarDateRef = React.useRef<number | null>(null);
+  
   useEffect(() => {
+    const calendarDateTimestamp = calendarDate?.getTime() ?? null;
+    
     if (!hasInitializedSelectedDate.current && calendarDate) {
       // Initialize once on mount
       console.log('[ProgramsPage] Initializing selectedDate from calendarDate');
       setSelectedDate(calendarDate);
       hasInitializedSelectedDate.current = true;
-    } else if (hasInitializedSelectedDate.current && calendarDate && selectedDate?.getTime() !== calendarDate.getTime()) {
-      // Sync when calendarDate changes after initialization
+      lastCalendarDateRef.current = calendarDateTimestamp;
+    } else if (hasInitializedSelectedDate.current && calendarDate && lastCalendarDateRef.current !== calendarDateTimestamp) {
+      // Sync when calendarDate actually changes (by timestamp comparison)
       console.log('[ProgramsPage] Syncing selectedDate with calendarDate');
       setSelectedDate(calendarDate);
+      lastCalendarDateRef.current = calendarDateTimestamp;
     }
-  }, [calendarDate, selectedDate?.getTime()]);
+  }, [calendarDate]); // Only depend on calendarDate
 
   const [includeWeekends, setIncludeWeekends] = useState(false);
 
