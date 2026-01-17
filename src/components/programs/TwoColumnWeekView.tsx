@@ -112,87 +112,147 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   onEventClick,
   onWorkoutClick
 }: TwoColumnWeekViewProps) {
+  console.log('[TwoColumnWeekView] Component rendering', {
+    calendarDate: calendarDate?.toISOString(),
+    allCalendarEventsCount: allCalendarEvents?.length,
+    workoutsCount: workouts?.length,
+    selectedClient,
+    includeWeekends
+  });
+  
   // All hooks must be called first, in the same order every render
+  console.log('[TwoColumnWeekView] Calling hooks...');
   const { workoutCategories: configWorkoutCategories, businessHours } = useConfigurationStore();
+  console.log('[TwoColumnWeekView] useConfigurationStore result:', {
+    workoutCategoriesCount: configWorkoutCategories?.length,
+    hasBusinessHours: !!businessHours
+  });
+  
   const { config: calendarConfig } = useCalendarStore();
+  console.log('[TwoColumnWeekView] useCalendarStore result:', {
+    hasConfig: !!calendarConfig
+  });
+  
   const router = useRouter();
+  console.log('[TwoColumnWeekView] useRouter called');
+  
   const [allDayCollapsed, setAllDayCollapsed] = useState(true);
+  console.log('[TwoColumnWeekView] allDayCollapsed state:', allDayCollapsed);
+  
   const [mounted, setMounted] = useState(false);
+  console.log('[TwoColumnWeekView] mounted state:', mounted);
   
   // Get app timezone (defaults to Pacific)
   const appTimezone = getAppTimezone();
+  console.log('[TwoColumnWeekView] appTimezone:', appTimezone);
 
-  // Filter events by client - use ref to track previous array to detect actual changes
-  // This prevents infinite loops from array reference changes
-  const prevEventsRef = useRef<GoogleCalendarEvent[]>([]);
-  const prevSelectedClientRef = useRef<string | null>(null);
-  const prevAllEventsRef = useRef<GoogleCalendarEvent[]>([]);
+  // Use length and selectedClient for stable dependencies instead of array reference
+  // This prevents React error #310 from unstable array dependencies
+  const allEventsLength = allCalendarEvents.length;
+  const eventsKey = `${allEventsLength}-${selectedClient || 'all'}`;
   
   const calendarEvents = React.useMemo(() => {
-    // Check if inputs actually changed
-    const eventsChanged = prevAllEventsRef.current !== allCalendarEvents;
-    const clientChanged = prevSelectedClientRef.current !== selectedClient;
-    
-    // If nothing changed, return cached result
-    if (!eventsChanged && !clientChanged && prevEventsRef.current.length >= 0) {
-      return prevEventsRef.current;
-    }
+    console.log('[TwoColumnWeekView] calendarEvents useMemo called', { 
+      eventsKey, 
+      allEventsLength, 
+      selectedClient,
+      allCalendarEventsLength: allCalendarEvents.length,
+      allCalendarEvents: allCalendarEvents.map(e => ({
+        id: e.id,
+        summary: e.summary,
+        preConfiguredClient: e.preConfiguredClient,
+        hasDescription: !!e.description
+      }))
+    });
     
     // Recalculate
     let result: GoogleCalendarEvent[];
     if (!selectedClient) {
       // "All Clients" - show ALL events so coach can see their full schedule
+      console.log('[TwoColumnWeekView] No selectedClient - showing all events');
       result = allCalendarEvents;
     } else {
       // Specific client selected - show only events for that client
-      result = allCalendarEvents.filter(event => {
+      console.log('[TwoColumnWeekView] Filtering events for selectedClient:', selectedClient);
+      const filtered = allCalendarEvents.filter(event => {
         const eventClientId = getEventClientId(event);
-        if (!eventClientId) return false; // Hide events without client metadata
-        return String(eventClientId).trim() === String(selectedClient).trim();
+        const matches = eventClientId && String(eventClientId).trim() === String(selectedClient).trim();
+        if (!matches && eventClientId) {
+          console.log('[TwoColumnWeekView] Event client mismatch:', {
+            eventId: event.id,
+            eventClientId,
+            selectedClient,
+            match: false
+          });
+        }
+        return matches;
       });
+      console.log('[TwoColumnWeekView] Filtered events:', {
+        originalCount: allCalendarEvents.length,
+        filteredCount: filtered.length,
+        eventsWithoutClient: allCalendarEvents.length - filtered.length
+      });
+      result = filtered;
     }
     
-    // Update refs
-    prevEventsRef.current = result;
-    prevSelectedClientRef.current = selectedClient;
-    prevAllEventsRef.current = allCalendarEvents;
+    console.log('[TwoColumnWeekView] calendarEvents useMemo result', { 
+      resultLength: result.length,
+      resultEvents: result.map(e => ({
+        id: e.id,
+        summary: e.summary,
+        preConfiguredClient: e.preConfiguredClient
+      }))
+    });
     
     return result;
-  }, [allCalendarEvents, selectedClient]);
+  }, [eventsKey, selectedClient]); // Removed allCalendarEvents - using eventsKey instead
   
   // Track when component is mounted to avoid hydration mismatch with dates
   useEffect(() => {
+    console.log('[TwoColumnWeekView] Mount effect running');
     setMounted(true);
+    console.log('[TwoColumnWeekView] Set mounted to true');
+    return () => {
+      console.log('[TwoColumnWeekView] Unmounting');
+    };
   }, []);
   
   // Separate all-day events from timed events
-  // Use ref to track previous result to avoid unnecessary recalculations
-  const prevSeparatedRef = useRef<{ allDayEvents: GoogleCalendarEvent[]; timedEvents: GoogleCalendarEvent[] } | null>(null);
-  const prevCalendarEventsRef = useRef<GoogleCalendarEvent[]>([]);
+  // Use length for stable dependency instead of array reference to prevent React error #310
+  const eventsLength = calendarEvents.length;
   
   const { allDayEvents, timedEvents } = useMemo(() => {
-    // If calendarEvents reference hasn't changed, return cached result
-    if (prevCalendarEventsRef.current === calendarEvents && prevSeparatedRef.current) {
-      return prevSeparatedRef.current;
-    }
+    console.log('[TwoColumnWeekView] allDayEvents/timedEvents useMemo called', { 
+      eventsLength,
+      calendarEventsLength: calendarEvents.length,
+      calendarEvents: calendarEvents.map(e => ({
+        id: e.id,
+        summary: e.summary,
+        start: e.start.dateTime || e.start.date
+      }))
+    });
     
     const allDay: GoogleCalendarEvent[] = [];
     const timed: GoogleCalendarEvent[] = [];
     
     calendarEvents.forEach(event => {
-      if (isAllDayEvent(event)) {
+      const isAllDay = isAllDayEvent(event);
+      if (isAllDay) {
         allDay.push(event);
       } else {
         timed.push(event);
       }
     });
     
-    const result = { allDayEvents: allDay, timedEvents: timed };
-    prevSeparatedRef.current = result;
-    prevCalendarEventsRef.current = calendarEvents;
+    console.log('[TwoColumnWeekView] allDayEvents/timedEvents useMemo result', { 
+      allDayCount: allDay.length,
+      timedCount: timed.length,
+      allDayEvents: allDay.map(e => ({ id: e.id, summary: e.summary })),
+      timedEvents: timed.map(e => ({ id: e.id, summary: e.summary }))
+    });
     
-    return result;
-  }, [calendarEvents]);
+    return { allDayEvents: allDay, timedEvents: timed };
+  }, [eventsLength]); // Removed calendarEvents - using eventsLength instead
   
   const dayColumnsRef = useRef<HTMLDivElement>(null);
 
@@ -215,6 +275,12 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   })() : 0;
   
   const { weekStart, weekDays } = useMemo(() => {
+    console.log('[TwoColumnWeekView] weekStart/weekDays useMemo called', { 
+      calendarDateTimestamp,
+      calendarDate: calendarDate?.toISOString(),
+      includeWeekends 
+    });
+    
     // Use UTC-based calculation to avoid timezone issues between server and client
     // Extract year, month, day from calendarDate to create a consistent local date
     const year = calendarDate.getFullYear();
@@ -283,6 +349,12 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Memoize time slots to prevent unnecessary recalculations
   // Use app timezone to ensure consistent hour calculation
   const timeSlots = useMemo(() => {
+    console.log('[TwoColumnWeekView] timeSlots useMemo called', { 
+      businessHours,
+      weekDaysCount: weekDays.length,
+      weekStart: weekStart?.toISOString(),
+      weekDays: weekDays.map(d => d.toISOString())
+    });
     const slots: Date[] = [];
     
     // Get min/max hours across all selected days
@@ -724,6 +796,14 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     });
   };
 
+  console.log('[TwoColumnWeekView] About to render JSX', {
+    weekDaysCount: weekDays.length,
+    timeSlotsCount: timeSlots.length,
+    allDayEventsCount: allDayEvents.length,
+    timedEventsCount: timedEvents.length,
+    workoutsCount: workouts.length
+  });
+  
   return (
     <Card className="py-1 gap-1" style={{ display: 'block', overflow: 'visible' }}>
       <CardContent className="p-0 pt-1" style={{ overflow: 'visible' }}>
@@ -1168,6 +1248,20 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     prevProps.workouts.length !== nextProps.workouts.length ||
     prevProps.clientPrograms !== nextProps.clientPrograms
   );
+  
+  console.log('[TwoColumnWeekView] React.memo comparison', {
+    structureChanged,
+    dataChanged,
+    calendarDateChanged: prevProps.calendarDate?.getTime() !== nextProps.calendarDate?.getTime(),
+    includeWeekendsChanged: prevProps.includeWeekends !== nextProps.includeWeekends,
+    selectedClientChanged: prevProps.selectedClient !== nextProps.selectedClient,
+    calendarEventsChanged: prevProps.calendarEvents !== nextProps.calendarEvents,
+    calendarEventsLengthChanged: prevProps.calendarEvents.length !== nextProps.calendarEvents.length,
+    workoutsChanged: prevProps.workouts !== nextProps.workouts,
+    workoutsLengthChanged: prevProps.workouts.length !== nextProps.workouts.length,
+    clientProgramsChanged: prevProps.clientPrograms !== nextProps.clientPrograms,
+    shouldRerender: structureChanged || dataChanged
+  });
   
   // If structure or data changed, allow re-render
   if (structureChanged || dataChanged) return false;

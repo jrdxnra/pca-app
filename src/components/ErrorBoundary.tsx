@@ -26,12 +26,32 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    console.error('[ErrorBoundary] getDerivedStateFromError called', {
+      errorName: error?.name,
+      errorMessage: error?.message,
+      errorStack: error?.stack
+    });
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // Log error to console in development
-    console.error('Error Boundary caught an error:', error, errorInfo);
+    console.error('[ErrorBoundary] Caught an error:', {
+      errorName: error?.name,
+      errorMessage: error?.message,
+      errorStack: error?.stack,
+      componentStack: errorInfo?.componentStack,
+      errorInfo: errorInfo,
+      fullError: error
+    });
+    
+    // Check if this is React error #310
+    if (error?.message?.includes('310') || error?.message?.includes('useMemo')) {
+      console.error('[ErrorBoundary] React Error #310 detected - likely hook order/dependency issue', {
+        errorMessage: error.message,
+        componentStack: errorInfo.componentStack
+      });
+    }
     
     // In production, you could send this to an error reporting service
     // Example: Sentry.captureException(error);

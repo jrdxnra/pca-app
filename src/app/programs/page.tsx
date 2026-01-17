@@ -33,6 +33,14 @@ import {
 import { useProgramStore } from '@/lib/stores/useProgramStore';
 import { useClientStore } from '@/lib/stores/useClientStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
+// React Query hooks
+import { useClients } from '@/hooks/queries/useClients';
+import { usePrograms, useProgramsByClient, useScheduledWorkoutsByClient, useScheduledWorkouts } from '@/hooks/queries/usePrograms';
+import { useCalendarEvents } from '@/hooks/queries/useCalendarEvents';
+import { usePeriods, useWorkoutCategories } from '@/hooks/queries/useConfiguration';
+import { useUpdateCalendarEvent, useDeleteCalendarEvent, useCreateCalendarEvent } from '@/hooks/mutations/useCalendarMutations';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/react-query/queryKeys';
 // Lazy load ModernCalendarView to prevent blocking initial render
 const ModernCalendarView = dynamic(
   () => import('@/components/programs/ModernCalendarView').then(mod => ({ default: mod.ModernCalendarView })),
@@ -71,21 +79,27 @@ import { getAppTimezone, setAppTimezone, getBrowserTimezone, hasTimezoneChanged,
 import { toastSuccess } from '@/components/ui/toaster';
 
 export default function ProgramsPage() {
+  // Track render count to detect infinite loops
+  const renderCountRef = React.useRef(0);
+  renderCountRef.current += 1;
+  const renderCount = renderCountRef.current;
+  
+  console.log(`[ProgramsPage] Component rendering (render #${renderCount})`);
+  
+  // Warn if we're rendering too many times
+  if (renderCount > 10) {
+    console.warn(`[ProgramsPage] WARNING: Component has rendered ${renderCount} times - possible infinite loop!`);
+  }
+  
   const router = useRouter();
 
+  // UI State from stores (keeping for now)
   const {
-    programs,
-    scheduledWorkouts,
     selectedClient,
     currentDate,
     viewMode,
     calendarDate,
-    loading,
     error,
-    fetchPrograms,
-    fetchProgramsByClient,
-    fetchScheduledWorkoutsByClient,
-    fetchAllScheduledWorkouts,
     setSelectedClient,
     setViewMode,
     setCalendarDate,
@@ -96,14 +110,157 @@ export default function ProgramsPage() {
     clearError,
     initializeSelectedClient,
   } = useProgramStore();
+  
+  console.log('[ProgramsPage] Store state:', {
+    selectedClient,
+    viewMode,
+    calendarDate: calendarDate?.toISOString(),
+    hasError: !!error
+  });
 
-  const { clients, fetchClients } = useClientStore();
+  // Data fetching with React Query
+  console.log('[ProgramsPage] Calling React Query hooks...');
+  const { data: clients = [], isLoading: clientsLoading } = useClients(false);
+  const { data: allPrograms = [], isLoading: programsLoading } = usePrograms();
+  const { data: programsByClient = [], isLoading: programsByClientLoading } = useProgramsByClient(selectedClient);
+  const { data: scheduledWorkoutsByClient = [], isLoading: scheduledWorkoutsByClientLoading } = useScheduledWorkoutsByClient(selectedClient);
+  const { data: allScheduledWorkouts = [], isLoading: allScheduledWorkoutsLoading } = useScheduledWorkouts();
+  
+  console.log('[ProgramsPage] React Query data loaded:', {
+    clientsCount: clients.length,
+    allProgramsCount: allPrograms.length,
+    programsByClientCount: programsByClient.length,
+    scheduledWorkoutsByClientCount: scheduledWorkoutsByClient.length,
+    allScheduledWorkoutsCount: allScheduledWorkouts.length,
+    clientsLoading,
+    programsLoading,
+    programsByClientLoading,
+    scheduledWorkoutsByClientLoading,
+    allScheduledWorkoutsLoading
+  });
+  
+  // Use client-specific or all data based on selectedClient
+  const programs = selectedClient ? programsByClient : allPrograms;
+  const scheduledWorkouts = selectedClient ? scheduledWorkoutsByClient : allScheduledWorkouts;
+  const loading = programsLoading || programsByClientLoading || scheduledWorkoutsByClientLoading || allScheduledWorkoutsLoading || clientsLoading;
+  
+  console.log('[ProgramsPage] Computed data:', {
+    programsCount: programs.length,
+    scheduledWorkoutsCount: scheduledWorkouts.length,
+    loading
+  });
 
-  // Configuration store
-  const { periods, weekTemplates, workoutCategories, workoutStructureTemplates, fetchAll: fetchAllConfig } = useConfigurationStore();
+  // Configuration data with React Query
+  const { data: periods = [] } = usePeriods();
+  const { data: workoutCategories = [] } = useWorkoutCategories();
+  const { weekTemplates, workoutStructureTemplates, fetchAll: fetchAllConfig } = useConfigurationStore();
 
-  // Calendar store for events
-  const { events: calendarEvents, createTestEvent, fetchEvents, updateEvent, deleteEvent, clearAllTestEvents, linkToWorkout } = useCalendarStore();
+  // Calendar events with React Query - calculate date range for current week view
+  const [calendarDateRange, setCalendarDateRange] = useState<{ start: Date; end: Date } | null>(null);
+  
+  console.log('[ProgramsPage] calendarDateRange state:', calendarDateRange ? {
+    start: calendarDateRange.start.toISOString(),
+    end: calendarDateRange.end.toISOString()
+  } : null);
+  
+  useEffect(() => {
+    console.log('[ProgramsPage] calendarDate changed, updating date range', {
+      calendarDate: calendarDate?.toISOString()
+    });
+    if (calendarDate) {
+      const startDate = new Date(calendarDate);
+      startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+      const newRange = { start: startDate, end: endDate };
+      console.log('[ProgramsPage] Setting calendarDateRange:', {
+        start: newRange.start.toISOString(),
+        end: newRange.end.toISOString()
+      });
+      setCalendarDateRange(newRange);
+    } else {
+      console.log('[ProgramsPage] calendarDate is null, clearing date range');
+      setCalendarDateRange(null);
+    }
+  }, [calendarDate]);
+
+  console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
+    start: calendarDateRange?.start?.toISOString(),
+    end: calendarDateRange?.end?.toISOString()
+  });
+  
+  const { data: calendarEvents = [], isLoading: calendarEventsLoading } = useCalendarEvents(
+    calendarDateRange?.start,
+    calendarDateRange?.end
+  );
+  
+  // Track calendarEvents reference to detect if it's changing on every render
+  const calendarEventsRef = React.useRef(calendarEvents);
+  const calendarEventsChanged = calendarEventsRef.current !== calendarEvents;
+  if (calendarEventsChanged) {
+    console.log('[ProgramsPage] calendarEvents reference changed!', {
+      oldLength: calendarEventsRef.current.length,
+      newLength: calendarEvents.length,
+      oldIds: calendarEventsRef.current.map(e => e.id),
+      newIds: calendarEvents.map(e => e.id)
+    });
+    calendarEventsRef.current = calendarEvents;
+  }
+  
+  // Create a stable hash of event IDs to detect actual content changes
+  // Use ref to track previous hash and only update when content actually changes
+  const calendarEventsHashRef = React.useRef<string>('');
+  const calendarEventsStableRef = React.useRef(calendarEvents);
+  const calendarEventsVersionRef = React.useRef<number>(0);
+  
+  // Calculate current hash
+  const currentHash = calendarEvents.map(e => e.id).sort().join(',');
+  
+  // Only update if hash actually changed (content changed, not just reference)
+  if (currentHash !== calendarEventsHashRef.current) {
+    console.log('[ProgramsPage] calendarEvents content changed', {
+      oldHash: calendarEventsHashRef.current.substring(0, 50) + '...',
+      newHash: currentHash.substring(0, 50) + '...',
+      eventsCount: calendarEvents.length
+    });
+    calendarEventsHashRef.current = currentHash;
+    calendarEventsStableRef.current = calendarEvents;
+    calendarEventsVersionRef.current += 1; // Increment version counter
+  }
+  
+  // Use stable reference that only changes when content changes
+  const stableCalendarEvents = calendarEventsStableRef.current;
+  const calendarEventsVersion = calendarEventsVersionRef.current;
+  
+  console.log('[ProgramsPage] Calendar events loaded:', {
+    eventsCount: calendarEvents.length,
+    isLoading: calendarEventsLoading,
+    referenceChanged: calendarEventsChanged,
+    eventsHash: calendarEventsHashRef.current.substring(0, 50) + '...',
+    stableEventsCount: stableCalendarEvents.length
+  });
+
+  // Query client for invalidating queries
+  const queryClient = useQueryClient();
+
+  // Calendar mutations
+  const updateCalendarEventMutation = useUpdateCalendarEvent();
+  const deleteCalendarEventMutation = useDeleteCalendarEvent();
+  const createCalendarEventMutation = useCreateCalendarEvent();
+
+  // Wrapper functions for backward compatibility
+  const updateEvent = async (eventId: string, updates: Partial<GoogleCalendarEvent>) => {
+    await updateCalendarEventMutation.mutateAsync({ id: eventId, updates });
+  };
+
+  const deleteEvent = async (eventId: string) => {
+    await deleteCalendarEventMutation.mutateAsync(eventId);
+  };
+
+  // Keep calendar store functions that aren't data fetching
+  const { createTestEvent, clearAllTestEvents, linkToWorkout } = useCalendarStore();
 
   // Selected date for mini calendar (defaults to calendarDate)
   // Initialize with null to avoid hydration mismatch, then set on client
@@ -112,44 +269,73 @@ export default function ProgramsPage() {
   // Track mounted state to avoid hydration mismatch with date-dependent UI
   const [mounted, setMounted] = useState(false);
   
+  console.log('[ProgramsPage] mounted state:', mounted);
+  
   // Timezone notification state
   const [appTimezone, setAppTimezoneState] = useState<string>(() => {
+    console.log('[ProgramsPage] Initializing appTimezone state');
     if (typeof window !== 'undefined') {
-      return getAppTimezone();
+      const tz = getAppTimezone();
+      console.log('[ProgramsPage] Got appTimezone from storage:', tz);
+      return tz;
     }
+    console.log('[ProgramsPage] window undefined, using default timezone');
     return 'America/Los_Angeles';
   });
   const [showTimezonePrompt, setShowTimezonePrompt] = useState(false);
   const TIMEZONE_DISMISS_KEY = 'pca-timezone-prompt-dismissed';
   
   useEffect(() => {
+    console.log('[ProgramsPage] Mount effect running');
     setMounted(true);
+    console.log('[ProgramsPage] Set mounted to true');
     
     // Check if timezone prompt was dismissed
     const wasDismissed = typeof window !== 'undefined' 
       ? localStorage.getItem(TIMEZONE_DISMISS_KEY) === 'true'
       : false;
     
+    console.log('[ProgramsPage] Timezone prompt dismissed?', wasDismissed);
+    
     // Check if browser timezone differs from app timezone
     if (!wasDismissed && hasTimezoneChanged()) {
       const savedTimezone = getAppTimezone();
       const browserTimezone = getBrowserTimezone();
+      console.log('[ProgramsPage] Timezone check:', {
+        savedTimezone,
+        browserTimezone,
+        hasChanged: hasTimezoneChanged()
+      });
       // Only show prompt if timezone was previously set (not default)
       if (savedTimezone !== 'America/Los_Angeles' || browserTimezone !== 'America/Los_Angeles') {
+        console.log('[ProgramsPage] Showing timezone prompt');
         setShowTimezonePrompt(true);
       }
     }
+    
+    return () => {
+      console.log('[ProgramsPage] Mount effect cleanup');
+    };
   }, []);
 
   // Sync selectedDate with calendarDate when it changes (e.g., from dashboard)
   // Only set on client side to avoid hydration mismatch
   useEffect(() => {
+    console.log('[ProgramsPage] calendarDate changed, syncing selectedDate', {
+      calendarDate: calendarDate?.toISOString(),
+      currentSelectedDate: selectedDate?.toISOString()
+    });
     setSelectedDate(calendarDate);
   }, [calendarDate]);
   
   // Initialize on mount (client-side only)
   useEffect(() => {
+    console.log('[ProgramsPage] Initialization effect running', {
+      selectedDate: selectedDate?.toISOString(),
+      calendarDate: calendarDate?.toISOString()
+    });
     if (selectedDate === null && calendarDate) {
+      console.log('[ProgramsPage] Setting selectedDate from calendarDate');
       setSelectedDate(calendarDate);
     }
   }, []);
@@ -157,6 +343,7 @@ export default function ProgramsPage() {
   const [includeWeekends, setIncludeWeekends] = useState(false);
 
   // Use the shared client programs hook - replaces local state and fetchClientPrograms function
+  console.log('[ProgramsPage] Calling useClientPrograms hook with selectedClient:', selectedClient);
   const {
     clientPrograms,
     isLoading: clientProgramsLoading,
@@ -165,6 +352,51 @@ export default function ProgramsPage() {
     clearAllPeriods: hookClearAllPeriods,
     fetchClientPrograms
   } = useClientPrograms(selectedClient);
+  
+  // Track clientPrograms reference to detect if it's changing on every render
+  const clientProgramsRef = React.useRef(clientPrograms);
+  const clientProgramsChanged = clientProgramsRef.current !== clientPrograms;
+  if (clientProgramsChanged) {
+    console.log('[ProgramsPage] clientPrograms reference changed!', {
+      oldLength: clientProgramsRef.current.length,
+      newLength: clientPrograms.length,
+      oldIds: clientProgramsRef.current.map(cp => cp.id),
+      newIds: clientPrograms.map(cp => cp.id)
+    });
+    clientProgramsRef.current = clientPrograms;
+  }
+  
+  // Create stable hash for clientPrograms to prevent infinite loops
+  // Use ref to track previous hash and only update when content actually changes
+  const clientProgramsHashRef = React.useRef<string>('');
+  const clientProgramsStableRef = React.useRef(clientPrograms);
+  const clientProgramsVersionRef = React.useRef<number>(0);
+  
+  // Calculate current hash
+  const currentClientProgramsHash = clientPrograms.map(cp => cp.id).sort().join(',');
+  
+  // Only update if hash actually changed (content changed, not just reference)
+  if (currentClientProgramsHash !== clientProgramsHashRef.current) {
+    console.log('[ProgramsPage] clientPrograms content changed', {
+      oldHash: clientProgramsHashRef.current.substring(0, 50) + '...',
+      newHash: currentClientProgramsHash.substring(0, 50) + '...',
+      programsCount: clientPrograms.length
+    });
+    clientProgramsHashRef.current = currentClientProgramsHash;
+    clientProgramsStableRef.current = clientPrograms;
+    clientProgramsVersionRef.current += 1; // Increment version counter
+  }
+  
+  // Use stable reference that only changes when content changes
+  const stableClientPrograms = clientProgramsStableRef.current;
+  const clientProgramsVersion = clientProgramsVersionRef.current;
+  
+  console.log('[ProgramsPage] useClientPrograms result:', {
+    clientProgramsCount: clientPrograms.length,
+    isLoading: clientProgramsLoading,
+    referenceChanged: clientProgramsChanged,
+    stableProgramsCount: stableClientPrograms.length
+  });
 
   const [selectedPeriod, setSelectedPeriod] = useState<ClientProgramPeriod | null>(null);
   const [periodPanelOpen, setPeriodPanelOpen] = useState(false);
@@ -177,6 +409,39 @@ export default function ProgramsPage() {
   const [createEventTime, setCreateEventTime] = useState<Date | null>(null);
   const [periodListDialogOpen, setPeriodListDialogOpen] = useState(false);
   const [dialogPeriods, setDialogPeriods] = useState<ClientProgramPeriod[]>([]);
+  
+  // Track dialogPeriods reference to detect if it's changing on every render
+  const dialogPeriodsRef = React.useRef(dialogPeriods);
+  const dialogPeriodsChanged = dialogPeriodsRef.current !== dialogPeriods;
+  if (dialogPeriodsChanged) {
+    console.log('[ProgramsPage] dialogPeriods reference changed!', {
+      oldLength: dialogPeriodsRef.current.length,
+      newLength: dialogPeriods.length,
+      oldIds: dialogPeriodsRef.current.map(p => p.id),
+      newIds: dialogPeriods.map(p => p.id)
+    });
+    dialogPeriodsRef.current = dialogPeriods;
+  }
+  
+  // Create stable hash for dialogPeriods
+  // Use ref to track previous hash and only update when content actually changes
+  const dialogPeriodsHashRef = React.useRef<string>('');
+  const dialogPeriodsStableRef = React.useRef(dialogPeriods);
+  const dialogPeriodsVersionRef = React.useRef<number>(0);
+  
+  // Calculate current hash
+  const currentDialogPeriodsHash = dialogPeriods.map(p => p.id).sort().join(',');
+  
+  // Only update if hash actually changed (content changed, not just reference)
+  if (currentDialogPeriodsHash !== dialogPeriodsHashRef.current) {
+    dialogPeriodsHashRef.current = currentDialogPeriodsHash;
+    dialogPeriodsStableRef.current = dialogPeriods;
+    dialogPeriodsVersionRef.current += 1; // Increment version counter
+  }
+  
+  // Use stable reference that only changes when content changes
+  const stableDialogPeriods = dialogPeriodsStableRef.current;
+  const dialogPeriodsVersion = dialogPeriodsVersionRef.current;
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
   const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
@@ -184,38 +449,25 @@ export default function ProgramsPage() {
 
 
 
-  // Parallel initial data fetch for better performance
+  // Fetch configuration data on mount
   useEffect(() => {
-    Promise.all([
-      fetchPrograms(),
-      fetchClients(),
-      fetchAllConfig()
-    ]);
-  }, [fetchPrograms, fetchClients, fetchAllConfig]);
+    console.log('[ProgramsPage] Fetching all config');
+    fetchAllConfig();
+    console.log('[ProgramsPage] Config fetch initiated');
+  }, [fetchAllConfig]);
 
   // Calendar date is now managed by the store with localStorage persistence
   // No need to reset on mount - it preserves state between dashboard and programs pages
 
   // Initialize selected client from localStorage after hydration
   useEffect(() => {
+    console.log('[ProgramsPage] Initializing selected client from localStorage');
     initializeSelectedClient();
+    console.log('[ProgramsPage] Selected client initialized');
   }, [initializeSelectedClient]);
 
-  // Fetch program data when client changes - hook auto-fetches clientPrograms
-  // Using parallel fetching for better performance
-  useEffect(() => {
-    if (selectedClient) {
-      Promise.all([
-        fetchProgramsByClient(selectedClient),
-        fetchScheduledWorkoutsByClient(selectedClient)
-      ]);
-    } else {
-      Promise.all([
-        fetchPrograms(),
-        fetchAllScheduledWorkouts()
-      ]);
-    }
-  }, [selectedClient, fetchProgramsByClient, fetchScheduledWorkoutsByClient, fetchPrograms, fetchAllScheduledWorkouts]);
+  // React Query handles data fetching automatically based on selectedClient
+  // No need for manual fetch calls - hooks will refetch when dependencies change
 
 // Track navigation to force refresh when returning to this page
   const pathname = usePathname();
@@ -243,7 +495,8 @@ export default function ProgramsPage() {
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(23, 59, 59, 999);
 
-      fetchEvents({ start: startDate, end: endDate });
+      // React Query will automatically refetch when calendarDateRange changes
+      // No manual fetch needed
       lastFetchTimeRef.current = Date.now(); // Update ref instead of state
     };
     
@@ -268,7 +521,7 @@ export default function ProgramsPage() {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', refreshEvents);
     };
-  }, [pathname, calendarDate, fetchEvents]); // Removed lastFetchTime from dependencies to prevent infinite loop
+  }, [pathname, calendarDate]); // React Query handles refetching automatically
 
   // Update dialog periods when clientPrograms state changes
   useEffect(() => {
@@ -354,7 +607,7 @@ export default function ProgramsPage() {
         weekEnd.setDate(weekEnd.getDate() + (6 - weekEnd.getDay()));
 
         // Refresh calendar events
-        await fetchEvents({ start: weekStart, end: weekEnd });
+        // React Query will automatically refetch calendar events when date range changes
 
         // Force calendar view to refresh by updating the key
         setCalendarKey(prev => prev + 1);
@@ -453,7 +706,7 @@ export default function ProgramsPage() {
       periodEnd.setHours(23, 59, 59, 999);
 
       // Fetch events for the entire period range
-      await fetchEvents({ start: periodStart, end: periodEnd });
+      // React Query will automatically refetch calendar events when date range changes
 
       // Wait a bit for store to update
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -502,13 +755,13 @@ export default function ProgramsPage() {
         setDialogPeriods(updatedProgram.periods || []);
       }
 
-      // Refresh calendar events and workouts
-      await fetchScheduledWorkoutsByClient(selectedClient);
+      // Refresh scheduled workouts via React Query
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduledWorkouts.all });
       const weekStart = new Date(calendarDate);
       weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
-      await fetchEvents({ start: weekStart, end: weekEnd });
+      // React Query will automatically refetch calendar events when date range changes
 
       // Force calendar refresh
       setCalendarKey(prev => prev + 1);
@@ -564,7 +817,7 @@ export default function ProgramsPage() {
       overallEnd.setHours(23, 59, 59, 999);
 
       // Fetch all events in the overall date range
-      await fetchEvents({ start: overallStart, end: overallEnd });
+      // React Query will automatically refetch calendar events when date range changes
       await new Promise(resolve => setTimeout(resolve, 300));
 
       // Delete events for all periods
@@ -612,12 +865,12 @@ export default function ProgramsPage() {
         setDialogPeriods(updatedProgram.periods || []);
       }
 
-      await fetchScheduledWorkoutsByClient(selectedClient);
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduledWorkouts.all });
       const weekStart = new Date(calendarDate);
       weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
-      await fetchEvents({ start: weekStart, end: weekEnd });
+      // React Query will automatically refetch calendar events when date range changes
 
       setCalendarKey(prev => prev + 1);
     } catch (error) {
@@ -654,10 +907,11 @@ export default function ProgramsPage() {
 
       // Fetch ALL events for the date range
       // Fetch events first
-      await fetchEvents({ start: dateRangeStart, end: dateRangeEnd });
+      // React Query will automatically refetch calendar events when date range changes
 
       // FIX: Access the store state directly to get the fresh events we just fetched
-      const freshEvents = useCalendarStore.getState().events;
+      // Use calendarEvents from React Query hook
+      const freshEvents = calendarEvents;
 
       // key: Get client name for broader matching
       const clientName = selectedClientData?.name || '';
@@ -694,7 +948,7 @@ export default function ProgramsPage() {
       weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
-      await fetchEvents({ start: weekStart, end: weekEnd });
+      // React Query will automatically refetch calendar events when date range changes
 
       // Force calendar refresh
       setCalendarKey(prev => prev + 1);
@@ -722,8 +976,8 @@ export default function ProgramsPage() {
         }
       }
 
-      // Update the implementation to refresh workouts as well
-      await fetchAllScheduledWorkouts();
+      // Refresh scheduled workouts via React Query
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduledWorkouts.all });
     } catch (error) {
       console.error('Error clearing events/workouts:', error);
       throw error;
@@ -799,7 +1053,7 @@ export default function ProgramsPage() {
 
       // Fetch ALL events for the entire date range covering all periods
       if (hasPeriods) {
-        await fetchEvents({ start: overallStart, end: overallEnd });
+        // React Query will automatically refetch calendar events when date range changes
         // Wait for store to update
         await new Promise(resolve => setTimeout(resolve, 300));
       }
@@ -867,7 +1121,7 @@ export default function ProgramsPage() {
       weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
-      await fetchEvents({ start: weekStart, end: weekEnd });
+      // React Query will automatically refetch calendar events when date range changes
 
       // Force calendar refresh
       setCalendarKey(prev => prev + 1);
@@ -887,7 +1141,7 @@ export default function ProgramsPage() {
         weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekStart.getDate() + 6);
-        await fetchEvents({ start: weekStart, end: weekEnd });
+        // React Query will automatically refetch calendar events when date range changes
       }
 
       setCalendarKey(prev => prev + 1);
@@ -1005,7 +1259,7 @@ export default function ProgramsPage() {
       weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
-      await fetchEvents({ start: weekStart, end: weekEnd });
+      // React Query will automatically refetch calendar events when date range changes
     } catch (error) {
       console.error('Error updating schedule event:', error);
       throw error;
@@ -1525,13 +1779,7 @@ export default function ProgramsPage() {
   // Callback for refreshing calendar after workout creation
   const handleWorkoutCreated = async () => {
     setCalendarKey(prev => prev + 1);
-    const startDate = new Date(calendarDate);
-    startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
-    await fetchEvents({ start: startDate, end: endDate });
+    // React Query will automatically refetch calendar events when mutations invalidate queries
   };
 
   // Prevent rendering if critical data isn't ready (prevents freeze)
@@ -1754,7 +2002,7 @@ export default function ProgramsPage() {
                   selectedClient={selectedClient}
                   programs={programs}
                   clients={clients}
-                  clientPrograms={clientPrograms}
+                  clientPrograms={stableClientPrograms}
                   includeWeekends={includeWeekends}
                   refreshKey={calendarKey}
                   onPeriodClick={handlePeriodClick}
@@ -1781,7 +2029,7 @@ export default function ProgramsPage() {
           <div className="w-64 flex-shrink-0 sticky top-2 self-start">
             <DayEventList
               selectedDate={selectedDate || calendarDate}
-              events={calendarEvents}
+              events={stableCalendarEvents}
               clients={clients}
               selectedClientId={null}
               headerActions={
@@ -1853,7 +2101,7 @@ export default function ProgramsPage() {
           weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
           const weekEnd = new Date(weekStart);
           weekEnd.setDate(weekStart.getDate() + 6);
-          fetchEvents({ start: weekStart, end: weekEnd });
+          // React Query will automatically refetch calendar events when date range changes
         }}
       />
 
@@ -1895,18 +2143,50 @@ export default function ProgramsPage() {
           }
         }}
         periods={React.useMemo(() => {
-            // Only calculate periods when dialog is open or when we have a selected client
-            // This prevents unnecessary calculations on every render
-            if (!selectedClient || !periodListDialogOpen) return [];
+            console.log(`[ProgramsPage] periods useMemo called (render #${renderCount})`, { 
+              selectedClient, 
+              periodListDialogOpen,
+              clientProgramsLength: stableClientPrograms.length,
+              dialogPeriodsLength: stableDialogPeriods.length,
+              clientProgramsHash: clientProgramsHashRef.current.substring(0, 50) + '...',
+              dialogPeriodsHash: dialogPeriodsHashRef.current.substring(0, 50) + '...'
+            });
             
-            const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
-            const statePeriods = clientProgram?.periods || [];
+            try {
+              // Only calculate periods when dialog is open or when we have a selected client
+              // This prevents unnecessary calculations on every render
+              if (!selectedClient || !periodListDialogOpen) {
+                console.log('[ProgramsPage] periods useMemo early return - no selectedClient or dialog closed');
+                return [];
+              }
+              
+              const clientProgram = stableClientPrograms.find(cp => cp.clientId === selectedClient);
+              console.log('[ProgramsPage] periods useMemo - found clientProgram:', {
+                found: !!clientProgram,
+                clientProgramId: clientProgram?.id,
+                statePeriodsCount: clientProgram?.periods?.length || 0
+              });
+              
+              const statePeriods = clientProgram?.periods || [];
 
-            // Use dialogPeriods if it has data, otherwise use state
-            const periodsToUse = dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
+              // Use dialogPeriods if it has data, otherwise use state
+              const periodsToUse = stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
+              
+              console.log('[ProgramsPage] periods useMemo - choosing periods:', {
+                usingDialogPeriods: stableDialogPeriods.length > 0,
+                periodsToUseCount: periodsToUse.length
+              });
 
-            return periodsToUse;
-          }, [selectedClient, clientPrograms, dialogPeriods, periodListDialogOpen])}
+              console.log('[ProgramsPage] periods useMemo result', { 
+                periodsCount: periodsToUse.length
+              });
+
+              return periodsToUse;
+            } catch (error) {
+              console.error('[ProgramsPage] periods useMemo ERROR:', error);
+              throw error;
+            }
+          }, [selectedClient, clientProgramsVersion, dialogPeriodsVersion, periodListDialogOpen])}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
@@ -1914,22 +2194,55 @@ export default function ProgramsPage() {
           onClearAllCalendarEvents={handleClearAllCalendarEvents}
           onForceClearLocalEvents={handleForceClearLocalEvents}
           calendarEventsCount={React.useMemo(() => {
-            if (!selectedClient) return 0;
-            const clientName = selectedClientData?.name;
-            return calendarEvents.filter(event => {
-              const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
-                event.description?.includes(`client=${selectedClient},`) ||
-                event.preConfiguredClient === selectedClient;
-
-              if (hasMatchingClient) return true;
-
-              if (clientName && event.summary && event.summary.includes(clientName)) {
-                return true;
+            console.log(`[ProgramsPage] calendarEventsCount useMemo called (render #${renderCount})`, { 
+              selectedClient,
+              calendarEventsLength: stableCalendarEvents.length,
+              selectedClientDataName: selectedClientData?.name,
+              eventsHash: calendarEventsHashRef.current.substring(0, 50) + '...'
+            });
+            
+            try {
+              if (!selectedClient) {
+                console.log('[ProgramsPage] calendarEventsCount useMemo early return - no selectedClient');
+                return 0;
               }
+              
+              const clientName = selectedClientData?.name;
+              // Use stable calendarEvents reference
+              const eventsLength = stableCalendarEvents.length;
+              console.log('[ProgramsPage] calendarEventsCount useMemo - filtering events', {
+                eventsLength,
+                clientName,
+                selectedClient
+              });
+              
+              const matchingEvents = stableCalendarEvents.filter(event => {
+                const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
+                  event.description?.includes(`client=${selectedClient},`) ||
+                  event.preConfiguredClient === selectedClient;
 
-              return false;
-            }).length;
-          }, [selectedClient, calendarEvents, clientPrograms.find(c => c.id === selectedClient)?.clientId, selectedClientData?.name])}
+                if (hasMatchingClient) return true;
+
+                if (clientName && event.summary && event.summary.includes(clientName)) {
+                  return true;
+                }
+
+                return false;
+              });
+              
+              const count = matchingEvents.length;
+              
+              console.log('[ProgramsPage] calendarEventsCount useMemo result', { 
+                count,
+                matchingEventsCount: matchingEvents.length
+              });
+              
+              return count;
+            } catch (error) {
+              console.error('[ProgramsPage] calendarEventsCount useMemo ERROR:', error);
+              throw error;
+            }
+          }, [selectedClient, calendarEventsVersion, selectedClientData?.name])}
         />
 
       {/* Schedule Event Edit Dialog */}
@@ -1951,10 +2264,13 @@ export default function ProgramsPage() {
           onOpenChange={setEventActionDialogOpen}
           event={selectedEventForAction}
           clientId={selectedClient || undefined}
-          allEvents={calendarEvents}
+          allEvents={stableCalendarEvents}
           clients={clients}
           clientPrograms={clientPrograms}
-          fetchEvents={fetchEvents}
+          fetchEvents={async (dateRange: { start: Date; end: Date }) => {
+            // React Query handles refetching automatically when date range changes
+            queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
+          }}
           onClientAssigned={async () => {
             // Clear the selected event so it gets fresh data when clicked again
             setSelectedEventForAction(null);
@@ -1964,7 +2280,7 @@ export default function ProgramsPage() {
             weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
             const weekEnd = new Date(weekStart);
             weekEnd.setDate(weekStart.getDate() + 6);
-            await fetchEvents({ start: weekStart, end: weekEnd });
+            // React Query will automatically refetch calendar events when date range changes
             
             // Force calendar view to refresh
             setCalendarKey(prev => prev + 1);

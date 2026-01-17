@@ -25,18 +25,35 @@ export function DayEventList({
   onEventClick,
   headerActions
 }: DayEventListProps) {
+  console.log('[DayEventList] Component rendering', {
+    selectedDate: selectedDate?.toISOString(),
+    eventsCount: events?.length,
+    selectedClientId
+  });
+  
   // Track if we're mounted on client to avoid hydration issues with dates
   const [mounted, setMounted] = useState(false);
   
   useEffect(() => {
+    console.log('[DayEventList] Mount effect running');
     setMounted(true);
+    console.log('[DayEventList] Set mounted to true');
+    return () => {
+      console.log('[DayEventList] Unmounting');
+    };
   }, []);
   
   // Use the provided date, with a stable fallback for SSR
   const safeSelectedDate = selectedDate || new Date(2024, 0, 1); // Stable fallback for SSR
+  console.log('[DayEventList] safeSelectedDate:', safeSelectedDate.toISOString());
 
   // Get events for the selected date with deduplication
   const dayEvents = React.useMemo(() => {
+    console.log('[DayEventList] dayEvents useMemo called', {
+      eventsCount: events.length,
+      safeSelectedDate: safeSelectedDate.toISOString(),
+      selectedClientId
+    });
     const filteredEvents = events.filter(event => {
       try {
         const eventDate = new Date(event.start.dateTime);
@@ -97,7 +114,18 @@ export function DayEventList({
       
       return true;
     });
+    
+    console.log('[DayEventList] dayEvents useMemo result', {
+      filteredCount: filteredEvents.length,
+      deduplicatedCount: filteredEvents.length
+    });
+    
+    return filteredEvents;
   }, [events, safeSelectedDate, selectedClientId]);
+  
+  console.log('[DayEventList] dayEvents after useMemo:', {
+    dayEventsCount: dayEvents.length
+  });
 
   // Sort events by time
   const sortedEvents = [...dayEvents].sort((a, b) => {
