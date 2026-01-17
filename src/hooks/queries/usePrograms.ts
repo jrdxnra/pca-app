@@ -98,20 +98,21 @@ export function useScheduledWorkoutsByClient(
 }
 
 /**
- * Hook to fetch scheduled workouts by date range
+ * Hook to fetch scheduled workouts by date range for a client
  */
 export function useScheduledWorkoutsByDateRange(
+  clientId: string | null | undefined,
   startDate: Date | null | undefined,
   endDate: Date | null | undefined,
   options?: Omit<UseQueryOptions<ScheduledWorkout[], Error>, 'queryKey' | 'queryFn'>
 ) {
   return useQuery({
-    queryKey: [...queryKeys.scheduledWorkouts.all, 'dateRange', startDate?.toISOString() || '', endDate?.toISOString() || ''],
+    queryKey: [...queryKeys.scheduledWorkouts.all, 'dateRange', clientId || '', startDate?.toISOString() || '', endDate?.toISOString() || ''],
     queryFn: () => {
-      if (!startDate || !endDate) return Promise.resolve([]);
-      return getScheduledWorkoutsByDateRange(startDate, endDate);
+      if (!clientId || !startDate || !endDate) return Promise.resolve([]);
+      return getScheduledWorkoutsByDateRange(clientId, startDate, endDate);
     },
-    enabled: !!startDate && !!endDate,
+    enabled: !!clientId && !!startDate && !!endDate,
     ...options,
   });
 }

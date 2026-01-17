@@ -43,11 +43,11 @@ export function useUpdateCalendarEvent() {
       await queryClient.cancelQueries({ queryKey: queryKeys.calendarEvents.all });
       
       // Snapshot previous data for rollback
-      const previousData: Array<[unknown[], GoogleCalendarEvent[] | undefined]> = [];
+      const previousData: Array<[readonly unknown[], GoogleCalendarEvent[] | undefined]> = [];
       
       // Update all matching queries optimistically
       queryClient.getQueriesData({ queryKey: queryKeys.calendarEvents.all }).forEach(([queryKey, data]) => {
-        previousData.push([queryKey, data as GoogleCalendarEvent[] | undefined]);
+        previousData.push([queryKey as readonly unknown[], data as GoogleCalendarEvent[] | undefined]);
         
         if (data) {
           const updatedData = (data as GoogleCalendarEvent[]).map(event => 
@@ -92,11 +92,11 @@ export function useDeleteCalendarEvent() {
       await queryClient.cancelQueries({ queryKey: queryKeys.calendarEvents.all });
       
       // Snapshot previous data for rollback
-      const previousData: Array<[unknown[], GoogleCalendarEvent[] | undefined]> = [];
+      const previousData: Array<[readonly unknown[], GoogleCalendarEvent[] | undefined]> = [];
       
       // Update all matching queries optimistically
       queryClient.getQueriesData({ queryKey: queryKeys.calendarEvents.all }).forEach(([queryKey, data]) => {
-        previousData.push([queryKey, data as GoogleCalendarEvent[] | undefined]);
+        previousData.push([queryKey as readonly unknown[], data as GoogleCalendarEvent[] | undefined]);
         
         if (data) {
           const updatedData = (data as GoogleCalendarEvent[]).filter(event => event.id !== id);

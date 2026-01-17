@@ -39,6 +39,8 @@ import { usePrograms, useProgramsByClient, useScheduledWorkoutsByClient, useSche
 import { useCalendarEvents } from '@/hooks/queries/useCalendarEvents';
 import { usePeriods, useWorkoutCategories } from '@/hooks/queries/useConfiguration';
 import { useUpdateCalendarEvent, useDeleteCalendarEvent, useCreateCalendarEvent } from '@/hooks/mutations/useCalendarMutations';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/react-query/queryKeys';
 // Lazy load ModernCalendarView to prevent blocking initial render
 const ModernCalendarView = dynamic(
   () => import('@/components/programs/ModernCalendarView').then(mod => ({ default: mod.ModernCalendarView })),
@@ -85,6 +87,7 @@ export default function ProgramsPage() {
     currentDate,
     viewMode,
     calendarDate,
+    error,
     setSelectedClient,
     setViewMode,
     setCalendarDate,
@@ -132,6 +135,9 @@ export default function ProgramsPage() {
     calendarDateRange?.start,
     calendarDateRange?.end
   );
+
+  // Query client for invalidating queries
+  const queryClient = useQueryClient();
 
   // Calendar mutations
   const updateCalendarEventMutation = useUpdateCalendarEvent();
@@ -531,8 +537,8 @@ export default function ProgramsPage() {
         setDialogPeriods(updatedProgram.periods || []);
       }
 
-      // Refresh calendar events and workouts
-      await fetchScheduledWorkoutsByClient(selectedClient);
+      // Refresh scheduled workouts via React Query
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduledWorkouts.all });
       const weekStart = new Date(calendarDate);
       weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
       const weekEnd = new Date(weekStart);
@@ -641,7 +647,7 @@ export default function ProgramsPage() {
         setDialogPeriods(updatedProgram.periods || []);
       }
 
-      await fetchScheduledWorkoutsByClient(selectedClient);
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduledWorkouts.all });
       const weekStart = new Date(calendarDate);
       weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
       const weekEnd = new Date(weekStart);
@@ -752,8 +758,8 @@ export default function ProgramsPage() {
         }
       }
 
-      // Update the implementation to refresh workouts as well
-      await fetchAllScheduledWorkouts();
+      // Refresh scheduled workouts via React Query
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduledWorkouts.all });
     } catch (error) {
       console.error('Error clearing events/workouts:', error);
       throw error;
@@ -1877,7 +1883,7 @@ export default function ProgramsPage() {
           weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
           const weekEnd = new Date(weekStart);
           weekEnd.setDate(weekStart.getDate() + 6);
-          fetchEvents({ start: weekStart, end: weekEnd });
+          // React Query will automatically refetch calendar events when date range changes
         }}
       />
 
@@ -1978,7 +1984,10 @@ export default function ProgramsPage() {
           allEvents={calendarEvents}
           clients={clients}
           clientPrograms={clientPrograms}
-          fetchEvents={fetchEvents}
+          fetchEvents={async (dateRange: { start: Date; end: Date }) => {
+            // React Query handles refetching automatically when date range changes
+            queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
+          }}
           onClientAssigned={async () => {
             // Clear the selected event so it gets fresh data when clicked again
             setSelectedEventForAction(null);
