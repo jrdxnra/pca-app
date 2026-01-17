@@ -1918,7 +1918,7 @@ export default function ProgramsPage() {
           <div className="w-64 flex-shrink-0 sticky top-2 self-start">
             <DayEventList
               selectedDate={selectedDate}
-              events={stableCalendarEvents}
+              events={calendarEvents}
               clients={clients}
               selectedClientId={null}
               headerActions={
