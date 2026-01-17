@@ -151,61 +151,20 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   const allEventsLength = allCalendarEvents.length;
   const eventsKey = `${allEventsLength}-${selectedClient || 'all'}`;
   
-  const calendarEvents = React.useMemo(() => {
-    console.log('[TwoColumnWeekView] calendarEvents useMemo called', { 
-      eventsKey, 
-      allEventsLength, 
-      selectedClient,
-      allCalendarEventsLength: allCalendarEvents.length,
-      allCalendarEvents: allCalendarEvents.map(e => ({
-        id: e.id,
-        summary: e.summary,
-        preConfiguredClient: e.preConfiguredClient,
-        hasDescription: !!e.description
-      }))
-    });
-    
-    // Recalculate
-    let result: GoogleCalendarEvent[];
+  // CRITICAL: Do NOT use useMemo here - it causes React error #310
+  // Calculate directly - filtering is fast enough and doesn't need memoization
+  const calendarEvents = (() => {
     if (!selectedClient) {
       // "All Clients" - show ALL events so coach can see their full schedule
-      console.log('[TwoColumnWeekView] No selectedClient - showing all events');
-      result = allCalendarEvents;
+      return allCalendarEvents;
     } else {
       // Specific client selected - show only events for that client
-      console.log('[TwoColumnWeekView] Filtering events for selectedClient:', selectedClient);
-      const filtered = allCalendarEvents.filter(event => {
+      return allCalendarEvents.filter(event => {
         const eventClientId = getEventClientId(event);
-        const matches = eventClientId && String(eventClientId).trim() === String(selectedClient).trim();
-        if (!matches && eventClientId) {
-          console.log('[TwoColumnWeekView] Event client mismatch:', {
-            eventId: event.id,
-            eventClientId,
-            selectedClient,
-            match: false
-          });
-        }
-        return matches;
+        return eventClientId && String(eventClientId).trim() === String(selectedClient).trim();
       });
-      console.log('[TwoColumnWeekView] Filtered events:', {
-        originalCount: allCalendarEvents.length,
-        filteredCount: filtered.length,
-        eventsWithoutClient: allCalendarEvents.length - filtered.length
-      });
-      result = filtered;
     }
-    
-    console.log('[TwoColumnWeekView] calendarEvents useMemo result', { 
-      resultLength: result.length,
-      resultEvents: result.map(e => ({
-        id: e.id,
-        summary: e.summary,
-        preConfiguredClient: e.preConfiguredClient
-      }))
-    });
-    
-    return result;
-  }, [eventsKey, selectedClient]); // Removed allCalendarEvents - using eventsKey instead
+  })();
   
   // Track when component is mounted to avoid hydration mismatch with dates
   useEffect(() => {
@@ -221,38 +180,18 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Use length for stable dependency instead of array reference to prevent React error #310
   const eventsLength = calendarEvents.length;
   
-  const { allDayEvents, timedEvents } = useMemo(() => {
-    console.log('[TwoColumnWeekView] allDayEvents/timedEvents useMemo called', { 
-      eventsLength,
-      calendarEventsLength: calendarEvents.length,
-      calendarEvents: calendarEvents.map(e => ({
-        id: e.id,
-        summary: e.summary,
-        start: e.start.dateTime || e.start.date
-      }))
-    });
-    
-    const allDay: GoogleCalendarEvent[] = [];
-    const timed: GoogleCalendarEvent[] = [];
-    
-    calendarEvents.forEach(event => {
-      const isAllDay = isAllDayEvent(event);
-      if (isAllDay) {
-        allDay.push(event);
-      } else {
-        timed.push(event);
-      }
-    });
-    
-    console.log('[TwoColumnWeekView] allDayEvents/timedEvents useMemo result', { 
-      allDayCount: allDay.length,
-      timedCount: timed.length,
-      allDayEvents: allDay.map(e => ({ id: e.id, summary: e.summary })),
-      timedEvents: timed.map(e => ({ id: e.id, summary: e.summary }))
-    });
-    
-    return { allDayEvents: allDay, timedEvents: timed };
-  }, [eventsLength]); // Removed calendarEvents - using eventsLength instead
+  // CRITICAL: Do NOT use useMemo here - it causes React error #310
+  // Calculate directly - this is fast enough
+  const allDayEvents: GoogleCalendarEvent[] = [];
+  const timedEvents: GoogleCalendarEvent[] = [];
+  
+  calendarEvents.forEach(event => {
+    if (isAllDayEvent(event)) {
+      allDayEvents.push(event);
+    } else {
+      timedEvents.push(event);
+    }
+  });
   
   const dayColumnsRef = useRef<HTMLDivElement>(null);
 
@@ -266,51 +205,31 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     return new Date();
   };
 
-  // Memoize week calculation to prevent unnecessary recalculations
-  // Use getTime() for stable comparison to prevent infinite loops
-  const calendarDateTimestamp = calendarDate ? (() => {
-    const normalized = new Date(calendarDate);
-    normalized.setHours(0, 0, 0, 0);
-    return normalized.getTime();
-  })() : 0;
+  // Calculate week directly - no memoization needed
   
-  const { weekStart, weekDays } = useMemo(() => {
-    console.log('[TwoColumnWeekView] weekStart/weekDays useMemo called', { 
-      calendarDateTimestamp,
-      calendarDate: calendarDate?.toISOString(),
-      includeWeekends 
-    });
+  // CRITICAL: Do NOT use useMemo here - it causes React error #310
+  // Calculate directly - this is fast enough
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  const date = calendarDate.getDate();
+  const normalizedCalendarDate = new Date(year, month, date, 12, 0, 0, 0);
+  
+  const weekStart = new Date(normalizedCalendarDate);
+  weekStart.setDate(normalizedCalendarDate.getDate() - normalizedCalendarDate.getDay());
+  weekStart.setHours(12, 0, 0, 0); // Use noon to avoid DST edge cases
+  
+  const weekDays: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(weekStart);
+    day.setDate(weekStart.getDate() + i);
+    day.setHours(12, 0, 0, 0); // Use noon to avoid DST edge cases
+    const dayOfWeek = day.getDay();
     
-    // Use UTC-based calculation to avoid timezone issues between server and client
-    // Extract year, month, day from calendarDate to create a consistent local date
-    const year = calendarDate.getFullYear();
-    const month = calendarDate.getMonth();
-    const date = calendarDate.getDate();
-    
-    // Create a new date from components (this will be consistent)
-    const normalizedCalendarDate = new Date(year, month, date, 12, 0, 0, 0);
-    
-    const start = new Date(normalizedCalendarDate);
-    start.setDate(normalizedCalendarDate.getDate() - normalizedCalendarDate.getDay());
-    start.setHours(12, 0, 0, 0); // Use noon to avoid DST edge cases
-    
-    const days: Date[] = [];
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(start);
-      day.setDate(start.getDate() + i);
-      day.setHours(12, 0, 0, 0); // Use noon to avoid DST edge cases
-      const dayOfWeek = day.getDay();
-      
-      // Filter out weekends if includeWeekends is false
-      // When includeWeekends is true, include ALL days (0-6)
-      // When includeWeekends is false, exclude Sunday (0) and Saturday (6)
-      if (includeWeekends || (dayOfWeek !== 0 && dayOfWeek !== 6)) {
-        days.push(day);
-      }
+    // Filter out weekends if includeWeekends is false
+    if (includeWeekends || (dayOfWeek !== 0 && dayOfWeek !== 6)) {
+      weekDays.push(day);
     }
-    
-    return { weekStart: start, weekDays: days };
-  }, [calendarDateTimestamp, includeWeekends]); // Use stable timestamp instead of Date object
+  }
   
   // Ensure weekDays is properly populated
   React.useEffect(() => {
@@ -346,15 +265,9 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     });
   };
 
-  // Memoize time slots to prevent unnecessary recalculations
-  // Use app timezone to ensure consistent hour calculation
-  const timeSlots = useMemo(() => {
-    console.log('[TwoColumnWeekView] timeSlots useMemo called', { 
-      businessHours,
-      weekDaysCount: weekDays.length,
-      weekStart: weekStart?.toISOString(),
-      weekDays: weekDays.map(d => d.toISOString())
-    });
+  // CRITICAL: Do NOT use useMemo here - it causes React error #310
+  // Calculate directly - this is fast enough
+  const timeSlots = (() => {
     const slots: Date[] = [];
     
     // Get min/max hours across all selected days
@@ -392,7 +305,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
       }
     }
     return slots;
-  }, [businessHours]);
+  })();
 
   // Helper to get hours/minutes in app timezone for comparison
   const getAppTimezoneTime = (date: Date): { hour: number; minute: number } => {

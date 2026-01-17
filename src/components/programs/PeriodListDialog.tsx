@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -55,15 +55,24 @@ export function PeriodListDialog({
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
 
   // Update local periods when prop changes
+  // Use ref to track previous periods IDs to prevent unnecessary updates
+  // CRITICAL: Do NOT use useMemo here - it causes React error #310
+  const periodsIdsString = periods.map(p => p.id).sort().join(',');
+  const previousPeriodsIdsStringRef = React.useRef<string>(periodsIdsString);
+  
   useEffect(() => {
-    console.log('PeriodListDialog: periods prop changed', {
-      periodsCount: periods.length,
-      periods: periods.map(p => ({ id: p.id, name: p.periodName }))
-    });
-    setLocalPeriods(periods);
-    // Clear selection when periods change
-    setSelectedPeriods(new Set());
-  }, [periods]);
+    // Only update if periods actually changed (by IDs, not just reference)
+    if (periodsIdsString !== previousPeriodsIdsStringRef.current) {
+      console.log('PeriodListDialog: periods prop changed', {
+        periodsCount: periods.length,
+        periods: periods.map(p => ({ id: p.id, name: p.periodName }))
+      });
+      setLocalPeriods(periods);
+      previousPeriodsIdsStringRef.current = periodsIdsString;
+      // Clear selection when periods change
+      setSelectedPeriods(new Set());
+    }
+  }, [periodsIdsString, periods]);
 
   // Reset state when dialog closes
   useEffect(() => {

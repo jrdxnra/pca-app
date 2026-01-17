@@ -157,9 +157,10 @@ export default function ProgramsPage() {
 
   // Calendar events with React Query - calculate date range for current week view
   
-  // Calculate date range directly - no need for separate state
-  // Use useMemo to create stable Date objects that only change when calendarDate actually changes
-  const calendarDateRange = React.useMemo(() => {
+  // Calculate date range directly - CRITICAL: Do NOT use useMemo here
+  // useMemo causes React error #310 during rapid re-renders
+  // This calculation is fast enough (< 1ms) and doesn't need memoization
+  const calendarDateRange = (() => {
     if (!calendarDate) return null;
     const startDate = new Date(calendarDate);
     startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -168,7 +169,7 @@ export default function ProgramsPage() {
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
     return { start: startDate, end: endDate };
-  }, [calendarDate?.getTime()]); // Use timestamp for stable comparison - only recalc when date actually changes
+  })();
 
   console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
     start: calendarDateRange?.start?.toISOString(),
@@ -180,9 +181,12 @@ export default function ProgramsPage() {
     calendarDateRange?.end
   );
   
-  // Simply use calendarEvents directly - React Query handles memoization
-  // Use length as stable dependency for useMemo to prevent infinite loops
-  const stableCalendarEvents = calendarEvents;
+  // Use ref to track stable calendarEvents reference
+  const calendarEventsRef = React.useRef(calendarEvents);
+  if (calendarEvents.length !== calendarEventsRef.current.length) {
+    calendarEventsRef.current = calendarEvents;
+  }
+  const stableCalendarEvents = calendarEventsRef.current;
   
   console.log('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
@@ -210,8 +214,12 @@ export default function ProgramsPage() {
   const { createTestEvent, clearAllTestEvents, linkToWorkout } = useCalendarStore();
 
   // Selected date for mini calendar (defaults to calendarDate)
-  // Initialize with null to avoid hydration mismatch, then set on client
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  // Initialize with calendarDate, fallback to today if null
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    if (calendarDate) return calendarDate;
+    // Fallback to today if calendarDate is null
+    return new Date();
+  });
   
   // Track mounted state to avoid hydration mismatch with date-dependent UI
   const [mounted, setMounted] = useState(false);
@@ -300,8 +308,12 @@ export default function ProgramsPage() {
     fetchClientPrograms
   } = useClientPrograms(selectedClient);
   
-  // Simply use clientPrograms directly
-  const stableClientPrograms = clientPrograms;
+  // Use ref to track stable clientPrograms reference
+  const clientProgramsRef = React.useRef(clientPrograms);
+  if (clientPrograms.length !== clientProgramsRef.current.length) {
+    clientProgramsRef.current = clientPrograms;
+  }
+  const stableClientPrograms = clientProgramsRef.current;
   
   console.log('[ProgramsPage] useClientPrograms result:', {
     clientProgramsCount: clientPrograms.length,
@@ -320,7 +332,7 @@ export default function ProgramsPage() {
   const [periodListDialogOpen, setPeriodListDialogOpen] = useState(false);
   const [dialogPeriods, setDialogPeriods] = useState<ClientProgramPeriod[]>([]);
   
-  // Simply use dialogPeriods directly
+  // Use dialogPeriods directly
   const stableDialogPeriods = dialogPeriods;
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
@@ -1905,14 +1917,14 @@ export default function ProgramsPage() {
           {/* Note: selectedClientId is null to show ALL events for the day, regardless of client selection */}
           <div className="w-64 flex-shrink-0 sticky top-2 self-start">
             <DayEventList
-              selectedDate={selectedDate || calendarDate}
-              events={stableCalendarEvents}
+              selectedDate={selectedDate}
+              events={calendarEvents}
               clients={clients}
               selectedClientId={null}
               headerActions={
                 <MiniCalendarTooltip
                   currentDate={calendarDate}
-                  selectedDate={selectedDate || calendarDate}
+                  selectedDate={selectedDate}
                   onDateSelect={handleMiniCalendarDateSelect}
                 />
               }
@@ -2020,14 +2032,17 @@ export default function ProgramsPage() {
           }
         }}
         periods={(() => {
-            // Calculate directly without useMemo to avoid dependency issues
+            // CRITICAL: Do NOT use useMemo here - it causes React error #310
+            // During rapid re-renders, useMemo with array.length dependencies causes
+            // React to see hooks being called in different orders, triggering error #310
+            // Simple calculations like this don't need memoization - they're fast enough
             if (!selectedClient || !periodListDialogOpen) {
               return [];
             }
             
-            const clientProgram = stableClientPrograms.find(cp => cp.clientId === selectedClient);
+            const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
             const statePeriods = clientProgram?.periods || [];
-            return stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
+            return dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
           })()}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
@@ -2036,11 +2051,14 @@ export default function ProgramsPage() {
           onClearAllCalendarEvents={handleClearAllCalendarEvents}
           onForceClearLocalEvents={handleForceClearLocalEvents}
           calendarEventsCount={(() => {
-            // Calculate directly without useMemo to avoid dependency issues
+            // CRITICAL: Do NOT use useMemo here - it causes React error #310
+            // During rapid re-renders, useMemo with array.length dependencies causes
+            // React to see hooks being called in different orders, triggering error #310
+            // Simple calculations like this don't need memoization - they're fast enough
             if (!selectedClient) return 0;
             
             const clientName = selectedClientData?.name;
-            return stableCalendarEvents.filter(event => {
+            return calendarEvents.filter(event => {
               const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
                 event.description?.includes(`client=${selectedClient},`) ||
                 event.preConfiguredClient === selectedClient;

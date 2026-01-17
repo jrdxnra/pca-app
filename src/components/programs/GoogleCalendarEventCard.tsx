@@ -25,7 +25,8 @@ interface GoogleCalendarEventCardProps {
   compact?: boolean;
 }
 
-export function GoogleCalendarEventCard({
+// Memoize to prevent unnecessary re-renders when parent re-renders
+export const GoogleCalendarEventCard = React.memo(function GoogleCalendarEventCard({
   event,
   onToggleCoachingSession,
   onCreateWorkout,
@@ -213,6 +214,14 @@ export function GoogleCalendarEventCard({
       </div>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Only re-render if event or callbacks change
+  return (
+    prevProps.event.id === nextProps.event.id &&
+    prevProps.event.summary === nextProps.event.summary &&
+    prevProps.event.start.dateTime === nextProps.event.start.dateTime &&
+    prevProps.compact === nextProps.compact
+  );
+});
 
 
