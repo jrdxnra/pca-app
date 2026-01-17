@@ -41,15 +41,22 @@ export function useUpdateCalendarEvent() {
     },
     onMutate: async ({ id, updates }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.calendarEvents.all });
-      const previousEvents = queryClient.getQueriesData<GoogleCalendarEvent[]>({ 
-        queryKey: queryKeys.calendarEvents.all 
-      });
+      
+      // Get all matching queries and snapshot their data
+      const queryCache = queryClient.getQueryCache();
+      const queries = queryCache.findAll({ queryKey: queryKeys.calendarEvents.all });
+      const previousEvents = queries.map(query => [query.queryKey, query.state.data] as const);
 
       // Optimistically update all event queries
-      queryClient.setQueriesData<GoogleCalendarEvent[]>(
-        { queryKey: queryKeys.calendarEvents.all },
-        (old = []) => old.map(event => event.id === id ? { ...event, ...updates } : event)
-      );
+      queries.forEach(query => {
+        const oldData = query.state.data as GoogleCalendarEvent[] | undefined;
+        if (oldData) {
+          queryClient.setQueryData<GoogleCalendarEvent[]>(
+            query.queryKey,
+            oldData.map(event => event.id === id ? { ...event, ...updates } : event)
+          );
+        }
+      });
 
       return { previousEvents };
     },
@@ -57,7 +64,9 @@ export function useUpdateCalendarEvent() {
       // Rollback on error
       if (context?.previousEvents) {
         context.previousEvents.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data);
+          if (data !== undefined) {
+            queryClient.setQueryData(queryKey, data);
+          }
         });
       }
       console.error('Error updating calendar event:', error);
@@ -82,15 +91,22 @@ export function useDeleteCalendarEvent() {
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.calendarEvents.all });
-      const previousEvents = queryClient.getQueriesData<GoogleCalendarEvent[]>({ 
-        queryKey: queryKeys.calendarEvents.all 
-      });
+      
+      // Get all matching queries and snapshot their data
+      const queryCache = queryClient.getQueryCache();
+      const queries = queryCache.findAll({ queryKey: queryKeys.calendarEvents.all });
+      const previousEvents = queries.map(query => [query.queryKey, query.state.data] as const);
 
-      // Optimistically remove
-      queryClient.setQueriesData<GoogleCalendarEvent[]>(
-        { queryKey: queryKeys.calendarEvents.all },
-        (old = []) => old.filter(event => event.id !== id)
-      );
+      // Optimistically remove from all event queries
+      queries.forEach(query => {
+        const oldData = query.state.data as GoogleCalendarEvent[] | undefined;
+        if (oldData) {
+          queryClient.setQueryData<GoogleCalendarEvent[]>(
+            query.queryKey,
+            oldData.filter(event => event.id !== id)
+          );
+        }
+      });
 
       return { previousEvents };
     },
@@ -98,7 +114,9 @@ export function useDeleteCalendarEvent() {
       // Rollback on error
       if (context?.previousEvents) {
         context.previousEvents.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data);
+          if (data !== undefined) {
+            queryClient.setQueryData(queryKey, data);
+          }
         });
       }
       console.error('Error deleting calendar event:', error);
