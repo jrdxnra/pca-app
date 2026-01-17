@@ -196,30 +196,13 @@ export default function ProgramsPage() {
     calendarDateRange?.end
   );
   
-  // Track calendarEvents reference to detect if it's changing on every render
-  const calendarEventsRef = React.useRef(calendarEvents);
-  const calendarEventsChanged = calendarEventsRef.current !== calendarEvents;
-  if (calendarEventsChanged) {
-    console.log('[ProgramsPage] calendarEvents reference changed!', {
-      oldLength: calendarEventsRef.current.length,
-      newLength: calendarEvents.length,
-      oldIds: calendarEventsRef.current.map(e => e.id),
-      newIds: calendarEvents.map(e => e.id)
-    });
-    calendarEventsRef.current = calendarEvents;
-  }
-  
   // Simply use calendarEvents directly - React Query handles memoization
-  // The infinite loop was caused by trying to stabilize arrays that React Query already handles
+  // Use length as stable dependency for useMemo to prevent infinite loops
   const stableCalendarEvents = calendarEvents;
-  const calendarEventsVersion = calendarEvents.length;
   
   console.log('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
-    isLoading: calendarEventsLoading,
-    referenceChanged: calendarEventsChanged,
-    eventsCount: calendarEvents.length,
-    stableEventsCount: stableCalendarEvents.length
+    isLoading: calendarEventsLoading
   });
 
   // Query client for invalidating queries
@@ -333,28 +316,12 @@ export default function ProgramsPage() {
     fetchClientPrograms
   } = useClientPrograms(selectedClient);
   
-  // Track clientPrograms reference to detect if it's changing on every render
-  const clientProgramsRef = React.useRef(clientPrograms);
-  const clientProgramsChanged = clientProgramsRef.current !== clientPrograms;
-  if (clientProgramsChanged) {
-    console.log('[ProgramsPage] clientPrograms reference changed!', {
-      oldLength: clientProgramsRef.current.length,
-      newLength: clientPrograms.length,
-      oldIds: clientProgramsRef.current.map(cp => cp.id),
-      newIds: clientPrograms.map(cp => cp.id)
-    });
-    clientProgramsRef.current = clientPrograms;
-  }
-  
   // Simply use clientPrograms directly
   const stableClientPrograms = clientPrograms;
-  const clientProgramsVersion = clientPrograms.length;
   
   console.log('[ProgramsPage] useClientPrograms result:', {
     clientProgramsCount: clientPrograms.length,
-    isLoading: clientProgramsLoading,
-    referenceChanged: clientProgramsChanged,
-    stableProgramsCount: stableClientPrograms.length
+    isLoading: clientProgramsLoading
   });
 
   const [selectedPeriod, setSelectedPeriod] = useState<ClientProgramPeriod | null>(null);
@@ -369,22 +336,8 @@ export default function ProgramsPage() {
   const [periodListDialogOpen, setPeriodListDialogOpen] = useState(false);
   const [dialogPeriods, setDialogPeriods] = useState<ClientProgramPeriod[]>([]);
   
-  // Track dialogPeriods reference to detect if it's changing on every render
-  const dialogPeriodsRef = React.useRef(dialogPeriods);
-  const dialogPeriodsChanged = dialogPeriodsRef.current !== dialogPeriods;
-  if (dialogPeriodsChanged) {
-    console.log('[ProgramsPage] dialogPeriods reference changed!', {
-      oldLength: dialogPeriodsRef.current.length,
-      newLength: dialogPeriods.length,
-      oldIds: dialogPeriodsRef.current.map(p => p.id),
-      newIds: dialogPeriods.map(p => p.id)
-    });
-    dialogPeriodsRef.current = dialogPeriods;
-  }
-  
   // Simply use dialogPeriods directly
   const stableDialogPeriods = dialogPeriods;
-  const dialogPeriodsVersion = dialogPeriods.length;
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
   const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
