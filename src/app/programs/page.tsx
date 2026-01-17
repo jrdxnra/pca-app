@@ -177,6 +177,15 @@ export default function ProgramsPage() {
   const [createEventTime, setCreateEventTime] = useState<Date | null>(null);
   const [periodListDialogOpen, setPeriodListDialogOpen] = useState(false);
   const [dialogPeriods, setDialogPeriods] = useState<ClientProgramPeriod[]>([]);
+  
+  // Compute periods directly to avoid useMemo dependency issues
+  // This is safe because the computation is simple and fast
+  const computedPeriods = (() => {
+    if (!selectedClient || !periodListDialogOpen) return [];
+    const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
+    const statePeriods = clientProgram?.periods || [];
+    return dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
+  })();
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
   const [selectedEventForEdit, setSelectedEventForEdit] = useState<GoogleCalendarEvent | null>(null);
   const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
@@ -1894,26 +1903,14 @@ export default function ProgramsPage() {
             setDialogPeriods([]);
           }
         }}
-        periods={React.useMemo(() => {
-            // Only calculate periods when dialog is open or when we have a selected client
-            // This prevents unnecessary calculations on every render
-            if (!selectedClient || !periodListDialogOpen) return [];
-            
-            const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
-            const statePeriods = clientProgram?.periods || [];
-
-            // Use dialogPeriods if it has data, otherwise use state
-            const periodsToUse = dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
-
-            return periodsToUse;
-          }, [selectedClient, clientPrograms, dialogPeriods, periodListDialogOpen])}
+        periods={computedPeriods}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
           onClearAll={handleClearAllPeriods}
           onClearAllCalendarEvents={handleClearAllCalendarEvents}
           onForceClearLocalEvents={handleForceClearLocalEvents}
-          calendarEventsCount={React.useMemo(() => {
+          calendarEventsCount={(() => {
             if (!selectedClient) return 0;
             const clientName = selectedClientData?.name;
             return calendarEvents.filter(event => {
@@ -1929,7 +1926,7 @@ export default function ProgramsPage() {
 
               return false;
             }).length;
-          }, [selectedClient, calendarEvents, clientPrograms.find(c => c.id === selectedClient)?.clientId, selectedClientData?.name])}
+          })()}
         />
 
       {/* Schedule Event Edit Dialog */}
