@@ -2019,105 +2019,41 @@ export default function ProgramsPage() {
             setDialogPeriods([]);
           }
         }}
-        periods={React.useMemo(() => {
-            console.log('[ProgramsPage] periods useMemo called', { 
-              selectedClient, 
-              periodListDialogOpen,
-              clientProgramsLength: stableClientPrograms.length,
-              dialogPeriodsLength: stableDialogPeriods.length
-            });
-            
-            try {
-              // Only calculate periods when dialog is open or when we have a selected client
-              // This prevents unnecessary calculations on every render
-              if (!selectedClient || !periodListDialogOpen) {
-                console.log('[ProgramsPage] periods useMemo early return - no selectedClient or dialog closed');
-                return [];
-              }
-              
-              const clientProgram = stableClientPrograms.find(cp => cp.clientId === selectedClient);
-              console.log('[ProgramsPage] periods useMemo - found clientProgram:', {
-                found: !!clientProgram,
-                clientProgramId: clientProgram?.id,
-                statePeriodsCount: clientProgram?.periods?.length || 0
-              });
-              
-              const statePeriods = clientProgram?.periods || [];
-
-              // Use dialogPeriods if it has data, otherwise use state
-              const periodsToUse = stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
-              
-              console.log('[ProgramsPage] periods useMemo - choosing periods:', {
-                usingDialogPeriods: stableDialogPeriods.length > 0,
-                periodsToUseCount: periodsToUse.length
-              });
-
-              console.log('[ProgramsPage] periods useMemo result', { 
-                periodsCount: periodsToUse.length
-              });
-
-              return periodsToUse;
-            } catch (error) {
-              console.error('[ProgramsPage] periods useMemo ERROR:', error);
-              throw error;
+        periods={(() => {
+            // Calculate directly without useMemo to avoid dependency issues
+            if (!selectedClient || !periodListDialogOpen) {
+              return [];
             }
-          }, [selectedClient, clientPrograms.length, dialogPeriods.length, periodListDialogOpen])}
+            
+            const clientProgram = stableClientPrograms.find(cp => cp.clientId === selectedClient);
+            const statePeriods = clientProgram?.periods || [];
+            return stableDialogPeriods.length > 0 ? stableDialogPeriods : statePeriods;
+          })()}
           clientName={selectedClientData?.name || 'Unknown Client'}
           onDeletePeriod={handleDeletePeriod}
           onDeletePeriods={handleDeletePeriods}
           onClearAll={handleClearAllPeriods}
           onClearAllCalendarEvents={handleClearAllCalendarEvents}
           onForceClearLocalEvents={handleForceClearLocalEvents}
-          calendarEventsCount={React.useMemo(() => {
-            console.log('[ProgramsPage] calendarEventsCount useMemo called', { 
-              selectedClient,
-              calendarEventsLength: stableCalendarEvents.length,
-              selectedClientDataName: selectedClientData?.name,
-              eventsCount: stableCalendarEvents.length
-            });
+          calendarEventsCount={(() => {
+            // Calculate directly without useMemo to avoid dependency issues
+            if (!selectedClient) return 0;
             
-            try {
-              if (!selectedClient) {
-                console.log('[ProgramsPage] calendarEventsCount useMemo early return - no selectedClient');
-                return 0;
+            const clientName = selectedClientData?.name;
+            return stableCalendarEvents.filter(event => {
+              const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
+                event.description?.includes(`client=${selectedClient},`) ||
+                event.preConfiguredClient === selectedClient;
+
+              if (hasMatchingClient) return true;
+
+              if (clientName && event.summary && event.summary.includes(clientName)) {
+                return true;
               }
-              
-              const clientName = selectedClientData?.name;
-              // Use stable calendarEvents reference
-              const eventsLength = stableCalendarEvents.length;
-              console.log('[ProgramsPage] calendarEventsCount useMemo - filtering events', {
-                eventsLength,
-                clientName,
-                selectedClient
-              });
-              
-              const matchingEvents = stableCalendarEvents.filter(event => {
-                const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
-                  event.description?.includes(`client=${selectedClient},`) ||
-                  event.preConfiguredClient === selectedClient;
 
-                if (hasMatchingClient) return true;
-
-                if (clientName && event.summary && event.summary.includes(clientName)) {
-                  return true;
-                }
-
-                return false;
-              });
-              
-              const count = matchingEvents.length;
-              
-              console.log('[ProgramsPage] calendarEventsCount useMemo result', { 
-                count,
-                matchingEventsCount: matchingEvents.length
-              });
-              
-              return count;
-            } catch (error) {
-              console.error('[ProgramsPage] calendarEventsCount useMemo ERROR:', error);
-              throw error;
-            }
-          }, [selectedClient, calendarEvents.length, selectedClientData?.name])}
+              return false;
+            }).length;
+          })()}
         />
 
       {/* Schedule Event Edit Dialog */}
