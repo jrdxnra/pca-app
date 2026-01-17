@@ -85,14 +85,22 @@
 
 ---
 
-## ❌ Phase 3: Data Layer Improvements - **NOT COMPLETE**
+## ❌ Phase 3: Data Layer Improvements - **NOT COMPLETE** (Alternative Implementation)
 
-### Status: ~10% Complete
+### Status: ~15% Complete (Different Approach Taken)
 
 **Target Goals:**
 - Migrate all stores to React Query
 - Implement optimistic updates
 - Create unified service layer
+
+**What Was Actually Done:**
+- ✅ Query keys defined for all entities (clients, programs, calendar, periods, etc.) in `queryKeys.ts`
+- ✅ Optimistic updates added to **Zustand stores** (not React Query)
+  - Git history shows commits: "Phase 3.1: Add unified mutation helpers with optimistic updates"
+  - "Phase 3.2: Add optimistic updates to ClientStore"
+  - "Phase 3.3: Add optimistic updates to ProgramStore and CalendarStore"
+- ⚠️ Phase 3 query files were created then removed (commit: "Remove Phase 3 query files that don't belong in this branch")
 
 **Current Status:**
 
@@ -100,44 +108,52 @@
 - ✅ Movements store migrated to React Query
   - `useMovements.ts` query hook exists
   - `useMovementMutations.ts` mutation hook exists
+- ✅ Query keys defined for all entities in `queryKeys.ts`
+- ✅ Optimistic updates in Zustand stores (alternative approach, not React Query)
 
-### ❌ Not Completed:
+### ❌ Not Completed (According to Original Plan):
 
 **3.1 Migrate Remaining Stores to React Query:**
-- ❌ Clients store - Still using `useClientStore` Zustand store
-  - Missing: `useClients.ts`, `useClient.ts`
-  - Missing: `useClientMutations.ts`
-  - Components still using: `ScheduleWorkoutDialog`, `QuickWorkoutBuilderDialog`
+- ❌ Clients store - Still using `useClientStore` Zustand store for fetching
+  - Missing: `useClients.ts`, `useClient.ts` React Query hooks
+  - Missing: `useClientMutations.ts` React Query hooks
+  - Components still using Zustand: `ScheduleWorkoutDialog`, `QuickWorkoutBuilderDialog`, `useClientPrograms.ts`
 
-- ❌ Programs store - Still using `useProgramStore` Zustand store
-  - Missing: `usePrograms.ts`, `useProgram.ts`
-  - Missing: `useProgramMutations.ts`
-  - Components still using: `ScheduleWorkoutDialog`
+- ❌ Programs store - Still using `useProgramStore` Zustand store for fetching
+  - Missing: `usePrograms.ts`, `useProgram.ts` React Query hooks
+  - Missing: `useProgramMutations.ts` React Query hooks
+  - Components still using Zustand: `ScheduleWorkoutDialog`
 
-- ❌ Calendar store - Still using `useCalendarStore` Zustand store
-  - Missing: `useCalendarEvents.ts`
-  - Missing: Calendar mutation hooks
-  - Components still using: `TwoColumnWeekView`, `GoogleCalendarEventCard`, `QuickWorkoutBuilderDialog`, `EventActionDialog`
+- ❌ Calendar store - Still using `useCalendarStore` Zustand store for fetching
+  - Missing: `useCalendarEvents.ts` React Query hook
+  - Missing: Calendar mutation hooks in React Query
+  - Components still using Zustand: `TwoColumnWeekView`, `GoogleCalendarEventCard`, `QuickWorkoutBuilderDialog`, `EventActionDialog`
 
-- ❌ Configuration store - Still using `useConfigurationStore` Zustand store
-  - Missing: `usePeriods.ts`
-  - Missing: `useWorkoutCategories.ts`
-  - Missing: Configuration mutation hooks
-  - Components still using: `TwoColumnWeekView`, `QuickWorkoutBuilderDialog`, `EventActionDialog`
+- ❌ Configuration store - Still using `useConfigurationStore` Zustand store for fetching
+  - Missing: `usePeriods.ts` React Query hook
+  - Missing: `useWorkoutCategories.ts` React Query hook
+  - Missing: Configuration mutation hooks in React Query
+  - Components still using Zustand: `TwoColumnWeekView`, `QuickWorkoutBuilderDialog`, `EventActionDialog`
 
-**3.2 Implement Optimistic Updates:**
+**3.2 Implement Optimistic Updates in React Query:**
 - ❌ No optimistic updates in React Query mutations
   - `useMovementMutations.ts` uses `invalidateQueries` (refetch after mutation)
-  - No `onMutate` handlers for optimistic cache updates
-  - No rollback logic on errors
-  - Some manual optimistic updates exist in components (not using React Query pattern)
+  - No `onMutate` handlers for optimistic cache updates in React Query
+  - No rollback logic on errors in React Query mutations
+  - ✅ Optimistic updates exist in Zustand stores (different approach)
 
 **3.3 Create Unified Service Layer:**
 - ❌ `BaseService.ts` - NOT created
 - ❌ Services still individual files without unified base class
 - ❌ No consistent error handling/logging pattern across services
 
-**Progress:** Only Movements migrated. Phase 3 is **NOT complete**.
+**Progress:** 
+- Movements migrated to React Query ✅
+- Optimistic updates added to Zustand stores (alternative to React Query) ✅
+- Other stores NOT migrated to React Query ❌
+- Unified service layer NOT created ❌
+
+**Note:** Phase 3 work took a different approach - adding optimistic updates to Zustand stores instead of migrating to React Query. According to the original plan, Phase 3 is **NOT complete** as stores were not migrated to React Query.
 
 ---
 
@@ -214,7 +230,7 @@
 |-------|--------|--------------|-------|
 | **Phase 1** | ✅ Complete | 100% | All tasks completed successfully |
 | **Phase 2** | 🟡 Partial | ~30% | Some components extracted, but main files still too large |
-| **Phase 3** | ❌ Not Complete | ~10% | Only Movements migrated, optimistic updates missing, no unified service layer |
+| **Phase 3** | ❌ Not Complete | ~15% | Only Movements migrated to React Query; optimistic updates added to Zustand (alternative approach); stores not migrated; no unified service layer |
 | **Phase 4** | ❌ Not Complete | ~20% | Basic strict mode, but stricter options and `any` removal not done |
 | **Phase 5** | ❌ Not Complete | ~5% | Package installed but not implemented |
 
