@@ -1925,6 +1925,13 @@ export default function ProgramsPage() {
           }
         }}
         periods={React.useMemo(() => {
+            console.log('[ProgramsPage] periods useMemo called', { 
+              selectedClient, 
+              periodListDialogOpen,
+              clientProgramsLength: clientPrograms.length,
+              dialogPeriodsLength: dialogPeriods.length 
+            });
+            
             // Only calculate periods when dialog is open or when we have a selected client
             // This prevents unnecessary calculations on every render
             if (!selectedClient || !periodListDialogOpen) return [];
@@ -1935,6 +1942,10 @@ export default function ProgramsPage() {
             // Use dialogPeriods if it has data, otherwise use state
             const periodsToUse = dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
 
+            console.log('[ProgramsPage] periods useMemo result', { 
+              periodsCount: periodsToUse.length 
+            });
+
             return periodsToUse;
           }, [selectedClient, clientPrograms, dialogPeriods, periodListDialogOpen])}
           clientName={selectedClientData?.name || 'Unknown Client'}
@@ -1944,11 +1955,17 @@ export default function ProgramsPage() {
           onClearAllCalendarEvents={handleClearAllCalendarEvents}
           onForceClearLocalEvents={handleForceClearLocalEvents}
           calendarEventsCount={React.useMemo(() => {
+            console.log('[ProgramsPage] calendarEventsCount useMemo called', { 
+              selectedClient,
+              calendarEventsLength: calendarEvents.length,
+              selectedClientDataName: selectedClientData?.name 
+            });
+            
             if (!selectedClient) return 0;
             const clientName = selectedClientData?.name;
             // Use length for stable dependency instead of array reference
             const eventsLength = calendarEvents.length;
-            return calendarEvents.filter(event => {
+            const count = calendarEvents.filter(event => {
               const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
                 event.description?.includes(`client=${selectedClient},`) ||
                 event.preConfiguredClient === selectedClient;
@@ -1961,6 +1978,12 @@ export default function ProgramsPage() {
 
               return false;
             }).length;
+            
+            console.log('[ProgramsPage] calendarEventsCount useMemo result', { 
+              count 
+            });
+            
+            return count;
           }, [selectedClient, calendarEvents.length, selectedClientData?.name])}
         />
 

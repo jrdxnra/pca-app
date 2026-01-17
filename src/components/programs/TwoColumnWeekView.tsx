@@ -128,6 +128,13 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   const eventsKey = `${allEventsLength}-${selectedClient || 'all'}`;
   
   const calendarEvents = React.useMemo(() => {
+    console.log('[TwoColumnWeekView] calendarEvents useMemo called', { 
+      eventsKey, 
+      allEventsLength, 
+      selectedClient,
+      allCalendarEventsLength: allCalendarEvents.length 
+    });
+    
     // Recalculate
     let result: GoogleCalendarEvent[];
     if (!selectedClient) {
@@ -142,6 +149,10 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
       });
     }
     
+    console.log('[TwoColumnWeekView] calendarEvents useMemo result', { 
+      resultLength: result.length 
+    });
+    
     return result;
   }, [eventsKey, allCalendarEvents, selectedClient]);
   
@@ -155,6 +166,11 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   const eventsLength = calendarEvents.length;
   
   const { allDayEvents, timedEvents } = useMemo(() => {
+    console.log('[TwoColumnWeekView] allDayEvents/timedEvents useMemo called', { 
+      eventsLength,
+      calendarEventsLength: calendarEvents.length 
+    });
+    
     const allDay: GoogleCalendarEvent[] = [];
     const timed: GoogleCalendarEvent[] = [];
     
@@ -164,6 +180,11 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
       } else {
         timed.push(event);
       }
+    });
+    
+    console.log('[TwoColumnWeekView] allDayEvents/timedEvents useMemo result', { 
+      allDayCount: allDay.length,
+      timedCount: timed.length 
     });
     
     return { allDayEvents: allDay, timedEvents: timed };
@@ -190,6 +211,11 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   })() : 0;
   
   const { weekStart, weekDays } = useMemo(() => {
+    console.log('[TwoColumnWeekView] weekStart/weekDays useMemo called', { 
+      calendarDateTimestamp,
+      includeWeekends 
+    });
+    
     // Use UTC-based calculation to avoid timezone issues between server and client
     // Extract year, month, day from calendarDate to create a consistent local date
     const year = calendarDate.getFullYear();
@@ -258,6 +284,10 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Memoize time slots to prevent unnecessary recalculations
   // Use app timezone to ensure consistent hour calculation
   const timeSlots = useMemo(() => {
+    console.log('[TwoColumnWeekView] timeSlots useMemo called', { 
+      businessHours,
+      weekDaysCount: weekDays.length 
+    });
     const slots: Date[] = [];
     
     // Get min/max hours across all selected days
