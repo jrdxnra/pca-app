@@ -79,6 +79,8 @@ import { getAppTimezone, setAppTimezone, getBrowserTimezone, hasTimezoneChanged,
 import { toastSuccess } from '@/components/ui/toaster';
 
 export default function ProgramsPage() {
+  console.log('[ProgramsPage] Component rendering');
+  
   const router = useRouter();
 
   // UI State from stores (keeping for now)
@@ -98,18 +100,45 @@ export default function ProgramsPage() {
     clearError,
     initializeSelectedClient,
   } = useProgramStore();
+  
+  console.log('[ProgramsPage] Store state:', {
+    selectedClient,
+    viewMode,
+    calendarDate: calendarDate?.toISOString(),
+    hasError: !!error
+  });
 
   // Data fetching with React Query
+  console.log('[ProgramsPage] Calling React Query hooks...');
   const { data: clients = [], isLoading: clientsLoading } = useClients(false);
   const { data: allPrograms = [], isLoading: programsLoading } = usePrograms();
   const { data: programsByClient = [], isLoading: programsByClientLoading } = useProgramsByClient(selectedClient);
   const { data: scheduledWorkoutsByClient = [], isLoading: scheduledWorkoutsByClientLoading } = useScheduledWorkoutsByClient(selectedClient);
   const { data: allScheduledWorkouts = [], isLoading: allScheduledWorkoutsLoading } = useScheduledWorkouts();
   
+  console.log('[ProgramsPage] React Query data loaded:', {
+    clientsCount: clients.length,
+    allProgramsCount: allPrograms.length,
+    programsByClientCount: programsByClient.length,
+    scheduledWorkoutsByClientCount: scheduledWorkoutsByClient.length,
+    allScheduledWorkoutsCount: allScheduledWorkouts.length,
+    clientsLoading,
+    programsLoading,
+    programsByClientLoading,
+    scheduledWorkoutsByClientLoading,
+    allScheduledWorkoutsLoading
+  });
+  
   // Use client-specific or all data based on selectedClient
   const programs = selectedClient ? programsByClient : allPrograms;
   const scheduledWorkouts = selectedClient ? scheduledWorkoutsByClient : allScheduledWorkouts;
   const loading = programsLoading || programsByClientLoading || scheduledWorkoutsByClientLoading || allScheduledWorkoutsLoading || clientsLoading;
+  
+  console.log('[ProgramsPage] Computed data:', {
+    programsCount: programs.length,
+    scheduledWorkoutsCount: scheduledWorkouts.length,
+    loading
+  });
 
   // Configuration data with React Query
   const { data: periods = [] } = usePeriods();
@@ -119,7 +148,15 @@ export default function ProgramsPage() {
   // Calendar events with React Query - calculate date range for current week view
   const [calendarDateRange, setCalendarDateRange] = useState<{ start: Date; end: Date } | null>(null);
   
+  console.log('[ProgramsPage] calendarDateRange state:', calendarDateRange ? {
+    start: calendarDateRange.start.toISOString(),
+    end: calendarDateRange.end.toISOString()
+  } : null);
+  
   useEffect(() => {
+    console.log('[ProgramsPage] calendarDate changed, updating date range', {
+      calendarDate: calendarDate?.toISOString()
+    });
     if (calendarDate) {
       const startDate = new Date(calendarDate);
       startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -127,14 +164,32 @@ export default function ProgramsPage() {
       endDate.setDate(startDate.getDate() + 6);
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(23, 59, 59, 999);
-      setCalendarDateRange({ start: startDate, end: endDate });
+      const newRange = { start: startDate, end: endDate };
+      console.log('[ProgramsPage] Setting calendarDateRange:', {
+        start: newRange.start.toISOString(),
+        end: newRange.end.toISOString()
+      });
+      setCalendarDateRange(newRange);
+    } else {
+      console.log('[ProgramsPage] calendarDate is null, clearing date range');
+      setCalendarDateRange(null);
     }
   }, [calendarDate]);
 
+  console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
+    start: calendarDateRange?.start?.toISOString(),
+    end: calendarDateRange?.end?.toISOString()
+  });
+  
   const { data: calendarEvents = [], isLoading: calendarEventsLoading } = useCalendarEvents(
     calendarDateRange?.start,
     calendarDateRange?.end
   );
+  
+  console.log('[ProgramsPage] Calendar events loaded:', {
+    eventsCount: calendarEvents.length,
+    isLoading: calendarEventsLoading
+  });
 
   // Query client for invalidating queries
   const queryClient = useQueryClient();
@@ -163,44 +218,73 @@ export default function ProgramsPage() {
   // Track mounted state to avoid hydration mismatch with date-dependent UI
   const [mounted, setMounted] = useState(false);
   
+  console.log('[ProgramsPage] mounted state:', mounted);
+  
   // Timezone notification state
   const [appTimezone, setAppTimezoneState] = useState<string>(() => {
+    console.log('[ProgramsPage] Initializing appTimezone state');
     if (typeof window !== 'undefined') {
-      return getAppTimezone();
+      const tz = getAppTimezone();
+      console.log('[ProgramsPage] Got appTimezone from storage:', tz);
+      return tz;
     }
+    console.log('[ProgramsPage] window undefined, using default timezone');
     return 'America/Los_Angeles';
   });
   const [showTimezonePrompt, setShowTimezonePrompt] = useState(false);
   const TIMEZONE_DISMISS_KEY = 'pca-timezone-prompt-dismissed';
   
   useEffect(() => {
+    console.log('[ProgramsPage] Mount effect running');
     setMounted(true);
+    console.log('[ProgramsPage] Set mounted to true');
     
     // Check if timezone prompt was dismissed
     const wasDismissed = typeof window !== 'undefined' 
       ? localStorage.getItem(TIMEZONE_DISMISS_KEY) === 'true'
       : false;
     
+    console.log('[ProgramsPage] Timezone prompt dismissed?', wasDismissed);
+    
     // Check if browser timezone differs from app timezone
     if (!wasDismissed && hasTimezoneChanged()) {
       const savedTimezone = getAppTimezone();
       const browserTimezone = getBrowserTimezone();
+      console.log('[ProgramsPage] Timezone check:', {
+        savedTimezone,
+        browserTimezone,
+        hasChanged: hasTimezoneChanged()
+      });
       // Only show prompt if timezone was previously set (not default)
       if (savedTimezone !== 'America/Los_Angeles' || browserTimezone !== 'America/Los_Angeles') {
+        console.log('[ProgramsPage] Showing timezone prompt');
         setShowTimezonePrompt(true);
       }
     }
+    
+    return () => {
+      console.log('[ProgramsPage] Mount effect cleanup');
+    };
   }, []);
 
   // Sync selectedDate with calendarDate when it changes (e.g., from dashboard)
   // Only set on client side to avoid hydration mismatch
   useEffect(() => {
+    console.log('[ProgramsPage] calendarDate changed, syncing selectedDate', {
+      calendarDate: calendarDate?.toISOString(),
+      currentSelectedDate: selectedDate?.toISOString()
+    });
     setSelectedDate(calendarDate);
   }, [calendarDate]);
   
   // Initialize on mount (client-side only)
   useEffect(() => {
+    console.log('[ProgramsPage] Initialization effect running', {
+      selectedDate: selectedDate?.toISOString(),
+      calendarDate: calendarDate?.toISOString()
+    });
     if (selectedDate === null && calendarDate) {
+      console.log('[ProgramsPage] Setting selectedDate from calendarDate');
       setSelectedDate(calendarDate);
     }
   }, []);
@@ -208,6 +292,7 @@ export default function ProgramsPage() {
   const [includeWeekends, setIncludeWeekends] = useState(false);
 
   // Use the shared client programs hook - replaces local state and fetchClientPrograms function
+  console.log('[ProgramsPage] Calling useClientPrograms hook with selectedClient:', selectedClient);
   const {
     clientPrograms,
     isLoading: clientProgramsLoading,
@@ -216,6 +301,11 @@ export default function ProgramsPage() {
     clearAllPeriods: hookClearAllPeriods,
     fetchClientPrograms
   } = useClientPrograms(selectedClient);
+  
+  console.log('[ProgramsPage] useClientPrograms result:', {
+    clientProgramsCount: clientPrograms.length,
+    isLoading: clientProgramsLoading
+  });
 
   const [selectedPeriod, setSelectedPeriod] = useState<ClientProgramPeriod | null>(null);
   const [periodPanelOpen, setPeriodPanelOpen] = useState(false);
@@ -237,7 +327,9 @@ export default function ProgramsPage() {
 
   // Fetch configuration data on mount
   useEffect(() => {
+    console.log('[ProgramsPage] Fetching all config');
     fetchAllConfig();
+    console.log('[ProgramsPage] Config fetch initiated');
   }, [fetchAllConfig]);
 
   // Calendar date is now managed by the store with localStorage persistence
@@ -245,7 +337,9 @@ export default function ProgramsPage() {
 
   // Initialize selected client from localStorage after hydration
   useEffect(() => {
+    console.log('[ProgramsPage] Initializing selected client from localStorage');
     initializeSelectedClient();
+    console.log('[ProgramsPage] Selected client initialized');
   }, [initializeSelectedClient]);
 
   // React Query handles data fetching automatically based on selectedClient
@@ -1929,21 +2023,38 @@ export default function ProgramsPage() {
               selectedClient, 
               periodListDialogOpen,
               clientProgramsLength: clientPrograms.length,
-              dialogPeriodsLength: dialogPeriods.length 
+              dialogPeriodsLength: dialogPeriods.length,
+              clientPrograms: clientPrograms.map(cp => ({ id: cp.id, clientId: cp.clientId, periodsCount: cp.periods?.length || 0 })),
+              dialogPeriods: dialogPeriods.map(p => ({ id: p.id, periodName: p.periodName }))
             });
             
             // Only calculate periods when dialog is open or when we have a selected client
             // This prevents unnecessary calculations on every render
-            if (!selectedClient || !periodListDialogOpen) return [];
+            if (!selectedClient || !periodListDialogOpen) {
+              console.log('[ProgramsPage] periods useMemo early return - no selectedClient or dialog closed');
+              return [];
+            }
             
             const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
+            console.log('[ProgramsPage] periods useMemo - found clientProgram:', {
+              found: !!clientProgram,
+              clientProgramId: clientProgram?.id,
+              statePeriodsCount: clientProgram?.periods?.length || 0
+            });
+            
             const statePeriods = clientProgram?.periods || [];
 
             // Use dialogPeriods if it has data, otherwise use state
             const periodsToUse = dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
+            
+            console.log('[ProgramsPage] periods useMemo - choosing periods:', {
+              usingDialogPeriods: dialogPeriods.length > 0,
+              periodsToUseCount: periodsToUse.length
+            });
 
             console.log('[ProgramsPage] periods useMemo result', { 
-              periodsCount: periodsToUse.length 
+              periodsCount: periodsToUse.length,
+              periods: periodsToUse.map(p => ({ id: p.id, periodName: p.periodName }))
             });
 
             return periodsToUse;
@@ -1958,14 +2069,30 @@ export default function ProgramsPage() {
             console.log('[ProgramsPage] calendarEventsCount useMemo called', { 
               selectedClient,
               calendarEventsLength: calendarEvents.length,
-              selectedClientDataName: selectedClientData?.name 
+              selectedClientDataName: selectedClientData?.name,
+              calendarEvents: calendarEvents.map(e => ({
+                id: e.id,
+                summary: e.summary,
+                preConfiguredClient: e.preConfiguredClient,
+                hasDescription: !!e.description
+              }))
             });
             
-            if (!selectedClient) return 0;
+            if (!selectedClient) {
+              console.log('[ProgramsPage] calendarEventsCount useMemo early return - no selectedClient');
+              return 0;
+            }
+            
             const clientName = selectedClientData?.name;
             // Use length for stable dependency instead of array reference
             const eventsLength = calendarEvents.length;
-            const count = calendarEvents.filter(event => {
+            console.log('[ProgramsPage] calendarEventsCount useMemo - filtering events', {
+              eventsLength,
+              clientName,
+              selectedClient
+            });
+            
+            const matchingEvents = calendarEvents.filter(event => {
               const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
                 event.description?.includes(`client=${selectedClient},`) ||
                 event.preConfiguredClient === selectedClient;
@@ -1977,10 +2104,17 @@ export default function ProgramsPage() {
               }
 
               return false;
-            }).length;
+            });
+            
+            const count = matchingEvents.length;
             
             console.log('[ProgramsPage] calendarEventsCount useMemo result', { 
-              count 
+              count,
+              matchingEvents: matchingEvents.map(e => ({
+                id: e.id,
+                summary: e.summary,
+                preConfiguredClient: e.preConfiguredClient
+              }))
             });
             
             return count;

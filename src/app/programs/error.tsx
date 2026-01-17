@@ -14,8 +14,22 @@ export default function ProgramsError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('Schedule Page Error:', error);
+    console.error('[ProgramsError] Component mounted/error changed', {
+      errorMessage: error?.message,
+      errorStack: error?.stack,
+      errorDigest: error?.digest,
+      errorName: error?.name,
+      fullError: error
+    });
+    console.error('[ProgramsError] Schedule Page Error:', error);
   }, [error]);
+
+  useEffect(() => {
+    console.log('[ProgramsError] Component mounted');
+    return () => {
+      console.log('[ProgramsError] Component unmounting');
+    };
+  }, []);
 
   const isAsyncComponentError = error.message?.includes('async Client Component');
 
