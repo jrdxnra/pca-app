@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import React from 'react';
 import { Timestamp } from 'firebase/firestore';
 import { format, getDay } from 'date-fns';
 import { ClientProgram, ClientProgramPeriod } from '@/lib/types';
@@ -99,9 +100,16 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
     }, []);
 
     // Auto-fetch when selected client changes
+    // Use ref to track last selectedClientId to prevent unnecessary fetches
+    const lastSelectedClientIdRef = useRef<string | null | undefined>(selectedClientId);
+    
     useEffect(() => {
-        fetchClientProgramsAsync(selectedClientId);
-    }, [selectedClientId, fetchClientProgramsAsync]);
+        // Only fetch if selectedClientId actually changed
+        if (lastSelectedClientIdRef.current !== selectedClientId) {
+            lastSelectedClientIdRef.current = selectedClientId;
+            fetchClientProgramsAsync(selectedClientId);
+        }
+    }, [selectedClientId, fetchClientProgramsAsync]); // Include fetchClientProgramsAsync but guard with ref
 
     // Get a specific client's program
     const getClientProgramForClient = useCallback((clientId: string): ClientProgram | undefined => {
