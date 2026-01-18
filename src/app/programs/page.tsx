@@ -152,7 +152,10 @@ export default function ProgramsPage() {
   // Configuration data with React Query
   const { data: periods = [] } = usePeriods();
   const { data: workoutCategories = [] } = useWorkoutCategories();
-  const { weekTemplates, workoutStructureTemplates, fetchAll: fetchAllConfig } = useConfigurationStore();
+  // Use selectors to prevent re-renders when unrelated config state changes
+  const weekTemplates = useConfigurationStore(state => state.weekTemplates);
+  const workoutStructureTemplates = useConfigurationStore(state => state.workoutStructureTemplates);
+  const fetchAllConfig = useConfigurationStore(state => state.fetchAll);
 
   // Calendar events with React Query - calculate date range for current week view
   // Use useMemo with stable timestamp dependency to prevent infinite loops

@@ -72,10 +72,16 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Get configuration data
-    const { periods: configPeriods, weekTemplates, workoutCategories } = useConfigurationStore();
-    const { clients } = useClientStore();
-    const { createTestEvent, fetchEvents, updateEvent, deleteEvent, events: calendarEvents } = useCalendarStore();
+    // Get configuration data - use selectors to prevent re-renders
+    const configPeriods = useConfigurationStore(state => state.periods);
+    const weekTemplates = useConfigurationStore(state => state.weekTemplates);
+    const workoutCategories = useConfigurationStore(state => state.workoutCategories);
+    const clients = useClientStore(state => state.clients);
+    const createTestEvent = useCalendarStore(state => state.createTestEvent);
+    const fetchEvents = useCalendarStore(state => state.fetchEvents);
+    const updateEvent = useCalendarStore(state => state.updateEvent);
+    const deleteEvent = useCalendarStore(state => state.deleteEvent);
+    const calendarEvents = useCalendarStore(state => state.events);
 
     // Fetch client programs
     const fetchClientProgramsAsync = useCallback(async (clientId?: string | null) => {
