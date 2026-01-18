@@ -57,8 +57,22 @@ export function getAuthUrl(redirectUri?: string): string {
     prompt: 'consent', // Force consent screen to get refresh token
   });
   
-  // Log the redirect URI being used for debugging
-  console.log('[OAuth] Generated auth URL redirect_uri:', authUrl.match(/redirect_uri=([^&]+)/)?.[1]);
+  // Extract and decode the redirect_uri from the generated URL for debugging
+  const redirectUriMatch = authUrl.match(/redirect_uri=([^&]+)/);
+  if (redirectUriMatch) {
+    const encodedRedirectUri = redirectUriMatch[1];
+    const decodedRedirectUri = decodeURIComponent(encodedRedirectUri);
+    console.log('[OAuth] Encoded redirect_uri in auth URL:', encodedRedirectUri);
+    console.log('[OAuth] Decoded redirect_uri in auth URL:', decodedRedirectUri);
+    console.log('[OAuth] Expected redirect_uri:', redirectUri || 'using default');
+    
+    // Check for common mismatches
+    if (decodedRedirectUri !== (redirectUri || process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback')) {
+      console.error('[OAuth] MISMATCH DETECTED!');
+      console.error('[OAuth] Expected:', redirectUri || process.env.GOOGLE_REDIRECT_URI);
+      console.error('[OAuth] Actual in URL:', decodedRedirectUri);
+    }
+  }
   
   return authUrl;
 }
