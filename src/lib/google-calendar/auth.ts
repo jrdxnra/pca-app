@@ -42,11 +42,16 @@ export function getAuthUrl(redirectUri?: string): string {
     'https://www.googleapis.com/auth/calendar', // Full calendar access (read/write)
   ];
 
-  return oauth2Client.generateAuthUrl({
+  const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
     prompt: 'consent', // Force consent screen to get refresh token
   });
+  
+  // Log the redirect URI being used for debugging
+  console.log('[OAuth] Generated auth URL redirect_uri:', authUrl.match(/redirect_uri=([^&]+)/)?.[1]);
+  
+  return authUrl;
 }
 
 /**
