@@ -94,18 +94,18 @@ export default function ProgramsPage() {
   const router = useRouter();
 
   // UI State from stores (keeping for now)
-  const {
-    selectedClient,
-    currentDate,
-    viewMode,
-    calendarDate,
-    error,
-    setSelectedClient,
-    setViewMode,
-    setCalendarDate,
-    navigateMonth,
-    navigateWeek,
-    navigateDay,
+  // Use selectors to prevent re-renders when unrelated store state changes
+  const selectedClient = useProgramStore(state => state.selectedClient);
+  const currentDate = useProgramStore(state => state.currentDate);
+  const viewMode = useProgramStore(state => state.viewMode);
+  const calendarDate = useProgramStore(state => state.calendarDate);
+  const error = useProgramStore(state => state.error);
+  const setSelectedClient = useProgramStore(state => state.setSelectedClient);
+  const setViewMode = useProgramStore(state => state.setViewMode);
+  const setCalendarDate = useProgramStore(state => state.setCalendarDate);
+  const navigateMonth = useProgramStore(state => state.navigateMonth);
+  const navigateWeek = useProgramStore(state => state.navigateWeek);
+  const navigateDay = useProgramStore(state => state.navigateDay);
     goToToday,
     clearError,
     initializeSelectedClient,
