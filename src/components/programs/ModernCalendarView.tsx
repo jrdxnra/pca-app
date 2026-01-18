@@ -127,6 +127,10 @@ export function ModernCalendarView({
         // Calendar events are now fetched via React Query in ProgramsPage - no need to fetch here
         // React Query will handle prefetching if needed via queryClient.prefetchQuery
 
+        // Calculate expanded date range for workouts (pre-fetch adjacent weeks)
+        const expandedStart = previousWeekStart;
+        const expandedEnd = nextWeekEnd;
+
         // Fetch workouts for all three weeks
         // Keep all workouts in persistent state, filter by client/date when rendering
         if (selectedClient && !cancelled) {
