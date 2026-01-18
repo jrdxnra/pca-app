@@ -35,6 +35,7 @@ export async function getCalendarEventsByDateRange(
     
     if (!isGoogleCalendarConnected) {
       console.warn('⚠️ Google Calendar is not connected. Calendar events will not be available.');
+      console.warn('💡 To fix: Go to Configure → App Config → Connect Google Calendar');
       return [];
     }
 
@@ -88,6 +89,19 @@ export async function getCalendarEventsByDateRange(
     return events;
   } catch (error) {
     console.error('❌ Error fetching calendar events:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error details:', {
+      message: errorMessage,
+      error: error
+    });
+    
+    // Check if it's an authentication error
+    if (errorMessage.includes('Authentication') || errorMessage.includes('401') || errorMessage.includes('Not authenticated')) {
+      console.warn('💡 Google Calendar authentication failed. Please reconnect: Configure → App Config → Connect Google Calendar');
+    } else if (errorMessage.includes('Permission') || errorMessage.includes('403')) {
+      console.warn('💡 Google Calendar permission denied. Please reconnect with proper permissions: Configure → App Config → Connect Google Calendar');
+    }
+    
     // Return empty array instead of throwing to prevent React Query retry loops
     // The error is already logged, and returning empty array allows the UI to render
     // Users will see no events, which is better than an infinite loading state
