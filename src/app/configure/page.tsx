@@ -460,16 +460,6 @@ export default function ConfigurePage() {
     }
   }, []);
 
-  // Handle Google Calendar connection
-  const handleConnectGoogleCalendar = async () => {
-    try {
-      await initiateGoogleAuth();
-    } catch (error) {
-      console.error('Error initiating Google Calendar connection:', error);
-      toastError('Failed to connect to Google Calendar. Please try again.');
-    }
-  };
-
   // Test Google Calendar connection by trying to fetch events
   const handleTestConnection = async () => {
     setTestingConnection(true);
@@ -505,6 +495,16 @@ export default function ConfigurePage() {
       setSyncError('Failed to test connection. Please try again or reconnect.');
     } finally {
       setTestingConnection(false);
+    }
+  };
+
+  // Handle Google Calendar connection
+  const handleConnectGoogleCalendar = async () => {
+    try {
+      await initiateGoogleAuth();
+    } catch (error) {
+      console.error('Error initiating Google Calendar connection:', error);
+      toastError('Failed to connect to Google Calendar. Please try again.');
     }
   };
 
