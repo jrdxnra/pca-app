@@ -327,11 +327,17 @@ export default function ConfigurePage() {
     })
   );
 
-  // Google Calendar auth state (must be declared before useEffect that uses it)
-  const [isGoogleCalendarConnected, setIsGoogleCalendarConnected] = useState(false);
+  // Google Calendar auth state - sync with store so Header and Configure stay in sync
+  const storeIsConnected = useCalendarStore(state => state.isGoogleCalendarConnected);
+  const [isGoogleCalendarConnected, setIsGoogleCalendarConnected] = useState(storeIsConnected);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
+  
+  // Sync local state with store state when it changes
+  useEffect(() => {
+    setIsGoogleCalendarConnected(storeIsConnected);
+  }, [storeIsConnected]);
   
   // Tab state
   const [activeTab, setActiveTab] = useState<'workout' | 'app'>('workout');
