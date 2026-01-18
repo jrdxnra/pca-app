@@ -28,7 +28,16 @@ export function createOAuth2Client(redirectUri?: string): OAuth2Client {
   }
 
   console.log('[OAuth] Using redirect URI:', finalRedirectUri);
-  return new google.auth.OAuth2(clientId, clientSecret, finalRedirectUri);
+  console.log('[OAuth] Client ID:', clientId?.substring(0, 20) + '...');
+  console.log('[OAuth] Has client secret:', !!clientSecret);
+  
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, finalRedirectUri);
+  
+  // Verify the redirect URI is set correctly
+  const clientRedirectUri = (oauth2Client as any).redirectUri_;
+  console.log('[OAuth] OAuth2Client redirectUri:', clientRedirectUri);
+  
+  return oauth2Client;
 }
 
 /**
