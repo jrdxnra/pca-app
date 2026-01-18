@@ -7,7 +7,12 @@ import { getAuthUrl } from '@/lib/google-calendar/auth';
  */
 export async function GET(request: NextRequest) {
   try {
-    const authUrl = getAuthUrl();
+    // Get the origin from the request to build the correct callback URL
+    const origin = request.headers.get('origin') || request.nextUrl.origin;
+    const callbackUrl = `${origin}/api/auth/google/callback`;
+    
+    // Generate auth URL with the correct redirect URI
+    const authUrl = getAuthUrl(callbackUrl);
     return NextResponse.redirect(authUrl);
   } catch (error) {
     console.error('Error generating auth URL:', error);
