@@ -158,7 +158,14 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
           console.error('Failed to fetch from Google Calendar:', googleError);
           // Don't fallback to Firebase - Google Calendar is the only source of truth
           // Return empty array if Google Calendar fails
-          set({ events: [], loading: false, error: 'Failed to fetch calendar events from Google Calendar' });
+          // Don't update state if we already have events (prevents re-render loops)
+          const { events: currentEvents } = get();
+          if (currentEvents.length === 0) {
+            set({ events: [], loading: false, error: 'Failed to fetch calendar events from Google Calendar' });
+          } else {
+            // Keep existing events, just stop loading
+            set({ loading: false });
+          }
           return;
         }
       } else {

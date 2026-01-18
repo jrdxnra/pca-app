@@ -157,6 +157,13 @@ export default function ProgramsPage() {
 
   // Calendar events with React Query - calculate date range for current week view
   // Use useMemo with stable timestamp dependency to prevent infinite loops
+  // Store the timestamp in a ref to ensure stability
+  const calendarDateTimestampRef = React.useRef<number | null>(null);
+  const currentTimestamp = calendarDate?.getTime() ?? null;
+  if (currentTimestamp !== calendarDateTimestampRef.current) {
+    calendarDateTimestampRef.current = currentTimestamp;
+  }
+  
   const calendarDateRange = React.useMemo(() => {
     if (!calendarDate) return null;
     const startDate = new Date(calendarDate);
@@ -166,7 +173,7 @@ export default function ProgramsPage() {
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
     return { start: startDate, end: endDate };
-  }, [calendarDate?.getTime()]); // Use timestamp for stable comparison
+  }, [calendarDateTimestampRef.current]); // Use ref value for stable comparison
 
   console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
     start: calendarDateRange?.start?.toISOString(),
@@ -204,7 +211,10 @@ export default function ProgramsPage() {
   };
 
   // Keep calendar store functions that aren't data fetching
-  const { createTestEvent, clearAllTestEvents, linkToWorkout } = useCalendarStore();
+  // Use selector to only subscribe to the functions we need, not the state
+  const createTestEvent = useCalendarStore(state => state.createTestEvent);
+  const clearAllTestEvents = useCalendarStore(state => state.clearAllTestEvents);
+  const linkToWorkout = useCalendarStore(state => state.linkToWorkout);
 
   // Selected date for mini calendar (defaults to calendarDate)
   // Initialize with calendarDate, fallback to today if null
