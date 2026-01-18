@@ -156,6 +156,16 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
           });
         } catch (googleError) {
           console.error('Failed to fetch from Google Calendar:', googleError);
+          
+          // Check if it's an authentication error (401)
+          const errorMessage = googleError instanceof Error ? googleError.message : String(googleError);
+          if (errorMessage.includes('401') || 
+              errorMessage.includes('Failed to get valid access token') ||
+              errorMessage.includes('Not authenticated')) {
+            // Update connection status - tokens are invalid/expired
+            set({ isGoogleCalendarConnected: false });
+          }
+          
           // Don't fallback to Firebase - Google Calendar is the only source of truth
           // Return empty array if Google Calendar fails
           // Don't update state if we already have events (prevents re-render loops)
@@ -708,8 +718,31 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
   checkGoogleCalendarConnection: async () => {
     try {
-      const connected = await checkGoogleCalendarAuth();
-      set({ isGoogleCalendarConnected: connected });
+      // First check if tokens exist
+      const hasTokens = await checkGoogleCalendarAuth();
+      if (!hasTokens) {
+        set({ isGoogleCalendarConnected: false });
+        return;
+      }
+      
+      // Then actually test the connection by trying to fetch events
+      // This catches expired tokens that checkGoogleCalendarAuth doesn't detect
+      const now = new Date();
+      const timeMin = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000); // 1 day ago
+      const timeMax = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000); // 1 day ahead
+      
+      const response = await fetch(
+        `/api/calendar/events?timeMin=${timeMin.toISOString()}&timeMax=${timeMax.toISOString()}&calendarId=primary`
+      );
+      
+      // If we get a 401, tokens are invalid/expired
+      if (response.status === 401) {
+        set({ isGoogleCalendarConnected: false });
+        return;
+      }
+      
+      // Connection is working
+      set({ isGoogleCalendarConnected: true });
     } catch (error) {
       console.error('Error checking Google Calendar connection:', error);
       set({ isGoogleCalendarConnected: false });

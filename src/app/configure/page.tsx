@@ -380,8 +380,11 @@ export default function ConfigurePage() {
     fetchClients();
     fetchBusinessHours();
     
-    // Check Google Calendar auth status
-    checkGoogleCalendarAuth().then(connected => {
+    // Check Google Calendar auth status using the store's connection check
+    // This ensures we use the same logic as the Header sync button
+    const storeState = useCalendarStore.getState();
+    storeState.checkGoogleCalendarConnection().then(() => {
+      const connected = useCalendarStore.getState().isGoogleCalendarConnected;
       setIsGoogleCalendarConnected(connected);
       setCheckingAuth(false);
       
@@ -519,8 +522,8 @@ export default function ConfigurePage() {
       setIsGoogleCalendarConnected(false);
       setSyncError(null);
       // Refresh calendar store
-      const { checkGoogleCalendarConnection } = useCalendarStore.getState();
-      await checkGoogleCalendarConnection();
+      const storeState = useCalendarStore.getState();
+      await storeState.checkGoogleCalendarConnection();
     } catch (error) {
       console.error('Error disconnecting Google Calendar:', error);
       toastError('Failed to disconnect Google Calendar. Please try again.');
