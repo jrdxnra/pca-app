@@ -40,6 +40,11 @@ GOOGLE_CALENDAR_SETUP.md
 # vercel
 .vercel
 
+# firebase emulators
+.firebase/
+firebase-debug.log
+ui-debug.log
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
