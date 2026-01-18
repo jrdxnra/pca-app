@@ -1,5 +1,5 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import { ClientProgram } from '@/lib/firebase/types';
+import { ClientProgram } from '@/lib/types';
 import { getClientProgramsByClient, getAllClientPrograms } from '@/lib/firebase/services/clientPrograms';
 import { queryKeys } from '@/lib/react-query/queryKeys';
 
