@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
       });
       return NextResponse.json(
         { 
-          error: 'Google Calendar OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel environment variables.',
-          hint: 'Go to Vercel → Settings → Environment Variables and add the credentials.'
+          error: 'Google Calendar OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in environment variables.',
+          hint: 'For Vercel: Go to Vercel → Settings → Environment Variables. For Firebase: Set in Cloud Run service environment variables.'
         },
         { status: 500 }
       );

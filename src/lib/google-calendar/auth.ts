@@ -20,7 +20,7 @@ export function createOAuth2Client(redirectUri?: string): OAuth2Client {
     finalRedirectUri = 'http://localhost:3000/api/auth/google/callback';
   } else {
     // In production, we must have a redirect URI
-    throw new Error('GOOGLE_REDIRECT_URI environment variable is required in production. Please set it in Vercel environment variables.');
+    throw new Error('GOOGLE_REDIRECT_URI environment variable is required in production. Please set it in Vercel (Environment Variables) or Firebase (Cloud Run service environment variables).');
   }
 
   if (!clientId || !clientSecret) {

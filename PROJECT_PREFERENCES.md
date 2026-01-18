@@ -85,7 +85,9 @@ src/
 - Cloud Run for Next.js server + API routes
 - Firebase Hosting as CDN
 - Environment variables in Cloud Run service config
-- Deploy Firestore rules separately: `npm run deploy:firestore`
+- Deploy Firestore rules separately: `npm run deploy:firebase`
+- **CRITICAL: Same deployment frequency rules apply** - Batch fixes, test locally first
+- **Don't deploy after every small change** - Group related changes together
 
 ## Environment Variables
 
@@ -170,9 +172,10 @@ GOOGLE_REDIRECT_URI (different for Vercel vs Firebase)
 
 ### Deployment Frequency (CRITICAL)
 - **BATCH FIXES**: Multiple related fixes = ONE commit, not many
-- **TEST LOCALLY FIRST**: Run `npm run build` before pushing
+- **TEST LOCALLY FIRST**: Run `npm run build` before pushing/deploying
 - **Vercel limit**: 100 deployments/day on free tier - exceeding blocks deployments
-- **Only push when necessary**: Not after every small change
+- **Firebase**: Same rules apply - batch fixes, test locally, don't deploy after every small change
+- **Only push/deploy when necessary**: Not after every small change
 - **Group related changes**: All fixes for the same issue should be one commit
 
 **This is as important as the useMemo rule - refer to this often!**
