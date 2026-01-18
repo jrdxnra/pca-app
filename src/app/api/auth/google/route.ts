@@ -7,18 +7,31 @@ import { getAuthUrl } from '@/lib/google-calendar/auth';
  */
 export async function GET(request: NextRequest) {
   try {
+    // Check if credentials are configured
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      console.error('[OAuth] Missing credentials:', {
+        hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+        hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET
+      });
+      return NextResponse.json(
+        { 
+          error: 'Google Calendar OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel environment variables.',
+          hint: 'Go to Vercel → Settings → Environment Variables and add the credentials.'
+        },
+        { status: 500 }
+      );
+    }
+
     // Get the origin from the request URL (more reliable than headers)
-    // Use the request URL's origin, or fall back to env var, or localhost
     const origin = request.nextUrl.origin;
     const callbackUrl = `${origin}/api/auth/google/callback`;
     
     console.log('[OAuth] Generating auth URL with callback:', callbackUrl);
     console.log('[OAuth] Request origin:', origin);
-    console.log('[OAuth] Environment GOOGLE_REDIRECT_URI:', process.env.GOOGLE_REDIRECT_URI);
     
     // Generate auth URL with the correct redirect URI
     const authUrl = getAuthUrl(callbackUrl);
-    console.log('[OAuth] Generated auth URL:', authUrl.substring(0, 100) + '...');
+    console.log('[OAuth] Generated auth URL (first 100 chars):', authUrl.substring(0, 100) + '...');
     return NextResponse.redirect(authUrl);
   } catch (error) {
     console.error('Error generating auth URL:', error);
