@@ -43,10 +43,10 @@ import { useUpdateCalendarEvent, useDeleteCalendarEvent, useCreateCalendarEvent 
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/queryKeys';
 // Lazy load ModernCalendarView to prevent blocking initial render
+// Note: Suspense fallback handles loading, so we don't need loading prop here
 const ModernCalendarView = dynamic(
   () => import('@/components/programs/ModernCalendarView').then(mod => ({ default: mod.ModernCalendarView })),
   {
-    loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
     ssr: false // Disable SSR for this heavy component
   }
 );
@@ -1658,11 +1658,9 @@ export default function ProgramsPage() {
     // React Query will automatically refetch calendar events when mutations invalidate queries
   };
 
-  // Show calendar structure immediately, even if data is loading
+  // Show calendar structure immediately (no loading screen here)
+  // The Suspense fallback will handle ModernCalendarView loading
   // This gives better UX - user sees the calendar grid right away
-  if (!mounted) {
-    return <CalendarSkeleton includeWeekends={includeWeekends} />;
-  }
 
   return (
     <div className="w-full px-1 pt-1 pb-4 space-y-2">
