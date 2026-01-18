@@ -233,12 +233,8 @@ export default function BuilderPage() {
     }
   }, [dateParam]);
 
-  // Force day view - month and week views are removed
-  useEffect(() => {
-    if (viewMode !== 'day') {
-      setViewMode('day');
-    }
-  }, [viewMode]);
+  // Note: View mode is managed by period detection and URL params
+  // Don't force 'day' view here - let period detection and workout loading control it
 
   // Auto-open disabled for day view - users can manually select multiple workouts to edit and compare
   // This allows for multi-workout editing and comparison functionality
@@ -701,9 +697,10 @@ export default function BuilderPage() {
       clientProgramsLoading
     });
 
-    // Wait for loading to complete
+    // Wait for loading to complete - don't clear period while loading
     if (clientProgramsLoading) {
       logger.debug('[Builder] Still loading client programs, waiting...');
+      // Don't clear period while loading - keep existing period if set
       return;
     }
 

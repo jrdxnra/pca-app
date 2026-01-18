@@ -27,11 +27,12 @@ export function MovementUsageRow({
   canDelete,
   isInline = false
 }: MovementUsageRowProps) {
-  // Lazy load movements - only fetch when category is selected or movement is needed
-  const needsMovements = !!(usage.categoryId || usage.movementId);
+  // Lazy load movements - fetch when category is selected OR when movement is already set
+  // This ensures movements load as soon as user selects a category
+  const shouldLoadMovements = !!(usage.categoryId || usage.movementId);
   const { data: movements = [], isLoading: movementsLoading } = useMovements(
     true, // includeCategory
-    needsMovements // Only fetch when needed
+    shouldLoadMovements // Only fetch when needed
   );
   
   const { categories } = useMovementCategoryStore();
@@ -154,9 +155,11 @@ export function MovementUsageRow({
               value={usage.movementId}
               onChange={(e) => onUpdate(roundIndex, usageIndex, 'movementId', e.target.value)}
               className="text-sm border rounded px-2 py-1"
-              disabled={!usage.categoryId}
+              disabled={!usage.categoryId || movementsLoading}
             >
-              <option value="">Select Movement</option>
+              <option value="">
+                {movementsLoading ? 'Loading movements...' : 'Select Movement'}
+              </option>
               {filteredMovements.map(mov => (
                 <option key={mov.id} value={mov.id}>
                   {mov.name}
