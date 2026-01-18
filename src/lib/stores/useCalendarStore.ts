@@ -11,7 +11,8 @@ import { Timestamp } from 'firebase/firestore';
 import { 
   fetchCalendarEvents, 
   checkGoogleCalendarAuth,
-  addWorkoutLinksToEvent
+  addWorkoutLinksToEvent,
+  createSingleCalendarEvent
 } from '@/lib/google-calendar/api-client';
 import { getCalendarSyncConfig, updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
 
@@ -210,7 +211,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   createTestEvent: async (eventInput: TestEventInput) => {
     set({ loading: true, error: null });
     try {
-      const { config } = get();
+      const { config, isGoogleCalendarConnected } = get();
       // Create start and end datetime strings
       const startDateTime = `${eventInput.date}T${eventInput.startTime}:00`;
       const endDateTime = `${eventInput.date}T${eventInput.endTime}:00`;
@@ -218,6 +219,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
       // Parse client and category from description if present
       let clientId: string | null = null;
       let categoryName: string | null = null;
+      let workoutId: string | null = null;
       
       if (eventInput.description) {
         const clientMatch = eventInput.description.match(/\[Metadata:.*client=([^,}]+)/);
@@ -229,23 +231,56 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
         if (categoryMatch) {
           categoryName = categoryMatch[1].trim();
         }
+
+        const workoutIdMatch = eventInput.description.match(/workoutId=([^,\s}]+)/);
+        if (workoutIdMatch && workoutIdMatch[1] && workoutIdMatch[1] !== 'none') {
+          workoutId = workoutIdMatch[1].trim();
+        }
       }
 
-      // Create calendar event in Firebase
-      const eventData: Omit<GoogleCalendarEvent, 'id'> = {
-        summary: eventInput.summary,
-        description: eventInput.description || '',
+      // FIRST: Create calendar event in Google Calendar API (primary source)
+      let googleCalendarEvent: any = null;
+      if (isGoogleCalendarConnected && config.selectedCalendarId) {
+        try {
+          const eventResponse = await createSingleCalendarEvent({
+            summary: eventInput.summary,
+            startDateTime: new Date(startDateTime).toISOString(),
+            endDateTime: new Date(endDateTime).toISOString(),
+            clientId: clientId || undefined,
+            categoryName: categoryName || undefined,
+            workoutId: workoutId || undefined,
+            description: eventInput.description || undefined,
+            location: eventInput.location || undefined,
+            timeZone: 'America/Los_Angeles',
+            calendarId: config.selectedCalendarId,
+          });
+          googleCalendarEvent = eventResponse.event;
+          console.log('✅ Created calendar event in Google Calendar:', googleCalendarEvent.id);
+        } catch (googleError) {
+          console.error('❌ Failed to create event in Google Calendar:', googleError);
+          // Continue to create in Firebase as fallback, but warn the user
+          throw new Error(`Failed to create event in Google Calendar: ${googleError instanceof Error ? googleError.message : 'Unknown error'}. Please check your Google Calendar connection.`);
+        }
+      } else {
+        throw new Error('Google Calendar is not connected. Please connect Google Calendar to create events.');
+      }
+
+      // Convert Google Calendar event to our format
+      const eventData: GoogleCalendarEvent = {
+        id: googleCalendarEvent.id || '',
+        summary: googleCalendarEvent.summary || eventInput.summary,
+        description: googleCalendarEvent.description || eventInput.description || '',
         start: {
-          dateTime: startDateTime,
-          timeZone: 'America/Los_Angeles',
+          dateTime: googleCalendarEvent.start?.dateTime || startDateTime,
+          timeZone: googleCalendarEvent.start?.timeZone || 'America/Los_Angeles',
         },
         end: {
-          dateTime: endDateTime,
-          timeZone: 'America/Los_Angeles',
+          dateTime: googleCalendarEvent.end?.dateTime || endDateTime,
+          timeZone: googleCalendarEvent.end?.timeZone || 'America/Los_Angeles',
         },
-        location: eventInput.location || '',
-        htmlLink: '',
-        creator: {
+        location: googleCalendarEvent.location || eventInput.location || '',
+        htmlLink: googleCalendarEvent.htmlLink || '',
+        creator: googleCalendarEvent.creator || {
           email: 'system@example.com',
           displayName: 'System',
         },
@@ -254,11 +289,12 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
                           eventInput.summary.toLowerCase().includes('workout') ||
                           eventInput.summary.toLowerCase().includes('pt'),
         isClassSession: isClassEvent({ summary: eventInput.summary } as GoogleCalendarEvent, config.classKeywords || []),
-        preConfiguredClient: clientId || undefined,
-        preConfiguredCategory: categoryName || undefined,
+        preConfiguredClient: clientId || googleCalendarEvent.extendedProperties?.private?.pcaClientId || undefined,
+        preConfiguredCategory: categoryName || googleCalendarEvent.extendedProperties?.private?.pcaCategory || undefined,
+        linkedWorkoutId: workoutId || googleCalendarEvent.extendedProperties?.private?.pcaWorkoutId || undefined,
       };
 
-      const newEvent = await createCalendarEvent(eventData);
+      const newEvent = eventData;
       
       // Auto-create workout if client is specified AND workoutId is not already in metadata
       // (If workoutId is present, the workout was already created and we just need to link)
@@ -269,11 +305,10 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
           ? workoutIdMatch[1].trim() 
           : null;
 
-        if (existingWorkoutId) {
-          // Workout already exists, just link the event to it
-          await updateCalendarEvent(newEvent.id, { linkedWorkoutId: existingWorkoutId });
-          newEvent.linkedWorkoutId = existingWorkoutId;
-          console.log('✅ Linked calendar event to existing workout:', existingWorkoutId);
+        if (workoutId) {
+          // Workout already exists, just update the Google Calendar event to link it
+          newEvent.linkedWorkoutId = workoutId;
+          console.log('✅ Calendar event linked to existing workout:', workoutId);
         } else {
           // No workout exists yet, create one
           try {
@@ -288,7 +323,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
               }
             }
             
-            // If no periodId found, use placeholder (system should handle finding/creating period)
+            // Create workout in Firebase
             const workout = await createClientWorkout({
               clientId,
               periodId: periodId || 'quick-workouts', // Use placeholder if not found
@@ -303,10 +338,28 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
               createdBy: 'system',
             });
 
-            // Link event to workout
-            await updateCalendarEvent(newEvent.id, { linkedWorkoutId: workout.id });
-            newEvent.linkedWorkoutId = workout.id;
+            // Update Google Calendar event to link to workout
+            if (isGoogleCalendarConnected && config.selectedCalendarId && googleCalendarEvent?.id) {
+              try {
+                // Update the event description to include workout link
+                await addWorkoutLinksToEvent(
+                  googleCalendarEvent.id,
+                  workout.id,
+                  clientId!,
+                  eventDate,
+                  eventInput.description || '',
+                  'single',
+                  undefined,
+                  config.selectedCalendarId
+                );
+                console.log('✅ Updated Google Calendar event with workout link:', workout.id);
+              } catch (updateError) {
+                console.warn('⚠️ Could not update Google Calendar event with workout link:', updateError);
+                // Don't fail - the workout is created, just the link update failed
+              }
+            }
             
+            newEvent.linkedWorkoutId = workout.id;
             console.log('✅ Auto-created workout for calendar event:', workout.id);
           } catch (workoutError) {
             console.error('❌ Error creating workout for calendar event:', workoutError);

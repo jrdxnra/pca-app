@@ -100,102 +100,69 @@ export async function getCalendarEventsByDateRange(
   startDate: Date,
   endDate: Date
 ): Promise<GoogleCalendarEvent[]> {
-  let events: GoogleCalendarEvent[] = [];
-
-  // Check if Google Calendar is connected
+  // ONLY use Google Calendar API - no Firebase fallback
+  // This ensures all calendar events come from Google Calendar as the single source of truth
+  
   try {
     const isGoogleCalendarConnected = await checkGoogleCalendarAuth();
     
-    if (isGoogleCalendarConnected) {
-      try {
-        // Get calendar config to know which calendar to use
-        const config = await getCalendarSyncConfig({
-          selectedCalendarId: 'primary',
-          coachingKeywords: [],
-          classKeywords: [],
-        });
-        
-        const calendarId = config.selectedCalendarId || 'primary';
-        
-        // Try Google Calendar API first
-        const googleEvents = await fetchGoogleCalendarEvents(
-          startDate,
-          endDate,
-          calendarId
-        );
-        
-        // Convert Google Calendar API format to our format
-        events = googleEvents.map((event: any) => {
-          const clientId = event.extendedProperties?.private?.pcaClientId;
-          const category = event.extendedProperties?.private?.pcaCategory;
-          
-          return {
-            id: event.id,
-            summary: event.summary || '',
-            description: event.description || '',
-            start: {
-              dateTime: event.start?.dateTime || event.start?.date || '',
-              timeZone: event.start?.timeZone || 'America/Los_Angeles',
-            },
-            end: {
-              dateTime: event.end?.dateTime || event.end?.date || '',
-              timeZone: event.end?.timeZone || 'America/Los_Angeles',
-            },
-            location: event.location,
-            htmlLink: event.htmlLink,
-            creator: event.creator,
-            attendees: event.attendees,
-            // Extract metadata from extended properties
-            preConfiguredClient: clientId,
-            preConfiguredCategory: category,
-            linkedWorkoutId: event.extendedProperties?.private?.pcaWorkoutId,
-            // Mark as coaching session if it has a client ID (from our app)
-            isCoachingSession: clientId ? true : undefined,
-          };
-        });
-        
-        // If we got events from Google Calendar, return them
-        if (events.length > 0) {
-          return events;
-        }
-      } catch (googleError) {
-        console.warn('Failed to fetch from Google Calendar, falling back to Firebase:', googleError);
-        // Fall through to Firebase
-      }
+    if (!isGoogleCalendarConnected) {
+      console.warn('⚠️ Google Calendar is not connected. Calendar events will not be available.');
+      return [];
     }
+
+    // Get calendar config to know which calendar to use
+    const config = await getCalendarSyncConfig({
+      selectedCalendarId: 'primary',
+      coachingKeywords: [],
+      classKeywords: [],
+    });
+    
+    const calendarId = config.selectedCalendarId || 'primary';
+    
+    // Fetch from Google Calendar API (ONLY source)
+    const googleEvents = await fetchGoogleCalendarEvents(
+      startDate,
+      endDate,
+      calendarId
+    );
+    
+    // Convert Google Calendar API format to our format
+    const events: GoogleCalendarEvent[] = googleEvents.map((event: any) => {
+      const clientId = event.extendedProperties?.private?.pcaClientId;
+      const category = event.extendedProperties?.private?.pcaCategory;
+      const workoutId = event.extendedProperties?.private?.pcaWorkoutId;
+      
+      return {
+        id: event.id,
+        summary: event.summary || '',
+        description: event.description || '',
+        start: {
+          dateTime: event.start?.dateTime || event.start?.date || '',
+          timeZone: event.start?.timeZone || 'America/Los_Angeles',
+        },
+        end: {
+          dateTime: event.end?.dateTime || event.end?.date || '',
+          timeZone: event.end?.timeZone || 'America/Los_Angeles',
+        },
+        location: event.location,
+        htmlLink: event.htmlLink,
+        creator: event.creator,
+        attendees: event.attendees,
+        // Extract metadata from extended properties
+        preConfiguredClient: clientId,
+        preConfiguredCategory: category,
+        linkedWorkoutId: workoutId,
+        // Mark as coaching session if it has a client ID (from our app)
+        isCoachingSession: clientId ? true : undefined,
+      };
+    });
+    
+    return events;
   } catch (error) {
-    console.warn('Error checking Google Calendar connection, falling back to Firebase:', error);
-    // Fall through to Firebase
+    console.error('❌ Error fetching calendar events:', error);
+    throw new Error(`Failed to fetch calendar events: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-
-  // Fallback to Firebase if Google Calendar not connected or failed
-  const startTimestamp = Timestamp.fromDate(startDate);
-  const endTimestamp = Timestamp.fromDate(endDate);
-
-  const q = query(
-    collection(getDb(), COLLECTION_NAME),
-    where('startDateTime', '>=', startTimestamp),
-    where('startDateTime', '<=', endTimestamp),
-    orderBy('startDateTime', 'asc')
-  );
-
-  const snapshot = await getDocs(q);
-  const firebaseEvents = snapshot.docs.map(doc => firestoreToEvent(doc.id, doc.data()));
-  
-  // Merge Google Calendar events (if any) with Firebase events, deduplicating by ID
-  const eventMap = new Map<string, GoogleCalendarEvent>();
-  
-  // Add Firebase events first
-  firebaseEvents.forEach(event => {
-    eventMap.set(event.id, event);
-  });
-  
-  // Add Google Calendar events (will overwrite Firebase if same ID)
-  events.forEach(event => {
-    eventMap.set(event.id, event);
-  });
-  
-  return Array.from(eventMap.values());
 }
 
 /**
