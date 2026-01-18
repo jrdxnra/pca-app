@@ -36,6 +36,8 @@ import { useWorkoutStore } from '@/lib/stores/useWorkoutStore';
 import { useMovements } from '@/hooks/queries/useMovements';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/react-query/queryKeys';
 import { Movement } from '@/lib/types';
 
 // Form validation schema
@@ -67,6 +69,7 @@ export function AddExerciseDialog({ roundIndex, trigger }: AddExerciseDialogProp
   const { addExercise } = useWorkoutStore();
   const { addMovement } = useMovementStore();
   const { categories, fetchCategories } = useMovementCategoryStore();
+  const queryClient = useQueryClient();
 
   // Lazy load movements - only fetch when dialog is open
   const { data: movements = [], isLoading: movementsLoading } = useMovements(
@@ -151,13 +154,20 @@ export function AddExerciseDialog({ roundIndex, trigger }: AddExerciseDialogProp
         links: [],
       });
       
-      // Refresh movements and select the newly created one
-      // Movements will be refetched automatically by React Query when dialog reopens
-      const newMovement = movements.find(m => m.id === movementId);
-      if (newMovement) {
-        setSelectedMovement(newMovement);
-        form.setValue('movementId', movementId);
-      }
+      // Invalidate movements cache to refetch with new movement
+      await queryClient.invalidateQueries({ queryKey: queryKeys.movements.list({ includeCategory: true }) });
+      
+      // Wait a moment for the query to refetch, then find and select the new movement
+      setTimeout(async () => {
+        const updatedMovements = queryClient.getQueryData<Movement[]>(
+          queryKeys.movements.list({ includeCategory: true })
+        ) || movements;
+        const newMovement = updatedMovements.find(m => m.id === movementId);
+        if (newMovement) {
+          setSelectedMovement(newMovement);
+          form.setValue('movementId', movementId);
+        }
+      }, 100);
       
       // Close quick add dialog
       setShowQuickAddMovement(false);
