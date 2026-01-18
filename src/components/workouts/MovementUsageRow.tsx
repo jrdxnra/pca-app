@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ClientWorkoutMovementUsage } from '@/lib/types';
-import { useMovementStore } from '@/lib/stores/useMovementStore';
+import { useMovements } from '@/hooks/queries/useMovements';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,14 +27,20 @@ export function MovementUsageRow({
   canDelete,
   isInline = false
 }: MovementUsageRowProps) {
-  const { movements } = useMovementStore();
+  // Lazy load movements - only fetch when category is selected or movement is needed
+  const needsMovements = !!(usage.categoryId || usage.movementId);
+  const { data: movements = [], isLoading: movementsLoading } = useMovements(
+    true, // includeCategory
+    needsMovements // Only fetch when needed
+  );
+  
   const { categories } = useMovementCategoryStore();
   
   const [filteredMovements, setFilteredMovements] = useState<any[]>([]);
   
   // Filter movements when category changes
   useEffect(() => {
-    if (usage.categoryId) {
+    if (usage.categoryId && movements.length > 0) {
       const filtered = movements.filter(m => m.categoryId === usage.categoryId);
       setFilteredMovements(filtered);
     } else {

@@ -33,6 +33,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { useWorkoutStore } from '@/lib/stores/useWorkoutStore';
+import { useMovements } from '@/hooks/queries/useMovements';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { Movement } from '@/lib/types';
@@ -64,8 +65,14 @@ export function AddExerciseDialog({ roundIndex, trigger }: AddExerciseDialogProp
   const [newMovementName, setNewMovementName] = useState('');
   const [isAddingMovement, setIsAddingMovement] = useState(false);
   const { addExercise } = useWorkoutStore();
-  const { movements, fetchMovements, addMovement } = useMovementStore();
+  const { addMovement } = useMovementStore();
   const { categories, fetchCategories } = useMovementCategoryStore();
+
+  // Lazy load movements - only fetch when dialog is open
+  const { data: movements = [], isLoading: movementsLoading } = useMovements(
+    true, // includeCategory
+    open // Only fetch when dialog is open
+  );
 
   const form = useForm<ExerciseFormData>({
     resolver: zodResolver(exerciseSchema),
@@ -82,9 +89,8 @@ export function AddExerciseDialog({ roundIndex, trigger }: AddExerciseDialogProp
   });
 
   useEffect(() => {
-    fetchMovements();
     fetchCategories();
-  }, [fetchMovements, fetchCategories]);
+  }, [fetchCategories]);
 
   // Reset movement selection when category changes
   useEffect(() => {
@@ -146,7 +152,7 @@ export function AddExerciseDialog({ roundIndex, trigger }: AddExerciseDialogProp
       });
       
       // Refresh movements and select the newly created one
-      await fetchMovements();
+      // Movements will be refetched automatically by React Query when dialog reopens
       const newMovement = movements.find(m => m.id === movementId);
       if (newMovement) {
         setSelectedMovement(newMovement);

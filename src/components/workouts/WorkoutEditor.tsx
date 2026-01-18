@@ -225,8 +225,26 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   onDelete,
   draftKey
 }, ref) {
-  // Use React Query for movements (with caching and deduplication)
-  const { data: movements = [], isLoading: movementsLoading } = useMovements(true); // includeCategory = true
+  // Lazy load movements - only fetch when needed:
+  // 1. If there are existing movementUsages with movementId (need to display them)
+  // 2. MovementUsageRow components will trigger their own loading when category is selected
+  const hasExistingMovements = React.useMemo(() => {
+    return rounds.some(round => 
+      round.movementUsages?.some(usage => usage.movementId && usage.movementId !== '')
+    );
+  }, [rounds]);
+  
+  // Use React Query for movements (with lazy loading and enhanced caching)
+  // Only fetch if there are existing movements to display
+  const { data: movements = [], isLoading: movementsLoading } = useMovements(
+    true, // includeCategory = true
+    hasExistingMovements, // Only fetch when there are existing movements to display
+    {
+      // Movements are cached for 10 minutes (configured in hook)
+      // This prevents refetching when navigating between workouts
+    }
+  );
+  
   const { categories, fetchCategories } = useMovementCategoryStore();
   const { workoutStructureTemplates, workoutTypes, fetchWorkoutTypes } = useConfigurationStore();
   const { events, updateEvent } = useCalendarStore();
@@ -309,19 +327,13 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     return columns;
   }, [rounds, movements.length]); // Only recalculate when rounds or movements change
 
-  // Load data on mount - React Query handles movements fetching automatically
-  // Only fetch categories and workout types if not already loaded
+  // Load data on mount - Only fetch categories and workout types if not already loaded
+  // Movements are lazy loaded via React Query when needed
   useEffect(() => {
-    console.log('[WorkoutEditor] Mounting, movements will load via React Query...');
     if (categories.length === 0) fetchCategories();
     if (workoutTypes.length === 0) fetchWorkoutTypes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps intentional - only fetch on mount
-  
-  // Debug: Log when movements change
-  useEffect(() => {
-    console.log('[WorkoutEditor] Movements updated:', movements.length, 'categories in movements:', [...new Set(movements.map(m => m.categoryId))], 'loading:', movementsLoading);
-  }, [movements, movementsLoading]);
 
   // Initialize form when workout changes (only when workout ID actually changes)
   useEffect(() => {
