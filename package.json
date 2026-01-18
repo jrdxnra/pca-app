@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:emulator": "NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true next dev --turbopack",
+    "emulators": "firebase emulators:start",
+    "emulators:exec": "firebase emulators:exec",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

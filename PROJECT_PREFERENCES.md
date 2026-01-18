@@ -178,6 +178,13 @@ GOOGLE_REDIRECT_URI (different for Vercel vs Firebase)
 - **Only push/deploy when necessary**: Not after every small change
 - **Group related changes**: All fixes for the same issue should be one commit
 
+### Data and Testing (CRITICAL)
+- **NO MOCK DATA IN PRODUCTION**: Production builds MUST use real services only
+- **Emulators OK for development**: Firebase Emulators with mock data are allowed for local dev
+- **Clear separation**: Development can use emulators, production always uses real Firebase/Google Calendar
+- **Never deploy emulator code**: Production code paths must never reference emulators or mocks
+- **Real services in production**: All production deployments use real Firebase, real Google Calendar API, real data
+
 **This is as important as the useMemo rule - refer to this often!**
 
 ## Last Updated
