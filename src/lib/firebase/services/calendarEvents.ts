@@ -88,7 +88,10 @@ export async function getCalendarEventsByDateRange(
     return events;
   } catch (error) {
     console.error('❌ Error fetching calendar events:', error);
-    throw new Error(`Failed to fetch calendar events: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Return empty array instead of throwing to prevent React Query retry loops
+    // The error is already logged, and returning empty array allows the UI to render
+    // Users will see no events, which is better than an infinite loading state
+    return [];
   }
 }
 
