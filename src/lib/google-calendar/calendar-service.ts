@@ -446,17 +446,36 @@ export async function getEvents(
   timeMin: Date,
   timeMax: Date
 ): Promise<calendar_v3.Schema$Event[]> {
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+  try {
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-  const response = await calendar.events.list({
-    calendarId,
-    timeMin: timeMin.toISOString(),
-    timeMax: timeMax.toISOString(),
-    singleEvents: true, // Expand recurring events into individual instances
-    orderBy: 'startTime',
-  });
+    const response = await calendar.events.list({
+      calendarId,
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true, // Expand recurring events into individual instances
+      orderBy: 'startTime',
+    });
 
-  return response.data.items || [];
+    return response.data.items || [];
+  } catch (error: any) {
+    console.error('Google Calendar API error in getEvents:', {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+    });
+    
+    // Provide more specific error messages
+    if (error.code === 401 || error.response?.status === 401) {
+      throw new Error('Authentication failed. Please disconnect and reconnect Google Calendar.');
+    }
+    if (error.code === 403 || error.response?.status === 403) {
+      const errorDetails = error.response?.data?.error?.message || error.message;
+      throw new Error(`Permission denied: ${errorDetails}. Please disconnect and reconnect Google Calendar to grant write permissions.`);
+    }
+    throw new Error(`Google Calendar API error: ${error.message}`);
+  }
 }
 
 
