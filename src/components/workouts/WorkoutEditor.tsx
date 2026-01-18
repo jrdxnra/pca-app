@@ -264,11 +264,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   // Lazy load movements - only fetch when needed:
   // 1. If there are existing movementUsages with movementId (need to display them)
   // 2. MovementUsageRow components will trigger their own loading when category is selected
-  const hasExistingMovements = React.useMemo(() => {
-    return rounds.some(round => 
-      round.movementUsages?.some(usage => usage.movementId && usage.movementId !== '')
-    );
-  }, [rounds]);
+  // Simple calculation - no useMemo needed (avoids React error #310)
+  const hasExistingMovements = rounds.some(round => 
+    round.movementUsages?.some(usage => usage.movementId && usage.movementId !== '')
+  );
   
   // Use React Query for movements (with lazy loading and enhanced caching)
   // Only fetch if there are existing movements to display
@@ -303,8 +302,8 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   };
 
   // Calculate available columns across all rounds for the toggle
-  // Memoize to prevent recalculation on every render
-  const availableColumns = React.useMemo(() => {
+  // Simple calculation - no useMemo needed (avoids React error #310)
+  const availableColumns = (() => {
     const columns = {
       tempo: false,
       distance: false,
@@ -325,7 +324,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     });
 
     return columns;
-  }, [rounds, movements.length]); // Only recalculate when rounds or movements change
+  })();
 
   // Load data on mount - Only fetch categories and workout types if not already loaded
   // Movements are lazy loaded via React Query when needed
