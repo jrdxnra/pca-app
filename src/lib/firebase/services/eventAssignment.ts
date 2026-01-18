@@ -1,7 +1,7 @@
 import { Timestamp } from 'firebase/firestore';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import { ClientProgram, ClientProgramPeriod } from '@/lib/types';
-import { updateCalendarEvent as updateFirestoreCalendarEvent } from './calendarEvents';
+// Firebase calendarEvents collection is deprecated - all events are in Google Calendar
 import { createClientWorkout, deleteClientWorkout } from './clientWorkouts';
 import { incrementSessionCount, decrementSessionCount } from './clients';
 import { safeToDate, isDateInRange } from '@/lib/utils/dateHelpers';
@@ -182,41 +182,49 @@ export async function assignClientToEvent(
       categoryName
     );
     
-    // Check if this is a Google Calendar event and if Google Calendar is connected
-    const isGoogleEvent = isGoogleCalendarEvent(event);
+    // Update via Google Calendar API (single source of truth)
     const isGoogleConnected = await checkGoogleCalendarAuth();
     
-    if (isGoogleEvent && isGoogleConnected) {
-      // Update via Google Calendar API
-      try {
-        await updateGoogleCalendarEvent({
-          eventId: event.id,
-          instanceDate: event.start.dateTime, // Required for single instance updates
-          updateType: 'single',
-          updates: {
-            description: updatedDescription
-          },
-          calendarId: 'primary'
-        });
-        console.log(`✅ Updated Google Calendar event ${event.id} with client assignment`);
-      } catch (googleError) {
-        console.error(`Failed to update Google Calendar event ${event.id}:`, googleError);
-        // Don't fail the whole operation - workout was created successfully
-        // The metadata will be in the workout, just not synced to Google Calendar
-      }
-    } else {
-      // Update via Firestore
-      try {
-        await updateFirestoreCalendarEvent(event.id, {
-          description: updatedDescription,
-          preConfiguredClient: clientId,
-          preConfiguredCategory: categoryName,
-          linkedWorkoutId: workout.id
-        });
-      } catch (firestoreError) {
-        console.error(`Failed to update Firestore event ${event.id}:`, firestoreError);
-        // Don't fail - workout was created, which is the important part
-      }
+    if (!isGoogleConnected) {
+      console.warn(`⚠️ Google Calendar is not connected. Cannot update event ${event.id}. Workout was created but event metadata won't be synced.`);
+      // Don't fail the whole operation - workout was created successfully
+      // The metadata will be in the workout, just not synced to Google Calendar
+      return {
+        eventId: event.id,
+        workoutId: workout.id,
+        success: true
+      };
+    }
+    
+    // Check if this is a Google Calendar event
+    const isGoogleEvent = isGoogleCalendarEvent(event);
+    
+    if (!isGoogleEvent) {
+      console.warn(`⚠️ Event ${event.id} is not a Google Calendar event. Cannot update. Workout was created but event metadata won't be synced.`);
+      // Don't fail the whole operation - workout was created successfully
+      return {
+        eventId: event.id,
+        workoutId: workout.id,
+        success: true
+      };
+    }
+    
+    // Update via Google Calendar API
+    try {
+      await updateGoogleCalendarEvent({
+        eventId: event.id,
+        instanceDate: event.start.dateTime, // Required for single instance updates
+        updateType: 'single',
+        updates: {
+          description: updatedDescription
+        },
+        calendarId: 'primary'
+      });
+      console.log(`✅ Updated Google Calendar event ${event.id} with client assignment`);
+    } catch (googleError) {
+      console.error(`Failed to update Google Calendar event ${event.id}:`, googleError);
+      // Don't fail the whole operation - workout was created successfully
+      // The metadata will be in the workout, just not synced to Google Calendar
     }
     
     return {
@@ -356,23 +364,15 @@ export async function unassignClientFromEvent(
         
         console.log('✅ [unassignClientFromEvent] Removed client assignment from Google Calendar event');
       } else {
-        console.warn('⚠️ [unassignClientFromEvent] Google Calendar not connected, updating Firestore only');
+        console.warn('⚠️ [unassignClientFromEvent] Google Calendar not connected. Cannot update event. Event metadata will remain.');
+        // Don't fail - the workout deletion is the important part
       }
+    } else {
+      console.warn('⚠️ [unassignClientFromEvent] Event is not a Google Calendar event. Cannot update.');
     }
     
-    // Update Firestore calendar event (if it exists - Google Calendar events may not have Firestore records)
-    try {
-      await updateFirestoreCalendarEvent(event.id, {
-        description: cleanedDescription,
-        linkedWorkoutId: undefined,
-        preConfiguredClient: undefined,
-        preConfiguredCategory: undefined,
-      });
-      console.log('✅ Cleared Firestore calendar event metadata');
-    } catch (firestoreError) {
-      // Firestore document may not exist for pure Google Calendar events - that's OK
-      console.log('Firestore event not found (Google Calendar event), skipping Firestore update');
-    }
+    // Note: Firebase calendarEvents collection is deprecated - all events are in Google Calendar
+    // No need to update Firebase - Google Calendar is the single source of truth
     
     // Delete the associated client workout if it exists
     if (shouldDeleteWorkout && linkedWorkoutId) {

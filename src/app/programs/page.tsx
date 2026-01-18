@@ -94,22 +94,21 @@ export default function ProgramsPage() {
   const router = useRouter();
 
   // UI State from stores (keeping for now)
-  const {
-    selectedClient,
-    currentDate,
-    viewMode,
-    calendarDate,
-    error,
-    setSelectedClient,
-    setViewMode,
-    setCalendarDate,
-    navigateMonth,
-    navigateWeek,
-    navigateDay,
-    goToToday,
-    clearError,
-    initializeSelectedClient,
-  } = useProgramStore();
+  // Use selectors to prevent re-renders when unrelated store state changes
+  const selectedClient = useProgramStore(state => state.selectedClient);
+  const currentDate = useProgramStore(state => state.currentDate);
+  const viewMode = useProgramStore(state => state.viewMode);
+  const calendarDate = useProgramStore(state => state.calendarDate);
+  const error = useProgramStore(state => state.error);
+  const setSelectedClient = useProgramStore(state => state.setSelectedClient);
+  const setViewMode = useProgramStore(state => state.setViewMode);
+  const setCalendarDate = useProgramStore(state => state.setCalendarDate);
+  const navigateMonth = useProgramStore(state => state.navigateMonth);
+  const navigateWeek = useProgramStore(state => state.navigateWeek);
+  const navigateDay = useProgramStore(state => state.navigateDay);
+  const goToToday = useProgramStore(state => state.goToToday);
+  const clearError = useProgramStore(state => state.clearError);
+  const initializeSelectedClient = useProgramStore(state => state.initializeSelectedClient);
   
   console.log('[ProgramsPage] Store state:', {
     selectedClient,
@@ -153,10 +152,15 @@ export default function ProgramsPage() {
   // Configuration data with React Query
   const { data: periods = [] } = usePeriods();
   const { data: workoutCategories = [] } = useWorkoutCategories();
-  const { weekTemplates, workoutStructureTemplates, fetchAll: fetchAllConfig } = useConfigurationStore();
+  // Use selectors to prevent re-renders when unrelated config state changes
+  const weekTemplates = useConfigurationStore(state => state.weekTemplates);
+  const workoutStructureTemplates = useConfigurationStore(state => state.workoutStructureTemplates);
+  const fetchAllConfig = useConfigurationStore(state => state.fetchAll);
 
   // Calendar events with React Query - calculate date range for current week view
   // Use useMemo with stable timestamp dependency to prevent infinite loops
+  const calendarDateTimestamp = calendarDate?.getTime() ?? null;
+  
   const calendarDateRange = React.useMemo(() => {
     if (!calendarDate) return null;
     const startDate = new Date(calendarDate);
@@ -166,14 +170,14 @@ export default function ProgramsPage() {
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
     return { start: startDate, end: endDate };
-  }, [calendarDate?.getTime()]); // Use timestamp for stable comparison
+  }, [calendarDateTimestamp]); // Use timestamp for stable comparison
 
   console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
     start: calendarDateRange?.start?.toISOString(),
     end: calendarDateRange?.end?.toISOString()
   });
   
-  const { data: calendarEvents = [], isLoading: calendarEventsLoading } = useCalendarEvents(
+  const { data: calendarEvents = [], isLoading: calendarEventsLoading, error: calendarEventsError } = useCalendarEvents(
     calendarDateRange?.start,
     calendarDateRange?.end
   );
@@ -183,8 +187,14 @@ export default function ProgramsPage() {
   
   console.log('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
-    isLoading: calendarEventsLoading
+    isLoading: calendarEventsLoading,
+    hasError: !!calendarEventsError
   });
+  
+  // Check if Google Calendar auth failed
+  const isGoogleCalendarAuthError = calendarEventsError?.message?.includes('Failed to get valid access token') ||
+    calendarEventsError?.message?.includes('Not authenticated') ||
+    calendarEventsError?.message?.includes('401');
 
   // Query client for invalidating queries
   const queryClient = useQueryClient();
@@ -204,7 +214,10 @@ export default function ProgramsPage() {
   };
 
   // Keep calendar store functions that aren't data fetching
-  const { createTestEvent, clearAllTestEvents, linkToWorkout } = useCalendarStore();
+  // Use selector to only subscribe to the functions we need, not the state
+  const createTestEvent = useCalendarStore(state => state.createTestEvent);
+  const clearAllTestEvents = useCalendarStore(state => state.clearAllTestEvents);
+  const linkToWorkout = useCalendarStore(state => state.linkToWorkout);
 
   // Selected date for mini calendar (defaults to calendarDate)
   // Initialize with calendarDate, fallback to today if null
@@ -1875,6 +1888,31 @@ export default function ProgramsPage() {
         <div className="flex gap-1 mt-1">
           {/* Week View - Scrollable, constrained to leave space for sidebar */}
           <div className="flex-1 min-w-0 overflow-x-auto" style={{ maxWidth: 'calc(100% - 272px)' }}>
+            {/* Show Google Calendar connection warning if auth failed */}
+            {isGoogleCalendarAuthError && (
+              <Card className="mb-4 border-yellow-500 bg-yellow-50">
+                <CardContent className="pt-4">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-yellow-800">
+                        ⚠️ Google Calendar Not Connected
+                      </p>
+                      <p className="text-xs text-yellow-700 mt-1">
+                        Calendar events won't appear until you connect Google Calendar. Workouts will still be visible.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        onClick={() => router.push('/configure')}
+                      >
+                        Go to Configure → Connect Google Calendar
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             <ErrorBoundary fallback={<div className="p-4 text-center text-destructive">Error loading calendar. Please refresh the page.</div>}>
               <React.Suspense fallback={<PageSkeleton />}>
                 <ModernCalendarView
@@ -1909,6 +1947,31 @@ export default function ProgramsPage() {
           {/* Current Day Schedule - Side view - Always visible, fixed width */}
           {/* Note: selectedClientId is null to show ALL events for the day, regardless of client selection */}
           <div className="w-64 flex-shrink-0 sticky top-2 self-start">
+            {/* Show Google Calendar connection warning if auth failed */}
+            {isGoogleCalendarAuthError && (
+              <Card className="mb-4 border-yellow-500 bg-yellow-50">
+                <CardContent className="pt-4">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-yellow-800">
+                        Google Calendar Not Connected
+                      </p>
+                      <p className="text-xs text-yellow-700 mt-1">
+                        Calendar events won't appear until you connect Google Calendar.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        onClick={() => router.push('/configure')}
+                      >
+                        Connect Google Calendar
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             <DayEventList
               selectedDate={selectedDate}
               events={calendarEvents}

@@ -25,8 +25,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Exchange code for tokens
-    const tokens = await getTokensFromCode(code);
+    // Get the origin from the request URL (must match what was used in auth)
+    const origin = request.nextUrl.origin;
+    const callbackUrl = `${origin}/api/auth/google/callback`;
+    
+    console.log('[OAuth Callback] Exchanging code with callback URL:', callbackUrl);
+    console.log('[OAuth Callback] Request origin:', origin);
+    
+    // Exchange code for tokens (use same redirect URI that was used in auth)
+    const tokens = await getTokensFromCode(code, callbackUrl);
 
     // Store tokens in Firestore
     await storeTokens({
@@ -42,8 +49,9 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error('Error exchanging code for tokens:', error);
+    const errorMessage = error instanceof Error ? error.message : 'token_exchange_failed';
     return NextResponse.redirect(
-      new URL(`/configure?error=${encodeURIComponent('token_exchange_failed')}`, request.url)
+      new URL(`/configure?error=${encodeURIComponent(errorMessage)}`, request.url)
     );
   }
 }

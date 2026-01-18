@@ -32,8 +32,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Try to refresh token if needed
+    const validToken = await getValidAccessToken();
+    
+    if (!validToken) {
+      return NextResponse.json(
+        { error: 'Failed to get valid access token. Please reconnect Google Calendar.' },
+        { status: 401 }
+      );
+    }
+
     const oauth2Client = createOAuth2Client();
-    setCredentials(oauth2Client, tokens.accessToken, tokens.refreshToken);
+    setCredentials(oauth2Client, validToken, tokens.refreshToken);
 
     const events = await getEvents(
       oauth2Client,
@@ -45,8 +55,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ events });
   } catch (error) {
     console.error('Error fetching calendar events:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch calendar events';
+    const errorDetails = error instanceof Error ? error.stack : String(error);
+    console.error('Error details:', errorDetails);
     return NextResponse.json(
-      { error: 'Failed to fetch calendar events' },
+      { 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+      },
       { status: 500 }
     );
   }

@@ -18,6 +18,8 @@ export function useCalendarEvents(
       return getCalendarEventsByDateRange(startDate, endDate);
     },
     enabled: !!startDate && !!endDate,
+    retry: false, // Don't retry on error to prevent infinite loops
+    retryOnMount: false, // Don't retry when component remounts
     ...options,
   });
 }

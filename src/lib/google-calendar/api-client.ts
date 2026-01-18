@@ -19,6 +19,20 @@ export interface CreateRecurringEventParams {
   location?: string;
 }
 
+export interface CreateSingleEventParams {
+  summary: string;
+  startDateTime: string; // ISO date string
+  endDateTime: string; // ISO date string
+  clientId?: string;
+  periodId?: string;
+  categoryName?: string;
+  workoutId?: string;
+  description?: string;
+  location?: string;
+  timeZone?: string;
+  calendarId?: string;
+}
+
 export interface UpdateEventParams {
   eventId: string;
   instanceDate?: string; // ISO date string - if provided, updates single instance
@@ -38,6 +52,28 @@ export interface UpdateEventParams {
  */
 export async function initiateGoogleAuth(): Promise<void> {
   window.location.href = '/api/auth/google';
+}
+
+/**
+ * Create a single (non-recurring) calendar event
+ */
+export async function createSingleCalendarEvent(
+  params: CreateSingleEventParams
+): Promise<any> {
+  const response = await fetch('/api/calendar/events/single', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to create calendar event');
+  }
+
+  return response.json();
 }
 
 /**
