@@ -77,11 +77,13 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
     const weekTemplates = useConfigurationStore(state => state.weekTemplates);
     const workoutCategories = useConfigurationStore(state => state.workoutCategories);
     const clients = useClientStore(state => state.clients);
+    // Only subscribe to calendar store functions we actually use
     const createTestEvent = useCalendarStore(state => state.createTestEvent);
     const fetchEvents = useCalendarStore(state => state.fetchEvents);
     const updateEvent = useCalendarStore(state => state.updateEvent);
     const deleteEvent = useCalendarStore(state => state.deleteEvent);
-    const calendarEvents = useCalendarStore(state => state.events);
+    // Don't subscribe to calendarEvents in the hook - it causes re-renders when ModernCalendarView fetches events
+    // Instead, get events directly from store when needed (in clearAllPeriods)
 
     // Fetch client programs
     const fetchClientProgramsAsync = useCallback(async (clientId?: string | null) => {
@@ -530,7 +532,9 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
             await fetchEvents({ start: periodStart, end: periodEnd });
             await new Promise(resolve => setTimeout(resolve, 300));
 
-            const eventsToDelete = calendarEvents.filter(event => {
+            // Get events directly from store when needed (don't subscribe to prevent re-renders)
+            const currentEvents = useCalendarStore.getState().events;
+            const eventsToDelete = currentEvents.filter(event => {
                 const hasMatchingClient = event.description?.includes(`client=${clientId}`) ||
                     event.preConfiguredClient === clientId;
 
@@ -573,7 +577,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
         } finally {
             setIsLoading(false);
         }
-    }, [selectedClientId, calendarEvents, fetchEvents, deleteEvent, fetchClientProgramsAsync]);
+    }, [selectedClientId, fetchEvents, deleteEvent, fetchClientProgramsAsync]);
 
     // Clear all periods for a client
     const clearAllPeriods = useCallback(async (clientId: string) => {
