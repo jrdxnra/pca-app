@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ClientWorkoutMovementUsage } from '@/lib/types';
-import { useMovements } from '@/hooks/queries/useMovements';
+import { useMovements, useMovementsByCategory } from '@/hooks/queries/useMovements';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,35 +27,31 @@ export function MovementUsageRow({
   canDelete,
   isInline = false
 }: MovementUsageRowProps) {
-  // Lazy load movements - fetch when category is selected OR when movement is already set
-  // This ensures movements load as soon as user selects a category
-  const shouldLoadMovements = !!(usage.categoryId || usage.movementId);
-  const { data: movements = [], isLoading: movementsLoading, refetch: refetchMovements } = useMovements(
-    true, // includeCategory
-    shouldLoadMovements // Only fetch when needed
-  );
-  
+  // Lazy load movements - use category-specific query when category is selected
+  // This is more efficient than fetching all movements and filtering
   const { categories } = useMovementCategoryStore();
   
-  const [filteredMovements, setFilteredMovements] = useState<any[]>([]);
+  // If category is selected, fetch only movements for that category
+  // If movementId is set but no category, fetch all movements to find the movement
+  const needsAllMovements = !usage.categoryId && !!usage.movementId;
+  const { data: allMovements = [] } = useMovements(
+    true, // includeCategory
+    needsAllMovements // Only fetch all if we need to find a movement without category
+  );
   
-  // When category is selected, ensure movements are fetched
-  useEffect(() => {
-    if (usage.categoryId && shouldLoadMovements && movements.length === 0 && !movementsLoading) {
-      // Category selected but movements not loaded yet - trigger fetch
-      refetchMovements();
+  const { data: categoryMovements = [], isLoading: movementsLoading } = useMovementsByCategory(
+    usage.categoryId || '', // Category ID
+    true, // includeCategory
+    {
+      enabled: !!usage.categoryId, // Only fetch when category is selected
     }
-  }, [usage.categoryId, shouldLoadMovements, movements.length, movementsLoading, refetchMovements]);
+  );
   
-  // Filter movements when category changes
-  useEffect(() => {
-    if (usage.categoryId && movements.length > 0) {
-      const filtered = movements.filter(m => m.categoryId === usage.categoryId);
-      setFilteredMovements(filtered);
-    } else {
-      setFilteredMovements([]);
-    }
-  }, [usage.categoryId, movements]);
+  // Use category-specific movements if available, otherwise use all movements
+  const movements = usage.categoryId ? categoryMovements : allMovements;
+  
+  // Filtered movements (already filtered by category query, but keep for compatibility)
+  const filteredMovements = movements;
   
   // Clear movement when category changes
   useEffect(() => {
