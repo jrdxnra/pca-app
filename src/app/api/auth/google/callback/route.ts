@@ -43,6 +43,23 @@ export async function GET(request: NextRequest) {
     } else {
       // Fallback to dynamic origin (local development only)
       const origin = request.nextUrl.origin;
+      
+      // Check if we're on Cloud Run (Firebase) - origin will be 0.0.0.0 or internal
+      const isCloudRun = origin.includes('0.0.0.0') || 
+                        origin.includes('127.0.0.1') || 
+                        process.env.K_SERVICE || // Cloud Run sets this
+                        process.env.GOOGLE_CLOUD_PROJECT; // GCP sets this
+      
+      if (isCloudRun) {
+        // On Cloud Run, we MUST use the Firebase hosting URL from env var
+        console.error('[OAuth Callback] ERROR: Running on Cloud Run but GOOGLE_REDIRECT_URI not set!');
+        console.error('[OAuth Callback] Request origin:', origin, '(this is internal Cloud Run URL, not public)');
+        return NextResponse.redirect(
+          new URL('/configure?error=GOOGLE_REDIRECT_URI_not_configured', request.url)
+        );
+      }
+      
+      // Local development fallback
       callbackUrl = `${origin}/api/auth/google/callback`;
       console.warn('[OAuth Callback] WARNING: GOOGLE_REDIRECT_URI not set! Building callback URL from request origin:', callbackUrl);
     }
@@ -62,9 +79,18 @@ export async function GET(request: NextRequest) {
     });
 
     // Redirect to configure page with success
-    return NextResponse.redirect(
-      new URL('/configure?connected=true', request.url)
-    );
+    // Use the Firebase hosting URL if we're on Cloud Run, otherwise use request origin
+    let redirectUrl: string;
+    if (process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT) {
+      // On Cloud Run, use Firebase hosting URL from env or construct it
+      const firebaseUrl = process.env.NEXT_PUBLIC_FIREBASE_HOSTING_URL || 'https://performancecoach.web.app';
+      redirectUrl = `${firebaseUrl}/configure?connected=true`;
+    } else {
+      // Local development or Vercel - use request origin
+      redirectUrl = new URL('/configure?connected=true', request.url).toString();
+    }
+    
+    return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error('Error exchanging code for tokens:', error);
     const errorMessage = error instanceof Error ? error.message : 'token_exchange_failed';

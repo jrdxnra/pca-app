@@ -41,10 +41,33 @@ export async function GET(request: NextRequest) {
     } else {
       // Fallback to dynamic origin (local development only)
       const origin = request.nextUrl.origin;
+      
+      // Check if we're on Cloud Run (Firebase) - origin will be 0.0.0.0 or internal
+      const isCloudRun = origin.includes('0.0.0.0') || 
+                        origin.includes('127.0.0.1') || 
+                        process.env.K_SERVICE || // Cloud Run sets this
+                        process.env.GOOGLE_CLOUD_PROJECT; // GCP sets this
+      
+      if (isCloudRun) {
+        // On Cloud Run, we MUST use the Firebase hosting URL from env var
+        // If not set, this is a configuration error
+        console.error('[OAuth] ERROR: Running on Cloud Run but GOOGLE_REDIRECT_URI not set!');
+        console.error('[OAuth] Request origin:', origin, '(this is internal Cloud Run URL, not public)');
+        console.error('[OAuth] Set GOOGLE_REDIRECT_URI in Cloud Run environment variables to: https://performancecoach.web.app/api/auth/google/callback');
+        return NextResponse.json(
+          { 
+            error: 'GOOGLE_REDIRECT_URI must be set in Cloud Run environment variables for Firebase deployments.',
+            hint: 'Set GOOGLE_REDIRECT_URI=https://performancecoach.web.app/api/auth/google/callback in Cloud Run service environment variables.'
+          },
+          { status: 500 }
+        );
+      }
+      
+      // Local development fallback
       const cleanOrigin = origin.replace(/\/$/, '');
       callbackUrl = `${cleanOrigin}/api/auth/google/callback`;
       console.warn('[OAuth] WARNING: GOOGLE_REDIRECT_URI not set! Building callback URL from request origin:', callbackUrl);
-      console.warn('[OAuth] This should only happen in local development. For Vercel, set GOOGLE_REDIRECT_URI in environment variables.');
+      console.warn('[OAuth] This should only happen in local development. For Vercel/Firebase, set GOOGLE_REDIRECT_URI in environment variables.');
     }
     
     console.log('[OAuth] Request origin:', request.nextUrl.origin);
