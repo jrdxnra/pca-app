@@ -72,6 +72,10 @@ export async function getStoredTokens(): Promise<StoredTokens | null> {
 
 /**
  * Get a valid access token, refreshing if necessary
+ * 
+ * NOTE: This only runs when user is actively using the site (API requests).
+ * No background token refresh - tokens only refresh when needed during active use.
+ * When user is off the site, tokens remain stored but no refresh happens.
  */
 export async function getValidAccessToken(): Promise<string | null> {
   const tokens = await getStoredTokens();
