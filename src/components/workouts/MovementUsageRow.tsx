@@ -30,7 +30,7 @@ export function MovementUsageRow({
   // Lazy load movements - fetch when category is selected OR when movement is already set
   // This ensures movements load as soon as user selects a category
   const shouldLoadMovements = !!(usage.categoryId || usage.movementId);
-  const { data: movements = [], isLoading: movementsLoading } = useMovements(
+  const { data: movements = [], isLoading: movementsLoading, refetch: refetchMovements } = useMovements(
     true, // includeCategory
     shouldLoadMovements // Only fetch when needed
   );
@@ -38,6 +38,14 @@ export function MovementUsageRow({
   const { categories } = useMovementCategoryStore();
   
   const [filteredMovements, setFilteredMovements] = useState<any[]>([]);
+  
+  // When category is selected, ensure movements are fetched
+  useEffect(() => {
+    if (usage.categoryId && shouldLoadMovements && movements.length === 0 && !movementsLoading) {
+      // Category selected but movements not loaded yet - trigger fetch
+      refetchMovements();
+    }
+  }, [usage.categoryId, shouldLoadMovements, movements.length, movementsLoading, refetchMovements]);
   
   // Filter movements when category changes
   useEffect(() => {
