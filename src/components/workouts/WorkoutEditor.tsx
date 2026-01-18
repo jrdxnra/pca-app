@@ -225,26 +225,6 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   onDelete,
   draftKey
 }, ref) {
-  // Lazy load movements - only fetch when needed:
-  // 1. If there are existing movementUsages with movementId (need to display them)
-  // 2. MovementUsageRow components will trigger their own loading when category is selected
-  const hasExistingMovements = React.useMemo(() => {
-    return rounds.some(round => 
-      round.movementUsages?.some(usage => usage.movementId && usage.movementId !== '')
-    );
-  }, [rounds]);
-  
-  // Use React Query for movements (with lazy loading and enhanced caching)
-  // Only fetch if there are existing movements to display
-  const { data: movements = [], isLoading: movementsLoading } = useMovements(
-    true, // includeCategory = true
-    hasExistingMovements, // Only fetch when there are existing movements to display
-    {
-      // Movements are cached for 10 minutes (configured in hook)
-      // This prevents refetching when navigating between workouts
-    }
-  );
-  
   const { categories, fetchCategories } = useMovementCategoryStore();
   const { workoutStructureTemplates, workoutTypes, fetchWorkoutTypes } = useConfigurationStore();
   const { events, updateEvent } = useCalendarStore();
@@ -280,6 +260,26 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   }>({});
 
   const visibleColumns = externalVisibleColumns ?? internalVisibleColumns;
+
+  // Lazy load movements - only fetch when needed:
+  // 1. If there are existing movementUsages with movementId (need to display them)
+  // 2. MovementUsageRow components will trigger their own loading when category is selected
+  const hasExistingMovements = React.useMemo(() => {
+    return rounds.some(round => 
+      round.movementUsages?.some(usage => usage.movementId && usage.movementId !== '')
+    );
+  }, [rounds]);
+  
+  // Use React Query for movements (with lazy loading and enhanced caching)
+  // Only fetch if there are existing movements to display
+  const { data: movements = [], isLoading: movementsLoading } = useMovements(
+    true, // includeCategory = true
+    hasExistingMovements, // Only fetch when there are existing movements to display
+    {
+      // Movements are cached for 10 minutes (configured in hook)
+      // This prevents refetching when navigating between workouts
+    }
+  );
 
   // Drag and drop state
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
