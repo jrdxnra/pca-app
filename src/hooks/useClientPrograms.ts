@@ -245,7 +245,9 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
             await fetchClientProgramsAsync(assignment.clientId);
 
             // Get updated program to find the created period
-            const updatedPrograms = await getClientProgramsByClient(assignment.clientId);
+            // Use React Query cache if available, otherwise fetch directly
+            const queryData = queryClient.getQueryData<ClientProgram[]>(queryKeys.clientPrograms.byClient(assignment.clientId));
+            const updatedPrograms = queryData || await getClientProgramsByClient(assignment.clientId);
             const updatedProgram = updatedPrograms[0];
 
             if (updatedProgram) {
@@ -509,7 +511,9 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
         setMutationError(null);
 
         try {
-            const freshPrograms = await getClientProgramsByClient(clientId);
+            // Use React Query cache if available, otherwise fetch directly
+            const queryData = queryClient.getQueryData<ClientProgram[]>(queryKeys.clientPrograms.byClient(clientId));
+            const freshPrograms = queryData || await getClientProgramsByClient(clientId);
             const clientProgram = freshPrograms.find(cp => cp.clientId === clientId);
 
             if (!clientProgram) throw new Error('Client program not found');
