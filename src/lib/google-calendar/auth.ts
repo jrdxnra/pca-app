@@ -8,13 +8,26 @@ import { OAuth2Client } from 'google-auth-library';
 export function createOAuth2Client(redirectUri?: string): OAuth2Client {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const defaultRedirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback';
-  const finalRedirectUri = redirectUri || defaultRedirectUri;
+  
+  // If redirectUri is provided, use it. Otherwise use env var, or throw error in production
+  let finalRedirectUri: string;
+  if (redirectUri) {
+    finalRedirectUri = redirectUri;
+  } else if (process.env.GOOGLE_REDIRECT_URI) {
+    finalRedirectUri = process.env.GOOGLE_REDIRECT_URI;
+  } else if (process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === undefined) {
+    // Only allow localhost fallback in local development
+    finalRedirectUri = 'http://localhost:3000/api/auth/google/callback';
+  } else {
+    // In production, we must have a redirect URI
+    throw new Error('GOOGLE_REDIRECT_URI environment variable is required in production. Please set it in Vercel environment variables.');
+  }
 
   if (!clientId || !clientSecret) {
     throw new Error('Google OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in environment variables.');
   }
 
+  console.log('[OAuth] Using redirect URI:', finalRedirectUri);
   return new google.auth.OAuth2(clientId, clientSecret, finalRedirectUri);
 }
 
