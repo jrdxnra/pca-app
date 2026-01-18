@@ -22,16 +22,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get the origin from the request URL (more reliable than headers)
-    const origin = request.nextUrl.origin;
-    // Remove trailing slash if present
-    const cleanOrigin = origin.replace(/\/$/, '');
-    const callbackUrl = `${cleanOrigin}/api/auth/google/callback`;
+    // Use GOOGLE_REDIRECT_URI from environment if set (for Vercel deployments)
+    // Otherwise, build from request origin (for local development)
+    let callbackUrl: string;
+    if (process.env.GOOGLE_REDIRECT_URI) {
+      callbackUrl = process.env.GOOGLE_REDIRECT_URI;
+      console.log('[OAuth] Using GOOGLE_REDIRECT_URI from environment:', callbackUrl);
+    } else {
+      // Fallback to dynamic origin (local development only)
+      const origin = request.nextUrl.origin;
+      const cleanOrigin = origin.replace(/\/$/, '');
+      callbackUrl = `${cleanOrigin}/api/auth/google/callback`;
+      console.log('[OAuth] Building callback URL from request origin:', callbackUrl);
+    }
     
-    console.log('[OAuth] Generating auth URL with callback:', callbackUrl);
-    console.log('[OAuth] Request origin:', origin);
-    console.log('[OAuth] Clean origin:', cleanOrigin);
-    console.log('[OAuth] Full callback URL:', callbackUrl);
+    console.log('[OAuth] Request origin:', request.nextUrl.origin);
+    console.log('[OAuth] Final callback URL:', callbackUrl);
     
     // Generate auth URL with the correct redirect URI
     const authUrl = getAuthUrl(callbackUrl);

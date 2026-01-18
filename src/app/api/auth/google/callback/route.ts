@@ -25,12 +25,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get the origin from the request URL (must match what was used in auth)
-    const origin = request.nextUrl.origin;
-    const callbackUrl = `${origin}/api/auth/google/callback`;
+    // Use GOOGLE_REDIRECT_URI from environment if set (must match what was used in auth)
+    // Otherwise, build from request origin (for local development)
+    let callbackUrl: string;
+    if (process.env.GOOGLE_REDIRECT_URI) {
+      callbackUrl = process.env.GOOGLE_REDIRECT_URI;
+      console.log('[OAuth Callback] Using GOOGLE_REDIRECT_URI from environment:', callbackUrl);
+    } else {
+      // Fallback to dynamic origin (local development only)
+      const origin = request.nextUrl.origin;
+      callbackUrl = `${origin}/api/auth/google/callback`;
+      console.log('[OAuth Callback] Building callback URL from request origin:', callbackUrl);
+    }
     
-    console.log('[OAuth Callback] Exchanging code with callback URL:', callbackUrl);
-    console.log('[OAuth Callback] Request origin:', origin);
+    console.log('[OAuth Callback] Request origin:', request.nextUrl.origin);
+    console.log('[OAuth Callback] Final callback URL:', callbackUrl);
     
     // Exchange code for tokens (use same redirect URI that was used in auth)
     const tokens = await getTokensFromCode(code, callbackUrl);
