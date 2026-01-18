@@ -25,15 +25,26 @@ export async function GET(request: NextRequest) {
     // Use GOOGLE_REDIRECT_URI from environment if set (for Vercel deployments)
     // Otherwise, build from request origin (for local development)
     let callbackUrl: string;
-    if (process.env.GOOGLE_REDIRECT_URI) {
-      callbackUrl = process.env.GOOGLE_REDIRECT_URI;
+    const envRedirectUri = process.env.GOOGLE_REDIRECT_URI?.trim();
+    
+    console.log('[OAuth] Environment check:', {
+      hasGOOGLE_REDIRECT_URI: !!process.env.GOOGLE_REDIRECT_URI,
+      GOOGLE_REDIRECT_URI_length: process.env.GOOGLE_REDIRECT_URI?.length || 0,
+      GOOGLE_REDIRECT_URI_value: process.env.GOOGLE_REDIRECT_URI ? '***set***' : 'undefined',
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      NODE_ENV: process.env.NODE_ENV
+    });
+    
+    if (envRedirectUri && envRedirectUri.length > 0) {
+      callbackUrl = envRedirectUri;
       console.log('[OAuth] Using GOOGLE_REDIRECT_URI from environment:', callbackUrl);
     } else {
       // Fallback to dynamic origin (local development only)
       const origin = request.nextUrl.origin;
       const cleanOrigin = origin.replace(/\/$/, '');
       callbackUrl = `${cleanOrigin}/api/auth/google/callback`;
-      console.log('[OAuth] Building callback URL from request origin:', callbackUrl);
+      console.warn('[OAuth] WARNING: GOOGLE_REDIRECT_URI not set! Building callback URL from request origin:', callbackUrl);
+      console.warn('[OAuth] This should only happen in local development. For Vercel, set GOOGLE_REDIRECT_URI in environment variables.');
     }
     
     console.log('[OAuth] Request origin:', request.nextUrl.origin);
