@@ -77,20 +77,9 @@ import {
 } from '@/lib/firebase/services/clientPrograms';
 import { getAppTimezone, setAppTimezone, getBrowserTimezone, hasTimezoneChanged, formatTimezoneLabel } from '@/lib/utils/timezone';
 import { toastSuccess } from '@/components/ui/toaster';
+import { logger } from '@/lib/utils/logger';
 
 export default function ProgramsPage() {
-  // Track render count to detect infinite loops
-  const renderCountRef = React.useRef(0);
-  renderCountRef.current += 1;
-  const renderCount = renderCountRef.current;
-  
-  console.log(`[ProgramsPage] Component rendering (render #${renderCount})`);
-  
-  // Warn if we're rendering too many times
-  if (renderCount > 10) {
-    console.warn(`[ProgramsPage] WARNING: Component has rendered ${renderCount} times - possible infinite loop!`);
-  }
-  
   const router = useRouter();
 
   // UI State from stores (keeping for now)
@@ -109,23 +98,15 @@ export default function ProgramsPage() {
   const goToToday = useProgramStore(state => state.goToToday);
   const clearError = useProgramStore(state => state.clearError);
   const initializeSelectedClient = useProgramStore(state => state.initializeSelectedClient);
-  
-  console.log('[ProgramsPage] Store state:', {
-    selectedClient,
-    viewMode,
-    calendarDate: calendarDate?.toISOString(),
-    hasError: !!error
-  });
 
   // Data fetching with React Query
-  console.log('[ProgramsPage] Calling React Query hooks...');
   const { data: clients = [], isLoading: clientsLoading } = useClients(false);
   const { data: allPrograms = [], isLoading: programsLoading } = usePrograms();
   const { data: programsByClient = [], isLoading: programsByClientLoading } = useProgramsByClient(selectedClient);
   const { data: scheduledWorkoutsByClient = [], isLoading: scheduledWorkoutsByClientLoading } = useScheduledWorkoutsByClient(selectedClient);
   const { data: allScheduledWorkouts = [], isLoading: allScheduledWorkoutsLoading } = useScheduledWorkouts();
   
-  console.log('[ProgramsPage] React Query data loaded:', {
+  logger.debug('[ProgramsPage] React Query data loaded:', {
     clientsCount: clients.length,
     allProgramsCount: allPrograms.length,
     programsByClientCount: programsByClient.length,
@@ -143,7 +124,7 @@ export default function ProgramsPage() {
   const scheduledWorkouts = selectedClient ? scheduledWorkoutsByClient : allScheduledWorkouts;
   const loading = programsLoading || programsByClientLoading || scheduledWorkoutsByClientLoading || allScheduledWorkoutsLoading || clientsLoading;
   
-  console.log('[ProgramsPage] Computed data:', {
+  logger.debug('[ProgramsPage] Computed data:', {
     programsCount: programs.length,
     scheduledWorkoutsCount: scheduledWorkouts.length,
     loading
@@ -172,7 +153,7 @@ export default function ProgramsPage() {
     return { start: startDate, end: endDate };
   }, [calendarDateTimestamp]); // Use timestamp for stable comparison
 
-  console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
+  logger.debug('[ProgramsPage] Calling useCalendarEvents hook with:', {
     start: calendarDateRange?.start?.toISOString(),
     end: calendarDateRange?.end?.toISOString()
   });
@@ -185,7 +166,7 @@ export default function ProgramsPage() {
   // Simply use calendarEvents directly - React Query handles memoization
   const stableCalendarEvents = calendarEvents;
   
-  console.log('[ProgramsPage] Calendar events loaded:', {
+  logger.debug('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
     isLoading: calendarEventsLoading,
     hasError: !!calendarEventsError
@@ -230,52 +211,52 @@ export default function ProgramsPage() {
   // Track mounted state to avoid hydration mismatch with date-dependent UI
   const [mounted, setMounted] = useState(false);
   
-  console.log('[ProgramsPage] mounted state:', mounted);
+  logger.debug('[ProgramsPage] mounted state:', mounted);
   
   // Timezone notification state
   const [appTimezone, setAppTimezoneState] = useState<string>(() => {
-    console.log('[ProgramsPage] Initializing appTimezone state');
+    logger.debug('[ProgramsPage] Initializing appTimezone state');
     if (typeof window !== 'undefined') {
       const tz = getAppTimezone();
-      console.log('[ProgramsPage] Got appTimezone from storage:', tz);
+      logger.debug('[ProgramsPage] Got appTimezone from storage:', tz);
       return tz;
     }
-    console.log('[ProgramsPage] window undefined, using default timezone');
+    logger.debug('[ProgramsPage] window undefined, using default timezone');
     return 'America/Los_Angeles';
   });
   const [showTimezonePrompt, setShowTimezonePrompt] = useState(false);
   const TIMEZONE_DISMISS_KEY = 'pca-timezone-prompt-dismissed';
   
   useEffect(() => {
-    console.log('[ProgramsPage] Mount effect running');
+    logger.debug('[ProgramsPage] Mount effect running');
     setMounted(true);
-    console.log('[ProgramsPage] Set mounted to true');
+    logger.debug('[ProgramsPage] Set mounted to true');
     
     // Check if timezone prompt was dismissed
     const wasDismissed = typeof window !== 'undefined' 
       ? localStorage.getItem(TIMEZONE_DISMISS_KEY) === 'true'
       : false;
     
-    console.log('[ProgramsPage] Timezone prompt dismissed?', wasDismissed);
+    logger.debug('[ProgramsPage] Timezone prompt dismissed?', wasDismissed);
     
     // Check if browser timezone differs from app timezone
     if (!wasDismissed && hasTimezoneChanged()) {
       const savedTimezone = getAppTimezone();
       const browserTimezone = getBrowserTimezone();
-      console.log('[ProgramsPage] Timezone check:', {
+      logger.debug('[ProgramsPage] Timezone check:', {
         savedTimezone,
         browserTimezone,
         hasChanged: hasTimezoneChanged()
       });
       // Only show prompt if timezone was previously set (not default)
       if (savedTimezone !== 'America/Los_Angeles' || browserTimezone !== 'America/Los_Angeles') {
-        console.log('[ProgramsPage] Showing timezone prompt');
+        logger.debug('[ProgramsPage] Showing timezone prompt');
         setShowTimezonePrompt(true);
       }
     }
     
     return () => {
-      console.log('[ProgramsPage] Mount effect cleanup');
+      logger.debug('[ProgramsPage] Mount effect cleanup');
     };
   }, []);
 
@@ -289,13 +270,13 @@ export default function ProgramsPage() {
     
     if (!hasInitializedSelectedDate.current && calendarDate) {
       // Initialize once on mount
-      console.log('[ProgramsPage] Initializing selectedDate from calendarDate');
+      logger.debug('[ProgramsPage] Initializing selectedDate from calendarDate');
       setSelectedDate(calendarDate);
       hasInitializedSelectedDate.current = true;
       lastCalendarDateRef.current = calendarDateTimestamp;
     } else if (hasInitializedSelectedDate.current && calendarDate && lastCalendarDateRef.current !== calendarDateTimestamp) {
       // Sync when calendarDate actually changes (by timestamp comparison)
-      console.log('[ProgramsPage] Syncing selectedDate with calendarDate');
+      logger.debug('[ProgramsPage] Syncing selectedDate with calendarDate');
       setSelectedDate(calendarDate);
       lastCalendarDateRef.current = calendarDateTimestamp;
     }
@@ -304,7 +285,7 @@ export default function ProgramsPage() {
   const [includeWeekends, setIncludeWeekends] = useState(false);
 
   // Use the shared client programs hook - replaces local state and fetchClientPrograms function
-  console.log('[ProgramsPage] Calling useClientPrograms hook with selectedClient:', selectedClient);
+  logger.debug('[ProgramsPage] Calling useClientPrograms hook with selectedClient:', selectedClient);
   const {
     clientPrograms,
     isLoading: clientProgramsLoading,
@@ -321,7 +302,7 @@ export default function ProgramsPage() {
   }
   const stableClientPrograms = clientProgramsRef.current;
   
-  console.log('[ProgramsPage] useClientPrograms result:', {
+  logger.debug('[ProgramsPage] useClientPrograms result:', {
     clientProgramsCount: clientPrograms.length,
     isLoading: clientProgramsLoading
   });
@@ -349,9 +330,9 @@ export default function ProgramsPage() {
 
   // Fetch configuration data on mount
   useEffect(() => {
-    console.log('[ProgramsPage] Fetching all config');
+    logger.debug('[ProgramsPage] Fetching all config');
     fetchAllConfig();
-    console.log('[ProgramsPage] Config fetch initiated');
+    logger.debug('[ProgramsPage] Config fetch initiated');
   }, [fetchAllConfig]);
 
   // Calendar date is now managed by the store with localStorage persistence
@@ -359,9 +340,9 @@ export default function ProgramsPage() {
 
   // Initialize selected client from localStorage after hydration
   useEffect(() => {
-    console.log('[ProgramsPage] Initializing selected client from localStorage');
+    logger.debug('[ProgramsPage] Initializing selected client from localStorage');
     initializeSelectedClient();
-    console.log('[ProgramsPage] Selected client initialized');
+    logger.debug('[ProgramsPage] Selected client initialized');
   }, [initializeSelectedClient]);
 
   // React Query handles data fetching automatically based on selectedClient

@@ -10,6 +10,7 @@ import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { getAppTimezone } from '@/lib/utils/timezone';
+import { logger } from '@/lib/utils/logger';
 
 // Helper to get a valid IANA timezone, falling back to app timezone if invalid
 // Google Calendar sometimes returns formats like "GMT-08:00" which aren't valid IANA names
@@ -112,41 +113,21 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   onEventClick,
   onWorkoutClick
 }: TwoColumnWeekViewProps) {
-  console.log('[TwoColumnWeekView] Component rendering', {
-    calendarDate: calendarDate?.toISOString(),
-    allCalendarEventsCount: allCalendarEvents?.length,
-    workoutsCount: workouts?.length,
-    selectedClient,
-    includeWeekends
-  });
-  
   // All hooks must be called first, in the same order every render
-  console.log('[TwoColumnWeekView] Calling hooks...');
   // Use selectors to prevent re-renders when unrelated store state changes
   const configWorkoutCategories = useConfigurationStore(state => state.workoutCategories);
   const businessHours = useConfigurationStore(state => state.businessHours);
-  console.log('[TwoColumnWeekView] useConfigurationStore result:', {
-    workoutCategoriesCount: configWorkoutCategories?.length,
-    hasBusinessHours: !!businessHours
-  });
   
   const calendarConfig = useCalendarStore(state => state.config);
-  console.log('[TwoColumnWeekView] useCalendarStore result:', {
-    hasConfig: !!calendarConfig
-  });
   
   const router = useRouter();
-  console.log('[TwoColumnWeekView] useRouter called');
   
   const [allDayCollapsed, setAllDayCollapsed] = useState(true);
-  console.log('[TwoColumnWeekView] allDayCollapsed state:', allDayCollapsed);
   
   const [mounted, setMounted] = useState(false);
-  console.log('[TwoColumnWeekView] mounted state:', mounted);
   
   // Get app timezone (defaults to Pacific)
   const appTimezone = getAppTimezone();
-  console.log('[TwoColumnWeekView] appTimezone:', appTimezone);
 
   // Use length and selectedClient for stable dependencies instead of array reference
   // This prevents React error #310 from unstable array dependencies
@@ -170,11 +151,9 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   
   // Track when component is mounted to avoid hydration mismatch with dates
   useEffect(() => {
-    console.log('[TwoColumnWeekView] Mount effect running');
     setMounted(true);
-    console.log('[TwoColumnWeekView] Set mounted to true');
     return () => {
-      console.log('[TwoColumnWeekView] Unmounting');
+      // Cleanup on unmount
     };
   }, []);
   
@@ -710,14 +689,6 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
       return timeA - timeB;
     });
   };
-
-  console.log('[TwoColumnWeekView] About to render JSX', {
-    weekDaysCount: weekDays.length,
-    timeSlotsCount: timeSlots.length,
-    allDayEventsCount: allDayEvents.length,
-    timedEventsCount: timedEvents.length,
-    workoutsCount: workouts.length
-  });
   
   return (
     <Card className="py-1 gap-1" style={{ display: 'block', overflow: 'visible' }}>
@@ -1150,38 +1121,25 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Structure changes: calendar date, weekend inclusion
   // Data changes: events, workouts, selected client, client programs
   
-  const structureChanged = (
-    prevProps.calendarDate?.getTime() !== nextProps.calendarDate?.getTime() ||
-    prevProps.includeWeekends !== nextProps.includeWeekends
-  );
+  // Quick checks first (most common changes)
+  if (prevProps.selectedClient !== nextProps.selectedClient) return false;
+  if (prevProps.includeWeekends !== nextProps.includeWeekends) return false;
   
-  const dataChanged = (
-    prevProps.selectedClient !== nextProps.selectedClient ||
-    prevProps.calendarEvents !== nextProps.calendarEvents ||
-    prevProps.calendarEvents.length !== nextProps.calendarEvents.length ||
-    prevProps.workouts !== nextProps.workouts ||
-    prevProps.workouts.length !== nextProps.workouts.length ||
-    prevProps.clientPrograms !== nextProps.clientPrograms
-  );
+  // Date comparison (expensive, but necessary)
+  const prevDate = prevProps.calendarDate?.getTime();
+  const nextDate = nextProps.calendarDate?.getTime();
+  if (prevDate !== nextDate) return false;
   
-  console.log('[TwoColumnWeekView] React.memo comparison', {
-    structureChanged,
-    dataChanged,
-    calendarDateChanged: prevProps.calendarDate?.getTime() !== nextProps.calendarDate?.getTime(),
-    includeWeekendsChanged: prevProps.includeWeekends !== nextProps.includeWeekends,
-    selectedClientChanged: prevProps.selectedClient !== nextProps.selectedClient,
-    calendarEventsChanged: prevProps.calendarEvents !== nextProps.calendarEvents,
-    calendarEventsLengthChanged: prevProps.calendarEvents.length !== nextProps.calendarEvents.length,
-    workoutsChanged: prevProps.workouts !== nextProps.workouts,
-    workoutsLengthChanged: prevProps.workouts.length !== nextProps.workouts.length,
-    clientProgramsChanged: prevProps.clientPrograms !== nextProps.clientPrograms,
-    shouldRerender: structureChanged || dataChanged
-  });
+  // Array reference checks (fast)
+  if (prevProps.calendarEvents !== nextProps.calendarEvents) return false;
+  if (prevProps.workouts !== nextProps.workouts) return false;
+  if (prevProps.clientPrograms !== nextProps.clientPrograms) return false;
   
-  // If structure or data changed, allow re-render
-  if (structureChanged || dataChanged) return false;
+  // Length checks (only if arrays are different references but might have same content)
+  if (prevProps.calendarEvents.length !== nextProps.calendarEvents.length) return false;
+  if (prevProps.workouts.length !== nextProps.workouts.length) return false;
   
-  // Skip re-render only if nothing important changed
+  // Skip re-render - nothing important changed
   return true;
 });
 

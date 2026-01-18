@@ -7,6 +7,7 @@ import { Client } from '@/lib/types';
 import { format } from 'date-fns';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { getAppTimezone } from '@/lib/utils/timezone';
+import { logger } from '@/lib/utils/logger';
 
 interface DayEventListProps {
   selectedDate: Date;
@@ -25,28 +26,19 @@ export function DayEventList({
   onEventClick,
   headerActions
 }: DayEventListProps) {
-  console.log('[DayEventList] Component rendering', {
-    selectedDate: selectedDate?.toISOString(),
-    eventsCount: events?.length,
-    selectedClientId
-  });
-  
   // Track if we're mounted on client to avoid hydration issues with dates
   const [mounted, setMounted] = useState(false);
   
   useEffect(() => {
-    console.log('[DayEventList] Mount effect running');
     setMounted(true);
-    console.log('[DayEventList] Set mounted to true');
     return () => {
-      console.log('[DayEventList] Unmounting');
+      // Cleanup on unmount
     };
   }, []);
   
   // Use the provided date, with a fallback to today
   // Note: Both parent pages pass `selectedDate || calendarDate`, so this fallback should rarely be needed
   const safeSelectedDate = selectedDate || new Date();
-  console.log('[DayEventList] safeSelectedDate:', safeSelectedDate.toISOString(), 'original selectedDate:', selectedDate?.toISOString());
 
   // Get events for the selected date with deduplication
   // Calculate directly without useMemo to avoid dependency issues
@@ -111,7 +103,7 @@ export function DayEventList({
     return true;
   });
   
-  console.log('[DayEventList] dayEvents calculated:', {
+  logger.debug('[DayEventList] dayEvents calculated:', {
     dayEventsCount: dayEvents.length,
     eventsCount: events.length,
     filteredCount: filteredEvents.length,

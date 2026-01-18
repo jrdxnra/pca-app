@@ -62,6 +62,7 @@ import { useProgramStore } from '@/lib/stores/useProgramStore';
 import { useClientPrograms } from '@/hooks/useClientPrograms';
 import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
+import { logger } from '@/lib/utils/logger';
 
 export default function BuilderPage() {
   const router = useRouter();
@@ -78,15 +79,9 @@ export default function BuilderPage() {
   const structureId = searchParams.get('structure');
   const categoryParam = searchParams.get('category');
   
-  // Log URL params for debugging
+  // Log URL params for debugging (dev only)
   useEffect(() => {
-    console.log('[Builder] ========================================');
-    console.log('[Builder] URL params (from useSearchParams):');
-    console.log('[Builder] client:', urlClientId);
-    console.log('[Builder] date:', dateParam);
-    console.log('[Builder] workoutId:', workoutId);
-    console.log('[Builder] eventId:', eventId);
-    console.log('[Builder] ========================================');
+    logger.debug('[Builder] URL params:', { urlClientId, dateParam, workoutId, eventId });
   }, [urlClientId, dateParam, workoutId, eventId]);
 
   // Calendar store for linking events to workouts
@@ -233,9 +228,9 @@ export default function BuilderPage() {
         const daysUntilMonday = dayOfWeek === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
         targetDate = new Date(today);
         targetDate.setDate(today.getDate() + daysUntilMonday);
-        console.log('[Builder] Weekend detected, advancing to next week Monday:', targetDate.toISOString());
+        logger.debug('[Builder] Weekend detected, advancing to next week Monday:', targetDate.toISOString());
       } else {
-        console.log('[Builder] Setting calendar to today:', today.toISOString());
+        logger.debug('[Builder] Setting calendar to today:', today.toISOString());
       }
       
       setCalendarDate(targetDate);
@@ -287,36 +282,36 @@ export default function BuilderPage() {
   // Load and open workout when workoutId is provided in URL
   useEffect(() => {
     const loadWorkoutById = async () => {
-      console.log('[Builder] ========================================');
-      console.log('[Builder] loadWorkoutById effect running');
-      console.log('[Builder] workoutId:', workoutId);
-      console.log('[Builder] loading:', loading);
-      console.log('[Builder] clientId:', clientId);
-      console.log('[Builder] ========================================');
+      logger.debug('[Builder] ========================================');
+      logger.debug('[Builder] loadWorkoutById effect running');
+      logger.debug('[Builder] workoutId:', workoutId);
+      logger.debug('[Builder] loading:', loading);
+      logger.debug('[Builder] clientId:', clientId);
+      logger.debug('[Builder] ========================================');
       
       if (!workoutId) {
-        console.log('[Builder] SKIP - no workoutId in URL');
+        logger.debug('[Builder] SKIP - no workoutId in URL');
         return;
       }
       
       // Check if we've already processed this workoutId (prevents re-opening after close)
       if (processedWorkoutIds.current.has(workoutId)) {
-        console.log('[Builder] SKIP - workoutId already processed (was closed by user)');
+        logger.debug('[Builder] SKIP - workoutId already processed (was closed by user)');
         return;
       }
       
       if (loading) {
-        console.log('[Builder] SKIP - still loading initial data');
+        logger.debug('[Builder] SKIP - still loading initial data');
         return;
       }
 
       try {
-        console.log('[Builder] Fetching workout from Firebase:', workoutId);
+        logger.debug('[Builder] Fetching workout from Firebase:', workoutId);
         const workout = await getClientWorkout(workoutId);
-        console.log('[Builder] Got workout result:', workout ? 'SUCCESS' : 'NULL');
+        logger.debug('[Builder] Got workout result:', workout ? 'SUCCESS' : 'NULL');
         
         if (workout) {
-          console.log('[Builder] Workout details:', {
+          logger.debug('[Builder] Workout details:', {
             id: workout.id,
             clientId: workout.clientId,
             date: workout.date,
@@ -334,18 +329,18 @@ export default function BuilderPage() {
           const workoutDate = safeToDate(workout.date);
           const normalizedDate = new Date(workoutDate);
           normalizedDate.setHours(0, 0, 0, 0);
-          console.log('[Builder] Setting calendar date to:', normalizedDate.toISOString());
+          logger.debug('[Builder] Setting calendar date to:', normalizedDate.toISOString());
           setCalendarDate(normalizedDate);
 
           // If client not in URL, update URL with workout's client
           if (workout.clientId && !clientId) {
-            console.log('[Builder] Updating URL with client from workout:', workout.clientId);
+            logger.debug('[Builder] Updating URL with client from workout:', workout.clientId);
             // Use replace to not add to history since we're just filling in missing info
             router.replace(`/workouts/builder?client=${workout.clientId}&date=${dateParam}&workoutId=${workoutId}`, { scroll: false });
           }
 
           // Switch to day view and directly open the editor (bypass autoOpenWorkout to avoid race conditions)
-          console.log('[Builder] Setting viewMode to day and opening editor directly');
+          logger.debug('[Builder] Setting viewMode to day and opening editor directly');
           setViewMode('day');
           
           // Get dateKey for this workout
@@ -357,7 +352,7 @@ export default function BuilderPage() {
             [dateKey]: workout
           }));
           setOpenDates(prev => new Set([...prev, dateKey]));
-          console.log('[Builder] ✅ Workout opened in EDIT mode for dateKey:', dateKey);
+          logger.debug('[Builder] ✅ Workout opened in EDIT mode for dateKey:', dateKey);
         } else {
           console.error('[Builder] ERROR - Workout not found for ID:', workoutId);
         }
@@ -703,7 +698,7 @@ export default function BuilderPage() {
 
   // Auto-detect and set selectedPeriod when client changes or clientPrograms loads
   useEffect(() => {
-    console.log('[Builder] Period detection effect running:', {
+    logger.debug('[Builder] Period detection effect running:', {
       clientId,
       clientProgramsLength: clientPrograms.length,
       clientProgramsClientIds: clientPrograms.map(cp => cp.clientId),
@@ -712,19 +707,19 @@ export default function BuilderPage() {
 
     // Wait for loading to complete
     if (clientProgramsLoading) {
-      console.log('[Builder] Still loading client programs, waiting...');
+      logger.debug('[Builder] Still loading client programs, waiting...');
       return;
     }
 
     if (!clientId) {
-      console.log('[Builder] No client selected, clearing period');
+      logger.debug('[Builder] No client selected, clearing period');
       setSelectedPeriod(null);
       return;
     }
 
     // Find the client program for this client
     const clientProgram = clientPrograms.find(cp => cp.clientId === clientId);
-    console.log('[Builder] Found client program:', clientProgram ? {
+    logger.debug('[Builder] Found client program:', clientProgram ? {
       id: clientProgram.id,
       clientId: clientProgram.clientId,
       periodsCount: clientProgram.periods.length,
@@ -732,7 +727,7 @@ export default function BuilderPage() {
     } : null);
 
     if (!clientProgram || clientProgram.periods.length === 0) {
-      console.log('[Builder] No client program or no periods, clearing period');
+      logger.debug('[Builder] No client program or no periods, clearing period');
       setSelectedPeriod(null);
       return;
     }
@@ -740,7 +735,7 @@ export default function BuilderPage() {
     // Find the period that contains today's date
     const today = new Date();
     today.setHours(12, 0, 0, 0); // Normalize to midday to avoid timezone edge cases
-    console.log('[Builder] Looking for period containing today:', today.toISOString());
+    logger.debug('[Builder] Looking for period containing today:', today.toISOString());
 
     const currentPeriod = clientProgram.periods.find(p => {
       const start = safeToDate(p.startDate);
@@ -748,12 +743,12 @@ export default function BuilderPage() {
       start.setHours(0, 0, 0, 0);
       end.setHours(23, 59, 59, 999);
       const contains = today >= start && today <= end;
-      console.log('[Builder] Checking period:', p.periodName, 'start:', start.toISOString(), 'end:', end.toISOString(), 'contains today:', contains);
+      logger.debug('[Builder] Checking period:', p.periodName, 'start:', start.toISOString(), 'end:', end.toISOString(), 'contains today:', contains);
       return contains;
     });
 
     if (currentPeriod) {
-      console.log('[Builder] Auto-detected current period:', currentPeriod.periodName);
+      logger.debug('[Builder] Auto-detected current period:', currentPeriod.periodName);
       setSelectedPeriod(currentPeriod);
     } else {
       // No period contains today - use the most recent or upcoming period
@@ -768,10 +763,10 @@ export default function BuilderPage() {
       const fallbackPeriod = upcomingPeriod || sortedPeriods[sortedPeriods.length - 1];
 
       if (fallbackPeriod) {
-        console.log('[Builder] Using fallback period:', fallbackPeriod.periodName);
+        logger.debug('[Builder] Using fallback period:', fallbackPeriod.periodName);
         setSelectedPeriod(fallbackPeriod);
       } else {
-        console.log('[Builder] No fallback period found');
+        logger.debug('[Builder] No fallback period found');
         setSelectedPeriod(null);
       }
     }
@@ -974,27 +969,27 @@ export default function BuilderPage() {
 
   // Auto-open workout editor when navigating to day view with a workout to edit
   useEffect(() => {
-    console.log('[Builder] Auto-open effect:', { viewMode, autoOpenWorkout, hasAutoOpen: !!autoOpenWorkout });
+    logger.debug('[Builder] Auto-open effect:', { viewMode, autoOpenWorkout, hasAutoOpen: !!autoOpenWorkout });
     
     if (viewMode === 'day' && autoOpenWorkout) {
       const { date, workout, categoryInfo } = autoOpenWorkout;
       const dateKey = getDateKey(date);
-      console.log('[Builder] Processing auto-open for dateKey:', dateKey, 'workout:', workout?.id);
+      logger.debug('[Builder] Processing auto-open for dateKey:', dateKey, 'workout:', workout?.id);
 
       // Don't auto-open if editor is already open
       if (openDates.has(dateKey)) {
-        console.log('[Builder] Editor already open for this date, skipping');
+        logger.debug('[Builder] Editor already open for this date, skipping');
         setAutoOpenWorkout(null);
         return;
       }
 
       // Small delay to ensure the view has rendered, then open the editor
       const timer = setTimeout(() => {
-        console.log('[Builder] Timer fired, opening editor directly');
+        logger.debug('[Builder] Timer fired, opening editor directly');
         
         if (workout) {
           // Directly set state to open the editor (avoid calling handleEditWorkout which has toggle logic)
-          console.log('[Builder] Opening editor for workout:', workout.id);
+          logger.debug('[Builder] Opening editor for workout:', workout.id);
           setEditingWorkouts(prev => ({
             ...prev,
             [dateKey]: workout
@@ -1002,7 +997,7 @@ export default function BuilderPage() {
           setOpenDates(prev => new Set([...prev, dateKey]));
         } else if (categoryInfo) {
           // For creating new workout
-          console.log('[Builder] Opening creator for category:', categoryInfo.category);
+          logger.debug('[Builder] Opening creator for category:', categoryInfo.category);
           setCreatingWorkouts(prev => ({
             ...prev,
             [dateKey]: { date, category: categoryInfo.category, color: categoryInfo.color }
@@ -1046,7 +1041,7 @@ export default function BuilderPage() {
     
     // If event already has a linked workout, let the workoutId effect handle it
     if (event.linkedWorkoutId) {
-      console.log('[Builder] Event has linked workout, skipping');
+      logger.debug('[Builder] Event has linked workout, skipping');
       processedEventIdRef.current = eventId;
       return;
     }
@@ -1074,7 +1069,7 @@ export default function BuilderPage() {
     const effectiveClientId = clientId || eventClientId;
     
     if (hasAssignedClient && effectiveClientId) {
-      console.log('[Builder] Event is assigned, opening inline editor directly');
+      logger.debug('[Builder] Event is assigned, opening inline editor directly');
       processedEventIdRef.current = eventId;
       
       const dateKey = getDateKey(eventDate);
@@ -1094,7 +1089,7 @@ export default function BuilderPage() {
       }));
       setOpenDates(prev => new Set(prev).add(dateKey));
       
-      console.log('[Builder] Opened inline editor for', dateKey, 'with category:', category, 'hasDraft:', !!hasDraft);
+      logger.debug('[Builder] Opened inline editor for', dateKey, 'with category:', category, 'hasDraft:', !!hasDraft);
       return;
     }
     
@@ -1102,7 +1097,7 @@ export default function BuilderPage() {
     const eventTime = event.start.dateTime ? 
       new Date(event.start.dateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
     
-    console.log('[Builder] No client assigned, opening Quick Workout dialog with:', { 
+    logger.debug('[Builder] No client assigned, opening Quick Workout dialog with:', { 
       date: dateParam, 
       category: categoryParam, 
       eventId 
