@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
+import { CalendarSkeleton } from '@/components/programs/CalendarSkeleton';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -1658,10 +1659,10 @@ export default function ProgramsPage() {
     // React Query will automatically refetch calendar events when mutations invalidate queries
   };
 
-  // Prevent rendering if critical data isn't ready (prevents freeze)
-  // Also wait for initial data to load before rendering calendar
-  if (!mounted || (clientProgramsLoading && clientPrograms.length === 0)) {
-    return <PageSkeleton />;
+  // Show calendar structure immediately, even if data is loading
+  // This gives better UX - user sees the calendar grid right away
+  if (!mounted) {
+    return <CalendarSkeleton includeWeekends={includeWeekends} />;
   }
 
   return (
@@ -1895,7 +1896,7 @@ export default function ProgramsPage() {
               </Card>
             )}
             <ErrorBoundary fallback={<div className="p-4 text-center text-destructive">Error loading calendar. Please refresh the page.</div>}>
-              <React.Suspense fallback={<PageSkeleton />}>
+              <React.Suspense fallback={<CalendarSkeleton includeWeekends={includeWeekends} />}>
                 <ModernCalendarView
                   viewMode="week"
                   calendarDate={calendarDate}

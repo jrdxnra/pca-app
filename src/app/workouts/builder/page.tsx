@@ -26,12 +26,8 @@ import {
 } from 'lucide-react';
 import { Client, Program, ScheduledWorkout, ClientProgramPeriod, WorkoutStructureTemplate, ClientWorkoutRound, ClientWorkout } from '@/lib/types';
 // Lazy load heavy components for code splitting
-const ModernCalendarView = dynamic(
-  () => import('@/components/programs/ModernCalendarView').then(mod => ({ default: mod.ModernCalendarView })),
-  {
-    loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
-  }
-);
+// ModernCalendarView not used in Builder - removed to reduce bundle size
+import { CalendarSkeleton } from '@/components/programs/CalendarSkeleton';
 
 const PeriodAssignmentDialog = dynamic(
   () => import('@/components/programs/PeriodAssignmentDialog').then(mod => ({ default: mod.PeriodAssignmentDialog }))
