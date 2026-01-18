@@ -37,47 +37,16 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       
-      - name: Setup Google Cloud SDK
+      - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: performancecoachapp-26bd1
       
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker
-      
-      - name: Build Docker image
+      - name: Submit Cloud Build
         run: |
-          IMAGE_NAME="gcr.io/performancecoachapp-26bd1/pca-app:latest"
-          docker build -t $IMAGE_NAME .
-      
-      - name: Push to Google Container Registry
-        run: |
-          IMAGE_NAME="gcr.io/performancecoachapp-26bd1/pca-app:latest"
-          docker push $IMAGE_NAME
-      
-      - name: Deploy to Cloud Run
-        run: |
-          gcloud run deploy pca-app \
-            --image gcr.io/performancecoachapp-26bd1/pca-app:latest \
-            --platform managed \
-            --region us-central1 \
-            --allow-unauthenticated \
-            --port 3000 \
-            --memory 2Gi \
-            --cpu 2 \
-            --min-instances 0 \
-            --max-instances 10 \
-            --project performancecoachapp-26bd1 \
-            --set-env-vars \
-              NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }},\
-              NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }},\
-              NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }},\
-              NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }},\
-              NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }},\
-              NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }},\
-              GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }},\
-              GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }},\
-              GOOGLE_REDIRECT_URI=https://performancecoach.web.app/api/auth/google/callback
+          gcloud builds submit \
+            --config=cloudbuild.yaml \
+            --substitutions=_NEXT_PUBLIC_FIREBASE_API_KEY="${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}",_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}",_NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}",_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}",_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}",_NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}",_GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}",_GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}",_GOOGLE_REDIRECT_URI="https://performancecoach.web.app/api/auth/google/callback"
       
       - name: Setup Firebase CLI
         uses: FirebaseExtended/action-hosting-deploy@v0
