@@ -106,10 +106,9 @@ export default function ProgramsPage() {
   const navigateMonth = useProgramStore(state => state.navigateMonth);
   const navigateWeek = useProgramStore(state => state.navigateWeek);
   const navigateDay = useProgramStore(state => state.navigateDay);
-    goToToday,
-    clearError,
-    initializeSelectedClient,
-  } = useProgramStore();
+  const goToToday = useProgramStore(state => state.goToToday);
+  const clearError = useProgramStore(state => state.clearError);
+  const initializeSelectedClient = useProgramStore(state => state.initializeSelectedClient);
   
   console.log('[ProgramsPage] Store state:', {
     selectedClient,
