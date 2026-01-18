@@ -489,6 +489,8 @@ export default function ConfigurePage() {
         if (response.status === 401) {
           setSyncError('Authentication expired. Please reconnect Google Calendar.');
           setIsGoogleCalendarConnected(false);
+          // Update store so Header sync button also knows
+          useCalendarStore.setState({ isGoogleCalendarConnected: false });
         } else {
           setSyncError(errorData.error || 'Failed to fetch calendar events. Please check your connection.');
         }
@@ -498,6 +500,8 @@ export default function ConfigurePage() {
       // Connection is working
       setSyncError(null);
       setIsGoogleCalendarConnected(true);
+      // Update store so Header sync button also knows
+      useCalendarStore.setState({ isGoogleCalendarConnected: true });
       toastSuccess('Google Calendar connection is working!');
     } catch (error) {
       console.error('Error testing connection:', error);
