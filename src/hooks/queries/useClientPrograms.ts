@@ -47,12 +47,10 @@ export function useClientPrograms(
   options?: Omit<UseQueryOptions<ClientProgram[], Error>, 'queryKey' | 'queryFn' | 'enabled'>
 ) {
   const clientProgramsQuery = useClientProgramsByClient(selectedClientId || undefined, {
-    enabled: !!selectedClientId,
     ...options,
   });
   
   const allProgramsQuery = useAllClientPrograms({
-    enabled: !selectedClientId,
     ...options,
   });
 
