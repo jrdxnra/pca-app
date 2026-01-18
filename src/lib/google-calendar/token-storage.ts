@@ -80,13 +80,14 @@ export async function getValidAccessToken(): Promise<string | null> {
     return null;
   }
 
-  // Check if token is expired (with 5 minute buffer)
-  // Also check if token might be invalid even if not expired (try-catch on actual API call)
+  // Check if token is expired (with 10 minute buffer for proactive refresh)
+  // This ensures tokens are refreshed before they expire, keeping the session active longer
   const now = Date.now();
-  const expiryBuffer = 5 * 60 * 1000; // 5 minutes in milliseconds
+  const expiryBuffer = 10 * 60 * 1000; // 10 minutes in milliseconds (increased from 5)
   const isExpired = tokens.expiryDate && (now + expiryBuffer) >= tokens.expiryDate;
   
   // If token is expired or no expiry date (might be invalid), try to refresh
+  // Refresh tokens don't expire (unless revoked), so we can keep refreshing indefinitely
   if (isExpired || !tokens.expiryDate) {
     // Token is expired or about to expire, refresh it
     if (!tokens.refreshToken) {
@@ -99,8 +100,9 @@ export async function getValidAccessToken(): Promise<string | null> {
       const newAccessToken = await refreshAccessToken(oauth2Client, tokens.refreshToken);
       
       // Get the actual expiry from Google's response
-      // We need to get it from the OAuth2 client after refresh
-      // For now, assume 1 hour (Google's default)
+      // Note: refreshAccessToken doesn't return expiry_date, so we'll use 1 hour
+      // Google access tokens typically last 1 hour
+      // The refresh token itself doesn't expire (unless revoked), so we can keep refreshing
       const newExpiryDate = Date.now() + (60 * 60 * 1000); // 1 hour from now
       
       // Update stored tokens

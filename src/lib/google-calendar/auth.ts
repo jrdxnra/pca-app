@@ -52,9 +52,11 @@ export function getAuthUrl(redirectUri?: string): string {
   ];
 
   const authUrl = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
+    access_type: 'offline', // Required to get refresh token
     scope: scopes,
     prompt: 'consent', // Force consent screen to get refresh token
+    // Note: refresh tokens don't expire unless revoked by user
+    // This ensures the connection lasts indefinitely as long as user doesn't revoke
   });
   
   // Extract and decode the redirect_uri from the generated URL for debugging
