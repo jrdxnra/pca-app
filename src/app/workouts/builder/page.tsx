@@ -573,61 +573,9 @@ export default function BuilderPage() {
     return null;
   }
 
-  // Auto-detect period and set up week view when client and date are provided
-  // IMPORTANT: Don't change viewMode if we're loading a specific workout (workoutId is present)
-  useEffect(() => {
-    if (clientId && dateParam && clientPrograms.length > 0) {
-      console.log('Auto-detecting period for client:', clientId, 'date:', dateParam);
-      console.log('Available client programs:', clientPrograms);
-
-      const clientProgram = clientPrograms.find(cp => cp.clientId === clientId);
-      console.log('Found client program:', clientProgram);
-
-      if (clientProgram) {
-        const targetDate = new Date(dateParam);
-        console.log('Target date:', targetDate);
-
-        const period = clientProgram.periods.find(p => {
-          const start = safeToDate(p.startDate);
-          const end = safeToDate(p.endDate);
-          start.setHours(0, 0, 0, 0);
-          end.setHours(23, 59, 59, 999);
-          console.log('Checking period:', p.id, 'start:', start, 'end:', end);
-          return targetDate >= start && targetDate <= end;
-        });
-
-        console.log('Found period:', period);
-
-        if (period) {
-          setSelectedPeriod(period);
-          const start = safeToDate(period.startDate);
-          const end = safeToDate(period.endDate);
-          const calculatedWeeks = calculateWeeks(start, end, period.periodName);
-          setWeeks(calculatedWeeks);
-          
-          // Only switch to week view if NOT loading a specific workout
-          // When workoutId is present, let loadWorkoutById effect control the view
-          if (!workoutId) {
-            setViewMode('week');
-            console.log('Set period and switched to week view');
-          } else {
-            console.log('Set period but keeping day view for workout editing');
-          }
-
-          // Load workouts for this period (we'll load them separately)
-          // const periodWorkouts = workouts.filter(w => {
-          //   const workoutDate = safeToDate(w.date);
-          //   return workoutDate >= start && workoutDate <= end;
-          // });
-          // setWorkouts(periodWorkouts);
-        } else {
-          console.log('No period found for the target date');
-        }
-      } else {
-        console.log('No client program found for client:', clientId);
-      }
-    }
-  }, [clientId, dateParam, clientPrograms, workoutId]);
+  // CONSOLIDATED: Single period detection effect
+  // Priority: dateParam (from URL) > calendarDate > today
+  // This replaces the two conflicting effects
 
 
   // Recalculate weeks when additionalWeeks changes and fetch workouts
@@ -688,13 +636,17 @@ export default function BuilderPage() {
     setClientIdImmediate(newClientId);
   };
 
-  // Auto-detect and set selectedPeriod when client changes or clientPrograms loads
+  // CONSOLIDATED: Single period detection effect
+  // Priority: dateParam (from URL) > calendarDate > today
+  // This replaces the two conflicting effects
   useEffect(() => {
     logger.debug('[Builder] Period detection effect running:', {
       clientId,
+      dateParam,
+      calendarDate: calendarDate.toISOString(),
       clientProgramsLength: clientPrograms.length,
-      clientProgramsClientIds: clientPrograms.map(cp => cp.clientId),
-      clientProgramsLoading
+      clientProgramsLoading,
+      workoutId
     });
 
     // Wait for loading to complete - don't clear period while loading
@@ -712,58 +664,82 @@ export default function BuilderPage() {
 
     // Find the client program for this client
     const clientProgram = clientPrograms.find(cp => cp.clientId === clientId);
-    logger.debug('[Builder] Found client program:', clientProgram ? {
-      id: clientProgram.id,
-      clientId: clientProgram.clientId,
-      periodsCount: clientProgram.periods.length,
-      periods: clientProgram.periods.map(p => ({ id: p.id, name: p.periodName, start: safeToDate(p.startDate).toISOString(), end: safeToDate(p.endDate).toISOString() }))
-    } : null);
-
     if (!clientProgram || clientProgram.periods.length === 0) {
       logger.debug('[Builder] No client program or no periods, clearing period');
       setSelectedPeriod(null);
       return;
     }
 
-    // Find the period that contains today's date
-    const today = new Date();
-    today.setHours(12, 0, 0, 0); // Normalize to midday to avoid timezone edge cases
-    logger.debug('[Builder] Looking for period containing today:', today.toISOString());
+    // Determine target date (priority: dateParam > calendarDate > today)
+    let targetDate: Date;
+    if (dateParam) {
+      // Use date from URL if provided
+      const [year, month, day] = dateParam.split('-').map(Number);
+      targetDate = new Date(year, month - 1, day);
+      logger.debug('[Builder] Using dateParam as target date:', targetDate.toISOString());
+    } else if (calendarDate) {
+      // Use calendarDate (user navigated to a specific date)
+      targetDate = new Date(calendarDate);
+      logger.debug('[Builder] Using calendarDate as target date:', targetDate.toISOString());
+    } else {
+      // Fallback to today
+      targetDate = new Date();
+      logger.debug('[Builder] Using today as target date:', targetDate.toISOString());
+    }
+    
+    targetDate.setHours(12, 0, 0, 0); // Normalize to midday
 
-    const currentPeriod = clientProgram.periods.find(p => {
+    // Find period containing target date
+    const period = clientProgram.periods.find(p => {
       const start = safeToDate(p.startDate);
       const end = safeToDate(p.endDate);
       start.setHours(0, 0, 0, 0);
       end.setHours(23, 59, 59, 999);
-      const contains = today >= start && today <= end;
-      logger.debug('[Builder] Checking period:', p.periodName, 'start:', start.toISOString(), 'end:', end.toISOString(), 'contains today:', contains);
-      return contains;
+      return targetDate >= start && targetDate <= end;
     });
 
-    if (currentPeriod) {
-      logger.debug('[Builder] Auto-detected current period:', currentPeriod.periodName);
-      setSelectedPeriod(currentPeriod);
+    if (period) {
+      logger.debug('[Builder] Found period for target date:', period.periodName);
+      setSelectedPeriod(period);
+      
+      // Calculate weeks for this period
+      const start = safeToDate(period.startDate);
+      const end = safeToDate(period.endDate);
+      const calculatedWeeks = calculateWeeks(start, end, period.periodName);
+      setWeeks(calculatedWeeks);
+      
+      // Only switch to week view if NOT loading a specific workout
+      // When workoutId is present, let loadWorkoutById effect control the view
+      if (!workoutId) {
+        setViewMode('week');
+        logger.debug('[Builder] Set period and switched to week view');
+      }
     } else {
-      // No period contains today - use the most recent or upcoming period
+      // No period contains target date - use fallback (most recent or upcoming)
       const sortedPeriods = [...clientProgram.periods].sort((a, b) => {
         const aStart = safeToDate(a.startDate).getTime();
         const bStart = safeToDate(b.startDate).getTime();
         return aStart - bStart;
       });
 
-      // Find the first period that starts after today, or use the last period
-      const upcomingPeriod = sortedPeriods.find(p => safeToDate(p.startDate) > today);
+      const upcomingPeriod = sortedPeriods.find(p => safeToDate(p.startDate) > targetDate);
       const fallbackPeriod = upcomingPeriod || sortedPeriods[sortedPeriods.length - 1];
 
       if (fallbackPeriod) {
         logger.debug('[Builder] Using fallback period:', fallbackPeriod.periodName);
         setSelectedPeriod(fallbackPeriod);
+        
+        // Calculate weeks for fallback period
+        const start = safeToDate(fallbackPeriod.startDate);
+        const end = safeToDate(fallbackPeriod.endDate);
+        const calculatedWeeks = calculateWeeks(start, end, fallbackPeriod.periodName);
+        setWeeks(calculatedWeeks);
       } else {
         logger.debug('[Builder] No fallback period found');
         setSelectedPeriod(null);
       }
     }
-  }, [clientId, clientPrograms, clientProgramsLoading]);
+  }, [clientId, dateParam, calendarDate, clientPrograms, clientProgramsLoading, workoutId]);
 
   const handleViewModeChange = (mode: 'month' | 'week' | 'day') => {
     setViewMode(mode);
