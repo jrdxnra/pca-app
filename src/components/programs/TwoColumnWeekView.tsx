@@ -122,13 +122,15 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   
   // All hooks must be called first, in the same order every render
   console.log('[TwoColumnWeekView] Calling hooks...');
-  const { workoutCategories: configWorkoutCategories, businessHours } = useConfigurationStore();
+  // Use selectors to prevent re-renders when unrelated store state changes
+  const configWorkoutCategories = useConfigurationStore(state => state.workoutCategories);
+  const businessHours = useConfigurationStore(state => state.businessHours);
   console.log('[TwoColumnWeekView] useConfigurationStore result:', {
     workoutCategoriesCount: configWorkoutCategories?.length,
     hasBusinessHours: !!businessHours
   });
   
-  const { config: calendarConfig } = useCalendarStore();
+  const calendarConfig = useCalendarStore(state => state.config);
   console.log('[TwoColumnWeekView] useCalendarStore result:', {
     hasConfig: !!calendarConfig
   });

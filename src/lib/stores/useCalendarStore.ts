@@ -208,7 +208,19 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
       
       const mergedEvents = Array.from(eventMap.values());
 
-      set({ events: mergedEvents, loading: false, _eventsFetchTime: Date.now(), _eventsFetchKey: cacheKey });
+      // Only update state if events actually changed (prevent unnecessary re-renders)
+      const { events: currentEvents } = get();
+      const currentEventIds = new Set(currentEvents.map(e => e.id));
+      const newEventIds = new Set(mergedEvents.map(e => e.id));
+      const eventsChanged = currentEventIds.size !== newEventIds.size || 
+        !Array.from(currentEventIds).every(id => newEventIds.has(id));
+      
+      if (eventsChanged) {
+        set({ events: mergedEvents, loading: false, _eventsFetchTime: Date.now(), _eventsFetchKey: cacheKey });
+      } else {
+        // Events didn't change, just update loading state
+        set({ loading: false, _eventsFetchTime: Date.now(), _eventsFetchKey: cacheKey });
+      }
     } catch (error) {
       set({ 
         error: error instanceof Error ? error.message : 'Failed to fetch events',

@@ -74,16 +74,14 @@ export function ModernCalendarView({
   // Workouts state - persistent across client switches, filter by client/date when rendering
   const [allWorkouts, setAllWorkouts] = React.useState<ClientWorkout[]>([]);
 
-  // Calendar store for Google Calendar events
-  const {
-    events: calendarEvents,
-    config: calendarConfig,
-    loading: calendarLoading,
-    fetchEvents,
-    markAsCoachingSession,
-    linkToWorkout,
-    updateEvent
-  } = useCalendarStore();
+  // Calendar store for Google Calendar events - use selectors to prevent re-renders
+  const calendarEvents = useCalendarStore(state => state.events);
+  const calendarConfig = useCalendarStore(state => state.config);
+  const calendarLoading = useCalendarStore(state => state.loading);
+  const fetchEvents = useCalendarStore(state => state.fetchEvents);
+  const markAsCoachingSession = useCalendarStore(state => state.markAsCoachingSession);
+  const linkToWorkout = useCalendarStore(state => state.linkToWorkout);
+  const updateEvent = useCalendarStore(state => state.updateEvent);
 
   // Pre-fetch calendar events and workouts for current week + adjacent weeks
   // This keeps the calendar cells always populated, reducing perceived loading time
