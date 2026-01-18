@@ -20,7 +20,7 @@ Setting up Render to replace Vercel for preview/testing deployments. Using the $
 
 **Basic Settings:**
 - **Name**: `pca-app` (or `pca-app-preview`)
-- **Region**: Choose closest (US East recommended)
+- **Region**: **Oregon (us-west)** - Closest to California
 - **Branch**: `cursor/react-query-calendar-workouts-e64a`
 - **Root Directory**: `/` (root of repo)
 

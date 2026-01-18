@@ -3,7 +3,7 @@ services:
     name: pca-app
     env: node
     plan: starter  # $7/month - always-on, no cold starts
-    region: oregon  # or us-east, us-west, etc.
+    region: oregon  # Oregon (us-west) - closest to California
     buildCommand: npm install && npm run build
     startCommand: npm start
     healthCheckPath: /
