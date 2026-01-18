@@ -1904,6 +1904,7 @@ export default function ProgramsPage() {
                   clientPrograms={stableClientPrograms}
                   includeWeekends={includeWeekends}
                   refreshKey={calendarKey}
+                  calendarEvents={stableCalendarEvents} // Pass events from React Query instead of Zustand fetching
                   onPeriodClick={handlePeriodClick}
                   onDateClick={handleDateClick}
                   onScheduleCellClick={handleWeekCellClick}

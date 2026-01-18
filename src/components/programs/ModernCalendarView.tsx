@@ -34,6 +34,7 @@ interface ModernCalendarViewProps {
   clientPrograms: ClientProgram[];
   includeWeekends?: boolean;
   refreshKey?: string | number; // Key to force refresh when workouts are created
+  calendarEvents?: GoogleCalendarEvent[]; // Pass events from React Query instead of fetching in Zustand
   onPeriodClick?: (period: ClientProgramPeriod, position: { x: number; y: number }) => void;
   onDateClick?: (date: Date, viewMode: 'week' | 'day') => void;
   onWeekCellClick?: (date: Date, timeSlot: Date, period?: ClientProgramPeriod) => void;
@@ -53,6 +54,7 @@ export function ModernCalendarView({
   clientPrograms,
   includeWeekends = false,
   refreshKey,
+  calendarEvents: propsCalendarEvents, // Use events from props (React Query) instead of Zustand
   onPeriodClick,
   onDateClick,
   onWeekCellClick,
@@ -74,17 +76,19 @@ export function ModernCalendarView({
   // Workouts state - persistent across client switches, filter by client/date when rendering
   const [allWorkouts, setAllWorkouts] = React.useState<ClientWorkout[]>([]);
 
-  // Calendar store for Google Calendar events - use selectors to prevent re-renders
-  const calendarEvents = useCalendarStore(state => state.events);
+  // Use calendarEvents from props (React Query) instead of fetching from Zustand
+  // This eliminates dual fetching - React Query handles all calendar event fetching
+  const calendarEvents = propsCalendarEvents || [];
+  
+  // Still need calendar store for config and mutations (not fetching)
   const calendarConfig = useCalendarStore(state => state.config);
-  const calendarLoading = useCalendarStore(state => state.loading);
-  const fetchEvents = useCalendarStore(state => state.fetchEvents);
   const markAsCoachingSession = useCalendarStore(state => state.markAsCoachingSession);
   const linkToWorkout = useCalendarStore(state => state.linkToWorkout);
   const updateEvent = useCalendarStore(state => state.updateEvent);
 
-  // Pre-fetch calendar events and workouts for current week + adjacent weeks
-  // This keeps the calendar cells always populated, reducing perceived loading time
+  // Pre-fetch workouts for current week + adjacent weeks
+  // NOTE: Calendar events are now fetched via React Query in ProgramsPage and passed as props
+  // No need to fetch events here - React Query handles prefetching via queryClient.prefetchQuery if needed
   React.useEffect(() => {
     if (viewMode !== 'week') return;
 
@@ -120,13 +124,8 @@ export function ModernCalendarView({
         previousWeekEnd.setHours(23, 59, 59, 999);
         nextWeekEnd.setHours(23, 59, 59, 999);
 
-        // Fetch events for all three weeks (pre-fetch adjacent weeks)
-        const expandedStart = previousWeekStart;
-        const expandedEnd = nextWeekEnd;
-        
-        if (!cancelled) {
-          fetchEvents({ start: expandedStart, end: expandedEnd });
-        }
+        // Calendar events are now fetched via React Query in ProgramsPage - no need to fetch here
+        // React Query will handle prefetching if needed via queryClient.prefetchQuery
 
         // Fetch workouts for all three weeks
         // Keep all workouts in persistent state, filter by client/date when rendering

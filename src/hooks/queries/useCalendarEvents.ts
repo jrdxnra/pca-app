@@ -20,6 +20,9 @@ export function useCalendarEvents(
     enabled: !!startDate && !!endDate,
     retry: false, // Don't retry on error to prevent infinite loops
     retryOnMount: false, // Don't retry when component remounts
+    // Calendar events don't change often, use longer cache time
+    staleTime: 10 * 60 * 1000, // 10 minutes (longer than default 5 min)
+    gcTime: 30 * 60 * 1000, // 30 minutes (keep in cache longer)
     ...options,
   });
 }

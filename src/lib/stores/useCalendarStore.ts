@@ -15,8 +15,9 @@ import {
 } from '@/lib/google-calendar/api-client';
 import { getCalendarSyncConfig, updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
 
-// Cache duration in milliseconds (30 seconds)
-const CACHE_DURATION = 30 * 1000;
+// Cache duration in milliseconds (5 minutes - matches React Query staleTime)
+// Note: Calendar events are now primarily fetched via React Query, this is for backward compatibility
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes (increased from 30 seconds)
 
 function normalizeLocationKey(input: string): string {
   // Normalize for comparison: lowercase, trim, collapse spaces
