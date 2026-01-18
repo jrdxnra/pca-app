@@ -24,14 +24,30 @@ export async function GET(request: NextRequest) {
 
     // Get the origin from the request URL (more reliable than headers)
     const origin = request.nextUrl.origin;
-    const callbackUrl = `${origin}/api/auth/google/callback`;
+    // Remove trailing slash if present
+    const cleanOrigin = origin.replace(/\/$/, '');
+    const callbackUrl = `${cleanOrigin}/api/auth/google/callback`;
     
     console.log('[OAuth] Generating auth URL with callback:', callbackUrl);
     console.log('[OAuth] Request origin:', origin);
+    console.log('[OAuth] Clean origin:', cleanOrigin);
+    console.log('[OAuth] Full callback URL:', callbackUrl);
     
     // Generate auth URL with the correct redirect URI
     const authUrl = getAuthUrl(callbackUrl);
-    console.log('[OAuth] Generated auth URL (first 100 chars):', authUrl.substring(0, 100) + '...');
+    
+    // Extract and log the redirect_uri from the generated URL for debugging
+    const redirectUriMatch = authUrl.match(/redirect_uri=([^&]+)/);
+    if (redirectUriMatch) {
+      const actualRedirectUri = decodeURIComponent(redirectUriMatch[1]);
+      console.log('[OAuth] Actual redirect_uri in auth URL:', actualRedirectUri);
+      console.log('[OAuth] Expected redirect_uri:', callbackUrl);
+      if (actualRedirectUri !== callbackUrl) {
+        console.error('[OAuth] MISMATCH! redirect_uri in URL does not match callbackUrl');
+      }
+    }
+    
+    console.log('[OAuth] Generated auth URL (first 200 chars):', authUrl.substring(0, 200) + '...');
     return NextResponse.redirect(authUrl);
   } catch (error) {
     console.error('Error generating auth URL:', error);
