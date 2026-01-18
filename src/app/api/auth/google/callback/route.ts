@@ -82,14 +82,22 @@ export async function GET(request: NextRequest) {
     // Use the Firebase hosting URL if we're on Cloud Run, otherwise use request origin
     let redirectUrl: string;
     if (process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT) {
-      // On Cloud Run, use Firebase hosting URL from env or construct it
-      const firebaseUrl = process.env.NEXT_PUBLIC_FIREBASE_HOSTING_URL || 'https://performancecoach.web.app';
-      redirectUrl = `${firebaseUrl}/configure?connected=true`;
+      // On Cloud Run, derive Firebase hosting URL from GOOGLE_REDIRECT_URI
+      // GOOGLE_REDIRECT_URI is like: https://performancecoach.web.app/api/auth/google/callback
+      // We need: https://performancecoach.web.app/configure?connected=true
+      if (envRedirectUri && envRedirectUri.length > 0) {
+        const baseUrl = envRedirectUri.replace('/api/auth/google/callback', '');
+        redirectUrl = `${baseUrl}/configure?connected=true`;
+      } else {
+        // Fallback to known Firebase hosting URL
+        redirectUrl = 'https://performancecoach.web.app/configure?connected=true';
+      }
     } else {
       // Local development or Vercel - use request origin
       redirectUrl = new URL('/configure?connected=true', request.url).toString();
     }
     
+    console.log('[OAuth Callback] Redirecting to:', redirectUrl);
     return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error('Error exchanging code for tokens:', error);
