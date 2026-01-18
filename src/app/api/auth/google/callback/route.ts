@@ -25,9 +25,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get the origin from the request to build the correct callback URL (must match what was used in auth)
-    const origin = request.headers.get('origin') || request.nextUrl.origin;
+    // Get the origin from the request URL (must match what was used in auth)
+    const origin = request.nextUrl.origin;
     const callbackUrl = `${origin}/api/auth/google/callback`;
+    
+    console.log('[OAuth Callback] Exchanging code with callback URL:', callbackUrl);
+    console.log('[OAuth Callback] Request origin:', origin);
     
     // Exchange code for tokens (use same redirect URI that was used in auth)
     const tokens = await getTokensFromCode(code, callbackUrl);
