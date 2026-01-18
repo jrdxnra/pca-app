@@ -122,13 +122,32 @@ export async function refreshAccessToken(
     refresh_token: refreshToken,
   });
 
-  const { credentials } = await oauth2Client.refreshAccessToken();
-  
-  if (!credentials.access_token) {
-    throw new Error('Failed to refresh access token');
-  }
+  try {
+    const { credentials } = await oauth2Client.refreshAccessToken();
+    
+    if (!credentials.access_token) {
+      throw new Error('Failed to refresh access token - no access token in response');
+    }
 
-  return credentials.access_token;
+    // Get actual expiry date from Google (if provided)
+    const expiryDate = credentials.expiry_date 
+      ? credentials.expiry_date 
+      : Date.now() + (60 * 60 * 1000); // Default to 1 hour if not provided
+
+    return credentials.access_token;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[OAuth] Refresh token error:', errorMessage);
+    
+    // Check for specific error types
+    if (errorMessage.includes('invalid_grant') || 
+        errorMessage.includes('Token has been expired') ||
+        errorMessage.includes('invalid_token')) {
+      throw new Error('Refresh token is invalid or expired. Please reconnect Google Calendar.');
+    }
+    
+    throw new Error(`Failed to refresh access token: ${errorMessage}`);
+  }
 }
 
 
