@@ -3,6 +3,7 @@
 import { Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
 import { Client } from '@/lib/types';
 import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBuilderDialog';
 import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
@@ -38,6 +39,10 @@ interface BuilderHeaderProps {
   
   // Quick workout
   onWorkoutCreated: () => void;
+  
+  // Week order
+  weekOrder: 'ascending' | 'descending';
+  onWeekOrderChange: (order: 'ascending' | 'descending') => void;
 }
 
 export function BuilderHeader({
@@ -55,6 +60,8 @@ export function BuilderHeader({
   clientPrograms,
   onAssignPeriod,
   onWorkoutCreated,
+  weekOrder,
+  onWeekOrderChange,
 }: BuilderHeaderProps) {
   const clientName = clientId ? (clients.find(c => c.id === clientId)?.name || 'Unknown Client') : '';
   const existingAssignments = clientId ? (clientPrograms.find(cp => cp.clientId === clientId)?.periods || []) : [];
@@ -101,10 +108,38 @@ export function BuilderHeader({
           onAssignPeriod={onAssignPeriod}
           existingAssignments={existingAssignments}
         />
+        {/* Column Filter moved here */}
+        <ColumnVisibilityToggle
+          visibleColumns={{}}
+          availableColumns={{
+            tempo: true,
+            distance: true,
+            rpe: true,
+            percentage: true
+          }}
+          onToggle={() => {}}
+        />
       </div>
 
-      {/* Right aligned - Week Selector (matches Schedule page) */}
+      {/* Right aligned - Week Order, Week Selector (matches Schedule page) */}
       <div className="flex items-center gap-1 md:gap-2">
+        {/* Week order dropdown */}
+        <div className="flex items-center gap-1">
+          <label htmlFor="weekOrder" className="text-xs md:text-sm font-medium">Week:</label>
+          <Select 
+            value={weekOrder} 
+            onValueChange={(value) => onWeekOrderChange(value as 'ascending' | 'descending')}
+          >
+            <SelectTrigger className="w-[100px] md:w-[120px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ascending">Ascending</SelectItem>
+              <SelectItem value="descending">Descending</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
         <Button variant="outline" size="sm" onClick={() => onNavigate('today')} className="text-xs md:text-sm px-2">
           Today
         </Button>

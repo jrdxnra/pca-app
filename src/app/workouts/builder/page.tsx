@@ -1454,10 +1454,10 @@ export default function BuilderPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="w-full px-1 pt-1 pb-4 space-y-2">
+      <div className="w-full px-1 pt-0.5 pb-2 space-y-1">
         {/* Filters and Controls */}
-          <Card className="py-2">
-            <CardContent className="py-1 px-2">
+          <Card className="py-1">
+            <CardContent className="py-0.5 px-2">
               {/* Navigation */}
               <BuilderHeader
                 clients={clients}
@@ -1477,6 +1477,8 @@ export default function BuilderPage() {
                   // Force re-fetch by updating calendarDate (triggers useEffect)
                   setCalendarDate(new Date(calendarDate));
                 }}
+                weekOrder={weekSettings.weekOrder}
+                onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
               />
 
               {/* Workout Building Actions */}
@@ -1486,16 +1488,12 @@ export default function BuilderPage() {
                 </div>
               )}
 
-              {/* Second Row - Column Toggle, Category Filter, Week Order */}
+              {/* Category Filter */}
               <BuilderFilters
-                visibleColumns={visibleColumns}
-                onColumnVisibilityChange={handleColumnVisibilityChange}
                 viewMode={viewMode}
                 workoutCategories={workoutCategories}
                 selectedCategories={selectedCategories}
                 onCategorySelectionChange={setSelectedCategories}
-                weekOrder={weekSettings.weekOrder}
-                onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
               />
             </CardContent>
           </Card>
@@ -1504,7 +1502,7 @@ export default function BuilderPage() {
         <>
           {/* Only day view is supported - show workouts for the selected week */}
           {/* Day View - Optimized for 2 workouts side-by-side */}
-          <div className="space-y-6">
+          <div className="space-y-3">
               {(() => {
                 // Always show the schedule structure - never return null
                 // Calculate weeks based on period if available, otherwise use calendarDate
@@ -1662,7 +1660,7 @@ export default function BuilderPage() {
                       }`}
                     >
                       {/* Week Header */}
-                      <div className={`border-b border-gray-200 px-4 py-2 ${
+                      <div className={`border-b border-gray-200 px-3 py-1 ${
                         isCurrentWeek 
                           ? 'bg-gradient-to-r from-blue-50 to-blue-100' 
                           : showViewedIndicator
@@ -1673,7 +1671,7 @@ export default function BuilderPage() {
                       }`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <h3 className={`text-sm ${
+                            <h3 className={`text-xs ${
                               isCurrentWeek 
                                 ? 'font-bold text-blue-800' 
                                 : showViewedIndicator 
@@ -1682,7 +1680,7 @@ export default function BuilderPage() {
                             }`}>
                               {week[0]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {week[week.length - 1]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </h3>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            <span className={`text-[10px] px-1.5 py-0 rounded-full ${
                               isCurrentWeek 
                                 ? 'bg-blue-500 text-white font-bold' 
                                 : showViewedIndicator
@@ -1697,7 +1695,7 @@ export default function BuilderPage() {
                           </div>
                           <div className="flex items-center gap-3">
                             {hasActiveEditors && (
-                              <div className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-medium">
+                              <div className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0 rounded-full font-medium">
                                 {weekEditingWorkouts.length + weekCreatingWorkouts.length} editing
                               </div>
                             )}
@@ -1712,7 +1710,7 @@ export default function BuilderPage() {
                           ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
                           : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
                         ).map((day, index) => (
-                          <div key={index} className="bg-gray-50 text-center text-xs font-semibold text-gray-700 py-3 border-b border-gray-200">
+                          <div key={index} className="bg-gray-50 text-center text-[10px] font-semibold text-gray-700 py-1.5 border-b border-gray-200">
                             <div className="hidden sm:block">{day}</div>
                             <div className="sm:hidden">{day.slice(0, 3)}</div>
                           </div>
@@ -1740,16 +1738,16 @@ export default function BuilderPage() {
 
                             if (!shouldShow) {
                               return (
-                                <div key={dayIndex} className="min-h-[160px] bg-gray-50 opacity-30">
-                                  <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
-                                    <div className="text-sm font-semibold text-gray-400">{date.getDate()}</div>
+                                <div key={dayIndex} className="min-h-[100px] bg-gray-50 opacity-30">
+                                  <div className="px-2 py-1 border-b border-gray-100 bg-gray-50">
+                                    <div className="text-xs font-semibold text-gray-400">{date.getDate()}</div>
                                   </div>
                                 </div>
                               );
                             }
 
                             return (
-                              <div key={dayIndex} className={`min-h-[160px] relative ${
+                              <div key={dayIndex} className={`min-h-[100px] relative ${
                                 isEditingThisDate && !isToday 
                                   ? 'bg-amber-50 border-2 border-amber-400' 
                                   : isToday 
@@ -1760,14 +1758,14 @@ export default function BuilderPage() {
                               } ${!inPeriod && !isToday && !isEditingThisDate ? 'opacity-60' : ''}`}>
 
                                 {/* Date Header */}
-                                <div className={`px-3 py-2 border-b border-gray-100 ${
+                                <div className={`px-2 py-0.5 border-b border-gray-100 ${
                                   isEditingThisDate && !isToday
                                     ? 'bg-amber-100'
                                     : isToday 
                                       ? 'bg-blue-100' 
                                       : 'bg-gray-50'
                                 }`}>
-                                  <div className={`text-sm font-semibold ${
+                                  <div className={`text-xs font-semibold ${
                                     isEditingThisDate && !isToday
                                       ? 'text-amber-800 font-bold'
                                       : isToday 
@@ -1777,7 +1775,7 @@ export default function BuilderPage() {
                                     {date.getDate()}
                                   </div>
                                   {isEditingThisDate && (
-                                    <div className={`text-xs font-medium ${
+                                    <div className={`text-[9px] font-medium ${
                                       isToday ? 'text-blue-600' : 'text-amber-700'
                                     }`}>
                                       ✏️ Editing {editingWorkout?.categoryName || createWorkoutData?.category || ''}
@@ -1798,14 +1796,14 @@ export default function BuilderPage() {
                                     >
                                       {/* Show applied template indicator */}
                                       {workout.appliedTemplateId && (
-                                        <div className="text-[8px] text-gray-500 px-1">
+                                        <div className="text-[7px] text-gray-500 px-0.5">
                                           {workoutStructureTemplates.find(t => t.id === workout.appliedTemplateId)?.name}
                                         </div>
                                       )}
                                       {/* Show workout's actual category (prioritize over period's category) */}
                                       {workout.categoryName ? (
                                         <div
-                                          className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5"
+                                          className="text-[11px] px-0.5 py-0.5 rounded text-white font-medium mb-0.5"
                                           style={{ 
                                             backgroundColor: workoutCategories.find((wc: any) => wc.name === workout.categoryName)?.color || categoryInfo?.color || '#6b7280'
                                           }}
@@ -1814,13 +1812,13 @@ export default function BuilderPage() {
                                         </div>
                                       ) : categoryInfo ? (
                                         <div
-                                          className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5"
+                                          className="text-[11px] px-0.5 py-0.5 rounded text-white font-medium mb-0.5"
                                           style={{ backgroundColor: categoryInfo.color }}
                                         >
                                           {categoryInfo.category}
                                         </div>
                                       ) : null}
-                                      <div className="text-xs text-gray-700 font-medium px-1">
+                                      <div className="text-[11px] text-gray-700 font-medium px-0.5">
                                         {workout.title || 'Untitled'}
                                       </div>
                                     </button>
@@ -1836,12 +1834,12 @@ export default function BuilderPage() {
                                       }}
                                     >
                                       <div
-                                        className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5 flex items-center justify-between"
+                                        className="text-[11px] px-0.5 py-0.5 rounded text-white font-medium mb-0.5 flex items-center justify-between"
                                         style={{ backgroundColor: categoryInfo.color }}
                                       >
                                         <span>{categoryInfo.category}</span>
                                         {workoutCategories.find((wc: any) => wc.name === categoryInfo.category)?.linkedWorkoutStructureTemplateId && (
-                                          <span className="text-[8px] opacity-75">★</span>
+                                          <span className="text-[7px] opacity-75">★</span>
                                         )}
                                       </div>
                                       <div className="flex items-center justify-center text-gray-400 mt-0.5">
@@ -1850,17 +1848,17 @@ export default function BuilderPage() {
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="p-3 flex flex-col items-center justify-center text-center h-full">
-                                    <div className="text-gray-400 text-xs">
+                                  <div className="p-2 flex flex-col items-center justify-center text-center h-full">
+                                    <div className="text-gray-400 text-[10px]">
                                       {inPeriod ? (
                                         <>
-                                          <div className="text-lg mb-1">📅</div>
-                                          <div>No category assigned</div>
+                                          <div className="text-lg mb-0.5">📅</div>
+                                          <div>No category</div>
                                         </>
                                       ) : (
                                         <>
-                                          <div className="text-lg mb-1">🚫</div>
-                                          <div>Outside training period</div>
+                                          <div className="text-lg mb-0.5">🚫</div>
+                                          <div>Outside period</div>
                                         </>
                                       )}
                                     </div>
@@ -1875,8 +1873,8 @@ export default function BuilderPage() {
                       {hasActiveEditors && (
                         <div className="border-t border-gray-200 bg-gray-50">
                           {/* Editors Horizontal Scroll - Optimized for 2 workouts side-by-side */}
-                          <div className="p-2 overflow-x-auto">
-                            <div className="flex gap-4 min-w-max border border-gray-200" style={{ maxWidth: 'calc(2 * 560px + 1rem)' }}>
+                          <div className="p-1 overflow-x-auto">
+                            <div className="flex gap-3 min-w-max border border-gray-200" style={{ maxWidth: 'calc(2 * 560px + 0.75rem)' }}>
                               {/* All Editors in Chronological Order - Show max 2 at a time */}
                               {[...weekEditingWorkouts, ...weekCreatingWorkouts]
                                 .sort(([dateKeyA], [dateKeyB]) => new Date(dateKeyA).getTime() - new Date(dateKeyB).getTime())
