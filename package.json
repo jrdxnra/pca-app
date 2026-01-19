@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "dev:emulator": "NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true next dev --turbopack",
     "emulators": "firebase emulators:start",
     "emulators:exec": "firebase emulators:exec",
