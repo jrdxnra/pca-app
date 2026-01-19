@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS='--max-old-space-size=1536' next dev --webpack",
+    "dev": "NODE_OPTIONS='--max-old-space-size=1536 --gc-interval=100' next dev --webpack",
     "dev:emulator": "NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true next dev --turbopack",
     "emulators": "firebase emulators:start",
     "emulators:exec": "firebase emulators:exec",

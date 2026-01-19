@@ -10,34 +10,56 @@ const nextConfig: NextConfig = {
   // Use webpack instead of Turbopack in development (to reduce memory usage)
   // Add empty turbopack config to silence the warning
   turbopack: {},
-  // Memory optimizations for dev server
+  // Aggressive memory optimizations for dev server
   ...(process.env.NODE_ENV === 'development' && {
-    // Disable source maps in dev to reduce memory usage
+    // Disable source maps completely
     productionBrowserSourceMaps: false,
     // Reduce memory usage in webpack
     webpack: (config, { dev, isServer }) => {
       if (dev && !isServer) {
-        // Reduce memory usage by limiting chunk sizes
+        // Aggressive memory optimizations
         config.optimization = {
           ...config.optimization,
+          // Minimize memory usage
+          minimize: false, // Don't minify in dev (saves memory)
           splitChunks: {
             chunks: 'all',
-            maxSize: 200000, // 200KB max chunk size
+            maxSize: 150000, // Smaller chunks (150KB)
+            minSize: 20000, // Don't split tiny chunks
             cacheGroups: {
               default: false,
               vendors: false,
+              // Single vendor chunk
               vendor: {
                 name: 'vendor',
                 chunks: 'all',
                 test: /node_modules/,
                 priority: 20,
-                maxSize: 200000,
+                maxSize: 150000,
+                enforce: true,
               },
             },
           },
         };
-        // Disable source maps to save memory
+        // Disable source maps completely
         config.devtool = false;
+        // Reduce memory for file watching
+        config.watchOptions = {
+          ...config.watchOptions,
+          ignored: [
+            '**/node_modules/**',
+            '**/.git/**',
+            '**/.next/**',
+            '**/dist/**',
+            '**/build/**',
+          ],
+        };
+        // Reduce module resolution memory
+        config.resolve = {
+          ...config.resolve,
+          // Cache fewer modules
+          cache: false, // Disable module resolution cache
+        };
       }
       return config;
     },
