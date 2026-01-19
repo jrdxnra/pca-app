@@ -71,26 +71,47 @@ const queryClientConfig = {
   },
 };
 
-// Create QueryClient instance at module level (singleton pattern)
+// Create QueryClient instance at module level (singleton pattern) - CLIENT-SIDE ONLY
 // This ensures it's always available and prevents recreation on re-renders
 let queryClientInstance: QueryClient | undefined;
 
+function makeQueryClient(): QueryClient {
+  return new QueryClient(queryClientConfig);
+}
+
 function getQueryClient(): QueryClient {
+  // Only create on client-side
   if (typeof window === 'undefined') {
-    // Server-side: create new instance for each request
-    return new QueryClient(queryClientConfig);
+    // Server-side: return a new instance for each request (but this shouldn't be used)
+    // In Next.js App Router, this component should only render on client
+    return makeQueryClient();
   }
   
   // Client-side: reuse singleton instance
   if (!queryClientInstance) {
-    queryClientInstance = new QueryClient(queryClientConfig);
+    queryClientInstance = makeQueryClient();
   }
   return queryClientInstance;
 }
 
 export function QueryProvider({ children }: QueryProviderProps) {
-  // Use the singleton QueryClient
-  const queryClient = getQueryClient();
+  // Use useState to ensure QueryClient is created only once on client-side mount
+  const [queryClient] = useState(() => {
+    try {
+      return getQueryClient();
+    } catch (error) {
+      console.error('Failed to create QueryClient:', error);
+      // Fallback: create a minimal QueryClient
+      return new QueryClient();
+    }
+  });
+
+  // Ensure we have a valid QueryClient
+  if (!queryClient) {
+    console.error('QueryClient is null - this should not happen');
+    // Return children without provider as last resort (will cause React Query errors)
+    return <>{children}</>;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
