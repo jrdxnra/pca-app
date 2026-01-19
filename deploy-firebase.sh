@@ -35,7 +35,7 @@ npm run build
 # Build Docker image
 echo "🐳 Building Docker image..."
 IMAGE_NAME="gcr.io/$PROJECT_ID/pca-app:latest"
-docker build -t $IMAGE_NAME .
+docker build -f Dockerfile.firebase -t $IMAGE_NAME .
 
 # Push to Google Container Registry
 echo "📤 Pushing image to GCR..."
