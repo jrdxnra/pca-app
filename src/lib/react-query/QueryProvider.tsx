@@ -113,11 +113,21 @@ export function QueryProvider({ children }: QueryProviderProps) {
     return <>{children}</>;
   }
 
+  // Use useEffect to ensure devtools only render after mount (client-side only)
+  const [showDevtools, setShowDevtools] = useState(false);
+  
+  useEffect(() => {
+    // Only show devtools on client-side after mount
+    if (typeof window !== 'undefined' && isDevelopment) {
+      setShowDevtools(true);
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      {/* Show React Query DevTools in development */}
-      {isDevelopment && ReactQueryDevtools && (
+      {/* Show React Query DevTools in development - only after client-side mount */}
+      {showDevtools && ReactQueryDevtools && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}
     </QueryClientProvider>
