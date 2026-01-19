@@ -34,51 +34,64 @@ interface QueryProviderProps {
  * - Automatic retry on failure (2 retries)
  * - DevTools in development
  */
+// Create QueryClient outside component to ensure it's always available
+const queryClientConfig = {
+  defaultOptions: {
+    queries: {
+      // Data is considered fresh for 5 minutes
+      // During this time, React Query won't refetch even if component remounts
+      staleTime: 5 * 60 * 1000, // 5 minutes
+
+      // Cached data is kept in memory for 10 minutes after last use
+      // This allows instant loading when navigating back
+      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+
+      // Retry failed requests 2 times
+      retry: 2,
+
+      // Retry delay increases exponentially
+      retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
+
+      // Refetch on window focus (keeps data fresh)
+      refetchOnWindowFocus: true,
+
+      // Don't refetch on reconnect (we'll handle this manually if needed)
+      refetchOnReconnect: false,
+
+      // Don't refetch on mount if data is fresh
+      refetchOnMount: true,
+    },
+    mutations: {
+      // Retry mutations once on failure
+      retry: 1,
+
+      // Retry delay for mutations
+      retryDelay: 1000,
+    },
+  },
+};
+
 export function QueryProvider({ children }: QueryProviderProps) {
   // Create QueryClient with stable instance (using useState to prevent recreation on re-renders)
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            // Data is considered fresh for 5 minutes
-            // During this time, React Query won't refetch even if component remounts
-            staleTime: 5 * 60 * 1000, // 5 minutes
-
-            // Cached data is kept in memory for 10 minutes after last use
-            // This allows instant loading when navigating back
-            gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
-
-            // Retry failed requests 2 times
-            retry: 2,
-
-            // Retry delay increases exponentially
-            retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-
-            // Refetch on window focus (keeps data fresh)
-            refetchOnWindowFocus: true,
-
-            // Don't refetch on reconnect (we'll handle this manually if needed)
-            refetchOnReconnect: false,
-
-            // Don't refetch on mount if data is fresh
-            refetchOnMount: true,
-          },
-          mutations: {
-            // Retry mutations once on failure
-            retry: 1,
-
-            // Retry delay for mutations
-            retryDelay: 1000,
-          },
-        },
-      })
-  );
+  const [queryClient] = useState(() => {
+    try {
+      return new QueryClient(queryClientConfig);
+    } catch (error) {
+      console.error('Failed to create QueryClient:', error);
+      // Return a minimal QueryClient if creation fails
+      return new QueryClient();
+    }
+  });
 
   // Ensure QueryClient is available (defensive check)
   if (!queryClient) {
-    console.error('QueryClient failed to initialize');
-    return <>{children}</>;
+    console.error('QueryClient is null - creating fallback');
+    const fallbackClient = new QueryClient();
+    return (
+      <QueryClientProvider client={fallbackClient}>
+        {children}
+      </QueryClientProvider>
+    );
   }
 
   return (
