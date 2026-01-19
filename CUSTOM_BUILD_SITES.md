@@ -45,19 +45,27 @@
 
 ---
 
-### 3. **Micro Center** (Best Prices + Build Service)
+### 3. **Micro Center** (Best Prices + Build Service) ⭐
 **Website**: microcenter.com
 
 **What it offers:**
-- ✅ **Best in-store prices** - Often cheapest
+- ✅ **Best in-store prices** - Often cheapest (famous for this!)
 - ✅ **Build service** - They build it for you (~$150)
 - ✅ **Expert help** - Staff can help select parts
 - ✅ **Price matching** - Matches competitors
 - ✅ **In-store pickup** - If you're near one
+- ✅ **Bundle deals** - CPU + Motherboard combos (great savings!)
+- ✅ **No OS required** - Can build without Windows
 
-**Locations**: Major cities (check if one near you)
+**Locations**: Major cities (check microcenter.com for locations)
 
-**Best for**: Best prices, in-person help, build service
+**Famous for:**
+- **Best CPU prices** - Often $50-100 cheaper than online
+- **Bundle deals** - CPU + Motherboard combos save $50-100
+- **Build service** - Professional assembly
+- **In-store expertise** - Staff really know their stuff
+
+**Best for**: Best prices, in-person help, build service, bundle deals
 
 ---
 
