@@ -55,6 +55,17 @@ export async function getCalendarEventsByDateRange(
       calendarId
     );
     
+    // Helper functions to detect event types based on keywords
+    const isCoachingEvent = (event: any, keywords: string[]): boolean => {
+      const title = event.summary?.toLowerCase() || '';
+      return keywords.some(keyword => title.includes(keyword.toLowerCase()));
+    };
+    
+    const isClassEvent = (event: any, keywords: string[]): boolean => {
+      const title = event.summary?.toLowerCase() || '';
+      return keywords.some(keyword => title.includes(keyword.toLowerCase()));
+    };
+    
     // Convert Google Calendar API format to our format
     const events: GoogleCalendarEvent[] = googleEvents.map((event: any) => {
       const clientId = event.extendedProperties?.private?.pcaClientId;
@@ -81,8 +92,10 @@ export async function getCalendarEventsByDateRange(
         preConfiguredClient: clientId,
         preConfiguredCategory: category,
         linkedWorkoutId: workoutId,
-        // Mark as coaching session if it has a client ID (from our app)
-        isCoachingSession: clientId ? true : undefined,
+        // Mark as coaching session if it has a client ID (from our app) OR matches coaching keywords
+        isCoachingSession: clientId ? true : isCoachingEvent(event, config.coachingKeywords || []),
+        // Mark as class session if it matches class keywords
+        isClassSession: isClassEvent(event, config.classKeywords || []),
       };
     });
     

@@ -14,6 +14,8 @@ import {
   deleteCalendarEvent
 } from '@/lib/google-calendar/api-client';
 import { getCalendarSyncConfig, updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
+import { queryKeys } from '@/lib/react-query/queryKeys';
+import { getGlobalQueryClient } from '@/lib/react-query/queryClientInstance';
 
 // Cache duration in milliseconds (5 minutes - matches React Query staleTime)
 // Note: Calendar events are now primarily fetched via React Query, this is for backward compatibility
@@ -42,6 +44,7 @@ interface CalendarStore {
   fetchEvents: (dateRange: DateRange, force?: boolean) => Promise<void>;
   createTestEvent: (eventInput: TestEventInput) => Promise<GoogleCalendarEvent>;
   markAsCoachingSession: (eventId: string, isCoaching: boolean) => Promise<void>;
+  markAsClassSession: (eventId: string, isClass: boolean) => Promise<void>;
   linkToWorkout: (eventId: string, workoutId: string) => Promise<void>;
   updateEvent: (eventId: string, updates: Partial<GoogleCalendarEvent>) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
@@ -467,6 +470,50 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
     }
   },
 
+  markAsClassSession: async (eventId: string, isClass: boolean) => {
+    set({ loading: true, error: null });
+    try {
+      const { events, isGoogleCalendarConnected, config } = get();
+      const existingEvent = events.find(e => e.id === eventId);
+      
+      if (!existingEvent) {
+        throw new Error('Event not found');
+      }
+      
+      // Update in Google Calendar API if connected
+      if (isGoogleCalendarConnected) {
+        try {
+          const instanceDate = existingEvent.start.dateTime || new Date().toISOString();
+          await updateCalendarEvent({
+            eventId,
+            instanceDate,
+            updateType: 'single',
+            updates: {
+              // Note: isClassSession is not a Google Calendar field, it's our metadata
+              // We store it in extendedProperties or description metadata
+            },
+            calendarId: config.selectedCalendarId || 'primary',
+          });
+        } catch (googleError) {
+          console.error('Failed to update Google Calendar event:', googleError);
+          // Continue with local update
+        }
+      }
+      
+      // Update in local state (isClassSession is a local property)
+      const updatedEvents = events.map(event => 
+        event.id === eventId ? { ...event, isClassSession: isClass } : event
+      );
+      
+      set({ events: updatedEvents, loading: false });
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to update event',
+        loading: false 
+      });
+    }
+  },
+
   linkToWorkout: async (eventId: string, workoutId: string) => {
     console.log('[linkToWorkout] Called with eventId:', eventId, 'workoutId:', workoutId);
     set({ loading: true, error: null });
@@ -682,6 +729,13 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
         console.error('Failed to persist calendar config to Firestore:', err);
         set({ error: err instanceof Error ? err.message : 'Failed to save calendar settings' });
       });
+      
+      // Invalidate React Query caches so components using React Query see the new config
+      // Calendar events need to be re-evaluated with new keywords/colors
+      const queryClient = getGlobalQueryClient();
+      if (queryClient) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
+      }
     } catch (err) {
       console.error('Failed to start Firestore calendar config save:', err);
       set({ error: err instanceof Error ? err.message : 'Failed to save calendar settings' });

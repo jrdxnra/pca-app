@@ -80,9 +80,10 @@ export function ModernCalendarView({
   // This eliminates dual fetching - React Query handles all calendar event fetching
   const calendarEvents = propsCalendarEvents || [];
   
-  // Still need calendar store for config and mutations (not fetching)
+  // Still need calendar store for config and mutations
   const calendarConfig = useCalendarStore(state => state.config);
   const markAsCoachingSession = useCalendarStore(state => state.markAsCoachingSession);
+  const markAsClassSession = useCalendarStore(state => state.markAsClassSession);
   const linkToWorkout = useCalendarStore(state => state.linkToWorkout);
   const updateEvent = useCalendarStore(state => state.updateEvent);
 
@@ -1678,6 +1679,7 @@ export function ModernCalendarView({
                                       <span className="truncate flex-1">{clientName}</span>
                                       <div className="flex items-center gap-0.5 flex-shrink-0">
                                         {event.isCoachingSession && <span title="Coaching Session">🏋️</span>}
+                                        {event.isClassSession && <span title="Class Session">👥</span>}
                                         {event.linkedWorkoutId && <span title="Linked to Workout">✓</span>}
                                       </div>
                                     </div>

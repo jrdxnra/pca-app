@@ -1,20 +1,23 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, Suspense, lazy, useEffect } from 'react';
+import { setGlobalQueryClient } from './queryClientInstance';
 
-// Dynamically import devtools only in development to avoid build errors
-let ReactQueryDevtools: any = null;
-
-if (process.env.NODE_ENV === 'development') {
+// Lazy load DevTools only in development - avoids bundle bloat in production
+const DevToolsWrapper = lazy(async () => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const devtools = require('@tanstack/react-query-devtools');
-    ReactQueryDevtools = devtools.ReactQueryDevtools;
+    const { ReactQueryDevtools } = await import('@tanstack/react-query-devtools');
+    return {
+      default: () => <ReactQueryDevtools initialIsOpen={false} />
+    };
   } catch {
-    // Devtools not available, that's okay
+    // Devtools not available, return empty component
+    return {
+      default: () => null
+    };
   }
-}
+});
 
 interface QueryProviderProps {
   children: ReactNode;
@@ -70,12 +73,19 @@ export function QueryProvider({ children }: QueryProviderProps) {
       })
   );
 
+  // Set the global queryClient so Zustand stores can access it for cache invalidation
+  useEffect(() => {
+    setGlobalQueryClient(queryClient);
+  }, [queryClient]);
+
   return (
     <QueryClientProvider client={queryClient}>
       {children}
       {/* Show React Query DevTools in development */}
-      {process.env.NODE_ENV === 'development' && ReactQueryDevtools && (
-        <ReactQueryDevtools initialIsOpen={false} />
+      {process.env.NODE_ENV === 'development' && (
+        <Suspense fallback={null}>
+          <DevToolsWrapper />
+        </Suspense>
       )}
     </QueryClientProvider>
   );

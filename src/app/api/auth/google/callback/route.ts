@@ -93,8 +93,9 @@ export async function GET(request: NextRequest) {
         redirectUrl = 'https://performancecoach.web.app/configure?connected=true';
       }
     } else {
-      // Local development or Vercel - use request origin
-      redirectUrl = new URL('/configure?connected=true', request.url).toString();
+      // Local development or Vercel - use request origin (without port since it's in the domain)
+      const origin = request.nextUrl.origin;
+      redirectUrl = `${origin}/configure?connected=true`;
     }
     
     console.log('[OAuth Callback] Redirecting to:', redirectUrl);
