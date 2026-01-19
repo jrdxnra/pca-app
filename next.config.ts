@@ -7,33 +7,9 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: false,
   },
-  // Memory optimizations for dev server
-  ...(process.env.NODE_ENV === 'development' && {
-    // Reduce memory usage in development
-    webpack: (config, { dev }) => {
-      if (dev) {
-        // Limit chunk size to reduce memory usage
-        config.optimization = {
-          ...config.optimization,
-          splitChunks: {
-            chunks: 'all',
-            cacheGroups: {
-              default: false,
-              vendors: false,
-              // Smaller chunks
-              vendor: {
-                name: 'vendor',
-                chunks: 'all',
-                test: /node_modules/,
-                priority: 20,
-              },
-            },
-          },
-        };
-      }
-      return config;
-    },
-  }),
+  // Use webpack instead of Turbopack in development (to reduce memory usage)
+  // Add empty turbopack config to silence the warning
+  turbopack: {},
 };
 
 export default nextConfig;
