@@ -34,7 +34,7 @@ interface QueryProviderProps {
  * - Automatic retry on failure (2 retries)
  * - DevTools in development
  */
-// Create QueryClient outside component to ensure it's always available
+// Create QueryClient configuration
 const queryClientConfig = {
   defaultOptions: {
     queries: {
@@ -71,28 +71,26 @@ const queryClientConfig = {
   },
 };
 
-export function QueryProvider({ children }: QueryProviderProps) {
-  // Create QueryClient with stable instance (using useState to prevent recreation on re-renders)
-  const [queryClient] = useState(() => {
-    try {
-      return new QueryClient(queryClientConfig);
-    } catch (error) {
-      console.error('Failed to create QueryClient:', error);
-      // Return a minimal QueryClient if creation fails
-      return new QueryClient();
-    }
-  });
+// Create QueryClient instance at module level (singleton pattern)
+// This ensures it's always available and prevents recreation on re-renders
+let queryClientInstance: QueryClient | undefined;
 
-  // Ensure QueryClient is available (defensive check)
-  if (!queryClient) {
-    console.error('QueryClient is null - creating fallback');
-    const fallbackClient = new QueryClient();
-    return (
-      <QueryClientProvider client={fallbackClient}>
-        {children}
-      </QueryClientProvider>
-    );
+function getQueryClient(): QueryClient {
+  if (typeof window === 'undefined') {
+    // Server-side: create new instance for each request
+    return new QueryClient(queryClientConfig);
   }
+  
+  // Client-side: reuse singleton instance
+  if (!queryClientInstance) {
+    queryClientInstance = new QueryClient(queryClientConfig);
+  }
+  return queryClientInstance;
+}
+
+export function QueryProvider({ children }: QueryProviderProps) {
+  // Use the singleton QueryClient
+  const queryClient = getQueryClient();
 
   return (
     <QueryClientProvider client={queryClient}>
