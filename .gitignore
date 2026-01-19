@@ -45,6 +45,11 @@ GOOGLE_CALENDAR_SETUP.md
 firebase-debug.log
 ui-debug.log
 
+# API keys and secrets
+*.api-key*
+*api-key*
+.render-api-key*
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
