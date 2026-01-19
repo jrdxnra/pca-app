@@ -1,12 +1,17 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 
 // Dynamically import devtools only in development to avoid build errors
 let ReactQueryDevtools: any = null;
 
-if (process.env.NODE_ENV === 'development') {
+// Check if we're in development mode (works in both client and server)
+const isDevelopment = typeof window !== 'undefined' 
+  ? (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_NODE_ENV === 'development')
+  : process.env.NODE_ENV === 'development';
+
+if (isDevelopment) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const devtools = require('@tanstack/react-query-devtools');
@@ -70,11 +75,17 @@ export function QueryProvider({ children }: QueryProviderProps) {
       })
   );
 
+  // Ensure QueryClient is available (defensive check)
+  if (!queryClient) {
+    console.error('QueryClient failed to initialize');
+    return <>{children}</>;
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       {children}
       {/* Show React Query DevTools in development */}
-      {process.env.NODE_ENV === 'development' && ReactQueryDevtools && (
+      {isDevelopment && ReactQueryDevtools && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}
     </QueryClientProvider>
