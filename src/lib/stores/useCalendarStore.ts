@@ -1,22 +1,23 @@
 import { create } from 'zustand';
 import { GoogleCalendar, GoogleCalendarEvent, CalendarSyncConfig, DateRange, TestEventInput } from '@/lib/google-calendar/types';
 import { 
-  createCalendarEvent, 
-  getCalendarEventsByDateRange, 
-  updateCalendarEvent, 
-  deleteCalendarEvent 
+  getCalendarEventsByDateRange
 } from '@/lib/firebase/services/calendarEvents';
 import { createClientWorkout } from '@/lib/firebase/services/clientWorkouts';
 import { Timestamp } from 'firebase/firestore';
 import { 
   fetchCalendarEvents, 
   checkGoogleCalendarAuth,
-  addWorkoutLinksToEvent
+  addWorkoutLinksToEvent,
+  createSingleCalendarEvent,
+  updateCalendarEvent,
+  deleteCalendarEvent
 } from '@/lib/google-calendar/api-client';
 import { getCalendarSyncConfig, updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
 
-// Cache duration in milliseconds (30 seconds)
-const CACHE_DURATION = 30 * 1000;
+// Cache duration in milliseconds (5 minutes - matches React Query staleTime)
+// Note: Calendar events are now primarily fetched via React Query, this is for backward compatibility
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes (increased from 30 seconds)
 
 function normalizeLocationKey(input: string): string {
   // Normalize for comparison: lowercase, trim, collapse spaces
@@ -155,14 +156,34 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
             };
           });
         } catch (googleError) {
-          console.warn('Failed to fetch from Google Calendar, falling back to Firebase:', googleError);
-          // Fall through to Firebase
+          console.error('Failed to fetch from Google Calendar:', googleError);
+          
+          // Check if it's an authentication error (401)
+          const errorMessage = googleError instanceof Error ? googleError.message : String(googleError);
+          if (errorMessage.includes('401') || 
+              errorMessage.includes('Failed to get valid access token') ||
+              errorMessage.includes('Not authenticated')) {
+            // Update connection status - tokens are invalid/expired
+            set({ isGoogleCalendarConnected: false });
+          }
+          
+          // Don't fallback to Firebase - Google Calendar is the only source of truth
+          // Return empty array if Google Calendar fails
+          // Don't update state if we already have events (prevents re-render loops)
+          const { events: currentEvents } = get();
+          if (currentEvents.length === 0) {
+            set({ events: [], loading: false, error: 'Failed to fetch calendar events from Google Calendar' });
+          } else {
+            // Keep existing events, just stop loading
+            set({ loading: false });
+          }
+          return;
         }
-      }
-
-      // Fallback to Firebase if Google Calendar not connected or failed
-      if (newEvents.length === 0) {
-        newEvents = await getCalendarEventsByDateRange(dateRange.start, dateRange.end);
+      } else {
+        // Google Calendar not connected - return empty array
+        console.warn('⚠️ Google Calendar is not connected. Calendar events will not be available.');
+        set({ events: [], loading: false });
+        return;
       }
       
       // Auto-detect coaching sessions and class sessions based on keywords
@@ -198,7 +219,19 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
       
       const mergedEvents = Array.from(eventMap.values());
 
-      set({ events: mergedEvents, loading: false, _eventsFetchTime: Date.now(), _eventsFetchKey: cacheKey });
+      // Only update state if events actually changed (prevent unnecessary re-renders)
+      const { events: currentEvents } = get();
+      const currentEventIds = new Set(currentEvents.map(e => e.id));
+      const newEventIds = new Set(mergedEvents.map(e => e.id));
+      const eventsChanged = currentEventIds.size !== newEventIds.size || 
+        !Array.from(currentEventIds).every(id => newEventIds.has(id));
+      
+      if (eventsChanged) {
+        set({ events: mergedEvents, loading: false, _eventsFetchTime: Date.now(), _eventsFetchKey: cacheKey });
+      } else {
+        // Events didn't change, just update loading state
+        set({ loading: false, _eventsFetchTime: Date.now(), _eventsFetchKey: cacheKey });
+      }
     } catch (error) {
       set({ 
         error: error instanceof Error ? error.message : 'Failed to fetch events',
@@ -210,7 +243,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   createTestEvent: async (eventInput: TestEventInput) => {
     set({ loading: true, error: null });
     try {
-      const { config } = get();
+      const { config, isGoogleCalendarConnected } = get();
       // Create start and end datetime strings
       const startDateTime = `${eventInput.date}T${eventInput.startTime}:00`;
       const endDateTime = `${eventInput.date}T${eventInput.endTime}:00`;
@@ -218,6 +251,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
       // Parse client and category from description if present
       let clientId: string | null = null;
       let categoryName: string | null = null;
+      let workoutId: string | null = null;
       
       if (eventInput.description) {
         const clientMatch = eventInput.description.match(/\[Metadata:.*client=([^,}]+)/);
@@ -229,23 +263,56 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
         if (categoryMatch) {
           categoryName = categoryMatch[1].trim();
         }
+
+        const workoutIdMatch = eventInput.description.match(/workoutId=([^,\s}]+)/);
+        if (workoutIdMatch && workoutIdMatch[1] && workoutIdMatch[1] !== 'none') {
+          workoutId = workoutIdMatch[1].trim();
+        }
       }
 
-      // Create calendar event in Firebase
-      const eventData: Omit<GoogleCalendarEvent, 'id'> = {
-        summary: eventInput.summary,
-        description: eventInput.description || '',
+      // FIRST: Create calendar event in Google Calendar API (primary source)
+      let googleCalendarEvent: any = null;
+      if (isGoogleCalendarConnected && config.selectedCalendarId) {
+        try {
+          const eventResponse = await createSingleCalendarEvent({
+            summary: eventInput.summary,
+            startDateTime: new Date(startDateTime).toISOString(),
+            endDateTime: new Date(endDateTime).toISOString(),
+            clientId: clientId || undefined,
+            categoryName: categoryName || undefined,
+            workoutId: workoutId || undefined,
+            description: eventInput.description || undefined,
+            location: eventInput.location || undefined,
+            timeZone: 'America/Los_Angeles',
+            calendarId: config.selectedCalendarId,
+          });
+          googleCalendarEvent = eventResponse.event;
+          console.log('✅ Created calendar event in Google Calendar:', googleCalendarEvent.id);
+        } catch (googleError) {
+          console.error('❌ Failed to create event in Google Calendar:', googleError);
+          // Continue to create in Firebase as fallback, but warn the user
+          throw new Error(`Failed to create event in Google Calendar: ${googleError instanceof Error ? googleError.message : 'Unknown error'}. Please check your Google Calendar connection.`);
+        }
+      } else {
+        throw new Error('Google Calendar is not connected. Please connect Google Calendar to create events.');
+      }
+
+      // Convert Google Calendar event to our format
+      const eventData: GoogleCalendarEvent = {
+        id: googleCalendarEvent.id || '',
+        summary: googleCalendarEvent.summary || eventInput.summary,
+        description: googleCalendarEvent.description || eventInput.description || '',
         start: {
-          dateTime: startDateTime,
-          timeZone: 'America/Los_Angeles',
+          dateTime: googleCalendarEvent.start?.dateTime || startDateTime,
+          timeZone: googleCalendarEvent.start?.timeZone || 'America/Los_Angeles',
         },
         end: {
-          dateTime: endDateTime,
-          timeZone: 'America/Los_Angeles',
+          dateTime: googleCalendarEvent.end?.dateTime || endDateTime,
+          timeZone: googleCalendarEvent.end?.timeZone || 'America/Los_Angeles',
         },
-        location: eventInput.location || '',
-        htmlLink: '',
-        creator: {
+        location: googleCalendarEvent.location || eventInput.location || '',
+        htmlLink: googleCalendarEvent.htmlLink || '',
+        creator: googleCalendarEvent.creator || {
           email: 'system@example.com',
           displayName: 'System',
         },
@@ -254,11 +321,12 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
                           eventInput.summary.toLowerCase().includes('workout') ||
                           eventInput.summary.toLowerCase().includes('pt'),
         isClassSession: isClassEvent({ summary: eventInput.summary } as GoogleCalendarEvent, config.classKeywords || []),
-        preConfiguredClient: clientId || undefined,
-        preConfiguredCategory: categoryName || undefined,
+        preConfiguredClient: clientId || googleCalendarEvent.extendedProperties?.private?.pcaClientId || undefined,
+        preConfiguredCategory: categoryName || googleCalendarEvent.extendedProperties?.private?.pcaCategory || undefined,
+        linkedWorkoutId: workoutId || googleCalendarEvent.extendedProperties?.private?.pcaWorkoutId || undefined,
       };
 
-      const newEvent = await createCalendarEvent(eventData);
+      const newEvent = eventData;
       
       // Auto-create workout if client is specified AND workoutId is not already in metadata
       // (If workoutId is present, the workout was already created and we just need to link)
@@ -269,11 +337,10 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
           ? workoutIdMatch[1].trim() 
           : null;
 
-        if (existingWorkoutId) {
-          // Workout already exists, just link the event to it
-          await updateCalendarEvent(newEvent.id, { linkedWorkoutId: existingWorkoutId });
-          newEvent.linkedWorkoutId = existingWorkoutId;
-          console.log('✅ Linked calendar event to existing workout:', existingWorkoutId);
+        if (workoutId) {
+          // Workout already exists, just update the Google Calendar event to link it
+          newEvent.linkedWorkoutId = workoutId;
+          console.log('✅ Calendar event linked to existing workout:', workoutId);
         } else {
           // No workout exists yet, create one
           try {
@@ -288,7 +355,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
               }
             }
             
-            // If no periodId found, use placeholder (system should handle finding/creating period)
+            // Create workout in Firebase
             const workout = await createClientWorkout({
               clientId,
               periodId: periodId || 'quick-workouts', // Use placeholder if not found
@@ -303,10 +370,28 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
               createdBy: 'system',
             });
 
-            // Link event to workout
-            await updateCalendarEvent(newEvent.id, { linkedWorkoutId: workout.id });
-            newEvent.linkedWorkoutId = workout.id;
+            // Update Google Calendar event to link to workout
+            if (isGoogleCalendarConnected && config.selectedCalendarId && googleCalendarEvent?.id) {
+              try {
+                // Update the event description to include workout link
+                await addWorkoutLinksToEvent(
+                  googleCalendarEvent.id,
+                  workout.id,
+                  clientId!,
+                  eventDate,
+                  eventInput.description || '',
+                  'single',
+                  undefined,
+                  config.selectedCalendarId
+                );
+                console.log('✅ Updated Google Calendar event with workout link:', workout.id);
+              } catch (updateError) {
+                console.warn('⚠️ Could not update Google Calendar event with workout link:', updateError);
+                // Don't fail - the workout is created, just the link update failed
+              }
+            }
             
+            newEvent.linkedWorkoutId = workout.id;
             console.log('✅ Auto-created workout for calendar event:', workout.id);
           } catch (workoutError) {
             console.error('❌ Error creating workout for calendar event:', workoutError);
@@ -341,10 +426,34 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   markAsCoachingSession: async (eventId: string, isCoaching: boolean) => {
     set({ loading: true, error: null });
     try {
-      await updateCalendarEvent(eventId, { isCoachingSession: isCoaching });
+      const { events, isGoogleCalendarConnected, config } = get();
+      const existingEvent = events.find(e => e.id === eventId);
       
-      // Update in local state
-      const { events } = get();
+      if (!existingEvent) {
+        throw new Error('Event not found');
+      }
+      
+      // Update in Google Calendar API if connected
+      if (isGoogleCalendarConnected) {
+        try {
+          const instanceDate = existingEvent.start.dateTime || new Date().toISOString();
+          await updateCalendarEvent({
+            eventId,
+            instanceDate,
+            updateType: 'single',
+            updates: {
+              // Note: isCoachingSession is not a Google Calendar field, it's our metadata
+              // We store it in extendedProperties or description metadata
+            },
+            calendarId: config.selectedCalendarId || 'primary',
+          });
+        } catch (googleError) {
+          console.error('Failed to update Google Calendar event:', googleError);
+          // Continue with local update
+        }
+      }
+      
+      // Update in local state (isCoachingSession is a local property)
       const updatedEvents = events.map(event => 
         event.id === eventId ? { ...event, isCoachingSession: isCoaching } : event
       );
@@ -409,8 +518,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
         }
       }
       
-      // Update Firebase/local state
-      await updateCalendarEvent(eventId, { linkedWorkoutId: workoutId });
+      // Note: linkedWorkoutId is already updated in Google Calendar via addWorkoutLinksToEvent above
+      // No need to update Firebase - Google Calendar is the source of truth
       
       // Update in local state
       const updatedEvents = events.map(e => 
@@ -429,11 +538,15 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   updateEvent: async (eventId: string, updates: Partial<GoogleCalendarEvent>) => {
     set({ loading: true, error: null });
     try {
-      const { events, isGoogleCalendarConnected } = get();
+      const { events, isGoogleCalendarConnected, config } = get();
       const existingEvent = events.find(e => e.id === eventId);
       
+      if (!existingEvent) {
+        throw new Error('Event not found');
+      }
+      
       // If connected to Google Calendar, update the event there first
-      if (isGoogleCalendarConnected && existingEvent) {
+      if (isGoogleCalendarConnected) {
         try {
           // Build updates for Google Calendar API
           const googleUpdates: Record<string, unknown> = {};
@@ -449,34 +562,25 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
           }
           
           // Get the event date for the API call
-          const eventDate = existingEvent.start.dateTime 
-            ? new Date(existingEvent.start.dateTime).toISOString()
-            : new Date().toISOString();
+          const instanceDate = existingEvent.start.dateTime || new Date().toISOString();
           
-          const response = await fetch('/api/calendar/events/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              eventId,
-              instanceDate: eventDate,
-              updateType: 'single',
-              updates: googleUpdates,
-            }),
+          await updateCalendarEvent({
+            eventId,
+            instanceDate,
+            updateType: 'single',
+            updates: googleUpdates,
+            calendarId: config.selectedCalendarId || 'primary',
           });
-          
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Google Calendar update failed:', errorData);
-            // Continue with local update even if Google fails
-          }
         } catch (googleError) {
           console.error('Failed to update Google Calendar event:', googleError);
-          // Continue with local update
+          throw googleError; // Fail if Google Calendar update fails
         }
+      } else {
+        throw new Error('Google Calendar is not connected. Cannot update events.');
       }
       
-      // Also update Firebase (for local caching)
-      await updateCalendarEvent(eventId, updates);
+      // Note: Event is already updated in Google Calendar above
+      // No need to update Firebase - Google Calendar is the source of truth
       
       // Update in local state
       const updatedEvents = events.map(event => 
@@ -495,10 +599,27 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   deleteEvent: async (eventId: string) => {
     set({ loading: true, error: null });
     try {
-      await deleteCalendarEvent(eventId);
+      const { events, isGoogleCalendarConnected, config } = get();
+      const existingEvent = events.find(e => e.id === eventId);
+      
+      // Delete from Google Calendar API if connected
+      if (isGoogleCalendarConnected && existingEvent) {
+        try {
+          const instanceDate = existingEvent.start.dateTime;
+          await deleteCalendarEvent(
+            eventId,
+            instanceDate,
+            config.selectedCalendarId || 'primary'
+          );
+        } catch (googleError) {
+          console.error('Failed to delete from Google Calendar:', googleError);
+          throw googleError; // Fail if Google Calendar delete fails
+        }
+      } else if (!isGoogleCalendarConnected) {
+        throw new Error('Google Calendar is not connected. Cannot delete events.');
+      }
       
       // Remove from local state
-      const { events } = get();
       const updatedEvents = events.filter(event => event.id !== eventId);
       
       set({ events: updatedEvents, loading: false });
@@ -570,15 +691,27 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   clearAllTestEvents: async () => {
     set({ loading: true, error: null });
     try {
-      // Delete all events from Firebase
-      const { events } = get();
-      await Promise.all(events.map(event => deleteCalendarEvent(event.id)));
+      const { events, isGoogleCalendarConnected, config } = get();
+      
+      if (!isGoogleCalendarConnected) {
+        throw new Error('Google Calendar is not connected. Cannot delete events.');
+      }
+      
+      // Delete all events from Google Calendar
+      await Promise.all(events.map(event => 
+        deleteCalendarEvent(
+          event.id,
+          event.start.dateTime,
+          config.selectedCalendarId || 'primary'
+        )
+      ));
       set({ events: [], loading: false });
     } catch (error) {
       set({ 
         error: error instanceof Error ? error.message : 'Failed to clear events',
         loading: false 
       });
+      throw error;
     }
   },
 
@@ -586,8 +719,31 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
   checkGoogleCalendarConnection: async () => {
     try {
-      const connected = await checkGoogleCalendarAuth();
-      set({ isGoogleCalendarConnected: connected });
+      // First check if tokens exist
+      const hasTokens = await checkGoogleCalendarAuth();
+      if (!hasTokens) {
+        set({ isGoogleCalendarConnected: false });
+        return;
+      }
+      
+      // Then actually test the connection by trying to fetch events
+      // This catches expired tokens that checkGoogleCalendarAuth doesn't detect
+      const now = new Date();
+      const timeMin = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000); // 1 day ago
+      const timeMax = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000); // 1 day ahead
+      
+      const response = await fetch(
+        `/api/calendar/events?timeMin=${timeMin.toISOString()}&timeMax=${timeMax.toISOString()}&calendarId=primary`
+      );
+      
+      // If we get a 401, tokens are invalid/expired
+      if (response.status === 401) {
+        set({ isGoogleCalendarConnected: false });
+        return;
+      }
+      
+      // Connection is working
+      set({ isGoogleCalendarConnected: true });
     } catch (error) {
       console.error('Error checking Google Calendar connection:', error);
       set({ isGoogleCalendarConnected: false });

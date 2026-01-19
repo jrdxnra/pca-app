@@ -17,12 +17,92 @@ export interface RecurringEventParams {
   location?: string;
 }
 
+export interface SingleEventParams {
+  summary: string;
+  startDateTime: Date; // Full datetime
+  endDateTime: Date; // Full datetime
+  clientId?: string;
+  periodId?: string;
+  categoryName?: string;
+  workoutId?: string;
+  description?: string;
+  location?: string;
+  timeZone?: string;
+}
+
 export interface EventUpdateParams {
   summary?: string;
   description?: string;
   start?: { dateTime: string; timeZone: string };
   end?: { dateTime: string; timeZone: string };
   location?: string;
+}
+
+/**
+ * Create a single (non-recurring) calendar event using Google Calendar API
+ */
+export async function createSingleEvent(
+  oauth2Client: OAuth2Client,
+  calendarId: string,
+  params: SingleEventParams
+): Promise<calendar_v3.Schema$Event> {
+  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+  const timeZone = params.timeZone || 'America/Los_Angeles';
+
+  const event: calendar_v3.Schema$Event = {
+    summary: params.summary,
+    description: params.description || '',
+    start: {
+      dateTime: params.startDateTime.toISOString(),
+      timeZone: timeZone,
+    },
+    end: {
+      dateTime: params.endDateTime.toISOString(),
+      timeZone: timeZone,
+    },
+    location: params.location,
+    extendedProperties: {
+      private: {
+        ...(params.clientId && { pcaClientId: params.clientId }),
+        ...(params.periodId && { pcaPeriodId: params.periodId }),
+        ...(params.categoryName && { pcaCategory: params.categoryName }),
+        ...(params.workoutId && { pcaWorkoutId: params.workoutId }),
+      },
+    },
+  };
+
+  try {
+    const response = await calendar.events.insert({
+      calendarId,
+      requestBody: event,
+    });
+
+    if (!response.data) {
+      throw new Error('Failed to create event - no data returned');
+    }
+
+    return response.data;
+  } catch (error: any) {
+    console.error('Google Calendar API error:', {
+      message: error.message,
+      code: error.code,
+      errors: error.errors,
+      response: error.response?.data,
+      status: error.response?.status,
+    });
+    
+    if (error.code === 401 || error.response?.status === 401) {
+      throw new Error('Authentication failed. Please disconnect and reconnect Google Calendar.');
+    } else if (error.code === 403 || error.response?.status === 403) {
+      const errorDetails = error.errors?.[0]?.message || error.message || 'Unknown permission error';
+      throw new Error(`Permission denied: ${errorDetails}. Please disconnect and reconnect Google Calendar to grant write permissions.`);
+    } else if (error.message) {
+      throw new Error(`Google Calendar API error: ${error.message}`);
+    } else {
+      throw new Error('Failed to create event. Please check the console for details.');
+    }
+  }
 }
 
 /**
@@ -366,17 +446,36 @@ export async function getEvents(
   timeMin: Date,
   timeMax: Date
 ): Promise<calendar_v3.Schema$Event[]> {
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+  try {
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-  const response = await calendar.events.list({
-    calendarId,
-    timeMin: timeMin.toISOString(),
-    timeMax: timeMax.toISOString(),
-    singleEvents: true, // Expand recurring events into individual instances
-    orderBy: 'startTime',
-  });
+    const response = await calendar.events.list({
+      calendarId,
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true, // Expand recurring events into individual instances
+      orderBy: 'startTime',
+    });
 
-  return response.data.items || [];
+    return response.data.items || [];
+  } catch (error: any) {
+    console.error('Google Calendar API error in getEvents:', {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+    });
+    
+    // Provide more specific error messages
+    if (error.code === 401 || error.response?.status === 401) {
+      throw new Error('Authentication failed. Please disconnect and reconnect Google Calendar.');
+    }
+    if (error.code === 403 || error.response?.status === 403) {
+      const errorDetails = error.response?.data?.error?.message || error.message;
+      throw new Error(`Permission denied: ${errorDetails}. Please disconnect and reconnect Google Calendar to grant write permissions.`);
+    }
+    throw new Error(`Google Calendar API error: ${error.message}`);
+  }
 }
 
 

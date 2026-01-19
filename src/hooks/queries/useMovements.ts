@@ -7,15 +7,21 @@ import { queryKeys } from '@/lib/react-query/queryKeys';
  * Hook to fetch all movements
  * 
  * @param includeCategory - Whether to include category data
+ * @param enabled - Whether to fetch movements (default: true for backward compatibility)
  * @param options - Additional React Query options
  */
 export function useMovements(
   includeCategory = false,
-  options?: Omit<UseQueryOptions<Movement[], Error>, 'queryKey' | 'queryFn'>
+  enabled = true,
+  options?: Omit<UseQueryOptions<Movement[], Error>, 'queryKey' | 'queryFn' | 'enabled'>
 ) {
   return useQuery({
     queryKey: queryKeys.movements.list({ includeCategory }),
     queryFn: () => getAllMovements(includeCategory),
+    enabled,
+    // Movements don't change often, so use longer cache time
+    staleTime: 10 * 60 * 1000, // 10 minutes (longer than default 5 min)
+    gcTime: 30 * 60 * 1000, // 30 minutes (keep in cache longer)
     ...options,
   });
 }

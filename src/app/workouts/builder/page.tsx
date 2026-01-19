@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from 'next/dynamic';
-import React, { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useDeferredValue, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,12 +26,8 @@ import {
 } from 'lucide-react';
 import { Client, Program, ScheduledWorkout, ClientProgramPeriod, WorkoutStructureTemplate, ClientWorkoutRound, ClientWorkout } from '@/lib/types';
 // Lazy load heavy components for code splitting
-const ModernCalendarView = dynamic(
-  () => import('@/components/programs/ModernCalendarView').then(mod => ({ default: mod.ModernCalendarView })),
-  {
-    loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
-  }
-);
+// ModernCalendarView not used in Builder - removed to reduce bundle size
+import { CalendarSkeleton } from '@/components/programs/CalendarSkeleton';
 
 const PeriodAssignmentDialog = dynamic(
   () => import('@/components/programs/PeriodAssignmentDialog').then(mod => ({ default: mod.PeriodAssignmentDialog }))
@@ -62,6 +58,7 @@ import { useProgramStore } from '@/lib/stores/useProgramStore';
 import { useClientPrograms } from '@/hooks/useClientPrograms';
 import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
+import { logger } from '@/lib/utils/logger';
 
 export default function BuilderPage() {
   const router = useRouter();
@@ -78,15 +75,9 @@ export default function BuilderPage() {
   const structureId = searchParams.get('structure');
   const categoryParam = searchParams.get('category');
   
-  // Log URL params for debugging
+  // Log URL params for debugging (dev only)
   useEffect(() => {
-    console.log('[Builder] ========================================');
-    console.log('[Builder] URL params (from useSearchParams):');
-    console.log('[Builder] client:', urlClientId);
-    console.log('[Builder] date:', dateParam);
-    console.log('[Builder] workoutId:', workoutId);
-    console.log('[Builder] eventId:', eventId);
-    console.log('[Builder] ========================================');
+    logger.debug('[Builder] URL params:', { urlClientId, dateParam, workoutId, eventId });
   }, [urlClientId, dateParam, workoutId, eventId]);
 
   // Calendar store for linking events to workouts
@@ -233,21 +224,17 @@ export default function BuilderPage() {
         const daysUntilMonday = dayOfWeek === 0 ? 1 : 2; // Sunday: +1, Saturday: +2
         targetDate = new Date(today);
         targetDate.setDate(today.getDate() + daysUntilMonday);
-        console.log('[Builder] Weekend detected, advancing to next week Monday:', targetDate.toISOString());
+        logger.debug('[Builder] Weekend detected, advancing to next week Monday:', targetDate.toISOString());
       } else {
-        console.log('[Builder] Setting calendar to today:', today.toISOString());
+        logger.debug('[Builder] Setting calendar to today:', today.toISOString());
       }
       
       setCalendarDate(targetDate);
     }
   }, [dateParam]);
 
-  // Force day view - month and week views are removed
-  useEffect(() => {
-    if (viewMode !== 'day') {
-      setViewMode('day');
-    }
-  }, [viewMode]);
+  // Note: View mode is managed by period detection and URL params
+  // Don't force 'day' view here - let period detection and workout loading control it
 
   // Auto-open disabled for day view - users can manually select multiple workouts to edit and compare
   // This allows for multi-workout editing and comparison functionality
@@ -287,36 +274,36 @@ export default function BuilderPage() {
   // Load and open workout when workoutId is provided in URL
   useEffect(() => {
     const loadWorkoutById = async () => {
-      console.log('[Builder] ========================================');
-      console.log('[Builder] loadWorkoutById effect running');
-      console.log('[Builder] workoutId:', workoutId);
-      console.log('[Builder] loading:', loading);
-      console.log('[Builder] clientId:', clientId);
-      console.log('[Builder] ========================================');
+      logger.debug('[Builder] ========================================');
+      logger.debug('[Builder] loadWorkoutById effect running');
+      logger.debug('[Builder] workoutId:', workoutId);
+      logger.debug('[Builder] loading:', loading);
+      logger.debug('[Builder] clientId:', clientId);
+      logger.debug('[Builder] ========================================');
       
       if (!workoutId) {
-        console.log('[Builder] SKIP - no workoutId in URL');
+        logger.debug('[Builder] SKIP - no workoutId in URL');
         return;
       }
       
       // Check if we've already processed this workoutId (prevents re-opening after close)
       if (processedWorkoutIds.current.has(workoutId)) {
-        console.log('[Builder] SKIP - workoutId already processed (was closed by user)');
+        logger.debug('[Builder] SKIP - workoutId already processed (was closed by user)');
         return;
       }
       
       if (loading) {
-        console.log('[Builder] SKIP - still loading initial data');
+        logger.debug('[Builder] SKIP - still loading initial data');
         return;
       }
 
       try {
-        console.log('[Builder] Fetching workout from Firebase:', workoutId);
+        logger.debug('[Builder] Fetching workout from Firebase:', workoutId);
         const workout = await getClientWorkout(workoutId);
-        console.log('[Builder] Got workout result:', workout ? 'SUCCESS' : 'NULL');
+        logger.debug('[Builder] Got workout result:', workout ? 'SUCCESS' : 'NULL');
         
         if (workout) {
-          console.log('[Builder] Workout details:', {
+          logger.debug('[Builder] Workout details:', {
             id: workout.id,
             clientId: workout.clientId,
             date: workout.date,
@@ -334,18 +321,18 @@ export default function BuilderPage() {
           const workoutDate = safeToDate(workout.date);
           const normalizedDate = new Date(workoutDate);
           normalizedDate.setHours(0, 0, 0, 0);
-          console.log('[Builder] Setting calendar date to:', normalizedDate.toISOString());
+          logger.debug('[Builder] Setting calendar date to:', normalizedDate.toISOString());
           setCalendarDate(normalizedDate);
 
           // If client not in URL, update URL with workout's client
           if (workout.clientId && !clientId) {
-            console.log('[Builder] Updating URL with client from workout:', workout.clientId);
+            logger.debug('[Builder] Updating URL with client from workout:', workout.clientId);
             // Use replace to not add to history since we're just filling in missing info
             router.replace(`/workouts/builder?client=${workout.clientId}&date=${dateParam}&workoutId=${workoutId}`, { scroll: false });
           }
 
           // Switch to day view and directly open the editor (bypass autoOpenWorkout to avoid race conditions)
-          console.log('[Builder] Setting viewMode to day and opening editor directly');
+          logger.debug('[Builder] Setting viewMode to day and opening editor directly');
           setViewMode('day');
           
           // Get dateKey for this workout
@@ -357,7 +344,7 @@ export default function BuilderPage() {
             [dateKey]: workout
           }));
           setOpenDates(prev => new Set([...prev, dateKey]));
-          console.log('[Builder] ✅ Workout opened in EDIT mode for dateKey:', dateKey);
+          logger.debug('[Builder] ✅ Workout opened in EDIT mode for dateKey:', dateKey);
         } else {
           console.error('[Builder] ERROR - Workout not found for ID:', workoutId);
         }
@@ -586,61 +573,9 @@ export default function BuilderPage() {
     return null;
   }
 
-  // Auto-detect period and set up week view when client and date are provided
-  // IMPORTANT: Don't change viewMode if we're loading a specific workout (workoutId is present)
-  useEffect(() => {
-    if (clientId && dateParam && clientPrograms.length > 0) {
-      console.log('Auto-detecting period for client:', clientId, 'date:', dateParam);
-      console.log('Available client programs:', clientPrograms);
-
-      const clientProgram = clientPrograms.find(cp => cp.clientId === clientId);
-      console.log('Found client program:', clientProgram);
-
-      if (clientProgram) {
-        const targetDate = new Date(dateParam);
-        console.log('Target date:', targetDate);
-
-        const period = clientProgram.periods.find(p => {
-          const start = safeToDate(p.startDate);
-          const end = safeToDate(p.endDate);
-          start.setHours(0, 0, 0, 0);
-          end.setHours(23, 59, 59, 999);
-          console.log('Checking period:', p.id, 'start:', start, 'end:', end);
-          return targetDate >= start && targetDate <= end;
-        });
-
-        console.log('Found period:', period);
-
-        if (period) {
-          setSelectedPeriod(period);
-          const start = safeToDate(period.startDate);
-          const end = safeToDate(period.endDate);
-          const calculatedWeeks = calculateWeeks(start, end, period.periodName);
-          setWeeks(calculatedWeeks);
-          
-          // Only switch to week view if NOT loading a specific workout
-          // When workoutId is present, let loadWorkoutById effect control the view
-          if (!workoutId) {
-            setViewMode('week');
-            console.log('Set period and switched to week view');
-          } else {
-            console.log('Set period but keeping day view for workout editing');
-          }
-
-          // Load workouts for this period (we'll load them separately)
-          // const periodWorkouts = workouts.filter(w => {
-          //   const workoutDate = safeToDate(w.date);
-          //   return workoutDate >= start && workoutDate <= end;
-          // });
-          // setWorkouts(periodWorkouts);
-        } else {
-          console.log('No period found for the target date');
-        }
-      } else {
-        console.log('No client program found for client:', clientId);
-      }
-    }
-  }, [clientId, dateParam, clientPrograms, workoutId]);
+  // CONSOLIDATED: Single period detection effect
+  // Priority: dateParam (from URL) > calendarDate > today
+  // This replaces the two conflicting effects
 
 
   // Recalculate weeks when additionalWeeks changes and fetch workouts
@@ -701,81 +636,110 @@ export default function BuilderPage() {
     setClientIdImmediate(newClientId);
   };
 
-  // Auto-detect and set selectedPeriod when client changes or clientPrograms loads
+  // CONSOLIDATED: Single period detection effect
+  // Priority: dateParam (from URL) > calendarDate > today
+  // This replaces the two conflicting effects
   useEffect(() => {
-    console.log('[Builder] Period detection effect running:', {
+    logger.debug('[Builder] Period detection effect running:', {
       clientId,
+      dateParam,
+      calendarDate: calendarDate.toISOString(),
       clientProgramsLength: clientPrograms.length,
-      clientProgramsClientIds: clientPrograms.map(cp => cp.clientId),
-      clientProgramsLoading
+      clientProgramsLoading,
+      workoutId
     });
 
-    // Wait for loading to complete
+    // Wait for loading to complete - don't clear period while loading
     if (clientProgramsLoading) {
-      console.log('[Builder] Still loading client programs, waiting...');
+      logger.debug('[Builder] Still loading client programs, waiting...');
+      // Don't clear period while loading - keep existing period if set
       return;
     }
 
     if (!clientId) {
-      console.log('[Builder] No client selected, clearing period');
+      logger.debug('[Builder] No client selected, clearing period');
       setSelectedPeriod(null);
       return;
     }
 
     // Find the client program for this client
     const clientProgram = clientPrograms.find(cp => cp.clientId === clientId);
-    console.log('[Builder] Found client program:', clientProgram ? {
-      id: clientProgram.id,
-      clientId: clientProgram.clientId,
-      periodsCount: clientProgram.periods.length,
-      periods: clientProgram.periods.map(p => ({ id: p.id, name: p.periodName, start: safeToDate(p.startDate).toISOString(), end: safeToDate(p.endDate).toISOString() }))
-    } : null);
-
     if (!clientProgram || clientProgram.periods.length === 0) {
-      console.log('[Builder] No client program or no periods, clearing period');
+      logger.debug('[Builder] No client program or no periods, clearing period');
       setSelectedPeriod(null);
       return;
     }
 
-    // Find the period that contains today's date
-    const today = new Date();
-    today.setHours(12, 0, 0, 0); // Normalize to midday to avoid timezone edge cases
-    console.log('[Builder] Looking for period containing today:', today.toISOString());
+    // Determine target date (priority: dateParam > calendarDate > today)
+    let targetDate: Date;
+    if (dateParam) {
+      // Use date from URL if provided
+      const [year, month, day] = dateParam.split('-').map(Number);
+      targetDate = new Date(year, month - 1, day);
+      logger.debug('[Builder] Using dateParam as target date:', targetDate.toISOString());
+    } else if (calendarDate) {
+      // Use calendarDate (user navigated to a specific date)
+      targetDate = new Date(calendarDate);
+      logger.debug('[Builder] Using calendarDate as target date:', targetDate.toISOString());
+    } else {
+      // Fallback to today
+      targetDate = new Date();
+      logger.debug('[Builder] Using today as target date:', targetDate.toISOString());
+    }
+    
+    targetDate.setHours(12, 0, 0, 0); // Normalize to midday
 
-    const currentPeriod = clientProgram.periods.find(p => {
+    // Find period containing target date
+    const period = clientProgram.periods.find(p => {
       const start = safeToDate(p.startDate);
       const end = safeToDate(p.endDate);
       start.setHours(0, 0, 0, 0);
       end.setHours(23, 59, 59, 999);
-      const contains = today >= start && today <= end;
-      console.log('[Builder] Checking period:', p.periodName, 'start:', start.toISOString(), 'end:', end.toISOString(), 'contains today:', contains);
-      return contains;
+      return targetDate >= start && targetDate <= end;
     });
 
-    if (currentPeriod) {
-      console.log('[Builder] Auto-detected current period:', currentPeriod.periodName);
-      setSelectedPeriod(currentPeriod);
+    if (period) {
+      logger.debug('[Builder] Found period for target date:', period.periodName);
+      setSelectedPeriod(period);
+      
+      // Calculate weeks for this period
+      const start = safeToDate(period.startDate);
+      const end = safeToDate(period.endDate);
+      const calculatedWeeks = calculateWeeks(start, end, period.periodName);
+      setWeeks(calculatedWeeks);
+      
+      // Only switch to week view if NOT loading a specific workout
+      // When workoutId is present, let loadWorkoutById effect control the view
+      if (!workoutId) {
+        setViewMode('week');
+        logger.debug('[Builder] Set period and switched to week view');
+      }
     } else {
-      // No period contains today - use the most recent or upcoming period
+      // No period contains target date - use fallback (most recent or upcoming)
       const sortedPeriods = [...clientProgram.periods].sort((a, b) => {
         const aStart = safeToDate(a.startDate).getTime();
         const bStart = safeToDate(b.startDate).getTime();
         return aStart - bStart;
       });
 
-      // Find the first period that starts after today, or use the last period
-      const upcomingPeriod = sortedPeriods.find(p => safeToDate(p.startDate) > today);
+      const upcomingPeriod = sortedPeriods.find(p => safeToDate(p.startDate) > targetDate);
       const fallbackPeriod = upcomingPeriod || sortedPeriods[sortedPeriods.length - 1];
 
       if (fallbackPeriod) {
-        console.log('[Builder] Using fallback period:', fallbackPeriod.periodName);
+        logger.debug('[Builder] Using fallback period:', fallbackPeriod.periodName);
         setSelectedPeriod(fallbackPeriod);
+        
+        // Calculate weeks for fallback period
+        const start = safeToDate(fallbackPeriod.startDate);
+        const end = safeToDate(fallbackPeriod.endDate);
+        const calculatedWeeks = calculateWeeks(start, end, fallbackPeriod.periodName);
+        setWeeks(calculatedWeeks);
       } else {
-        console.log('[Builder] No fallback period found');
+        logger.debug('[Builder] No fallback period found');
         setSelectedPeriod(null);
       }
     }
-  }, [clientId, clientPrograms, clientProgramsLoading]);
+  }, [clientId, dateParam, calendarDate, clientPrograms, clientProgramsLoading, workoutId]);
 
   const handleViewModeChange = (mode: 'month' | 'week' | 'day') => {
     setViewMode(mode);
@@ -974,27 +938,27 @@ export default function BuilderPage() {
 
   // Auto-open workout editor when navigating to day view with a workout to edit
   useEffect(() => {
-    console.log('[Builder] Auto-open effect:', { viewMode, autoOpenWorkout, hasAutoOpen: !!autoOpenWorkout });
+    logger.debug('[Builder] Auto-open effect:', { viewMode, autoOpenWorkout, hasAutoOpen: !!autoOpenWorkout });
     
     if (viewMode === 'day' && autoOpenWorkout) {
       const { date, workout, categoryInfo } = autoOpenWorkout;
       const dateKey = getDateKey(date);
-      console.log('[Builder] Processing auto-open for dateKey:', dateKey, 'workout:', workout?.id);
+      logger.debug('[Builder] Processing auto-open for dateKey:', dateKey, 'workout:', workout?.id);
 
       // Don't auto-open if editor is already open
       if (openDates.has(dateKey)) {
-        console.log('[Builder] Editor already open for this date, skipping');
+        logger.debug('[Builder] Editor already open for this date, skipping');
         setAutoOpenWorkout(null);
         return;
       }
 
       // Small delay to ensure the view has rendered, then open the editor
       const timer = setTimeout(() => {
-        console.log('[Builder] Timer fired, opening editor directly');
+        logger.debug('[Builder] Timer fired, opening editor directly');
         
         if (workout) {
           // Directly set state to open the editor (avoid calling handleEditWorkout which has toggle logic)
-          console.log('[Builder] Opening editor for workout:', workout.id);
+          logger.debug('[Builder] Opening editor for workout:', workout.id);
           setEditingWorkouts(prev => ({
             ...prev,
             [dateKey]: workout
@@ -1002,7 +966,7 @@ export default function BuilderPage() {
           setOpenDates(prev => new Set([...prev, dateKey]));
         } else if (categoryInfo) {
           // For creating new workout
-          console.log('[Builder] Opening creator for category:', categoryInfo.category);
+          logger.debug('[Builder] Opening creator for category:', categoryInfo.category);
           setCreatingWorkouts(prev => ({
             ...prev,
             [dateKey]: { date, category: categoryInfo.category, color: categoryInfo.color }
@@ -1046,7 +1010,7 @@ export default function BuilderPage() {
     
     // If event already has a linked workout, let the workoutId effect handle it
     if (event.linkedWorkoutId) {
-      console.log('[Builder] Event has linked workout, skipping');
+      logger.debug('[Builder] Event has linked workout, skipping');
       processedEventIdRef.current = eventId;
       return;
     }
@@ -1074,7 +1038,7 @@ export default function BuilderPage() {
     const effectiveClientId = clientId || eventClientId;
     
     if (hasAssignedClient && effectiveClientId) {
-      console.log('[Builder] Event is assigned, opening inline editor directly');
+      logger.debug('[Builder] Event is assigned, opening inline editor directly');
       processedEventIdRef.current = eventId;
       
       const dateKey = getDateKey(eventDate);
@@ -1094,7 +1058,7 @@ export default function BuilderPage() {
       }));
       setOpenDates(prev => new Set(prev).add(dateKey));
       
-      console.log('[Builder] Opened inline editor for', dateKey, 'with category:', category, 'hasDraft:', !!hasDraft);
+      logger.debug('[Builder] Opened inline editor for', dateKey, 'with category:', category, 'hasDraft:', !!hasDraft);
       return;
     }
     
@@ -1102,7 +1066,7 @@ export default function BuilderPage() {
     const eventTime = event.start.dateTime ? 
       new Date(event.start.dateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
     
-    console.log('[Builder] No client assigned, opening Quick Workout dialog with:', { 
+    logger.debug('[Builder] No client assigned, opening Quick Workout dialog with:', { 
       date: dateParam, 
       category: categoryParam, 
       eventId 

@@ -17,6 +17,10 @@ import {
     deleteAllPeriodsFromClientProgram,
     assignProgramTemplateToClient
 } from '@/lib/firebase/services/clientPrograms';
+// React Query hooks for fetching
+import { useClientPrograms as useClientProgramsQuery } from '@/hooks/queries/useClientPrograms';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/react-query/queryKeys';
 import {
     createClientWorkout,
     deleteClientWorkout,
@@ -68,48 +72,42 @@ interface UseClientProgramsResult {
 }
 
 export function useClientPrograms(selectedClientId?: string | null): UseClientProgramsResult {
-    const [clientPrograms, setClientPrograms] = useState<ClientProgram[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    // Use React Query for fetching client programs (better caching, automatic refetching)
+    const { data: clientPrograms = [], isLoading: queryLoading, error: queryError } = useClientProgramsQuery(selectedClientId);
+    const queryClient = useQueryClient();
 
-    // Get configuration data
-    const { periods: configPeriods, weekTemplates, workoutCategories } = useConfigurationStore();
-    const { clients } = useClientStore();
-    const { createTestEvent, fetchEvents, updateEvent, deleteEvent, events: calendarEvents } = useCalendarStore();
+    // Mutation-specific loading/error states (separate from query loading)
+    const [mutationLoading, setMutationLoading] = useState(false);
+    const [mutationError, setMutationError] = useState<string | null>(null);
 
-    // Fetch client programs
+    // Combined loading state (query or mutation)
+    const isLoading = queryLoading || mutationLoading;
+
+    // Get configuration data - use selectors to prevent re-renders
+    const configPeriods = useConfigurationStore(state => state.periods);
+    const weekTemplates = useConfigurationStore(state => state.weekTemplates);
+    const workoutCategories = useConfigurationStore(state => state.workoutCategories);
+    const clients = useClientStore(state => state.clients);
+    // Only subscribe to calendar store functions we actually use
+    const createTestEvent = useCalendarStore(state => state.createTestEvent);
+    const fetchEvents = useCalendarStore(state => state.fetchEvents);
+    const updateEvent = useCalendarStore(state => state.updateEvent);
+    const deleteEvent = useCalendarStore(state => state.deleteEvent);
+    // Don't subscribe to calendarEvents in the hook - it causes re-renders when ModernCalendarView fetches events
+    // Instead, get events directly from store when needed (in clearAllPeriods)
+
+    // Combined error state (prioritize mutation errors over query errors)
+    const error = mutationError || (queryError ? (queryError instanceof Error ? queryError.message : 'Failed to fetch client programs') : null);
+
+    // Fetch client programs - now just invalidates React Query cache to trigger refetch
     const fetchClientProgramsAsync = useCallback(async (clientId?: string | null) => {
-        try {
-            setIsLoading(true);
-            setError(null);
-
-            let programs: ClientProgram[];
-            if (clientId) {
-                programs = await getClientProgramsByClient(clientId);
-            } else {
-                programs = await getAllClientPrograms();
-            }
-
-            setClientPrograms(programs);
-        } catch (err) {
-            console.error('Error fetching client programs:', err);
-            setError(err instanceof Error ? err.message : 'Failed to fetch client programs');
-        } finally {
-            setIsLoading(false);
+        // Invalidate React Query cache to trigger refetch
+        if (clientId) {
+            await queryClient.invalidateQueries({ queryKey: queryKeys.clientPrograms.byClient(clientId) });
+        } else {
+            await queryClient.invalidateQueries({ queryKey: queryKeys.clientPrograms.all });
         }
-    }, []);
-
-    // Auto-fetch when selected client changes
-    // Use ref to track last selectedClientId to prevent unnecessary fetches
-    const lastSelectedClientIdRef = useRef<string | null | undefined>(selectedClientId);
-    
-    useEffect(() => {
-        // Only fetch if selectedClientId actually changed
-        if (lastSelectedClientIdRef.current !== selectedClientId) {
-            lastSelectedClientIdRef.current = selectedClientId;
-            fetchClientProgramsAsync(selectedClientId);
-        }
-    }, [selectedClientId, fetchClientProgramsAsync]); // Include fetchClientProgramsAsync but guard with ref
+    }, [queryClient]); // Include fetchClientProgramsAsync but guard with ref
 
     // Get a specific client's program
     const getClientProgramForClient = useCallback((clientId: string): ClientProgram | undefined => {
@@ -130,8 +128,8 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
 
     // Assign a period to a client
     const assignPeriod = useCallback(async (assignment: PeriodAssignment) => {
-        setIsLoading(true);
-        setError(null);
+        setMutationLoading(true);
+        setMutationError(null);
 
         try {
             // Find or create client program
@@ -247,7 +245,9 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
             await fetchClientProgramsAsync(assignment.clientId);
 
             // Get updated program to find the created period
-            const updatedPrograms = await getClientProgramsByClient(assignment.clientId);
+            // Use React Query cache if available, otherwise fetch directly
+            const queryData = queryClient.getQueryData<ClientProgram[]>(queryKeys.clientPrograms.byClient(assignment.clientId));
+            const updatedPrograms = queryData || await getClientProgramsByClient(assignment.clientId);
             const updatedProgram = updatedPrograms[0];
 
             if (updatedProgram) {
@@ -433,17 +433,19 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
 
         } catch (err) {
             console.error('Error assigning period:', err);
-            setError(err instanceof Error ? err.message : 'Failed to assign period');
+            setMutationError(err instanceof Error ? err.message : 'Failed to assign period');
             throw err;
         } finally {
-            setIsLoading(false);
+            setMutationLoading(false);
+            // Invalidate React Query cache after mutation
+            await fetchClientProgramsAsync(assignment.clientId);
         }
     }, [clientPrograms, configPeriods, weekTemplates, workoutCategories, clients, createTestEvent, fetchEvents, fetchClientProgramsAsync]);
 
     // Assign a program template
     const assignProgramTemplate = useCallback(async (assignment: ProgramTemplateAssignment) => {
-        setIsLoading(true);
-        setError(null);
+        setMutationLoading(true);
+        setMutationError(null);
 
         try {
             const clientProgram = clientPrograms.find(cp => cp.clientId === assignment.clientId);
@@ -467,14 +469,15 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                 await assignProgramTemplateToClient(assignment);
             }
 
+            // Invalidate React Query cache after mutation
             await fetchClientProgramsAsync(selectedClientId);
 
         } catch (err) {
             console.error('Error assigning program template:', err);
-            setError(err instanceof Error ? err.message : 'Failed to assign program template');
+            setMutationError(err instanceof Error ? err.message : 'Failed to assign program template');
             throw err;
         } finally {
-            setIsLoading(false);
+            setMutationLoading(false);
         }
     }, [clientPrograms, selectedClientId, fetchClientProgramsAsync]);
 
@@ -482,32 +485,35 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
     const updatePeriodAsync = useCallback(async (periodId: string, updates: Partial<ClientProgramPeriod>) => {
         if (!selectedClientId) return;
 
-        setIsLoading(true);
-        setError(null);
+        setMutationLoading(true);
+        setMutationError(null);
 
         try {
             const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClientId);
             if (!clientProgram) throw new Error('Client program not found');
 
             await updatePeriodInClientProgram(clientProgram.id, periodId, updates);
+            // Invalidate React Query cache after mutation
             await fetchClientProgramsAsync(selectedClientId);
 
         } catch (err) {
             console.error('Error updating period:', err);
-            setError(err instanceof Error ? err.message : 'Failed to update period');
+            setMutationError(err instanceof Error ? err.message : 'Failed to update period');
             throw err;
         } finally {
-            setIsLoading(false);
+            setMutationLoading(false);
         }
     }, [selectedClientId, clientPrograms, fetchClientProgramsAsync]);
 
     // Delete a period and its associated events/workouts
     const deletePeriodAsync = useCallback(async (periodId: string, clientId: string) => {
-        setIsLoading(true);
-        setError(null);
+        setMutationLoading(true);
+        setMutationError(null);
 
         try {
-            const freshPrograms = await getClientProgramsByClient(clientId);
+            // Use React Query cache if available, otherwise fetch directly
+            const queryData = queryClient.getQueryData<ClientProgram[]>(queryKeys.clientPrograms.byClient(clientId));
+            const freshPrograms = queryData || await getClientProgramsByClient(clientId);
             const clientProgram = freshPrograms.find(cp => cp.clientId === clientId);
 
             if (!clientProgram) throw new Error('Client program not found');
@@ -524,7 +530,9 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
             await fetchEvents({ start: periodStart, end: periodEnd });
             await new Promise(resolve => setTimeout(resolve, 300));
 
-            const eventsToDelete = calendarEvents.filter(event => {
+            // Get events directly from store when needed (don't subscribe to prevent re-renders)
+            const currentEvents = useCalendarStore.getState().events;
+            const eventsToDelete = currentEvents.filter(event => {
                 const hasMatchingClient = event.description?.includes(`client=${clientId}`) ||
                     event.preConfiguredClient === clientId;
 
@@ -558,35 +566,37 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
 
             // Delete the period
             await deletePeriodFromClientProgram(clientProgram.id, periodId);
+            // Invalidate React Query cache after mutation
             await fetchClientProgramsAsync(selectedClientId);
 
         } catch (err) {
             console.error('Error deleting period:', err);
-            setError(err instanceof Error ? err.message : 'Failed to delete period');
+            setMutationError(err instanceof Error ? err.message : 'Failed to delete period');
             throw err;
         } finally {
-            setIsLoading(false);
+            setMutationLoading(false);
         }
-    }, [selectedClientId, calendarEvents, fetchEvents, deleteEvent, fetchClientProgramsAsync]);
+    }, [selectedClientId, fetchEvents, deleteEvent, fetchClientProgramsAsync]);
 
     // Clear all periods for a client
     const clearAllPeriods = useCallback(async (clientId: string) => {
-        setIsLoading(true);
-        setError(null);
+        setMutationLoading(true);
+        setMutationError(null);
 
         try {
             const clientProgram = clientPrograms.find(cp => cp.clientId === clientId);
             if (!clientProgram) throw new Error('Client program not found');
 
             await deleteAllPeriodsFromClientProgram(clientProgram.id);
+            // Invalidate React Query cache after mutation
             await fetchClientProgramsAsync(selectedClientId);
 
         } catch (err) {
             console.error('Error clearing all periods:', err);
-            setError(err instanceof Error ? err.message : 'Failed to clear periods');
+            setMutationError(err instanceof Error ? err.message : 'Failed to clear periods');
             throw err;
         } finally {
-            setIsLoading(false);
+            setMutationLoading(false);
         }
     }, [clientPrograms, selectedClientId, fetchClientProgramsAsync]);
 

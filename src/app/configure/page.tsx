@@ -327,9 +327,17 @@ export default function ConfigurePage() {
     })
   );
 
-  // Google Calendar auth state (must be declared before useEffect that uses it)
-  const [isGoogleCalendarConnected, setIsGoogleCalendarConnected] = useState(false);
+  // Google Calendar auth state - sync with store so Header and Configure stay in sync
+  const storeIsConnected = useCalendarStore(state => state.isGoogleCalendarConnected);
+  const [isGoogleCalendarConnected, setIsGoogleCalendarConnected] = useState(storeIsConnected);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [testingConnection, setTestingConnection] = useState(false);
+  
+  // Sync local state with store state when it changes
+  useEffect(() => {
+    setIsGoogleCalendarConnected(storeIsConnected);
+  }, [storeIsConnected]);
   
   // Tab state
   const [activeTab, setActiveTab] = useState<'workout' | 'app'>('workout');
@@ -378,10 +386,18 @@ export default function ConfigurePage() {
     fetchClients();
     fetchBusinessHours();
     
-    // Check Google Calendar auth status
-    checkGoogleCalendarAuth().then(connected => {
+    // Check Google Calendar auth status using the store's connection check
+    // This ensures we use the same logic as the Header sync button
+    const storeState = useCalendarStore.getState();
+    storeState.checkGoogleCalendarConnection().then(() => {
+      const connected = useCalendarStore.getState().isGoogleCalendarConnected;
       setIsGoogleCalendarConnected(connected);
       setCheckingAuth(false);
+      
+      // If connected, test the actual connection to catch expired tokens
+      if (connected) {
+        handleTestConnection();
+      }
     });
 
     // Check if browser timezone differs from app timezone
@@ -453,6 +469,48 @@ export default function ConfigurePage() {
     }
   }, []);
 
+  // Test Google Calendar connection by trying to fetch events
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    setSyncError(null);
+    
+    try {
+      // Try to fetch events for a small date range to test connection
+      const now = new Date();
+      const timeMin = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
+      const timeMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days ahead
+      
+      const response = await fetch(
+        `/api/calendar/events?timeMin=${timeMin.toISOString()}&timeMax=${timeMax.toISOString()}&calendarId=primary`
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          setSyncError('Authentication expired. Please reconnect Google Calendar.');
+          setIsGoogleCalendarConnected(false);
+          // Update store so Header sync button also knows
+          useCalendarStore.setState({ isGoogleCalendarConnected: false });
+        } else {
+          setSyncError(errorData.error || 'Failed to fetch calendar events. Please check your connection.');
+        }
+        return;
+      }
+      
+      // Connection is working
+      setSyncError(null);
+      setIsGoogleCalendarConnected(true);
+      // Update store so Header sync button also knows
+      useCalendarStore.setState({ isGoogleCalendarConnected: true });
+      toastSuccess('Google Calendar connection is working!');
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      setSyncError('Failed to test connection. Please try again or reconnect.');
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
   // Handle Google Calendar connection
   const handleConnectGoogleCalendar = async () => {
     try {
@@ -472,9 +530,10 @@ export default function ConfigurePage() {
     try {
       await disconnectGoogleCalendar();
       setIsGoogleCalendarConnected(false);
+      setSyncError(null);
       // Refresh calendar store
-      const { checkGoogleCalendarConnection } = useCalendarStore.getState();
-      await checkGoogleCalendarConnection();
+      const storeState = useCalendarStore.getState();
+      await storeState.checkGoogleCalendarConnection();
     } catch (error) {
       console.error('Error disconnecting Google Calendar:', error);
       toastError('Failed to disconnect Google Calendar. Please try again.');
@@ -1727,10 +1786,26 @@ export default function ConfigurePage() {
                 <span>Google Account Connection</span>
                 {!checkingAuth && (
                   <Badge 
-                    variant={isGoogleCalendarConnected ? "default" : "secondary"}
-                    className={isGoogleCalendarConnected ? "bg-green-600" : ""}
+                    variant={
+                      syncError 
+                        ? "destructive" 
+                        : isGoogleCalendarConnected 
+                          ? "default" 
+                          : "secondary"
+                    }
+                    className={
+                      syncError 
+                        ? "bg-red-600" 
+                        : isGoogleCalendarConnected 
+                          ? "bg-green-600" 
+                          : ""
+                    }
                   >
-                    {isGoogleCalendarConnected ? 'Connected' : 'Not Connected'}
+                    {syncError 
+                      ? 'Sync Error' 
+                      : isGoogleCalendarConnected 
+                        ? 'Connected' 
+                        : 'Not Connected'}
                   </Badge>
                 )}
               </CardTitle>
@@ -1771,7 +1846,7 @@ export default function ConfigurePage() {
                   </div>
 
                   {/* Sync Status */}
-                  {calendarConfig.selectedCalendarId && (
+                  {calendarConfig.selectedCalendarId && !syncError && (
                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                       <p className="text-sm text-green-700">
                         ✓ Calendar sync enabled - events will appear on Schedule page
@@ -1779,19 +1854,64 @@ export default function ConfigurePage() {
                     </div>
                   )}
 
-                  {/* Disconnect option */}
+                  {/* Sync Error */}
+                  {syncError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-red-800 mb-1">
+                            ⚠️ Sync Error
+                          </p>
+                          <p className="text-sm text-red-700 mb-2">
+                            {syncError}
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleConnectGoogleCalendar}
+                            className="text-red-700 border-red-300 hover:bg-red-100"
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            Reconnect Google Calendar
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Test Connection Button */}
                   <div className="pt-2 border-t">
                     <Button 
                       variant="outline"
                       size="sm"
+                      onClick={handleTestConnection}
+                      disabled={testingConnection}
+                      className="w-full mb-2"
+                    >
+                      {testingConnection ? (
+                        <>
+                          <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                          Testing Connection...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          Test Connection
+                        </>
+                      )}
+                    </Button>
+                    
+                    <Button 
+                      variant="outline"
+                      size="sm"
                       onClick={handleDisconnectGoogleCalendar}
-                      className="text-gray-600"
+                      className="text-gray-600 w-full"
                     >
                       <X className="h-3 w-3 mr-1" />
                       Disconnect Google Calendar
                     </Button>
                     <p className="text-xs text-gray-400 mt-2">
-                      If you see permission errors, disconnect and reconnect to grant write permissions
+                      If you see sync errors, click "Test Connection" to verify, or disconnect and reconnect to refresh permissions
                     </p>
                   </div>
                 </>

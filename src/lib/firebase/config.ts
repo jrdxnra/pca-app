@@ -1,7 +1,7 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import type { Auth } from 'firebase/auth';
 
 type PublicFirebaseConfig = {
@@ -109,6 +109,23 @@ function initializeDb(): Firestore {
     }
     try {
       dbInstance = getFirestore(firebaseApp);
+      
+      // Connect to Firestore Emulator ONLY in development mode
+      // CRITICAL: Never use emulators in production builds
+      if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
+        // Only connect if not already connected (prevents multiple connections)
+        if (!(dbInstance as any)._delegate?._settings?.host?.includes('localhost')) {
+          try {
+            connectFirestoreEmulator(dbInstance, 'localhost', 8080);
+            console.log('🔧 Connected to Firestore Emulator (development only)');
+          } catch (error) {
+            // Ignore if already connected
+            if (!(error as Error).message.includes('already been initialized')) {
+              console.warn('⚠️ Could not connect to Firestore Emulator:', error);
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error initializing Firestore:', error);
       throw error;
@@ -124,6 +141,23 @@ function initializeAuth(): Auth {
       throw new Error('Firebase not initialized. Please ensure Firebase configuration is available in window.__FIREBASE_CONFIG__ or environment variables.');
     }
     authInstance = getAuth(firebaseApp);
+    
+    // Connect to Auth Emulator ONLY in development mode
+    // CRITICAL: Never use emulators in production builds
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
+      // Only connect if not already connected
+      if (!(authInstance as any)._delegate?._config?.emulator) {
+        try {
+          connectAuthEmulator(authInstance, 'http://localhost:9099');
+          console.log('🔧 Connected to Auth Emulator (development only)');
+        } catch (error) {
+          // Ignore if already connected
+          if (!(error as Error).message.includes('already been initialized')) {
+            console.warn('⚠️ Could not connect to Auth Emulator:', error);
+          }
+        }
+      }
+    }
   }
   return authInstance;
 }

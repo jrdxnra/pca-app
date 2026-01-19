@@ -1,22 +1,36 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import {
-  createCalendarEvent,
-  updateCalendarEvent,
-  deleteCalendarEvent,
-} from '@/lib/firebase/services/calendarEvents';
+  createSingleCalendarEvent,
+  updateCalendarEvent as updateGoogleCalendarEvent,
+  deleteCalendarEvent as deleteGoogleCalendarEvent,
+} from '@/lib/google-calendar/api-client';
 import { queryKeys } from '@/lib/react-query/queryKeys';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
 
 /**
  * Hook for creating a calendar event
+ * Creates in Google Calendar API (single source of truth)
  */
 export function useCreateCalendarEvent() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (event: Omit<GoogleCalendarEvent, 'id'>) => {
-      return await createCalendarEvent(event);
+      // Create in Google Calendar API
+      const result = await createSingleCalendarEvent({
+        summary: event.summary,
+        startDateTime: event.start.dateTime,
+        endDateTime: event.end.dateTime,
+        clientId: event.preConfiguredClient || undefined,
+        categoryName: event.preConfiguredCategory || undefined,
+        workoutId: event.linkedWorkoutId || undefined,
+        description: event.description || undefined,
+        location: event.location || undefined,
+        timeZone: event.start.timeZone || 'America/Los_Angeles',
+        calendarId: 'primary', // TODO: Get from config
+      });
+      return result.event;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
@@ -37,7 +51,27 @@ export function useUpdateCalendarEvent() {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<GoogleCalendarEvent> }) => {
-      return await updateCalendarEvent(id, updates);
+      // Update in Google Calendar API
+      const googleUpdates: Record<string, unknown> = {};
+      if (updates.summary) googleUpdates.summary = updates.summary;
+      if (updates.description !== undefined) googleUpdates.description = updates.description;
+      if (updates.location) googleUpdates.location = updates.location;
+      if (updates.start?.dateTime) googleUpdates.start = updates.start;
+      if (updates.end?.dateTime) googleUpdates.end = updates.end;
+      
+      // Get instanceDate from updates or use current date
+      const instanceDate = updates.start?.dateTime || new Date().toISOString();
+      
+      await updateGoogleCalendarEvent({
+        eventId: id,
+        instanceDate,
+        updateType: 'single',
+        updates: googleUpdates,
+        calendarId: 'primary', // TODO: Get from config
+      });
+      
+      // Return updated event (we don't get it back from API, so construct it)
+      return { id, ...updates } as GoogleCalendarEvent;
     },
     onMutate: async ({ id, updates }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.calendarEvents.all });
@@ -86,7 +120,8 @@ export function useDeleteCalendarEvent() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      return await deleteCalendarEvent(id);
+      // Delete from Google Calendar API
+      await deleteGoogleCalendarEvent(id, undefined, 'primary'); // TODO: Get calendarId from config
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.calendarEvents.all });

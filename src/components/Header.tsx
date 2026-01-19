@@ -40,10 +40,28 @@ export function Header() {
       endDate.setHours(23, 59, 59, 999);
 
       await fetchEvents({ start: startDate, end: endDate }, true); // force refresh
-      toastSuccess('Calendar synced successfully!');
+      
+      // Re-check connection status after sync to catch any auth errors
+      await checkGoogleCalendarConnection();
+      const stillConnected = useCalendarStore.getState().isGoogleCalendarConnected;
+      
+      if (stillConnected) {
+        toastSuccess('Calendar synced successfully!');
+      } else {
+        toastError('Calendar sync failed - authentication expired. Please reconnect in Configure → App Config.');
+      }
     } catch (error) {
       console.error('Calendar sync error:', error);
-      toastError('Failed to sync calendar. Please try again.');
+      
+      // Re-check connection status to catch auth errors
+      await checkGoogleCalendarConnection();
+      const stillConnected = useCalendarStore.getState().isGoogleCalendarConnected;
+      
+      if (!stillConnected) {
+        toastError('Google Calendar authentication expired. Please reconnect in Configure → App Config.');
+      } else {
+        toastError('Failed to sync calendar. Please try again.');
+      }
     } finally {
       setIsSyncing(false);
     }

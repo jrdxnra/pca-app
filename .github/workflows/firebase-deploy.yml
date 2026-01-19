@@ -1,110 +1,47 @@
 name: Deploy to Firebase
 
 on:
-  workflow_dispatch:  # Can be triggered manually
   push:
     branches:
-      - main
-    # Only deploy if commit message contains [deploy]
-    # This allows frequent commits without deployments
-    # When you ask me to deploy, I'll add [deploy] to the commit message
-
-# Cancel in-progress runs when a new deployment is triggered
-# Note: With manual deployments, this is less critical but still useful
-concurrency:
-  group: firebase-deployment
-  cancel-in-progress: true
+      - cursor/react-query-calendar-workouts-e64a
+  workflow_dispatch:
 
 jobs:
   deploy:
-    # Only run if commit message contains [deploy] OR manually triggered
-    if: contains(github.event.head_commit.message, '[deploy]') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-
+      
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: performancecoachapp-26bd1
-
-      - name: Grant Firebase Service Account Cloud Run Permissions
-        continue-on-error: true
-        run: |
-          echo "🔐 Granting Cloud Run permissions to Firebase service account..."
-          # Get the Firebase service account email from the service account JSON
-          SERVICE_ACCOUNT_EMAIL=$(echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' | jq -r '.client_email')
-          echo "Service Account: $SERVICE_ACCOUNT_EMAIL"
-          
-          # Grant Cloud Run Viewer role (needed to verify Cloud Run services exist)
-          gcloud projects add-iam-policy-binding performancecoachapp-26bd1 \
-            --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
-            --role="roles/run.viewer" \
-            --condition=None || echo "⚠️  Permission granting failed (insufficient privileges), continuing..."
-          
-          # Also grant Cloud Run Invoker if needed
-          gcloud run services add-iam-policy-binding pca-app \
-            --region=us-central1 \
-            --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
-            --role="roles/run.invoker" \
-            --condition=None || echo "⚠️  Invoker permission granting failed, continuing..."
-          
-          echo "✅ Permission check complete"
-
+      
       - name: Submit Cloud Build
-        id: cloud-build
         run: |
-          echo "🔨 Starting Cloud Build deployment..."
-          echo "📦 Commit: ${GITHUB_SHA::7}"
-          echo "🌿 Branch: ${GITHUB_REF#refs/heads/}"
+          SHORT_SHA=${GITHUB_SHA:0:7}
+          echo "Using SHORT_SHA: $SHORT_SHA"
           gcloud builds submit \
             --config=cloudbuild.yaml \
-            --substitutions=SHORT_SHA=${GITHUB_SHA::7},_NEXT_PUBLIC_FIREBASE_API_KEY="${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}",_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}",_NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}",_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}",_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}",_NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}",_GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}",_GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}",_GOOGLE_REDIRECT_URI="${{ secrets.GOOGLE_REDIRECT_URI }}"
-          echo "✅ Cloud Build completed successfully"
-
-      - name: Get Cloud Run Service URL
-        id: service-url
-        continue-on-error: true
-        run: |
-          SERVICE_URL=$(gcloud run services describe pca-app --region us-central1 --format 'value(status.url)' --project performancecoachapp-26bd1 || echo "")
-          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
-          if [ -n "$SERVICE_URL" ]; then
-            echo "🌐 Cloud Run Service URL: $SERVICE_URL"
-          else
-            echo "⚠️ Could not retrieve Service URL (permissions issue?)"
-          fi
-
-      - name: Deploy Firebase Hosting
-        id: firebase-deploy
-        continue-on-error: false
+            --substitutions=SHORT_SHA=${SHORT_SHA},_NEXT_PUBLIC_FIREBASE_API_KEY="${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}",_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}",_NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}",_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}",_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}",_NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}",_GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}",_GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}",_GOOGLE_REDIRECT_URI="https://performancecoach.web.app/api/auth/google/callback"
+      
+      - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
-        env:
-          FIREBASE_CLI_EXPERIMENTS: webframeworks
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           projectId: performancecoachapp-26bd1
           channelId: live
           target: performancecoach
-          entryPoint: .
-
-      - name: Deployment Summary
-        run: |
-          echo "## 🚀 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** \`${GITHUB_SHA::7}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** \`${GITHUB_REF#refs/heads/}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Cloud Run URL:** ${{ steps.service-url.outputs.url }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ✅ Your app is now live on Firebase!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "You can start testing your changes now." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**View deployment:** https://console.firebase.google.com/project/performancecoachapp-26bd1/hosting" >> $GITHUB_STEP_SUMMARY

@@ -72,6 +72,10 @@ export async function getStoredTokens(): Promise<StoredTokens | null> {
 
 /**
  * Get a valid access token, refreshing if necessary
+ * 
+ * NOTE: This only runs when user is actively using the site (API requests).
+ * No background token refresh - tokens only refresh when needed during active use.
+ * When user is off the site, tokens remain stored but no refresh happens.
  */
 export async function getValidAccessToken(): Promise<string | null> {
   const tokens = await getStoredTokens();
@@ -80,11 +84,15 @@ export async function getValidAccessToken(): Promise<string | null> {
     return null;
   }
 
-  // Check if token is expired (with 5 minute buffer)
+  // Check if token is expired (with 10 minute buffer for proactive refresh)
+  // This ensures tokens are refreshed before they expire, keeping the session active longer
   const now = Date.now();
-  const expiryBuffer = 5 * 60 * 1000; // 5 minutes in milliseconds
+  const expiryBuffer = 10 * 60 * 1000; // 10 minutes in milliseconds (increased from 5)
+  const isExpired = tokens.expiryDate && (now + expiryBuffer) >= tokens.expiryDate;
   
-  if (tokens.expiryDate && (now + expiryBuffer) >= tokens.expiryDate) {
+  // If token is expired or no expiry date (might be invalid), try to refresh
+  // Refresh tokens don't expire (unless revoked), so we can keep refreshing indefinitely
+  if (isExpired || !tokens.expiryDate) {
     // Token is expired or about to expire, refresh it
     if (!tokens.refreshToken) {
       console.error('Token expired but no refresh token available');
@@ -95,16 +103,34 @@ export async function getValidAccessToken(): Promise<string | null> {
       const oauth2Client = createOAuth2Client();
       const newAccessToken = await refreshAccessToken(oauth2Client, tokens.refreshToken);
       
+      // Get the actual expiry from Google's response
+      // Note: refreshAccessToken doesn't return expiry_date, so we'll use 1 hour
+      // Google access tokens typically last 1 hour
+      // The refresh token itself doesn't expire (unless revoked), so we can keep refreshing
+      const newExpiryDate = Date.now() + (60 * 60 * 1000); // 1 hour from now
+      
       // Update stored tokens
       await storeTokens({
         ...tokens,
         accessToken: newAccessToken,
-        expiryDate: Date.now() + (60 * 60 * 1000), // Assume 1 hour expiry
+        expiryDate: newExpiryDate,
       });
 
       return newAccessToken;
     } catch (error) {
-      console.error('Error refreshing access token:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[Token Storage] Error refreshing access token:', errorMessage);
+      
+      // If refresh fails, the refresh token might be invalid
+      // Clear tokens so user can reconnect
+      if (errorMessage.includes('invalid_grant') || 
+          errorMessage.includes('Token has been expired') ||
+          errorMessage.includes('invalid_token') ||
+          errorMessage.includes('Refresh token is invalid')) {
+        console.error('[Token Storage] Refresh token is invalid, clearing stored tokens');
+        await clearStoredTokens();
+      }
+      
       return null;
     }
   }

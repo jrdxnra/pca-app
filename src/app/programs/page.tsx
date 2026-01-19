@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
+import { CalendarSkeleton } from '@/components/programs/CalendarSkeleton';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -42,10 +43,10 @@ import { useUpdateCalendarEvent, useDeleteCalendarEvent, useCreateCalendarEvent 
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/queryKeys';
 // Lazy load ModernCalendarView to prevent blocking initial render
+// Note: Suspense fallback handles loading, so we don't need loading prop here
 const ModernCalendarView = dynamic(
   () => import('@/components/programs/ModernCalendarView').then(mod => ({ default: mod.ModernCalendarView })),
   {
-    loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>,
     ssr: false // Disable SSR for this heavy component
   }
 );
@@ -77,56 +78,36 @@ import {
 } from '@/lib/firebase/services/clientPrograms';
 import { getAppTimezone, setAppTimezone, getBrowserTimezone, hasTimezoneChanged, formatTimezoneLabel } from '@/lib/utils/timezone';
 import { toastSuccess } from '@/components/ui/toaster';
+import { logger } from '@/lib/utils/logger';
 
 export default function ProgramsPage() {
-  // Track render count to detect infinite loops
-  const renderCountRef = React.useRef(0);
-  renderCountRef.current += 1;
-  const renderCount = renderCountRef.current;
-  
-  console.log(`[ProgramsPage] Component rendering (render #${renderCount})`);
-  
-  // Warn if we're rendering too many times
-  if (renderCount > 10) {
-    console.warn(`[ProgramsPage] WARNING: Component has rendered ${renderCount} times - possible infinite loop!`);
-  }
-  
   const router = useRouter();
 
   // UI State from stores (keeping for now)
-  const {
-    selectedClient,
-    currentDate,
-    viewMode,
-    calendarDate,
-    error,
-    setSelectedClient,
-    setViewMode,
-    setCalendarDate,
-    navigateMonth,
-    navigateWeek,
-    navigateDay,
-    goToToday,
-    clearError,
-    initializeSelectedClient,
-  } = useProgramStore();
-  
-  console.log('[ProgramsPage] Store state:', {
-    selectedClient,
-    viewMode,
-    calendarDate: calendarDate?.toISOString(),
-    hasError: !!error
-  });
+  // Use selectors to prevent re-renders when unrelated store state changes
+  const selectedClient = useProgramStore(state => state.selectedClient);
+  const currentDate = useProgramStore(state => state.currentDate);
+  const viewMode = useProgramStore(state => state.viewMode);
+  const calendarDate = useProgramStore(state => state.calendarDate);
+  const error = useProgramStore(state => state.error);
+  const setSelectedClient = useProgramStore(state => state.setSelectedClient);
+  const setViewMode = useProgramStore(state => state.setViewMode);
+  const setCalendarDate = useProgramStore(state => state.setCalendarDate);
+  const navigateMonth = useProgramStore(state => state.navigateMonth);
+  const navigateWeek = useProgramStore(state => state.navigateWeek);
+  const navigateDay = useProgramStore(state => state.navigateDay);
+  const goToToday = useProgramStore(state => state.goToToday);
+  const clearError = useProgramStore(state => state.clearError);
+  const initializeSelectedClient = useProgramStore(state => state.initializeSelectedClient);
 
   // Data fetching with React Query
-  console.log('[ProgramsPage] Calling React Query hooks...');
   const { data: clients = [], isLoading: clientsLoading } = useClients(false);
   const { data: allPrograms = [], isLoading: programsLoading } = usePrograms();
   const { data: programsByClient = [], isLoading: programsByClientLoading } = useProgramsByClient(selectedClient);
   const { data: scheduledWorkoutsByClient = [], isLoading: scheduledWorkoutsByClientLoading } = useScheduledWorkoutsByClient(selectedClient);
   const { data: allScheduledWorkouts = [], isLoading: allScheduledWorkoutsLoading } = useScheduledWorkouts();
   
-  console.log('[ProgramsPage] React Query data loaded:', {
+  logger.debug('[ProgramsPage] React Query data loaded:', {
     clientsCount: clients.length,
     allProgramsCount: allPrograms.length,
     programsByClientCount: programsByClient.length,
@@ -144,7 +125,7 @@ export default function ProgramsPage() {
   const scheduledWorkouts = selectedClient ? scheduledWorkoutsByClient : allScheduledWorkouts;
   const loading = programsLoading || programsByClientLoading || scheduledWorkoutsByClientLoading || allScheduledWorkoutsLoading || clientsLoading;
   
-  console.log('[ProgramsPage] Computed data:', {
+  logger.debug('[ProgramsPage] Computed data:', {
     programsCount: programs.length,
     scheduledWorkoutsCount: scheduledWorkouts.length,
     loading
@@ -153,11 +134,15 @@ export default function ProgramsPage() {
   // Configuration data with React Query
   const { data: periods = [] } = usePeriods();
   const { data: workoutCategories = [] } = useWorkoutCategories();
-  const { weekTemplates, workoutStructureTemplates, fetchAll: fetchAllConfig } = useConfigurationStore();
+  // Use selectors to prevent re-renders when unrelated config state changes
+  const weekTemplates = useConfigurationStore(state => state.weekTemplates);
+  const workoutStructureTemplates = useConfigurationStore(state => state.workoutStructureTemplates);
+  const fetchAllConfig = useConfigurationStore(state => state.fetchAll);
 
   // Calendar events with React Query - calculate date range for current week view
-  // Use useMemo with stable timestamp dependency to prevent infinite loops
-  const calendarDateRange = React.useMemo(() => {
+  // Calculate date range for current week view
+  // Simple calculation - no useMemo needed (avoids React error #310)
+  const calendarDateRange = (() => {
     if (!calendarDate) return null;
     const startDate = new Date(calendarDate);
     startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -166,14 +151,14 @@ export default function ProgramsPage() {
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
     return { start: startDate, end: endDate };
-  }, [calendarDate?.getTime()]); // Use timestamp for stable comparison
+  })();
 
-  console.log('[ProgramsPage] Calling useCalendarEvents hook with:', {
+  logger.debug('[ProgramsPage] Calling useCalendarEvents hook with:', {
     start: calendarDateRange?.start?.toISOString(),
     end: calendarDateRange?.end?.toISOString()
   });
   
-  const { data: calendarEvents = [], isLoading: calendarEventsLoading } = useCalendarEvents(
+  const { data: calendarEvents = [], isLoading: calendarEventsLoading, error: calendarEventsError } = useCalendarEvents(
     calendarDateRange?.start,
     calendarDateRange?.end
   );
@@ -181,10 +166,16 @@ export default function ProgramsPage() {
   // Simply use calendarEvents directly - React Query handles memoization
   const stableCalendarEvents = calendarEvents;
   
-  console.log('[ProgramsPage] Calendar events loaded:', {
+  logger.debug('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
-    isLoading: calendarEventsLoading
+    isLoading: calendarEventsLoading,
+    hasError: !!calendarEventsError
   });
+  
+  // Check if Google Calendar auth failed
+  const isGoogleCalendarAuthError = calendarEventsError?.message?.includes('Failed to get valid access token') ||
+    calendarEventsError?.message?.includes('Not authenticated') ||
+    calendarEventsError?.message?.includes('401');
 
   // Query client for invalidating queries
   const queryClient = useQueryClient();
@@ -204,7 +195,10 @@ export default function ProgramsPage() {
   };
 
   // Keep calendar store functions that aren't data fetching
-  const { createTestEvent, clearAllTestEvents, linkToWorkout } = useCalendarStore();
+  // Use selector to only subscribe to the functions we need, not the state
+  const createTestEvent = useCalendarStore(state => state.createTestEvent);
+  const clearAllTestEvents = useCalendarStore(state => state.clearAllTestEvents);
+  const linkToWorkout = useCalendarStore(state => state.linkToWorkout);
 
   // Selected date for mini calendar (defaults to calendarDate)
   // Initialize with calendarDate, fallback to today if null
@@ -217,52 +211,52 @@ export default function ProgramsPage() {
   // Track mounted state to avoid hydration mismatch with date-dependent UI
   const [mounted, setMounted] = useState(false);
   
-  console.log('[ProgramsPage] mounted state:', mounted);
+  logger.debug('[ProgramsPage] mounted state:', mounted);
   
   // Timezone notification state
   const [appTimezone, setAppTimezoneState] = useState<string>(() => {
-    console.log('[ProgramsPage] Initializing appTimezone state');
+    logger.debug('[ProgramsPage] Initializing appTimezone state');
     if (typeof window !== 'undefined') {
       const tz = getAppTimezone();
-      console.log('[ProgramsPage] Got appTimezone from storage:', tz);
+      logger.debug('[ProgramsPage] Got appTimezone from storage:', tz);
       return tz;
     }
-    console.log('[ProgramsPage] window undefined, using default timezone');
+    logger.debug('[ProgramsPage] window undefined, using default timezone');
     return 'America/Los_Angeles';
   });
   const [showTimezonePrompt, setShowTimezonePrompt] = useState(false);
   const TIMEZONE_DISMISS_KEY = 'pca-timezone-prompt-dismissed';
   
   useEffect(() => {
-    console.log('[ProgramsPage] Mount effect running');
+    logger.debug('[ProgramsPage] Mount effect running');
     setMounted(true);
-    console.log('[ProgramsPage] Set mounted to true');
+    logger.debug('[ProgramsPage] Set mounted to true');
     
     // Check if timezone prompt was dismissed
     const wasDismissed = typeof window !== 'undefined' 
       ? localStorage.getItem(TIMEZONE_DISMISS_KEY) === 'true'
       : false;
     
-    console.log('[ProgramsPage] Timezone prompt dismissed?', wasDismissed);
+    logger.debug('[ProgramsPage] Timezone prompt dismissed?', wasDismissed);
     
     // Check if browser timezone differs from app timezone
     if (!wasDismissed && hasTimezoneChanged()) {
       const savedTimezone = getAppTimezone();
       const browserTimezone = getBrowserTimezone();
-      console.log('[ProgramsPage] Timezone check:', {
+      logger.debug('[ProgramsPage] Timezone check:', {
         savedTimezone,
         browserTimezone,
         hasChanged: hasTimezoneChanged()
       });
       // Only show prompt if timezone was previously set (not default)
       if (savedTimezone !== 'America/Los_Angeles' || browserTimezone !== 'America/Los_Angeles') {
-        console.log('[ProgramsPage] Showing timezone prompt');
+        logger.debug('[ProgramsPage] Showing timezone prompt');
         setShowTimezonePrompt(true);
       }
     }
     
     return () => {
-      console.log('[ProgramsPage] Mount effect cleanup');
+      logger.debug('[ProgramsPage] Mount effect cleanup');
     };
   }, []);
 
@@ -276,13 +270,13 @@ export default function ProgramsPage() {
     
     if (!hasInitializedSelectedDate.current && calendarDate) {
       // Initialize once on mount
-      console.log('[ProgramsPage] Initializing selectedDate from calendarDate');
+      logger.debug('[ProgramsPage] Initializing selectedDate from calendarDate');
       setSelectedDate(calendarDate);
       hasInitializedSelectedDate.current = true;
       lastCalendarDateRef.current = calendarDateTimestamp;
     } else if (hasInitializedSelectedDate.current && calendarDate && lastCalendarDateRef.current !== calendarDateTimestamp) {
       // Sync when calendarDate actually changes (by timestamp comparison)
-      console.log('[ProgramsPage] Syncing selectedDate with calendarDate');
+      logger.debug('[ProgramsPage] Syncing selectedDate with calendarDate');
       setSelectedDate(calendarDate);
       lastCalendarDateRef.current = calendarDateTimestamp;
     }
@@ -291,7 +285,7 @@ export default function ProgramsPage() {
   const [includeWeekends, setIncludeWeekends] = useState(false);
 
   // Use the shared client programs hook - replaces local state and fetchClientPrograms function
-  console.log('[ProgramsPage] Calling useClientPrograms hook with selectedClient:', selectedClient);
+  logger.debug('[ProgramsPage] Calling useClientPrograms hook with selectedClient:', selectedClient);
   const {
     clientPrograms,
     isLoading: clientProgramsLoading,
@@ -308,7 +302,7 @@ export default function ProgramsPage() {
   }
   const stableClientPrograms = clientProgramsRef.current;
   
-  console.log('[ProgramsPage] useClientPrograms result:', {
+  logger.debug('[ProgramsPage] useClientPrograms result:', {
     clientProgramsCount: clientPrograms.length,
     isLoading: clientProgramsLoading
   });
@@ -336,9 +330,9 @@ export default function ProgramsPage() {
 
   // Fetch configuration data on mount
   useEffect(() => {
-    console.log('[ProgramsPage] Fetching all config');
+    logger.debug('[ProgramsPage] Fetching all config');
     fetchAllConfig();
-    console.log('[ProgramsPage] Config fetch initiated');
+    logger.debug('[ProgramsPage] Config fetch initiated');
   }, [fetchAllConfig]);
 
   // Calendar date is now managed by the store with localStorage persistence
@@ -346,9 +340,9 @@ export default function ProgramsPage() {
 
   // Initialize selected client from localStorage after hydration
   useEffect(() => {
-    console.log('[ProgramsPage] Initializing selected client from localStorage');
+    logger.debug('[ProgramsPage] Initializing selected client from localStorage');
     initializeSelectedClient();
-    console.log('[ProgramsPage] Selected client initialized');
+    logger.debug('[ProgramsPage] Selected client initialized');
   }, [initializeSelectedClient]);
 
   // React Query handles data fetching automatically based on selectedClient
@@ -1664,11 +1658,9 @@ export default function ProgramsPage() {
     // React Query will automatically refetch calendar events when mutations invalidate queries
   };
 
-  // Prevent rendering if critical data isn't ready (prevents freeze)
-  // Also wait for initial data to load before rendering calendar
-  if (!mounted || (clientProgramsLoading && clientPrograms.length === 0)) {
-    return <PageSkeleton />;
-  }
+  // Show calendar structure immediately (no loading screen here)
+  // The Suspense fallback will handle ModernCalendarView loading
+  // This gives better UX - user sees the calendar grid right away
 
   return (
     <div className="w-full px-1 pt-1 pb-4 space-y-2">
@@ -1875,8 +1867,33 @@ export default function ProgramsPage() {
         <div className="flex gap-1 mt-1">
           {/* Week View - Scrollable, constrained to leave space for sidebar */}
           <div className="flex-1 min-w-0 overflow-x-auto" style={{ maxWidth: 'calc(100% - 272px)' }}>
+            {/* Show Google Calendar connection warning if auth failed */}
+            {isGoogleCalendarAuthError && (
+              <Card className="mb-4 border-yellow-500 bg-yellow-50">
+                <CardContent className="pt-4">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-yellow-800">
+                        ⚠️ Google Calendar Not Connected
+                      </p>
+                      <p className="text-xs text-yellow-700 mt-1">
+                        Calendar events won't appear until you connect Google Calendar. Workouts will still be visible.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        onClick={() => router.push('/configure')}
+                      >
+                        Go to Configure → Connect Google Calendar
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             <ErrorBoundary fallback={<div className="p-4 text-center text-destructive">Error loading calendar. Please refresh the page.</div>}>
-              <React.Suspense fallback={<PageSkeleton />}>
+              <React.Suspense fallback={<CalendarSkeleton includeWeekends={includeWeekends} />}>
                 <ModernCalendarView
                   viewMode="week"
                   calendarDate={calendarDate}
@@ -1887,6 +1904,7 @@ export default function ProgramsPage() {
                   clientPrograms={stableClientPrograms}
                   includeWeekends={includeWeekends}
                   refreshKey={calendarKey}
+                  calendarEvents={stableCalendarEvents} // Pass events from React Query instead of Zustand fetching
                   onPeriodClick={handlePeriodClick}
                   onDateClick={handleDateClick}
                   onScheduleCellClick={handleWeekCellClick}
@@ -1909,6 +1927,31 @@ export default function ProgramsPage() {
           {/* Current Day Schedule - Side view - Always visible, fixed width */}
           {/* Note: selectedClientId is null to show ALL events for the day, regardless of client selection */}
           <div className="w-64 flex-shrink-0 sticky top-2 self-start">
+            {/* Show Google Calendar connection warning if auth failed */}
+            {isGoogleCalendarAuthError && (
+              <Card className="mb-4 border-yellow-500 bg-yellow-50">
+                <CardContent className="pt-4">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-yellow-800">
+                        Google Calendar Not Connected
+                      </p>
+                      <p className="text-xs text-yellow-700 mt-1">
+                        Calendar events won't appear until you connect Google Calendar.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        onClick={() => router.push('/configure')}
+                      >
+                        Connect Google Calendar
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             <DayEventList
               selectedDate={selectedDate}
               events={calendarEvents}

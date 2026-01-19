@@ -85,7 +85,9 @@ src/
 - Cloud Run for Next.js server + API routes
 - Firebase Hosting as CDN
 - Environment variables in Cloud Run service config
-- Deploy Firestore rules separately: `npm run deploy:firestore`
+- Deploy Firestore rules separately: `npm run deploy:firebase`
+- **CRITICAL: Same deployment frequency rules apply** - Batch fixes, test locally first
+- **Don't deploy after every small change** - Group related changes together
 
 ## Environment Variables
 
@@ -109,10 +111,25 @@ GOOGLE_REDIRECT_URI (different for Vercel vs Firebase)
 - Feature branches for new development
 - Test on Vercel before merging to main
 
-### Commits
+### Commits & Deployment Frequency
+- **CRITICAL: Batch related fixes into single commits** - Don't push after every small fix
+- **Vercel free tier limit: 100 deployments/day** - Exceeding this blocks deployments for 8+ hours
+- **Before pushing**: Test locally with `npm run build` when possible
+- **Group related changes**: Multiple small fixes should be one commit, not many
+- **Only push when necessary**: Not after every single line change
 - Clear, descriptive commit messages
-- Group related changes together
 - Reference issues/features when applicable
+
+**Example of what NOT to do:**
+- ❌ Fix 1 → commit → push
+- ❌ Fix 2 → commit → push  
+- ❌ Fix 3 → commit → push
+- This creates 3 deployments for what should be 1
+
+**Example of what TO do:**
+- ✅ Fix 1, Fix 2, Fix 3 → single commit → push
+- ✅ Test locally first → fix any issues → then push
+- ✅ Batch all related fixes together
 
 ## Firebase Project
 
@@ -146,5 +163,29 @@ GOOGLE_REDIRECT_URI (different for Vercel vs Firebase)
 - `DEPLOYMENT_CHECKLIST.md` - Pre-production checklist
 - `PROJECT_PREFERENCES.md` - This file (preferences reference)
 
+## Development Rules (CRITICAL - Refer Often)
+
+### React Performance (see REACT_ERROR_310_PREVENTION.md)
+- **NEVER use useMemo** for simple array operations (filter, find, map)
+- Calculate values directly - React Query already handles caching
+- Don't try to "optimize" what doesn't need optimization
+
+### Deployment Frequency (CRITICAL)
+- **BATCH FIXES**: Multiple related fixes = ONE commit, not many
+- **TEST LOCALLY FIRST**: Run `npm run build` before pushing/deploying
+- **Vercel limit**: 100 deployments/day on free tier - exceeding blocks deployments
+- **Firebase**: Same rules apply - batch fixes, test locally, don't deploy after every small change
+- **Only push/deploy when necessary**: Not after every small change
+- **Group related changes**: All fixes for the same issue should be one commit
+
+### Data and Testing (CRITICAL)
+- **NO MOCK DATA IN PRODUCTION**: Production builds MUST use real services only
+- **Emulators OK for development**: Firebase Emulators with mock data are allowed for local dev
+- **Clear separation**: Development can use emulators, production always uses real Firebase/Google Calendar
+- **Never deploy emulator code**: Production code paths must never reference emulators or mocks
+- **Real services in production**: All production deployments use real Firebase, real Google Calendar API, real data
+
+**This is as important as the useMemo rule - refer to this often!**
+
 ## Last Updated
-January 12, 2026
+January 18, 2026
