@@ -1,4 +1,5 @@
 services:
+  # Production Service - Full builds for testing production-like environment
   - type: web
     name: pca-app
     env: node
@@ -13,13 +14,32 @@ services:
         value: production
       # Note: Add other environment variables in Render dashboard
       # They're not included here for security
-    # Environment variables to add in Render dashboard:
-    # NEXT_PUBLIC_FIREBASE_API_KEY
-    # NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    # NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    # NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    # NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    # NEXT_PUBLIC_FIREBASE_APP_ID
-    # GOOGLE_CLIENT_ID
-    # GOOGLE_CLIENT_SECRET
-    # GOOGLE_REDIRECT_URI (set after getting Render URL)
+
+  # Dev Service - Hot reload for fast development iteration
+  # Deploys from 'render-dev' branch for dedicated dev testing
+  - type: web
+    name: pca-app-dev
+    env: node
+    plan: starter  # $7/month - always-on, no cold starts
+    region: oregon  # Oregon (us-west) - closest to California
+    branch: render-dev  # Dedicated dev branch
+    buildCommand: npm install  # No build step - just install dependencies
+    startCommand: npm run dev  # Dev server with hot reload
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: development  # Important: Use development mode
+      # Note: Add other environment variables in Render dashboard
+      # Copy all vars from pca-app, but update GOOGLE_REDIRECT_URI to dev service URL
+
+  # Environment variables to add in Render dashboard for BOTH services:
+  # NEXT_PUBLIC_FIREBASE_API_KEY
+  # NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+  # NEXT_PUBLIC_FIREBASE_PROJECT_ID
+  # NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+  # NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+  # NEXT_PUBLIC_FIREBASE_APP_ID
+  # GOOGLE_CLIENT_ID
+  # GOOGLE_CLIENT_SECRET
+  # GOOGLE_REDIRECT_URI (different for each service - use their respective URLs)
