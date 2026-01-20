@@ -10,6 +10,7 @@ import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useClientPrograms } from '@/hooks/useClientPrograms';
 import { AddClientDialog } from '@/components/clients/AddClientDialog';
 import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
+import { PeriodizationTimeline } from '@/components/clients/PeriodizationTimeline';
 import { Client } from '@/lib/types';
 
 export default function ClientsPage() {
@@ -397,6 +398,45 @@ export default function ClientsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Periodization Planner - Show when clients exist */}
+      {clients.length > 0 && !loading && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Periodization Planner</CardTitle>
+            <CardDescription>
+              View all assigned training phases across your clients
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {clients.filter(c => !c.isDeleted).map((client) => {
+                const clientProgram = clientPrograms.find(cp => cp.clientId === client.id);
+                const clientPeriods = clientProgram?.periods || [];
+
+                if (clientPeriods.length === 0) return null;
+
+                return (
+                  <div key={client.id} className="space-y-2">
+                    <h3 className="font-semibold text-sm">{client.name}</h3>
+                    <PeriodizationTimeline
+                      periods={periods || []}
+                      clientPeriods={clientPeriods}
+                      title=""
+                    />
+                  </div>
+                );
+              })}
+
+              {!clientPrograms.some(cp => cp.periods && cp.periods.length > 0) && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No periods assigned yet. Start by assigning periods to clients.</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Edit Client Dialog */}
