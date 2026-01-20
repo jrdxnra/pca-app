@@ -45,8 +45,6 @@ const WorkoutEditor = dynamic(
 );
 
 import type { WorkoutEditorHandle } from '@/components/workouts/WorkoutEditor';
-import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
-import { CategoryFilter } from '@/components/workouts/CategoryFilter';
 import { BuilderHeader } from '@/components/workouts/builder/BuilderHeader';
 import { BuilderFilters } from '@/components/workouts/builder/BuilderFilters';
 import { Timestamp } from 'firebase/firestore';
@@ -1456,8 +1454,8 @@ export default function BuilderPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="w-full px-1 pt-0.5 pb-2 space-y-1">
         {/* Filters and Controls */}
-          <Card className="py-1">
-            <CardContent className="py-0.5 px-2">
+          <Card className="py-2">
+            <CardContent className="py-1 px-2">
               {/* Navigation */}
               <BuilderHeader
                 clients={clients}
@@ -1470,6 +1468,8 @@ export default function BuilderPage() {
                 navigationLabel={getNavigationLabel()}
                 periods={periods}
                 workoutCategories={workoutCategories}
+                selectedCategories={selectedCategories}
+                onCategorySelectionChange={setSelectedCategories}
                 weekTemplates={weekTemplates}
                 clientPrograms={clientPrograms}
                 onAssignPeriod={handleAssignPeriod}
@@ -1479,21 +1479,7 @@ export default function BuilderPage() {
                 }}
                 weekOrder={weekSettings.weekOrder}
                 onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
-              />
-
-              {/* Workout Building Actions */}
-              {!clientId && (
-                <div className="col-span-full text-center py-8 text-muted-foreground">
-                  Please select a client to start building workouts.
-                </div>
-              )}
-
-              {/* Category Filter */}
-              <BuilderFilters
                 viewMode={viewMode}
-                workoutCategories={workoutCategories}
-                selectedCategories={selectedCategories}
-                onCategorySelectionChange={setSelectedCategories}
               />
             </CardContent>
           </Card>

@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +47,8 @@ import { WorkoutStructureTemplate } from '@/lib/types';
 import { TestEventInput, LocationAbbreviation } from '@/lib/google-calendar/types';
 import { initiateGoogleAuth, checkGoogleCalendarAuth, disconnectGoogleCalendar } from '@/lib/google-calendar/api-client';
 import { updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
+import { getGlobalQueryClient } from '@/lib/react-query/queryClientInstance';
+import { queryKeys } from '@/lib/react-query/queryKeys';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MapPin } from 'lucide-react';
 import {
@@ -333,6 +335,7 @@ export default function ConfigurePage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
+  const oauthToastShownRef = useRef(false);  // Track if we've already shown the OAuth success toast
   
   // Sync local state with store state when it changes
   useEffect(() => {
@@ -341,6 +344,17 @@ export default function ConfigurePage() {
   
   // Tab state
   const [activeTab, setActiveTab] = useState<'workout' | 'app'>('workout');
+  
+  // Read tab from URL query param on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'app') {
+        setActiveTab('app');
+      }
+    }
+  }, []);
   
   // Location management state
   const [uniqueLocations, setUniqueLocations] = useState<string[]>([]);
@@ -379,6 +393,55 @@ export default function ConfigurePage() {
     }
   }, [calendarConfig.coachingKeywords, calendarConfig.classKeywords, calendarConfig.coachingColor, calendarConfig.classColor]);
 
+  // Handle OAuth callback redirect - check if we just completed OAuth
+  useEffect(() => {
+    const handleOAuthCallback = async () => {
+      if (typeof window === 'undefined') return;
+      
+      const params = new URLSearchParams(window.location.search);
+      const connected = params.get('connected');
+      const hasError = params.get('error');
+      
+      if (connected === 'true' && !oauthToastShownRef.current) {
+        // We just completed OAuth, force re-check the connection status
+        console.log('OAuth redirect detected, force re-checking auth status...');
+        oauthToastShownRef.current = true;  // Mark that we've shown the toast
+        setCheckingAuth(true);
+        
+        const storeState = useCalendarStore.getState();
+        await storeState.checkGoogleCalendarConnection();
+        
+        const isConnected = useCalendarStore.getState().isGoogleCalendarConnected;
+        setIsGoogleCalendarConnected(isConnected);
+        setCheckingAuth(false);
+        
+        if (isConnected) {
+          toastSuccess('Google Calendar connected successfully!');
+          
+          // Invalidate React Query caches so other pages will refetch with the new connection status
+          const queryClient = getGlobalQueryClient();
+          if (queryClient) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
+          }
+        }
+        
+        // Clean URL: remove query params so this doesn't run again on refresh
+        // Use replaceState to update the browser history without reloading
+        const newUrl = window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      } else if (hasError) {
+        console.error('OAuth error:', hasError);
+        // Clean URL
+        const newUrl = window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      }
+    };
+    
+    // Delay to ensure DOM is ready
+    const timeoutId = setTimeout(handleOAuthCallback, 0);
+    return () => clearTimeout(timeoutId);
+  }, []);
+
   // Fetch configuration on mount
   useEffect(() => {
     fetchAllConfig();
@@ -393,11 +456,6 @@ export default function ConfigurePage() {
       const connected = useCalendarStore.getState().isGoogleCalendarConnected;
       setIsGoogleCalendarConnected(connected);
       setCheckingAuth(false);
-      
-      // If connected, test the actual connection to catch expired tokens
-      if (connected) {
-        handleTestConnection();
-      }
     });
 
     // Check if browser timezone differs from app timezone

@@ -117,8 +117,15 @@ export function MiniCalendarTooltip({
             setIsHovered(false);
           }}
         >
-          {/* Day indicator circle */}
-          {isDayHovered && (
+          {/* Today indicator circle */}
+          {isToday && (
+            <span className={cn(
+              "absolute inset-1 rounded-full border-2 pointer-events-none",
+              isInSelectedWeek ? "border-blue-200" : "border-blue-300"
+            )} />
+          )}
+          {/* Day hover circle */}
+          {isDayHovered && !isToday && (
             <span className={cn(
               "absolute inset-0.5 rounded-full border-2 pointer-events-none transition-all",
               isInSelectedWeek ? "border-white" : "border-blue-500"

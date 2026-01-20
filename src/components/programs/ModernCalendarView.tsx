@@ -1512,14 +1512,14 @@ export function ModernCalendarView({
             // Events without client metadata should be hidden
             if (!eventClientId) {
               // Event has no client - hide it when a client is selected
-            return false;
+              return false;
             }
             // Compare as strings to ensure exact match
             return String(eventClientId).trim() === String(selectedClient).trim();
           }
 
-          // "All Clients" selected - show only coach's personal events (events NOT linked to any client)
-          return eventClientId === null;
+          // No specific client selected - show all events
+          return true;
         } catch (error) {
           console.warn('Error parsing event dateTime:', event.start.dateTime, error);
           return false;

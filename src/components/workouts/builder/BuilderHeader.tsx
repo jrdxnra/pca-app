@@ -4,6 +4,7 @@ import { Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
+import { CategoryFilter } from '@/components/workouts/CategoryFilter';
 import { Client } from '@/lib/types';
 import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBuilderDialog';
 import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
@@ -24,6 +25,8 @@ interface BuilderHeaderProps {
   // Period assignment
   periods: any[];
   workoutCategories: any[];
+  selectedCategories: string[];
+  onCategorySelectionChange: (categories: string[]) => void;
   weekTemplates: any[];
   clientPrograms: any[];
   onAssignPeriod: (assignment: {
@@ -43,6 +46,9 @@ interface BuilderHeaderProps {
   // Week order
   weekOrder: 'ascending' | 'descending';
   onWeekOrderChange: (order: 'ascending' | 'descending') => void;
+  
+  // Column visibility
+  viewMode: 'month' | 'week' | 'day';
 }
 
 export function BuilderHeader({
@@ -56,12 +62,15 @@ export function BuilderHeader({
   navigationLabel,
   periods,
   workoutCategories,
+  selectedCategories,
+  onCategorySelectionChange,
   weekTemplates,
   clientPrograms,
   onAssignPeriod,
   onWorkoutCreated,
   weekOrder,
   onWeekOrderChange,
+  viewMode,
 }: BuilderHeaderProps) {
   const clientName = clientId ? (clients.find(c => c.id === clientId)?.name || 'Unknown Client') : '';
   const existingAssignments = clientId ? (clientPrograms.find(cp => cp.clientId === clientId)?.periods || []) : [];
@@ -75,11 +84,11 @@ export function BuilderHeader({
           <label className="text-sm font-medium">Client:</label>
         </div>
         <Select 
-          value={clientIdImmediate || undefined} 
+          value={clientIdImmediate || ''} 
           onValueChange={onClientChange} 
           disabled={loading}
         >
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className={`w-[200px] ${!clientId ? 'border-green-300 bg-green-50' : ''}`}>
             <SelectValue placeholder="Select client" />
           </SelectTrigger>
           <SelectContent>
@@ -108,7 +117,16 @@ export function BuilderHeader({
           onAssignPeriod={onAssignPeriod}
           existingAssignments={existingAssignments}
         />
-        {/* Column Filter moved here */}
+        
+        {/* Filters - Category and Column Visibility */}
+        {viewMode === 'day' && workoutCategories.length > 0 && (
+          <CategoryFilter
+            categories={workoutCategories}
+            selectedCategories={selectedCategories}
+            onSelectionChange={onCategorySelectionChange}
+          />
+        )}
+        
         <ColumnVisibilityToggle
           visibleColumns={{}}
           availableColumns={{
@@ -122,7 +140,7 @@ export function BuilderHeader({
       </div>
 
       {/* Right aligned - Week Order, Week Selector (matches Schedule page) */}
-      <div className="flex items-center gap-1 md:gap-2">
+      <div className="flex items-center gap-0.5 md:gap-1">
         {/* Week order dropdown */}
         <div className="flex items-center gap-1">
           <label htmlFor="weekOrder" className="text-xs md:text-sm font-medium">Week:</label>
@@ -130,7 +148,7 @@ export function BuilderHeader({
             value={weekOrder} 
             onValueChange={(value) => onWeekOrderChange(value as 'ascending' | 'descending')}
           >
-            <SelectTrigger className="w-[100px] md:w-[120px]">
+            <SelectTrigger className="w-[90px] md:w-[110px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -140,25 +158,25 @@ export function BuilderHeader({
           </Select>
         </div>
         
-        <Button variant="outline" size="sm" onClick={() => onNavigate('today')} className="text-xs md:text-sm px-2">
+        <Button variant="outline" size="sm" onClick={() => onNavigate('today')} className="text-xs md:text-sm px-2 h-8">
           Today
         </Button>
         <Button
           variant="outline"
           size="sm"
           onClick={() => onNavigate('prev')}
-          className="p-1 md:p-2"
+          className="p-1"
         >
           <ChevronLeft className="h-3 w-3 md:h-4 md:w-4 icon-builder" />
         </Button>
-        <div className="min-w-[110px] md:min-w-[140px] text-center font-medium text-sm">
+        <div className="min-w-[90px] md:min-w-[110px] text-center font-medium text-xs md:text-sm">
           {navigationLabel}
         </div>
         <Button
           variant="outline"
           size="sm"
           onClick={() => onNavigate('next')}
-          className="p-1 md:p-2"
+          className="p-1"
         >
           <ChevronRight className="h-3 w-3 md:h-4 md:w-4 icon-builder" />
         </Button>

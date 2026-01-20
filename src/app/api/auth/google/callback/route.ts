@@ -11,6 +11,12 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const error = searchParams.get('error');
 
+  console.log('[OAuth Callback] Starting callback handler');
+  console.log('[OAuth Callback] Code present:', !!code);
+  console.log('[OAuth Callback] Error:', error);
+  console.log('[OAuth Callback] Request URL:', request.url);
+  console.log('[OAuth Callback] Request origin:', request.nextUrl.origin);
+
   if (error) {
     console.error('OAuth error:', error);
     return NextResponse.redirect(
@@ -19,6 +25,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!code) {
+    console.error('[OAuth Callback] No code received');
     return NextResponse.redirect(
       new URL('/configure?error=no_code', request.url)
     );
@@ -33,6 +40,7 @@ export async function GET(request: NextRequest) {
     console.log('[OAuth Callback] Environment check:', {
       hasGOOGLE_REDIRECT_URI: !!process.env.GOOGLE_REDIRECT_URI,
       GOOGLE_REDIRECT_URI_length: process.env.GOOGLE_REDIRECT_URI?.length || 0,
+      GOOGLE_REDIRECT_URI_value: envRedirectUri,
       VERCEL_ENV: process.env.VERCEL_ENV,
       NODE_ENV: process.env.NODE_ENV
     });
@@ -92,14 +100,23 @@ export async function GET(request: NextRequest) {
         // Fallback to known Firebase hosting URL
         redirectUrl = 'https://performancecoach.web.app/configure?connected=true';
       }
+      console.log('[OAuth Callback] Redirecting to Firebase URL:', redirectUrl);
+      return NextResponse.redirect(redirectUrl);
     } else {
-      // Local development or Vercel - use request origin (without port since it's in the domain)
-      const origin = request.nextUrl.origin;
-      redirectUrl = `${origin}/configure?connected=true`;
+      // Local development - derive from GOOGLE_REDIRECT_URI or use request URL without port
+      // GOOGLE_REDIRECT_URI is like: https://jubilant-goldfish-5gg6gww654r27vgr-3000.app.github.dev/api/auth/google/callback
+      if (envRedirectUri && envRedirectUri.length > 0) {
+        const baseUrl = envRedirectUri.replace('/api/auth/google/callback', '');
+        redirectUrl = `${baseUrl}/configure?connected=true`;
+        console.log('[OAuth Callback] Local dev: Using GOOGLE_REDIRECT_URI base:', redirectUrl);
+      } else {
+        // Fallback: reconstruct from request hostname without port
+        const hostname = request.headers.get('host')?.split(':')[0] || 'localhost';
+        redirectUrl = `https://${hostname}/configure?connected=true`;
+        console.log('[OAuth Callback] Local dev: Using hostname:', redirectUrl);
+      }
+      return NextResponse.redirect(redirectUrl);
     }
-    
-    console.log('[OAuth Callback] Redirecting to:', redirectUrl);
-    return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error('Error exchanging code for tokens:', error);
     const errorMessage = error instanceof Error ? error.message : 'token_exchange_failed';

@@ -30,6 +30,7 @@ import {
   Grid3X3,
   List,
   Settings,
+  SquareArrowOutUpRight,
 } from 'lucide-react';
 import { useProgramStore } from '@/lib/stores/useProgramStore';
 import { useClientStore } from '@/lib/stores/useClientStore';
@@ -427,11 +428,33 @@ export default function ProgramsPage() {
     setViewMode('week');
   };
 
-  const handleNavigate = (direction: number) => {
-    // Only week view is supported
-    navigateWeek(direction);
+  const handleNavigate = (direction: number | 'today') => {
+    // Support both numeric directions (-1, +1) and 'today' string
+    if (direction === 'today') {
+      setCalendarDate(new Date());
+    } else {
+      // Only week view is supported
+      navigateWeek(direction as number);
+    }
   };
 
+  // Generate Google Calendar URL for the selected week
+  const getGoogleCalendarUrl = () => {
+    // Get the start of the week for calendarDate
+    const weekStart = new Date(calendarDate);
+    weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
+    
+    const year = weekStart.getFullYear();
+    const month = weekStart.getMonth() + 1; // Google Calendar uses 1-indexed months
+    const day = weekStart.getDate();
+    
+    return `https://calendar.google.com/calendar/u/0/r/week/${year}/${month}/${day}`;
+  };
+
+  const handleOpenGoogleCalendar = () => {
+    const url = getGoogleCalendarUrl();
+    window.open(url, '_blank');
+  };
 
   const getNavigationLabel = () => {
     // Return placeholder during SSR to avoid hydration mismatch
@@ -1836,23 +1859,31 @@ export default function ProgramsPage() {
               </div>
 
               {/* Week Selector */}
-              <div className="flex items-center gap-1 md:gap-2">
+              <div className="flex items-center gap-0.5 md:gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleNavigate('today')}
+                  className="text-xs md:text-sm px-2 h-8"
+                >
+                  Today
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleNavigate(-1)}
-                  className="p-1 md:p-2"
+                  className="p-1"
                 >
                   <ChevronLeft className="h-3 w-3 md:h-4 md:w-4 icon-schedule" />
                 </Button>
-                <div className="min-w-[110px] md:min-w-[140px] text-center font-medium text-sm">
+                <div className="min-w-[90px] md:min-w-[110px] text-center font-medium text-xs md:text-sm">
                   {getNavigationLabel()}
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleNavigate(1)}
-                  className="p-1 md:p-2"
+                  className="p-1"
                 >
                   <ChevronRight className="h-3 w-3 md:h-4 md:w-4 icon-schedule" />
                 </Button>
@@ -1958,11 +1989,20 @@ export default function ProgramsPage() {
               clients={clients}
               selectedClientId={null}
               headerActions={
-                <MiniCalendarTooltip
-                  currentDate={calendarDate}
-                  selectedDate={selectedDate}
-                  onDateSelect={handleMiniCalendarDateSelect}
-                />
+                <div className="flex items-center gap-0 -space-x-1">
+                  <button
+                    onClick={handleOpenGoogleCalendar}
+                    className="p-2 hover:bg-gray-100 rounded transition-colors translate-y-px"
+                    title="Open this week in Google Calendar"
+                  >
+                    <SquareArrowOutUpRight className="h-5 w-5 icon-schedule" />
+                  </button>
+                  <MiniCalendarTooltip
+                    currentDate={calendarDate}
+                    selectedDate={selectedDate}
+                    onDateSelect={handleMiniCalendarDateSelect}
+                  />
+                </div>
               }
               onEventClick={handleScheduleEventClick}
             />

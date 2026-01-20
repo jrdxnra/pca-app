@@ -2,33 +2,28 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Navigation, HamburgerMenu } from './Navigation';
 import { CalendarClock, Loader2 } from 'lucide-react';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
 
 export function Header() {
+  const router = useRouter();
   const [isSyncing, setIsSyncing] = useState(false);
   const { fetchEvents, isGoogleCalendarConnected, checkGoogleCalendarConnection } = useCalendarStore();
 
   const handleCalendarSync = async () => {
+    // If not connected, navigate to configure page
+    if (!isGoogleCalendarConnected) {
+      router.push('/configure?tab=app');
+      return;
+    }
+    
+    // Otherwise, perform sync
     setIsSyncing(true);
     
     try {
-      // Re-check connection status if we think we're not connected
-      // This handles stale state after computer restart
-      let connected = isGoogleCalendarConnected;
-      if (!connected) {
-        await checkGoogleCalendarConnection();
-        // Get the updated state
-        connected = useCalendarStore.getState().isGoogleCalendarConnected;
-      }
-      
-      if (!connected) {
-        toastError('Google Calendar not connected. Go to Configure → App Config to connect.');
-        setIsSyncing(false);
-        return;
-      }
       // Fetch events for a wide range (current month ± 2 weeks)
       const today = new Date();
       const startDate = new Date(today);
@@ -87,17 +82,21 @@ export function Header() {
 
           {/* Right side - Sync Button and Hamburger Menu */}
           <div className="flex items-center gap-2">
-            {/* Calendar Sync Button */}
+            {/* Calendar Sync Button - Green when connected, Red when not */}
             <button
               onClick={handleCalendarSync}
               disabled={isSyncing}
-              className="p-2 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
-              title={isGoogleCalendarConnected ? "Sync Google Calendar" : "Google Calendar not connected"}
+              className={`p-2 rounded-md transition-colors disabled:opacity-50 ${
+                isGoogleCalendarConnected 
+                  ? 'hover:bg-green-100 text-green-600 hover:text-green-700' 
+                  : 'hover:bg-red-100 text-red-600 hover:text-red-700'
+              }`}
+              title={isGoogleCalendarConnected ? "Sync Google Calendar (Connected)" : "Click to connect Google Calendar"}
             >
               {isSyncing ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
-                <CalendarClock className={`h-5 w-5 ${isGoogleCalendarConnected ? 'text-primary' : 'text-muted-foreground'}`} />
+                <CalendarClock className="h-5 w-5" />
               )}
             </button>
 

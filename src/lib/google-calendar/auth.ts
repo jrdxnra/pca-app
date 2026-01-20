@@ -89,14 +89,34 @@ export async function getTokensFromCode(code: string, redirectUri?: string): Pro
   refresh_token: string | null;
   expiry_date: number | null;
 }> {
-  const oauth2Client = createOAuth2Client(redirectUri);
-  const { tokens } = await oauth2Client.getToken(code);
+  console.log('[getTokensFromCode] Starting token exchange');
+  console.log('[getTokensFromCode] Code:', code?.substring(0, 20) + '...');
+  console.log('[getTokensFromCode] Redirect URI:', redirectUri);
   
-  return {
-    access_token: tokens.access_token!,
-    refresh_token: tokens.refresh_token || null,
-    expiry_date: tokens.expiry_date || null,
-  };
+  try {
+    const oauth2Client = createOAuth2Client(redirectUri);
+    console.log('[getTokensFromCode] OAuth2 client created');
+    
+    const { tokens } = await oauth2Client.getToken(code);
+    console.log('[getTokensFromCode] Tokens received:', {
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      hasExpiryDate: !!tokens.expiry_date,
+      expiryDate: tokens.expiry_date,
+    });
+    
+    const result = {
+      access_token: tokens.access_token!,
+      refresh_token: tokens.refresh_token || null,
+      expiry_date: tokens.expiry_date || null,
+    };
+    
+    console.log('[getTokensFromCode] Token exchange successful');
+    return result;
+  } catch (error) {
+    console.error('[getTokensFromCode] Token exchange failed:', error);
+    throw error;
+  }
 }
 
 /**
