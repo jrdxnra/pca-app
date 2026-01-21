@@ -108,6 +108,26 @@ export function EventActionDialog({
   const existingClientId = clientId || getEventClientId(event);
   const hasClient = !!existingClientId;
   
+  // Extract attendee names for display
+  const getAttendeeNames = (): string => {
+    // First try extendedProperties.shared.guest_names from work calendar sync
+    const guestNames = event.extendedProperties?.shared?.guest_names;
+    if (guestNames) {
+      return guestNames;
+    }
+    
+    // Fallback to attendees array
+    if (event.attendees && event.attendees.length > 0) {
+      return event.attendees
+        .map(a => a.displayName || a.email.split('@')[0])
+        .join(', ');
+    }
+    
+    return '';
+  };
+  
+  const attendeeNames = getAttendeeNames();
+  
   // State for client assignment
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -595,6 +615,14 @@ export function EventActionDialog({
                     <UserPlus className="h-4 w-4" />
                     Assign Session
                   </div>
+                  
+                  {/* Event Attendee Names */}
+                  {attendeeNames && (
+                    <div className="px-3 py-2 bg-background rounded-md border">
+                      <p className="text-xs text-muted-foreground mb-0.5">Attendees</p>
+                      <p className="text-sm font-medium">{attendeeNames}</p>
+                    </div>
+                  )}
                   
                   {/* Client Selection */}
                   <div className="space-y-2">

@@ -411,6 +411,22 @@ export default function ClientsPage() {
         }}
         periods={periods || []}
         clientPrograms={clientPrograms}
+        onClientRefresh={async () => {
+          // Refetch all clients to get updated trainingPhases and eventGoals
+          await fetchClients();
+          // Update the local editingClient with the refreshed data from the store
+          if (editingClient) {
+            const refreshedClient = clients.find(c => c.id === editingClient.id);
+            if (refreshedClient) {
+              setEditingClient(refreshedClient);
+            }
+          }
+        }}
+        onClientProgramsRefresh={async () => {
+          if (editingClient) {
+            await fetchClientPrograms(editingClient.id);
+          }
+        }}
       />
 
       {/* Period Assignment Dialog - matches schedule page props exactly */}

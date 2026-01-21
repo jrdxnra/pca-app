@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Timestamp } from 'firebase/firestore';
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,7 @@ import {
 import { Plus, Pencil } from 'lucide-react';
 import { useClientStore } from '@/lib/stores/useClientStore';
 import { Client, Period, ClientProgram } from '@/lib/types';
-import { PeriodizationTimeline } from './PeriodizationTimeline';
+import { PeriodizationTimeline, MemoizedPeriodizationTimeline } from './PeriodizationTimeline';
 import { useClientPrograms } from '@/hooks/useClientPrograms';
 
 // Form validation schema
@@ -58,22 +59,54 @@ interface AddClientDialogProps {
   onOpenChange?: (open: boolean) => void;
   periods?: Period[];
   clientPrograms?: ClientProgram[];
+  onClientProgramsRefresh?: () => Promise<void>; // Callback to refresh client programs after save
+  onClientRefresh?: () => Promise<void>; // Callback to refresh client data after save
 }
 
-export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenChange: controlledOnOpenChange, periods = [], clientPrograms = [] }: AddClientDialogProps) {
+export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenChange: controlledOnOpenChange, periods = [], clientPrograms = [], onClientProgramsRefresh, onClientRefresh }: AddClientDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [scrollPosition, setScrollPosition] = useState(0);
   const { addClient, editClient, loading } = useClientStore();
   const { assignPeriod } = useClientPrograms(client?.id);
+  const periodizationRef = useRef<any>(null);
   
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
+
+  // Handle scroll restoration when dialog closes
+  useEffect(() => {
+    if (open) {
+      // Dialog opening - save scroll position
+      setScrollPosition(window.scrollY);
+    } else {
+      // Dialog closing - wait for animations to complete, then restore scroll
+      const timer = setTimeout(() => {
+        window.scrollTo(0, scrollPosition);
+      }, 275);
+      return () => clearTimeout(timer);
+    }
+  }, [open, scrollPosition]);
   
   const isEditMode = !!client;
   
   // Get current client's periods
   const clientProgram = isEditMode ? clientPrograms.find(cp => cp.clientId === client?.id) : undefined;
   const clientPeriods = clientProgram?.periods || [];
+  
+  // Memoize the conversion of trainingPhases to clientPeriods format
+  const convertedTrainingPhases = useMemo(() => {
+    if (!client?.trainingPhases) return [];
+    return client.trainingPhases.map(tp => ({
+      id: tp.id,
+      periodConfigId: tp.periodConfigId,
+      periodName: tp.periodName,
+      periodColor: tp.periodColor,
+      startDate: new Date(tp.startDate),
+      endDate: new Date(tp.endDate),
+      days: []
+    }));
+  }, [client?.trainingPhases]);
 
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
@@ -114,7 +147,8 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
     }
   }, [open, client, form]);
 
-  const onSubmit = async (data: ClientFormData) => {
+  const onSubmit = async (data: ClientFormData, shouldClose: boolean = true) => {
+    console.log('[AddClientDialog] onSubmit called, isEditMode:', isEditMode, 'shouldClose:', shouldClose);
     try {
       if (isEditMode && client) {
         await editClient(client.id, {
@@ -138,30 +172,76 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
         });
       }
 
-      // Reset form and close dialog
+      // Also save periods if in edit mode
+      if (isEditMode && client && periodizationRef.current) {
+        setPeriodSaving(true);
+        try {
+          console.log('[AddClientDialog] About to getSaveData from periodization timeline');
+          const saveData = await periodizationRef.current.getSaveData();
+          console.log('[AddClientDialog] getSaveData returned:', saveData);
+          // Save periods and goals to database via handleSavePeriods
+          await handleSavePeriods(saveData.periods, saveData.goals);
+          console.log('Period selections and goals saved to database:', saveData.periods.length, 'periods,', saveData.goals.length, 'goals');
+        } catch (error) {
+          console.error('Failed to save periods:', error);
+        } finally {
+          setPeriodSaving(false);
+        }
+      }
+
+      // Reset form and optionally close dialog
       form.reset();
-      setOpen(false);
+      if (shouldClose) {
+        setOpen(false);
+      }
     } catch (error) {
       console.error(`Failed to ${isEditMode ? 'update' : 'add'} client:`, error);
       // Error is handled by the store
     }
   };
 
-  const handleSavePeriods = async (newPeriods: any[]) => {
+  const [periodSaving, setPeriodSaving] = useState(false);
+
+  const handleSavePeriods = async (newPeriods: any[], goals: any[]) => {
     if (!isEditMode || !client) return;
     
+    setPeriodSaving(true);
     try {
-      // Clear existing periods first (optional - or just add new ones)
-      for (const period of newPeriods) {
-        await assignPeriod({
-          clientId: client.id,
-          periodId: period.periodConfigId,
-          startDate: period.startDate,
-          endDate: period.endDate,
-        });
+      // Convert periods to TrainingPhase format for simple storage on client document
+      const trainingPhases = newPeriods.map(period => ({
+        id: period.id,
+        periodConfigId: period.periodConfigId,
+        periodName: period.periodName,
+        periodColor: period.periodColor,
+        startDate: period.startDate instanceof Date 
+          ? period.startDate.toISOString().split('T')[0]
+          : period.startDate,
+        endDate: period.endDate instanceof Date 
+          ? period.endDate.toISOString().split('T')[0]
+          : period.endDate
+      }));
+
+      // Save both training phases and event goals directly to client document
+      await editClient(client.id, {
+        trainingPhases,
+        eventGoals: goals
+      });
+      
+      // Refresh client data to get updated trainingPhases and eventGoals
+      if (onClientRefresh) {
+        await onClientRefresh();
       }
+      
+      // Refresh client programs to ensure UI updates
+      if (onClientProgramsRefresh) {
+        await onClientProgramsRefresh();
+      }
+      
+      console.log('Training phases and event goals saved to client profile:', trainingPhases.length, 'phases,', goals.length, 'goals');
     } catch (error) {
-      console.error('Failed to save periods:', error);
+      console.error('Failed to save training phases:', error);
+    } finally {
+      setPeriodSaving(false);
     }
   };
 
@@ -339,32 +419,58 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
               />
             </div>
 
-            {/* Periodization Timeline - Only show in edit mode when periods exist */}
-            {isEditMode && clientPeriods.length > 0 && (
+            {/* Periodization Timeline - Show in edit mode (even if no periods assigned yet) */}
+            {isEditMode && (
               <div className="border-t pt-3 mt-3">
-                <h3 className="text-sm font-semibold mb-3">Training Phases</h3>
-                <PeriodizationTimeline
+                <MemoizedPeriodizationTimeline
+                  ref={periodizationRef}
                   periods={periods}
-                  clientPeriods={clientPeriods}
-                  title=""
+                  clientPeriods={convertedTrainingPhases}
+                  clientEventGoals={client?.eventGoals || []}
+                  clientCreatedAt={client?.createdAt}
+                  title="Training Phases"
                   onSave={handleSavePeriods}
+                  showSaveButton={false}
                 />
               </div>
             )}
 
-            <DialogFooter className="sticky bottom-0 bg-background pt-3 border-t">
+            <DialogFooter className="sticky bottom-0 bg-background pt-3 border-t flex gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={loading}
+                disabled={loading || periodSaving}
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="outline" disabled={loading}>
-                {loading 
-                  ? (isEditMode ? 'Updating...' : 'Adding...') 
-                  : (isEditMode ? 'Update Client' : 'Add Client')
+              {isEditMode && clientPeriods.length > 0 && (
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  disabled={loading || periodSaving}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    form.handleSubmit((data) => onSubmit(data, false))();
+                  }}
+                >
+                  {loading || periodSaving ? 'Saving...' : 'Save'}
+                </Button>
+              )}
+              <Button 
+                type="button"
+                variant="outline" 
+                disabled={loading || periodSaving}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  form.handleSubmit((data) => onSubmit(data, true))();
+                }}
+              >
+                {loading || periodSaving
+                  ? (isEditMode ? 'Saving...' : 'Adding...') 
+                  : (isEditMode ? 'Save & Close' : 'Add Client')
                 }
               </Button>
             </DialogFooter>

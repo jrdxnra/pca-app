@@ -168,16 +168,13 @@ export async function addPeriodToClientProgram(
 
     const updatedPeriods = [...clientProgram.periods, newPeriod];
     
+    // Log with raw date values (no conversion)
     console.log('Saving period to Firebase:', {
       clientProgramId,
       periodId: newPeriod.id,
       periodName: newPeriod.periodName,
-      startDate: newPeriod.startDate instanceof Timestamp 
-        ? newPeriod.startDate.toDate().toISOString() 
-        : newPeriod.startDate,
-      endDate: newPeriod.endDate instanceof Timestamp 
-        ? newPeriod.endDate.toDate().toISOString() 
-        : newPeriod.endDate,
+      startDateRaw: newPeriod.startDate,
+      endDateRaw: newPeriod.endDate,
       daysCount: newPeriod.days?.length || 0,
       totalPeriodsInProgram: updatedPeriods.length,
       collection: 'client-programs',

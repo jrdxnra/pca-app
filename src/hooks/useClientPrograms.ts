@@ -422,14 +422,8 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                 }
             }
 
-            // Refresh calendar events
-            const weekStart = new Date(assignment.startDate);
-            weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-            const weekEnd = new Date(assignment.endDate);
-            weekEnd.setDate(weekEnd.getDate() + (6 - weekEnd.getDay()));
-
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await fetchEvents({ start: weekStart, end: weekEnd });
+            // Period assignment complete - calendar sync decoupled
+            // Calendar events will be managed separately when needed
 
         } catch (err) {
             console.error('Error assigning period:', err);

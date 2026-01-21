@@ -33,6 +33,14 @@ export interface GoogleCalendarEvent {
     displayName?: string;
   };
   htmlLink?: string; // Link to open event in Google Calendar
+  // Extended properties for metadata storage (from Google Calendar API)
+  extendedProperties?: {
+    private?: Record<string, string>;
+    shared?: Record<string, string>;
+  };
+  // Work calendar sync metadata (stored in extendedProperties.private)
+  guestEmails?: string; // Comma-separated list of guest emails from work calendar
+  originalEventId?: string; // ID of the source event from work calendar
   // App-specific metadata
   isCoachingSession?: boolean; // Detected or manually set
   isClassSession?: boolean; // Detected or manually set
@@ -51,10 +59,12 @@ export interface LocationAbbreviation {
 
 export interface CalendarSyncConfig {
   selectedCalendarId?: string; // If set, sync is enabled. If not set, sync is disabled.
-  coachingKeywords: string[]; // Keywords to auto-detect coaching sessions
+  coachingKeywords: string[]; // Keywords to auto-detect coaching sessions (1-on-1)
   coachingColor?: string; // Color for coaching sessions (e.g. 'blue', 'purple')
-  classKeywords: string[]; // Keywords to auto-detect class sessions
+  classKeywords: string[]; // Keywords to auto-detect class sessions (group)
   classColor?: string; // Color for class sessions
+  exclusionKeywords?: string[]; // Keywords to exclude events from matching (hold, meeting, etc.)
+  coachEmailPatterns?: string[]; // Email patterns to filter from attendees (@xwf.google.com, huntjordan@, etc.)
   locationAbbreviations?: LocationAbbreviation[]; // Location abbreviation mappings
   lastSyncTime?: Date;
 }

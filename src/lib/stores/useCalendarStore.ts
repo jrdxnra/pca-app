@@ -133,6 +133,9 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
           newEvents = googleEvents.map((event: any) => {
             const clientId = event.extendedProperties?.private?.pcaClientId;
             const category = event.extendedProperties?.private?.pcaCategory;
+            // Check shared first (from work calendar sync), then private (from PCA app)
+            const guestEmails = event.extendedProperties?.shared?.guest_emails || event.extendedProperties?.private?.guest_emails;
+            const originalEventId = event.extendedProperties?.shared?.originalId || event.extendedProperties?.private?.originalId;
             
             return {
               id: event.id,
@@ -150,6 +153,11 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
               htmlLink: event.htmlLink,
               creator: event.creator,
               attendees: event.attendees, // Capture attendees for client matching
+              // Work calendar sync metadata
+              guestEmails: guestEmails,
+              originalEventId: originalEventId,
+              // Preserve full extendedProperties for client matching service
+              extendedProperties: event.extendedProperties,
               // Extract metadata from extended properties
               preConfiguredClient: clientId,
               preConfiguredCategory: category,

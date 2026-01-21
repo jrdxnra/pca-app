@@ -68,9 +68,12 @@ export async function getCalendarEventsByDateRange(
     
     // Convert Google Calendar API format to our format
     const events: GoogleCalendarEvent[] = googleEvents.map((event: any) => {
+      // Check shared first (from work calendar sync), then private (from PCA app)
       const clientId = event.extendedProperties?.private?.pcaClientId;
       const category = event.extendedProperties?.private?.pcaCategory;
       const workoutId = event.extendedProperties?.private?.pcaWorkoutId;
+      const guestEmails = event.extendedProperties?.shared?.guest_emails || event.extendedProperties?.private?.guest_emails;
+      const originalEventId = event.extendedProperties?.shared?.originalId || event.extendedProperties?.private?.originalId;
       
       return {
         id: event.id,
@@ -88,6 +91,9 @@ export async function getCalendarEventsByDateRange(
         htmlLink: event.htmlLink,
         creator: event.creator,
         attendees: event.attendees,
+        // Work calendar sync metadata
+        guestEmails: guestEmails,
+        originalEventId: originalEventId,
         // Extract metadata from extended properties
         preConfiguredClient: clientId,
         preConfiguredCategory: category,

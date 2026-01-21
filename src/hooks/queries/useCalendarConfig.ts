@@ -9,6 +9,8 @@ const defaultConfig: CalendarSyncConfig = {
   coachingColor: undefined,
   classKeywords: [],
   classColor: undefined,
+  exclusionKeywords: [],
+  coachEmailPatterns: [],
   locationAbbreviations: [],
   lastSyncTime: undefined,
 };
