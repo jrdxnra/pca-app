@@ -51,10 +51,20 @@ export async function storeTokens(tokens: StoredTokens): Promise<void> {
   console.log('[storeTokens] Token reference:', TOKEN_DOC_ID);
   
   try {
-    await setDoc(tokensRef, {
-      ...tokens,
+    // Build object, excluding undefined userId to prevent Firebase errors
+    const dataToStore: Record<string, unknown> = {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiryDate: tokens.expiryDate,
       updatedAt: new Date(),
-    }, { merge: true });
+    };
+    
+    // Only include userId if it's defined
+    if (tokens.userId !== undefined) {
+      dataToStore.userId = tokens.userId;
+    }
+    
+    await setDoc(tokensRef, dataToStore, { merge: true });
     console.log('[storeTokens] Tokens stored successfully in Firestore');
   } catch (error) {
     console.error('[storeTokens] ERROR storing tokens:', error);

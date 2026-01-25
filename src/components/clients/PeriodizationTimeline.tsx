@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useImperativeHandle, forwardRef, useCallback } from 'react';
+import React, { useState, useImperativeHandle, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -39,10 +39,8 @@ interface EventGoal {
 interface PeriodizationTimelineProps {
   periods: Period[];
   clientPeriods?: ClientPeriodAssignment[];
-  clientEventGoals?: EventGoal[]; // Saved event goals from client
-  clientCreatedAt?: Date | { toDate(): Date }; // Client's creation date for year range
   title?: string;
-  onSave?: (periods: ClientPeriodAssignment[], goals: EventGoal[]) => Promise<void>;
+  onSave?: (periods: ClientPeriodAssignment[]) => Promise<void>;
   showSaveButton?: boolean;
 }
 
@@ -62,43 +60,22 @@ interface PeriodizationTimelineProps {
 export const PeriodizationTimeline = forwardRef(function PeriodizationTimeline({
   periods,
   clientPeriods = [],
-  clientEventGoals = [],
-  clientCreatedAt,
   title = 'Training Phases',
   onSave,
   showSaveButton = true
 }: PeriodizationTimelineProps, ref) {
   const [monthPeriods, setMonthPeriods] = useState<Record<string, string>>({});
-  const [eventGoals, setEventGoals] = useState<EventGoal[]>([]);
+  const [eventGoals, setEventGoals] = useState<EventGoal[]>([
+    { id: '1', description: '', date: '' }
+  ]);
   const [saving, setSaving] = useState(false);
-
-  // Initialize displayYear based on client creation date
-  const getInitialDisplayYear = () => {
-    if (clientCreatedAt) {
-      let createdDate: Date;
-      if (clientCreatedAt instanceof Date) {
-        createdDate = clientCreatedAt;
-      } else if ('toDate' in clientCreatedAt) {
-        createdDate = (clientCreatedAt as { toDate(): Date }).toDate();
-      } else {
-        createdDate = new Date();
-      }
-      return getYear(createdDate);
-    }
-    return getYear(new Date());
-  };
-
-  const [displayYear, setDisplayYear] = useState<number>(getInitialDisplayYear());
 
   // Initialize monthPeriods from clientPeriods on mount
   React.useEffect(() => {
     if (clientPeriods.length > 0) {
       const initialized: Record<string, string> = {};
       clientPeriods.forEach(cp => {
-        // Convert both start and end dates
         let startDate: Date;
-        let endDate: Date;
-        
         if (cp.startDate instanceof Date) {
           startDate = cp.startDate;
         } else if ('toDate' in cp.startDate) {
@@ -106,66 +83,17 @@ export const PeriodizationTimeline = forwardRef(function PeriodizationTimeline({
         } else {
           startDate = new Date(cp.startDate);
         }
-        
-        if (cp.endDate instanceof Date) {
-          endDate = cp.endDate;
-        } else if ('toDate' in cp.endDate) {
-          endDate = (cp.endDate as { toDate(): Date }).toDate();
-        } else {
-          endDate = new Date(cp.endDate);
-        }
-        
-        // Calculate all months between start and end date
-        let currentMonth = startOfMonth(startDate);
-        const end = endOfMonth(endDate);
-        
-        while (currentMonth <= end) {
-          const month = getMonth(currentMonth);
-          const year = getYear(currentMonth);
-          const key = `${month}-${year}`;
-          initialized[key] = cp.periodConfigId;
-          currentMonth = addMonths(currentMonth, 1);
-        }
+        const month = getMonth(startDate);
+        const year = getYear(startDate);
+        const key = `${month}-${year}`;
+        initialized[key] = cp.periodConfigId;
       });
-      console.log('[PeriodizationTimeline] Initialized monthPeriods from clientPeriods:', initialized);
       setMonthPeriods(initialized);
     }
   }, [clientPeriods]);
 
-  // Initialize eventGoals from client's saved goals
-  React.useEffect(() => {
-    if (clientEventGoals.length > 0) {
-      setEventGoals(clientEventGoals);
-    } else {
-      // Default empty goal for new clients
-      setEventGoals([{ id: '1', description: '', date: '' }]);
-    }
-  }, [clientEventGoals]);
-
-
-  const getYearRange = () => {
-    const currentYear = getYear(new Date());
-    
-    // Determine start year from client creation date or current year
-    let startYear = currentYear;
-    if (clientCreatedAt) {
-      let createdDate: Date;
-      if (clientCreatedAt instanceof Date) {
-        createdDate = clientCreatedAt;
-      } else if ('toDate' in clientCreatedAt) {
-        createdDate = (clientCreatedAt as { toDate(): Date }).toDate();
-      } else {
-        createdDate = new Date();
-      }
-      startYear = getYear(createdDate);
-    }
-    
-    return { start: startYear, end: currentYear + 2 };
-  };
-
-  // Generate 12 months for the selected year
-  const months = Array.from({ length: 12 }, (_, i) => addMonths(startOfYear(new Date(displayYear, 0, 1)), i));
-  const yearRange = getYearRange();
+  // Generate exactly 12 months starting from January of current year
+  const months = Array.from({ length: 12 }, (_, i) => addMonths(startOfYear(new Date()), i));
 
   const monthKey = (date: Date) => `${getMonth(date)}-${getYear(date)}`;
 
@@ -176,47 +104,42 @@ export const PeriodizationTimeline = forwardRef(function PeriodizationTimeline({
 
   const setPeriodForMonth = (monthDate: Date, periodId: string) => {
     const key = monthKey(monthDate);
-    console.log('[PeriodizationTimeline] Setting period for month:', { key, periodId, monthDate: monthDate.toISOString() });
-    setMonthPeriods(prev => {
-      const updated = {
-        ...prev,
-        [key]: periodId
-      };
-      console.log('[PeriodizationTimeline] monthPeriods updated:', updated);
-      return updated;
-    });
+    setMonthPeriods(prev => ({
+      ...prev,
+      [key]: periodId
+    }));
   };
 
   const sortedPeriods = [...periods].sort((a, b) => (a.order || 0) - (b.order || 0));
 
-  const getEventGoalsForMonth = useCallback((monthDate: Date) => {
+  const getEventGoalsForMonth = (monthDate: Date) => {
     const monthStart = startOfMonth(monthDate);
     const monthEnd = endOfMonth(monthDate);
     return eventGoals.filter(goal => {
       const goalDate = parse(goal.date, 'yyyy-MM-dd', new Date());
       return goalDate >= monthStart && goalDate <= monthEnd;
     });
-  }, [eventGoals]);
+  };
 
-  const addEventGoal = useCallback(() => {
+  const addEventGoal = () => {
     const newId = Date.now().toString();
     const newGoal: EventGoal = {
       id: newId,
       description: '',
       date: ''
     };
-    setEventGoals(prev => [...prev, newGoal]);
-  }, []);
+    setEventGoals([...eventGoals, newGoal]);
+  };
 
-  const updateEventGoal = useCallback((id: string, field: 'description' | 'date', value: string) => {
-    setEventGoals(prev => prev.map(goal => 
+  const updateEventGoal = (id: string, field: 'description' | 'date', value: string) => {
+    setEventGoals(eventGoals.map(goal => 
       goal.id === id ? { ...goal, [field]: value } : goal
     ));
-  }, []);
+  };
 
-  const removeEventGoal = useCallback((id: string) => {
-    setEventGoals(prev => prev.filter(goal => goal.id !== id));
-  }, []);
+  const removeEventGoal = (id: string) => {
+    setEventGoals(eventGoals.filter(goal => goal.id !== id));
+  };
 
   const handleSave = async () => {
     if (!onSave) return;
@@ -233,17 +156,6 @@ export const PeriodizationTimeline = forwardRef(function PeriodizationTimeline({
         const monthStart = startOfMonth(monthDate);
         const monthEnd = endOfMonth(monthDate);
         
-        console.log('Creating period:', {
-          monthKeyStr,
-          monthNum,
-          yearNum,
-          monthDate: monthDate.toISOString(),
-          monthStart: monthStart.toISOString(),
-          monthEnd: monthEnd.toISOString(),
-          isValidStart: !isNaN(monthStart.getTime()),
-          isValidEnd: !isNaN(monthEnd.getTime())
-        });
-        
         const periodConfig = periods.find(p => p.id === periodId);
         if (!periodConfig) return;
         
@@ -257,10 +169,7 @@ export const PeriodizationTimeline = forwardRef(function PeriodizationTimeline({
         });
       });
 
-      // Filter out empty goals
-      const validGoals = eventGoals.filter(g => g.description.trim() || g.date.trim());
-
-      await onSave(newPeriods, validGoals);
+      await onSave(newPeriods);
     } finally {
       setSaving(false);
     }
@@ -269,7 +178,6 @@ export const PeriodizationTimeline = forwardRef(function PeriodizationTimeline({
   // Expose method to get current period selections for parent to save
   useImperativeHandle(ref, () => ({
     async getSaveData() {
-      console.log('[PeriodizationTimeline] getSaveData called with monthPeriods:', monthPeriods);
       const newPeriods: ClientPeriodAssignment[] = [];
       
       Object.entries(monthPeriods).forEach(([monthKeyStr, periodId]) => {
@@ -293,72 +201,21 @@ export const PeriodizationTimeline = forwardRef(function PeriodizationTimeline({
         });
       });
 
-      // Filter out empty goals
-      const validGoals = eventGoals.filter(g => g.description.trim() || g.date.trim());
-
-      console.log('[PeriodizationTimeline] getSaveData returning:', { periods: newPeriods.length, goals: validGoals.length });
-      return { periods: newPeriods, goals: validGoals };
+      return newPeriods;
     }
   }));
 
   return (
     <div className="space-y-3">
-      {/* Header with Year Navigation and Save Button */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-sm">{title}</h3>
-          <div className="flex items-center gap-1">
-            <Button 
-              type="button"
-              variant="outline" 
-              size="sm"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setDisplayYear(displayYear - 1);
-              }}
-              disabled={displayYear <= yearRange.start}
-            >
-              ←
-            </Button>
-            <span className="text-sm font-medium w-12 text-center">{displayYear}</span>
-            <Button 
-              type="button"
-              variant="outline" 
-              size="sm"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setDisplayYear(displayYear + 1);
-              }}
-              disabled={displayYear >= yearRange.end}
-            >
-              →
-            </Button>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            type="button"
-            variant="destructive" 
-            size="sm"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setMonthPeriods({});
-              setEventGoals([{ id: '1', description: '', date: '' }]);
-            }}
-            className="text-xs"
-          >
-            Clear All
+      {/* Header with Save Button */}
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm">{title}</h3>
+        {showSaveButton && onSave && (
+          <Button onClick={handleSave} disabled={saving} size="sm" variant="outline" className="gap-1">
+            <Save className="h-3.5 w-3.5" />
+            {saving ? 'Saving...' : 'Save'}
           </Button>
-          {showSaveButton && onSave && (
-            <Button type="button" onClick={handleSave} disabled={saving} size="sm" variant="outline" className="gap-1">
-              <Save className="h-3.5 w-3.5" />
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Month columns - all 12 on one row */}
@@ -380,10 +237,7 @@ export const PeriodizationTimeline = forwardRef(function PeriodizationTimeline({
               </div>
 
               {/* Period selector */}
-              <Select value={selectedPeriodId || ''} onValueChange={(value) => {
-                console.log('[PeriodizationTimeline] Dropdown onChange fired:', { monthDate: monthDate.toISOString(), selectedValue: value });
-                setPeriodForMonth(monthDate, value);
-              }}>
+              <Select value={selectedPeriodId || ''} onValueChange={(value) => setPeriodForMonth(monthDate, value)}>
                 <SelectTrigger 
                   className="h-16 text-xs w-full rounded-none border-r flex-1 p-0 flex items-center justify-center" 
                   style={{ 
@@ -475,7 +329,3 @@ export const PeriodizationTimeline = forwardRef(function PeriodizationTimeline({
     </div>
   );
 });
-
-// Memoize to prevent unnecessary re-renders when parent (AddClientDialog) re-renders
-PeriodizationTimeline.displayName = 'PeriodizationTimeline';
-export const MemoizedPeriodizationTimeline = React.memo(PeriodizationTimeline);
