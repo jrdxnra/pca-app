@@ -6,13 +6,7 @@ import { isAuthenticated } from '@/lib/google-calendar/token-storage';
  * Check if user is authenticated with Google Calendar
  */
 export async function GET(request: NextRequest) {
-  try {
-    const authenticated = await isAuthenticated();
-    return NextResponse.json({ authenticated });
-  } catch (error) {
-    console.error('Error checking auth status:', error);
-    return NextResponse.json({ authenticated: false });
-  }
+  return NextResponse.json({ error: 'API temporarily disabled' }, { status: 503 });
 }
 
 

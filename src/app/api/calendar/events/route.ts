@@ -9,63 +9,7 @@ import { getStoredTokens, getValidAccessToken } from '@/lib/google-calendar/toke
  * Fetch events from Google Calendar for a date range
  */
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const timeMin = searchParams.get('timeMin');
-  const timeMax = searchParams.get('timeMax');
-  const calendarId = searchParams.get('calendarId') || 'primary';
-
-  if (!timeMin || !timeMax) {
-    return NextResponse.json(
-      { error: 'timeMin and timeMax are required' },
-      { status: 400 }
-    );
-  }
-
-  try {
-    // Get stored tokens
-    const tokens = await getStoredTokens();
-    
-    if (!tokens || !tokens.accessToken) {
-      return NextResponse.json(
-        { error: 'Not authenticated with Google Calendar' },
-        { status: 401 }
-      );
-    }
-
-    // Try to refresh token if needed
-    const validToken = await getValidAccessToken();
-    
-    if (!validToken) {
-      return NextResponse.json(
-        { error: 'Failed to get valid access token. Please reconnect Google Calendar.' },
-        { status: 401 }
-      );
-    }
-
-    const oauth2Client = createOAuth2Client();
-    setCredentials(oauth2Client, validToken, tokens.refreshToken);
-
-    const events = await getEvents(
-      oauth2Client,
-      calendarId,
-      new Date(timeMin),
-      new Date(timeMax)
-    );
-
-    return NextResponse.json({ events });
-  } catch (error) {
-    console.error('Error fetching calendar events:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch calendar events';
-    const errorDetails = error instanceof Error ? error.stack : String(error);
-    console.error('Error details:', errorDetails);
-    return NextResponse.json(
-      { 
-        error: errorMessage,
-        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
-      },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({ error: 'API temporarily disabled' }, { status: 503 });
 }
 
 /**

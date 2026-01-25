@@ -161,6 +161,13 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Use length for stable dependency instead of array reference to prevent React error #310
   const eventsLength = calendarEvents.length;
   
+  console.log('[TwoColumnWeekView] Calendar events stats:', {
+    totalEvents: allEventsLength,
+    filteredEvents: calendarEvents.length,
+    selectedClient,
+    firstEvent: calendarEvents[0]?.summary
+  });
+  
   // CRITICAL: Do NOT use useMemo here - it causes React error #310
   // Calculate directly - this is fast enough
   const allDayEvents: GoogleCalendarEvent[] = [];
@@ -172,6 +179,11 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     } else {
       timedEvents.push(event);
     }
+  });
+  
+  console.log('[TwoColumnWeekView] Event split:', {
+    allDayEvents: allDayEvents.length,
+    timedEvents: timedEvents.length
   });
   
   const dayColumnsRef = useRef<HTMLDivElement>(null);

@@ -13,6 +13,9 @@ import { ClientProgram, ClientProgramPeriod, ClientWorkout } from '@/lib/types';
 import { Timestamp } from 'firebase/firestore';
 import { WorkoutEditor } from '@/components/workouts/WorkoutEditor';
 import { getAllClientPrograms } from '@/lib/firebase/services/clientPrograms';
+import { calculateOneRepMax } from '@/lib/utils/rpe-calculator';
+import { updateRecentExercisePerformance } from '@/lib/firebase/services/clients';
+import { getWorkoutLogByScheduledWorkout } from '@/lib/firebase/services/workoutLogs';
 
 // Helper function to safely convert various date formats to Date object
 const safeToDate = (dateValue: any): Date => {
@@ -462,6 +465,7 @@ export default function WorkoutPlanView() {
                                           onSave={handleSaveWorkout}
                                           isCreating={isCreatingWorkout}
                                           isInline={true}
+                                          clientId={clientId}
                                         />
                                       </div>
                                     )}
@@ -598,6 +602,7 @@ export default function WorkoutPlanView() {
                                       onSave={handleSaveWorkout}
                                       isCreating={isCreatingWorkout}
                                       isInline={true}
+                                      clientId={clientId}
                                     />
                                   </div>
                                 )}

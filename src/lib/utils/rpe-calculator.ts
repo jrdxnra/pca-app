@@ -52,6 +52,24 @@ export function calculateOConner(weight: number, reps: number): number {
 }
 
 /**
+ * Calculate 1RM using Lombardi formula
+ * Better for higher rep ranges (10-15 reps)
+ */
+export function calculateLombardi(weight: number, reps: number): number {
+  if (reps === 1) return weight;
+  return weight * Math.pow(reps, 0.1);
+}
+
+/**
+ * Calculate 1RM using Mayhew formula
+ * Validated across diverse populations (trained and untrained)
+ */
+export function calculateMayhew(weight: number, reps: number): number {
+  if (reps === 1) return weight;
+  return (100 * weight) / (52.2 + (48.8 * Math.exp(-0.075 * reps)));
+}
+
+/**
  * Calculate 1RM using Tuchscherer RPE method
  */
 export function calculateTuchscherer(weight: number, reps: number, rpe: number): number {
@@ -61,6 +79,31 @@ export function calculateTuchscherer(weight: number, reps: number, rpe: number):
     return calculateBrzycki(weight, reps);
   }
   return weight / (percentage / 100);
+}
+
+/**
+ * Calculate weight to lift based on 1RM and target reps
+ * Uses all 6 formulas and averages them (like TopEndSports)
+ */
+export function calculateWeightFromOneRepMax(
+  oneRepMax: number,
+  targetReps: number
+): number {
+  if (targetReps === 1) return oneRepMax;
+  
+  // Calculate using all 6 formulas and average them
+  // Formula: weight = 1RM * (inverse of 1RM formula coefficient)
+  const brzycki = oneRepMax * ((37 - targetReps) / 36);
+  const epley = oneRepMax / (1 + targetReps / 30);
+  const lander = oneRepMax * ((101.3 - 2.67123 * targetReps) / 100);
+  const oconner = oneRepMax / (1 + 0.025 * targetReps);
+  const lombardi = oneRepMax / Math.pow(targetReps, 0.1);
+  const mayhew = oneRepMax * ((52.2 + (48.8 * Math.exp(-0.075 * targetReps))) / 100);
+  
+  // Average all formulas (like TopEndSports does)
+  const average = (brzycki + epley + lander + oconner + lombardi + mayhew) / 6;
+  
+  return Math.round(average);
 }
 
 /**
@@ -87,6 +130,73 @@ export function getAccuracyRating(reps: number): 'high' | 'medium' | 'low' {
   if (reps >= 1 && reps <= 6) return 'high';
   if (reps >= 7 && reps <= 10) return 'medium';
   return 'low';
+}
+
+/**
+ * Get accuracy confidence as number (0-100) and description
+ * Higher reps and extreme ranges are less reliable
+ */
+export function getAccuracyConfidence(reps: number, hasRPE: boolean = false): { 
+  score: number;
+  label: 'high' | 'medium' | 'low';
+  description: string;
+} {
+  // If RPE is provided, confidence is higher (Tuchscherer is very accurate with RPE)
+  if (hasRPE) {
+    return {
+      score: 95,
+      label: 'high',
+      description: 'Very reliable (RPE-based calculation)'
+    };
+  }
+
+  // Based on rep range
+  if (reps >= 1 && reps <= 3) {
+    return {
+      score: 95,
+      label: 'high',
+      description: 'Very reliable (low rep range)'
+    };
+  }
+  
+  if (reps >= 4 && reps <= 6) {
+    return {
+      score: 90,
+      label: 'high',
+      description: 'Very reliable (optimal rep range)'
+    };
+  }
+  
+  if (reps >= 7 && reps <= 10) {
+    return {
+      score: 75,
+      label: 'medium',
+      description: 'Good estimate (mid-range)'
+    };
+  }
+  
+  if (reps >= 11 && reps <= 15) {
+    return {
+      score: 70,
+      label: 'medium',
+      description: 'Moderate estimate (high rep range)'
+    };
+  }
+  
+  if (reps >= 16 && reps <= 20) {
+    return {
+      score: 60,
+      label: 'low',
+      description: 'Lower confidence (high reps, endurance factor)'
+    };
+  }
+  
+  // Beyond 20 reps
+  return {
+    score: 40,
+    label: 'low',
+    description: 'Low confidence (extreme rep range, endurance-based)'
+  };
 }
 
 /**
@@ -128,6 +238,22 @@ export function calculateOneRepMax(
   results.push({
     formula: 'oconner',
     estimatedOneRepMax: Math.round(calculateOConner(weight, reps)),
+    recommendedWeight: weight,
+    accuracy,
+  });
+
+  // Lombardi (better for higher reps 10-15)
+  results.push({
+    formula: 'lombardi',
+    estimatedOneRepMax: Math.round(calculateLombardi(weight, reps)),
+    recommendedWeight: weight,
+    accuracy,
+  });
+
+  // Mayhew (validated across diverse populations)
+  results.push({
+    formula: 'mayhew',
+    estimatedOneRepMax: Math.round(calculateMayhew(weight, reps)),
     recommendedWeight: weight,
     accuracy,
   });

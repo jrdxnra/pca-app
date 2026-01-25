@@ -4,6 +4,78 @@ This file contains notes and ideas for future improvements to the PCA app. Items
 
 ---
 
+## System-Wide Native Interaction Audit
+**Date Added:** Current Session  
+**Priority:** Medium  
+**Status:** Planned
+
+- Replace custom drag/scroll pickers with native scroll + snap (momentum-friendly) where possible (pattern proven in Category wheel picker).
+- Audit other components for heavy per-frame state updates; favor native behavior, throttling/debouncing, and minimal re-renders.
+- Target areas: workout editor pickers/lists, calendars, and any custom gesture handling that could use browser-native interactions.
+- Aim: smoother UX, fewer render stalls, simpler codepaths.
+
+## Automated Client Matching (Paused)
+
+**Date Added:** January 2026  
+**Priority:** Low (Manual workflow working well)  
+**Status:** Built but Hidden - Re-enable when needed
+
+### What's Already Built
+
+**Client Matching Service** (`/src/lib/services/clientMatching.ts`)
+- Fuzzy name matching (exact, partial, word-based)
+- Filters out coach emails and room resources
+- Multi-client event detection
+- Session type classification (1-on-1, Buddy, Group)
+- Configurable via Event Detection settings
+
+**Event Detection Configuration** (Configure page)
+- Coaching Keywords - identify 1-on-1 sessions
+- Class Keywords - identify group sessions
+- Exclusion Keywords - filter out holds, meetings, admin events
+- Coach Email Patterns - remove coach from attendee matching
+
+**Client Matching Diagnostic** (`/src/components/calendar/ClientMatchingDiagnostic.tsx`)
+- Shows match statistics (X% match rate)
+- Matched events tab - events successfully linked to clients
+- Unmatched events tab - valid sessions needing client setup
+- Excluded events tab - filtered holds/meetings/admin
+- Session type badges (1-on-1, Buddy, Group)
+
+**Session Type Badge Component** (`/src/components/calendar/SessionTypeBadge.tsx`)
+- Visual indicators for session size
+- Color-coded: Blue (1-on-1), Purple (Buddy), Green (Group)
+
+### When to Re-enable
+
+**Trigger Points:**
+- Client base grows beyond manual management
+- Need to track group session attendance
+- Want automated workout duplication for multi-client sessions
+- Need analytics on session types and client frequency
+
+**How to Re-enable:**
+1. Uncomment `ClientMatchingDiagnostic` import and usage in `/src/app/configure/page.tsx`
+2. Test with your Event Detection settings
+3. Review match accuracy before relying on automation
+
+### Future Enhancements (When Re-enabled)
+
+**Phase 1: Basic Automation**
+- One-click "Create Workout" from matched events
+- Auto-populate client dropdown based on matches
+- Bulk workout creation for multiple matched events
+
+**Phase 2: Multi-Client Sessions**
+- Duplicate workout creation for Buddy/Group sessions
+- Session type selection in workout builder
+- Individual client variations within shared sessions
+
+**Phase 3: Shared Group Workouts**
+- Single workout record with multiple client participations
+- Individual performance tracking per client
+- Group session history and analytics
+- Shared programming, individual inputs (sets, reps, weight)
 ## Schedule Management
 
 ### Ongoing Period Workout Category Dropdown

@@ -6,12 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, MoreVertical } from 'lucide-react';
+import { RepWheelPicker } from './RepWheelPicker';
+import { RPEWheelPicker } from './RPEWheelPicker';
+import { CategoryWheelPicker } from './CategoryWheelPicker';
 import { 
   ClientWorkoutMovementUsage,
   Movement,
   MovementCategory 
 } from '@/lib/types';
 import { getRecentExercisePerformance } from '@/lib/firebase/services/clients';
+import { calculateWeightFromOneRepMax, calculateOneRepMax } from '@/lib/utils/rpe-calculator';
 
 interface InlineMovementEditorProps {
   usage: ClientWorkoutMovementUsage;
@@ -71,17 +75,142 @@ export function InlineMovementEditor({
 
   // Auto-populate weight/reps from recent performance when movement is selected
   const previousMovementIdRef = useRef<string | undefined>(usage.movementId);
+  const previousRepsRef = useRef<string | number | undefined>(usage.targetWorkload.reps);
+  
+  // Calculate weight from 1RM when reps are entered or changed
+  useEffect(() => {
+    // Track if reps actually changed
+    const repsChanged = previousRepsRef.current !== usage.targetWorkload.reps;
+    previousRepsRef.current = usage.targetWorkload.reps;
+    
+    // Proceed even if movement metadata isn't loaded yet; fall back to defaults
+    if (!clientId || !usage.movementId) return;
+    const supportsWeight = selectedMovement?.configuration?.use_weight ?? true;
+    if (!supportsWeight) return;
+    
+    // Only process if reps are set
+    const repsValue = usage.targetWorkload.reps;
+    
+    // Parse reps - handle ranges like "8-12" by using the average
+    let repCount: number | null = null;
+    if (typeof repsValue === 'string') {
+      if (repsValue.includes('-')) {
+        const [min, max] = repsValue.split('-').map(r => parseInt(r.trim()));
+        if (!isNaN(min) && !isNaN(max)) {
+          repCount = Math.round((min + max) / 2);
+        }
+      } else {
+        repCount = parseInt(repsValue);
+      }
+    } else if (typeof repsValue === 'number') {
+      repCount = repsValue;
+    }
+    
+    if (!repCount || repCount < 1 || isNaN(repCount)) return;
+    
+    console.log('[InlineMovementEditor] Reps effect triggered', {
+      repsChanged,
+      repCount,
+      movementId: usage.movementId
+    });
+    
+    // Fetch recent performance and calculate weight from 1RM
+    getRecentExercisePerformance(clientId, usage.movementId)
+      .then(performance => {
+        if (!performance) {
+          console.log('[InlineMovementEditor] No recent performance found for movement', usage.movementId);
+          return;
+        }
+
+        let oneRepMax = performance.estimatedOneRepMax;
+
+        // Derive 1RM if missing but prior weight/repRange exist
+        if (!oneRepMax && performance.weight && performance.repRange) {
+          const historyWeight = parseFloat(performance.weight);
+          let historyReps: number | null = null;
+
+          if (typeof performance.repRange === 'string') {
+            if (performance.repRange.includes('-')) {
+              const [min, max] = performance.repRange.split('-').map(r => parseInt(r.trim()));
+              if (!isNaN(min) && !isNaN(max)) {
+                historyReps = Math.round((min + max) / 2);
+              }
+            } else {
+              const parsed = parseInt(performance.repRange);
+              if (!isNaN(parsed)) historyReps = parsed;
+            }
+          }
+
+          if (historyWeight > 0 && historyReps && historyReps > 0) {
+            const results = calculateOneRepMax(historyWeight, historyReps);
+            const avgResult = results.find(r => r.formula === 'average');
+            oneRepMax = avgResult?.estimatedOneRepMax || results[0]?.estimatedOneRepMax;
+            console.log('[InlineMovementEditor] Derived 1RM from history', {
+              historyWeight,
+              historyReps,
+              derived1RM: oneRepMax
+            });
+          }
+        }
+
+        if (!oneRepMax) {
+          console.log('[InlineMovementEditor] No 1RM available to calculate suggested weight', {
+            movementId: usage.movementId
+          });
+          return;
+        }
+
+        console.log('[InlineMovementEditor] Calculating suggested weight from 1RM', {
+          movementId: usage.movementId,
+          repCount,
+          oneRepMax,
+          performance
+        });
+        const calculatedWeight = calculateWeightFromOneRepMax(
+          oneRepMax,
+          repCount
+        );
+        
+        console.log('[InlineMovementEditor] Updating weight to:', calculatedWeight, 'for', repCount, 'reps from 1RM:', oneRepMax);
+        // Batch both updates into a single call to avoid race condition
+        onUpdate({
+          ...usage,
+          targetWorkload: {
+            ...usage.targetWorkload,
+            weight: calculatedWeight,
+            useWeight: true
+          }
+        });
+      })
+      .catch(error => {
+        console.error('Error calculating weight from 1RM:', error);
+        // Silent fail - don't interrupt user experience
+      });
+  }, [usage.targetWorkload.reps, clientId, usage.movementId]); // Trigger when reps change
+  
   useEffect(() => {
     // Only auto-populate when movementId changes (newly selected)
     const movementChanged = previousMovementIdRef.current !== usage.movementId;
+    
+    // Always update the ref to track current movement
     previousMovementIdRef.current = usage.movementId;
     
-    if (clientId && usage.movementId && selectedMovement && movementChanged) {
+    // Don't run on initial mount or if movement didn't change
+    if (!movementChanged) {
+      return;
+    }
+    
+    if (clientId && usage.movementId && selectedMovement) {
+      console.log('[InlineMovementEditor] Movement changed, checking recent performance', {
+        movementId: usage.movementId,
+        clientId
+      });
       // Only auto-populate if weight/reps are not already set
       const hasWeight = usage.targetWorkload.weight && usage.targetWorkload.weight.toString().trim() !== '';
       const hasReps = usage.targetWorkload.reps && usage.targetWorkload.reps.toString().trim() !== '';
       
-      if (!hasWeight || !hasReps) {
+      // Only fetch if BOTH are empty (completely new movement selection)
+      if (!hasWeight && !hasReps) {
         getRecentExercisePerformance(clientId, usage.movementId)
           .then(performance => {
             if (performance) {
@@ -109,6 +238,11 @@ export function InlineMovementEditor({
               
               // Only update if we actually changed something
               if (needsUpdate) {
+                console.log('[InlineMovementEditor] Applied recent performance defaults', {
+                  movementId: usage.movementId,
+                  weight: updates.targetWorkload!.weight,
+                  reps: updates.targetWorkload!.reps
+                });
                 onUpdate(updates as ClientWorkoutMovementUsage);
               }
             }
@@ -119,17 +253,11 @@ export function InlineMovementEditor({
           });
       }
     }
-  }, [usage.movementId, clientId, selectedMovement?.id]); // Only run when movement or client changes
+  }, [usage.movementId, clientId]); // Only run when movement or client changes
   
   // Debug logging
   if (usage.categoryId && filteredMovements.length === 0) {
-    console.log('[InlineMovementEditor] No movements found for category:', {
-      categoryId: usage.categoryId,
-      categoryName: selectedCategory?.name,
-      totalMovements: movements.length,
-      movementCategoryIds: [...new Set(movements.map(m => m.categoryId))],
-      usage
-    });
+     // (noise removed) Previously logged when a category had no movements loaded
   }
 
   // Close context menu when clicking outside
@@ -149,13 +277,15 @@ export function InlineMovementEditor({
   const updateField = (field: string, value: any) => {
     if (field.startsWith('targetWorkload.')) {
       const workloadField = field.replace('targetWorkload.', '');
-      onUpdate({
+      const updated = {
         ...usage,
         targetWorkload: {
           ...usage.targetWorkload,
           [workloadField]: value
         }
-      });
+      };
+      console.log('[InlineMovementEditor] updateField calling onUpdate:', {field, value, workloadField, updatedWeight: updated.targetWorkload.weight});
+      onUpdate(updated);
     } else {
       onUpdate({
         ...usage,
@@ -231,30 +361,11 @@ export function InlineMovementEditor({
       >
       {/* Exercise Name (Category + Movement) */}
       <div className="flex items-center gap-2 min-w-0 px-1 py-1.5">
-        <Select value={usage.categoryId || ''} onValueChange={(value) => updateField('categoryId', value)}>
-          <SelectTrigger className={`h-8 text-xs bg-white py-0 flex-shrink-0 ${selectedCategory ? 'w-8 px-0 flex items-center justify-center [&_svg]:hidden [&_[data-slot=select-value]]:hidden' : 'w-28'}`}>
-            {selectedCategory ? (
-              <div 
-                className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0" 
-                style={{ backgroundColor: selectedCategory.color }}
-              />
-            ) : null}
-            <SelectValue placeholder="Category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map(cat => (
-              <SelectItem key={cat.id} value={cat.id}>
-                <div className="flex items-center gap-2">
-                  <div 
-                    className="w-3 h-3 rounded-full" 
-                    style={{ backgroundColor: cat.color }}
-                  />
-                  {cat.name}
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <CategoryWheelPicker
+          value={usage.categoryId || ''}
+          onChange={(value) => updateField('categoryId', value)}
+          categories={categories}
+        />
         <Select value={usage.movementId || ''} onValueChange={(value) => updateField('movementId', value)}>
           <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs bg-white py-0">
             <SelectValue placeholder="Movement" />
@@ -287,12 +398,9 @@ export function InlineMovementEditor({
       {gridHasReps && (
         <div className="px-1 py-1.5">
           {movementSupportsReps ? (
-            <Input
-              type="number"
-              placeholder="Reps"
-              value={usage.targetWorkload.reps?.toString() || ''}
-              onChange={(e) => updateField('targetWorkload.reps', parseInt(e.target.value) || null)}
-              className="h-8 min-h-[32px] max-h-[32px] w-full text-xs bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
+            <RepWheelPicker
+              value={typeof usage.targetWorkload.reps === 'number' ? usage.targetWorkload.reps : null}
+              onChange={(value) => updateField('targetWorkload.reps', value)}
             />
           ) : null}
         </div>
@@ -390,25 +498,10 @@ export function InlineMovementEditor({
       {gridHasRPE && (
         <div className="px-1 py-1.5">
           {movementSupportsRPE ? (
-            <select
-              value={usage.targetWorkload.rpe?.toString() || ''}
-              onChange={(e) => updateField('targetWorkload.rpe', e.target.value || null)}
-              className="h-8 min-h-[32px] max-h-[32px] w-full text-sm border border-gray-300 rounded-md bg-white px-1 py-0 shadow-sm text-gray-700"
-            >
-              <option value="" className="text-gray-300">RPE</option>
-              <option value="<5">&lt;5</option>
-              <option value="5">5</option>
-              <option value="5.5">5.5</option>
-              <option value="6">6</option>
-              <option value="6.5">6.5</option>
-              <option value="7">7</option>
-              <option value="7.5">7.5</option>
-              <option value="8">8</option>
-              <option value="8.5">8.5</option>
-              <option value="9">9</option>
-              <option value="9.5">9.5</option>
-              <option value="10">10</option>
-            </select>
+            <RPEWheelPicker
+              value={typeof usage.targetWorkload.rpe === 'number' ? usage.targetWorkload.rpe : null}
+              onChange={(value) => updateField('targetWorkload.rpe', value)}
+            />
           ) : null}
         </div>
       )}

@@ -377,7 +377,63 @@ export default function ConfigurePage() {
     if (calendarConfig.classColor) {
       setClassColor(calendarConfig.classColor);
     }
-  }, [calendarConfig.coachingKeywords, calendarConfig.classKeywords, calendarConfig.coachingColor, calendarConfig.classColor]);
+  }, [
+    calendarConfig.coachingKeywords, 
+    calendarConfig.classKeywords, 
+    calendarConfig.exclusionKeywords,
+    calendarConfig.coachEmailPatterns,
+    calendarConfig.coachingColor, 
+    calendarConfig.classColor
+  ]);
+
+  // Handle OAuth callback redirect - check if we just completed OAuth
+  useEffect(() => {
+    const handleOAuthCallback = async () => {
+      if (typeof window === 'undefined') return;
+      
+      const params = new URLSearchParams(window.location.search);
+      const connected = params.get('connected');
+      const hasError = params.get('error');
+      
+      if (connected === 'true' && !oauthToastShownRef.current) {
+        // We just completed OAuth, force re-check the connection status
+        console.log('OAuth redirect detected, force re-checking auth status...');
+        oauthToastShownRef.current = true;  // Mark that we've shown the toast
+        setCheckingAuth(true);
+        
+        const storeState = useCalendarStore.getState();
+        await storeState.checkGoogleCalendarConnection();
+        
+        const isConnected = useCalendarStore.getState().isGoogleCalendarConnected;
+        setIsGoogleCalendarConnected(isConnected);
+        setCheckingAuth(false);
+        
+        if (isConnected) {
+          toastSuccess('Google Calendar connected successfully!');
+          
+          // Invalidate React Query caches so other pages will refetch with the new connection status
+          const queryClient = getGlobalQueryClient();
+          if (queryClient) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
+          }
+        }
+        
+        // Clean URL: remove query params so this doesn't run again on refresh
+        // Use replaceState to update the browser history without reloading
+        const newUrl = window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      } else if (hasError) {
+        console.error('OAuth error:', hasError);
+        // Clean URL
+        const newUrl = window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      }
+    };
+    
+    // Delay to ensure DOM is ready
+    const timeoutId = setTimeout(handleOAuthCallback, 0);
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   // Fetch configuration on mount
   useEffect(() => {

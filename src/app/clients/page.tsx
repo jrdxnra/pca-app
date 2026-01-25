@@ -409,6 +409,8 @@ export default function ClientsPage() {
             setEditingClient(null);
           }
         }}
+        periods={periods || []}
+        clientPrograms={clientPrograms}
       />
 
       {/* Period Assignment Dialog - matches schedule page props exactly */}

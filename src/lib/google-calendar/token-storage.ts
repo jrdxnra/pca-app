@@ -42,10 +42,18 @@ export async function storeTokens(tokens: StoredTokens): Promise<void> {
   const db = await getDb();
   if (!db) return;
   const tokensRef = doc(db, 'googleCalendarTokens', TOKEN_DOC_ID);
-  await setDoc(tokensRef, {
-    ...tokens,
-    updatedAt: new Date(),
-  }, { merge: true });
+  console.log('[storeTokens] Token reference:', TOKEN_DOC_ID);
+  
+  try {
+    await setDoc(tokensRef, {
+      ...tokens,
+      updatedAt: new Date(),
+    }, { merge: true });
+    console.log('[storeTokens] Tokens stored successfully in Firestore');
+  } catch (error) {
+    console.error('[storeTokens] ERROR storing tokens:', error);
+    throw error;
+  }
 }
 
 /**

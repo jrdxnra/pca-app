@@ -40,6 +40,7 @@ interface RoundEditorProps {
     percentage?: boolean;
   };
   onColumnVisibilityChange?: (column: 'tempo' | 'distance' | 'rpe' | 'percentage', visible: boolean) => void;
+  onMovementFieldChange?: (movementId: string) => void; // Track dirty movements in logging mode
 }
 
 export function RoundEditor({
@@ -59,7 +60,8 @@ export function RoundEditor({
   isDragging,
   isDropTarget,
   visibleColumns,
-  onColumnVisibilityChange
+  onColumnVisibilityChange,
+  onMovementFieldChange
 }: RoundEditorProps) {
   
   // Movement drag and drop state
@@ -315,7 +317,11 @@ export function RoundEditor({
                 movements={movements}
                 categories={categories}
                 clientId={clientId}
-                onUpdate={(updatedUsage) => updateMovementUsage(usageIndex, updatedUsage)}
+                onUpdate={(updatedUsage) => {
+                  updateMovementUsage(usageIndex, updatedUsage);
+                  // Use the latest movement id so dirty tracking follows the new selection
+                  onMovementFieldChange?.(updatedUsage.movementId || usage.movementId);
+                }}
                 onRemove={() => removeMovementUsage(usageIndex)}
                 canDelete={true}
                 onDragStart={handleMovementDragStart}

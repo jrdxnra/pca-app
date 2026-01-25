@@ -215,23 +215,113 @@ export async function updateRecentExercisePerformance(
   clientId: string,
   movementId: string,
   weight: string,
-  repRange: string
+  repRange: string,
+  estimatedOneRepMax: number,
+  rpe?: number,
+  usedRPECalculation?: boolean
 ): Promise<void> {
   try {
     const client = await getClient(clientId);
     if (!client) throw new Error('Client not found');
 
+    // Get existing performance data for this movement
+    const existingPerformance = client.recentExercisePerformance?.[movementId];
+    
+    // Parse rep range to get numeric rep count
+    let repCount = 0;
+    if (typeof repRange === 'string') {
+      if (repRange.includes('-')) {
+        const [min, max] = repRange.split('-').map(r => parseInt(r.trim()));
+        repCount = Math.round((min + max) / 2);
+      } else {
+        repCount = parseInt(repRange);
+      }
+    }
+    
+    // Check if this is a new PR (highest 1RM for this movement)
+    const isPR = !existingPerformance || estimatedOneRepMax > (existingPerformance.estimatedOneRepMax || 0);
+
+    // Create new history entry
+    const newHistoryEntry = {
+      estimatedOneRepMax,
+      weight,
+      reps: repCount,
+      rpe,
+      usedRPECalculation: usedRPECalculation || false,
+      date: Timestamp.now(),
+      isPR
+    };
+
+    // Build the updated performance object
+    // Helper to remove undefined fields from a performance record
+    const sanitizePerformance = (perf: RecentExercisePerformance): RecentExercisePerformance => {
+      const cleanHistory = (perf.history || []).map(entry => {
+        return Object.entries(entry).reduce((acc, [key, value]) => {
+          if (value !== undefined) (acc as any)[key] = value;
+          return acc;
+        }, {} as typeof entry);
+      });
+
+      const cleanPerf = Object.entries(perf).reduce((acc, [key, value]) => {
+        if (key === 'history') {
+          (acc as any)[key] = cleanHistory;
+          return acc;
+        }
+        if (value !== undefined) (acc as any)[key] = value;
+        return acc;
+      }, {} as Partial<RecentExercisePerformance>);
+
+      // Type cast back after cleaning
+      return cleanPerf as RecentExercisePerformance;
+    };
+
+    // Clean existing performance map to avoid undefined values
+    const sanitizedExistingMap: Record<string, RecentExercisePerformance> = {};
+    if (client.recentExercisePerformance) {
+      for (const [mvId, perf] of Object.entries(client.recentExercisePerformance)) {
+        if (perf) {
+          sanitizedExistingMap[mvId] = sanitizePerformance(perf as RecentExercisePerformance);
+        }
+      }
+    }
+
+    // Build new entry and sanitize it
+    const cleanHistoryEntry = sanitizePerformance({
+      ...newHistoryEntry,
+      movementId,
+      weight,
+      repRange,
+      estimatedOneRepMax,
+      lastUsedDate: Timestamp.now(),
+      history: []
+    } as unknown as RecentExercisePerformance).history?.[0] || newHistoryEntry;
+
     const performance: RecentExercisePerformance = {
       movementId,
       weight,
       repRange,
+      estimatedOneRepMax,
       lastUsedDate: Timestamp.now(),
+      history: [
+        cleanHistoryEntry,
+        ...(existingPerformance?.history || []).map(entry => sanitizePerformance({
+          ...(entry as any),
+          movementId,
+          weight,
+          repRange,
+          estimatedOneRepMax,
+          lastUsedDate: Timestamp.now(),
+          history: []
+        } as unknown as RecentExercisePerformance)).slice(0, 49)
+      ]
     };
+
+    const cleanPerformance = sanitizePerformance(performance);
 
     await updateClient(clientId, {
       recentExercisePerformance: {
-        ...(client.recentExercisePerformance || {}),
-        [movementId]: performance,
+        ...sanitizedExistingMap,
+        [movementId]: cleanPerformance,
       },
     });
   } catch (error) {

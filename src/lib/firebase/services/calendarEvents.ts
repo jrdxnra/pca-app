@@ -31,7 +31,10 @@ export async function getCalendarEventsByDateRange(
   // This ensures all calendar events come from Google Calendar as the single source of truth
   
   try {
+    console.log('[getCalendarEventsByDateRange] Fetching events for:', { start: startDate.toISOString(), end: endDate.toISOString() });
+    
     const isGoogleCalendarConnected = await checkGoogleCalendarAuth();
+    console.log('[getCalendarEventsByDateRange] Google Calendar connected:', isGoogleCalendarConnected);
     
     if (!isGoogleCalendarConnected) {
       console.warn('⚠️ Google Calendar is not connected. Calendar events will not be available.');
@@ -47,6 +50,7 @@ export async function getCalendarEventsByDateRange(
     });
     
     const calendarId = config.selectedCalendarId || 'primary';
+    console.log('[getCalendarEventsByDateRange] Using calendar ID:', calendarId);
     
     // Fetch from Google Calendar API (ONLY source)
     const googleEvents = await fetchGoogleCalendarEvents(
@@ -54,6 +58,7 @@ export async function getCalendarEventsByDateRange(
       endDate,
       calendarId
     );
+    console.log('[getCalendarEventsByDateRange] Fetched events from Google:', googleEvents.length);
     
     // Convert Google Calendar API format to our format
     const events: GoogleCalendarEvent[] = googleEvents.map((event: any) => {
@@ -86,6 +91,7 @@ export async function getCalendarEventsByDateRange(
       };
     });
     
+    console.log('[getCalendarEventsByDateRange] Returning events:', events.length);
     return events;
   } catch (error) {
     console.error('❌ Error fetching calendar events:', error);

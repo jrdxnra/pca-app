@@ -15,6 +15,8 @@ import { getWorkoutLogByScheduledWorkout, upsertWorkoutLog } from '@/lib/firebas
 import { updateRecentExercisePerformance } from '@/lib/firebase/services/clients';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
+import { calculateOneRepMax, calculateWeightFromOneRepMax, calculateTuchscherer } from '@/lib/utils/rpe-calculator';
+import { getRecentExercisePerformance } from '@/lib/firebase/services/clients';
 import { format } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 
@@ -29,6 +31,18 @@ interface ExerciseActuals {
   movementId: string;
   sets: ActualSet[];
 }
+
+// Utility function for unit conversion
+const convertWeight = (weight: number, fromUnit: 'lbs' | 'kg', toUnit: 'lbs' | 'kg'): number => {
+  if (fromUnit === toUnit) return weight;
+  if (fromUnit === 'lbs' && toUnit === 'kg') {
+    return Math.round(weight / 2.205 * 10) / 10; // Convert lbs to kg, round to 1 decimal
+  }
+  if (fromUnit === 'kg' && toUnit === 'lbs') {
+    return Math.round(weight * 2.205 * 10) / 10; // Convert kg to lbs, round to 1 decimal
+  }
+  return weight;
+};
 
 export default function WorkoutViewPage() {
   const router = useRouter();
@@ -46,6 +60,7 @@ export default function WorkoutViewPage() {
   const [actuals, setActuals] = useState<Record<string, ExerciseActuals>>({});
   const [athleteNotes, setAthleteNotes] = useState('');
   const [sessionRPE, setSessionRPE] = useState<string>('');
+  const [suggestedWeights, setSuggestedWeights] = useState<Record<string, { value: string; unit: string }>>({}); // key: movementId, value: { suggested weight, unit }
 
   useEffect(() => {
     fetchMovements();
@@ -57,6 +72,113 @@ export default function WorkoutViewPage() {
       loadWorkout();
     }
   }, [workoutId]);
+
+  // Load suggested weights based on client's 1RM history
+  useEffect(() => {
+    const loadSuggestedWeights = async () => {
+      if (!clientId || !workout?.rounds) return;
+
+      try {
+        const weights: Record<string, { value: string; unit: string }> = {};
+
+        // Get unique movements from the workout
+        const uniqueMovements = new Map<string, ClientWorkoutMovementUsage>();
+        workout.rounds.forEach(round => {
+          round.movementUsages?.forEach(usage => {
+            if (!uniqueMovements.has(usage.movementId)) {
+              uniqueMovements.set(usage.movementId, usage);
+            }
+          });
+        });
+
+        console.log('[Suggestions] Loading for movements:', Array.from(uniqueMovements.keys()));
+
+        // Calculate suggested weight for each movement
+        for (const [movementId, usage] of uniqueMovements.entries()) {
+          try {
+            const performance = await getRecentExercisePerformance(clientId, movementId);
+            console.log(`[Suggestions] Movement ${movementId}:`, performance);
+            
+            if (performance?.estimatedOneRepMax) {
+              let suggestedWeight = 0;
+              
+              // Priority order for calculating suggested weight:
+              
+              // 1. TEMPO: If tempo is set, use 67.5% of 1RM (midpoint of 65-70%)
+              if (usage.targetWorkload.useTempo && usage.targetWorkload.tempo) {
+                suggestedWeight = performance.estimatedOneRepMax * 0.675;
+              }
+              // 2. PERCENTAGE: If percentage is set, use that percentage of 1RM
+              else if (usage.targetWorkload.usePercentage && usage.targetWorkload.percentage) {
+                suggestedWeight = performance.estimatedOneRepMax * (usage.targetWorkload.percentage / 100);
+              }
+              // 3. RPE + REPS: If both RPE and reps are prescribed, use Tuchscherer (most accurate)
+              else if (usage.targetWorkload.useRPE && usage.targetWorkload.rpe && usage.targetWorkload.useReps && usage.targetWorkload.reps) {
+                const rpeStr = usage.targetWorkload.rpe;
+                const rpeValue = parseFloat(rpeStr);
+                const repStr = usage.targetWorkload.reps;
+                const repParts = repStr.split('-').map(r => parseInt(r.trim()));
+                const targetReps = repParts.length > 1 
+                  ? Math.round((repParts[0] + repParts[1]) / 2)
+                  : repParts[0];
+
+                if (!isNaN(rpeValue) && targetReps > 0) {
+                  // Tuchscherer formula takes RPE into account
+                  suggestedWeight = calculateTuchscherer(
+                    performance.estimatedOneRepMax,
+                    targetReps,
+                    rpeValue
+                  );
+                }
+              }
+              // 4. REPS ONLY: If only reps are prescribed, use rep-based formula
+              else if (usage.targetWorkload.useReps && usage.targetWorkload.reps) {
+                const repStr = usage.targetWorkload.reps;
+                const repParts = repStr.split('-').map(r => parseInt(r.trim()));
+                const targetReps = repParts.length > 1 
+                  ? Math.round((repParts[0] + repParts[1]) / 2)
+                  : repParts[0];
+
+                if (targetReps > 0) {
+                  suggestedWeight = calculateWeightFromOneRepMax(
+                    performance.estimatedOneRepMax,
+                    targetReps
+                  );
+                }
+              }
+              // 5. RPE ONLY: Can't calculate weight from RPE alone without reps, so skip
+              
+              if (suggestedWeight > 0) {
+                // Determine the unit of the stored 1RM (assume it's the same as the current usage)
+                // If units don't match, convert
+                const storedUnit = (usage.targetWorkload.weightMeasure || 'lbs') as 'lbs' | 'kg';
+                if (storedUnit !== usage.targetWorkload.weightMeasure) {
+                  suggestedWeight = convertWeight(
+                    suggestedWeight,
+                    storedUnit,
+                    usage.targetWorkload.weightMeasure as 'lbs' | 'kg'
+                  );
+                }
+                
+                weights[movementId] = {
+                  value: Math.round(suggestedWeight * 10) / 10, // Round to 1 decimal
+                  unit: usage.targetWorkload.weightMeasure || 'lbs'
+                };
+              }
+            }
+          } catch (error) {
+            console.error(`Error loading performance for movement ${movementId}:`, error);
+          }
+        }
+
+        setSuggestedWeights(weights);
+      } catch (error) {
+        console.error('Error loading suggested weights:', error);
+      }
+    };
+
+    loadSuggestedWeights();
+  }, [clientId, workout]);
 
   const loadWorkout = async () => {
     if (!workoutId) return;
@@ -266,15 +388,18 @@ export default function WorkoutViewPage() {
       });
       
       // Update recent exercise performance for each exercise
+      console.log('[Save] Updating recent performance for exercises:', exercises);
       for (const exercise of exercises) {
         if (exercise.actualSets.length > 0 && exercise.movementId) {
           // Calculate average weight (handle cases where weight might vary)
           const weights = exercise.actualSets.map(s => s.weight).filter(w => w > 0);
           const reps = exercise.actualSets.map(s => s.reps).filter(r => r > 0);
+          const rpeValues = exercise.actualSets.map(s => s.actualRPE).filter(r => r > 0);
+          
+          console.log(`[Save] Exercise ${exercise.movementId}: weights=${weights}, reps=${reps}`);
           
           if (weights.length > 0 && reps.length > 0) {
             // Use the first set's weight as the representative weight (most common pattern)
-            // Or calculate average if needed
             const avgWeight = weights.reduce((sum, w) => sum + w, 0) / weights.length;
             const weightStr = Math.round(avgWeight).toString();
             
@@ -283,9 +408,42 @@ export default function WorkoutViewPage() {
             const maxReps = Math.max(...reps);
             const repRange = minReps === maxReps ? minReps.toString() : `${minReps}-${maxReps}`;
             
-            // Update client's recent performance
+            // Calculate 1RM using multiple formulas and average them
+            // Use the average weight and a representative rep count
+            const repForCalculation = Math.round((minReps + maxReps) / 2);
+            
+            // Use RPE if available for more accurate 1RM calculation
+            const representativeRPE = rpeValues.length > 0 ? rpeValues[0] : undefined;
+            
+            const oneRepMaxResults = calculateOneRepMax(
+              Math.round(avgWeight), 
+              repForCalculation,
+              representativeRPE
+            );
+            
+            // Get the average 1RM (last result in the array is always the average)
+            const averageResult = oneRepMaxResults.find(r => r.formula === 'average');
+            const estimatedOneRepMax = averageResult?.estimatedOneRepMax || 
+                                       oneRepMaxResults[0]?.estimatedOneRepMax || 
+                                       Math.round(avgWeight);
+            
+            // Determine if Tuchscherer RPE formula was used in the calculation
+            const usedRPE = representativeRPE !== undefined && oneRepMaxResults.some(r => r.formula === 'tuchscherer');
+            
+            console.log(`[Save] Updating perf: movement=${exercise.movementId}, weight=${weightStr}, reps=${repRange}, 1RM=${estimatedOneRepMax}`);
+            
+            // Update client's recent performance with calculated 1RM and RPE
             try {
-              await updateRecentExercisePerformance(clientId, exercise.movementId, weightStr, repRange);
+              await updateRecentExercisePerformance(
+                clientId, 
+                exercise.movementId, 
+                weightStr, 
+                repRange,
+                estimatedOneRepMax,
+                representativeRPE,  // Pass RPE value
+                usedRPE  // Pass flag indicating if RPE calculation was used
+              );
+              console.log(`[Save] Successfully updated performance for ${exercise.movementId}`);
             } catch (error) {
               console.error(`Error updating recent performance for movement ${exercise.movementId}:`, error);
               // Don't fail the entire save if this fails
@@ -428,7 +586,12 @@ export default function WorkoutViewPage() {
 
                     {/* Prescribed */}
                     <div className="mb-4 p-3 bg-muted rounded">
-                      <p className="text-sm font-medium mb-2">Prescribed:</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-medium">Prescribed:</p>
+                        <Badge variant="outline" className="text-xs">
+                          💡 Suggestions based on these values
+                        </Badge>
+                      </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                         {usage.targetWorkload.useReps && (
                           <div>
@@ -464,7 +627,10 @@ export default function WorkoutViewPage() {
 
                     {/* Actual Sets */}
                     <div>
-                      <p className="text-sm font-medium mb-3">Your Actual Performance:</p>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-sm font-medium">Your Actual Performance:</p>
+                        <span className="text-xs text-muted-foreground">Log what actually happened</span>
+                      </div>
                       <div className="space-y-3">
                         {Array.from({ length: round.sets || 1 }).map((_, setIndex) => (
                           <div key={setIndex} className="flex gap-2 items-center p-2 border rounded">
@@ -475,7 +641,11 @@ export default function WorkoutViewPage() {
                                   <Label className="text-xs">Weight ({usage.targetWorkload.weightMeasure})</Label>
                                   <Input
                                     type="text"
-                                    placeholder={usage.targetWorkload.weight || '0'}
+                                    placeholder={
+                                      suggestedWeights[usage.movementId]
+                                        ? `Suggested: ${suggestedWeights[usage.movementId].value}`
+                                        : usage.targetWorkload.weight || '0'
+                                    }
                                     value={exerciseActuals.sets[setIndex]?.weight || ''}
                                     onChange={(e) => handleSetChange(round.ordinal, usageIndex, setIndex, 'weight', e.target.value)}
                                     className="h-8"
@@ -496,7 +666,12 @@ export default function WorkoutViewPage() {
                               )}
                               {usage.targetWorkload.useRPE && (
                                 <div>
-                                  <Label className="text-xs">RPE</Label>
+                                  <Label className="text-xs">
+                                    Actual RPE
+                                    {usage.targetWorkload.rpe && (
+                                      <span className="text-muted-foreground ml-1">(prescribed: {usage.targetWorkload.rpe})</span>
+                                    )}
+                                  </Label>
                                   <Input
                                     type="text"
                                     placeholder={usage.targetWorkload.rpe || '0'}

@@ -54,10 +54,20 @@ export interface PersonalRecord {
 
 export interface RecentExercisePerformance {
   movementId: string;
-  weight: string; // e.g., "135", "185 lbs"
-  repRange: string; // e.g., "10", "8-12", "AMRAP"
+  weight: string; // Most recent weight used
+  repRange: string; // Most recent rep range
+  estimatedOneRepMax: number; // Current estimated 1RM (average of all formulas, or RPE-based if available)
   lastUsedDate: Timestamp;
-  // Store the most recent performance (can extend to history later if needed)
+  // 1RM History for tracking progression and graphing
+  history?: Array<{
+    estimatedOneRepMax: number;
+    weight: string;
+    reps: number;
+    rpe?: number; // RPE if provided
+    usedRPECalculation?: boolean; // true if Tuchscherer RPE formula was used
+    date: Timestamp;
+    isPR?: boolean; // Personal record flag (highest 1RM for this movement)
+  }>;
 }
 
 export interface ClientRecentPerformance {

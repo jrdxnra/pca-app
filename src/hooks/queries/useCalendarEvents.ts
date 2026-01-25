@@ -11,8 +11,12 @@ export function useCalendarEvents(
   endDate: Date | null | undefined,
   options?: Omit<UseQueryOptions<GoogleCalendarEvent[], Error>, 'queryKey' | 'queryFn'>
 ) {
+  // Convert dates to ISO strings for stable query key (Date objects have different references each render)
+  const startDateString = startDate?.toISOString();
+  const endDateString = endDate?.toISOString();
+  
   return useQuery({
-    queryKey: queryKeys.calendarEvents.list({ start: startDate || undefined, end: endDate || undefined }),
+    queryKey: queryKeys.calendarEvents.list({ start: startDateString, end: endDateString }),
     queryFn: () => {
       if (!startDate || !endDate) return Promise.resolve([]);
       return getCalendarEventsByDateRange(startDate, endDate);

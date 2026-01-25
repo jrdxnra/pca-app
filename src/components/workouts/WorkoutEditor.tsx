@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, GripVertical, X, Save } from 'lucide-react';
+import { Plus, Trash2, GripVertical, X, Save, ClipboardList, TrendingUp } from 'lucide-react';
 import {
   ClientWorkout,
   ClientWorkoutWarmup,
@@ -118,6 +118,20 @@ import { RoundEditor } from './RoundEditor';
 import { MovementUsageRow } from './MovementUsageRow';
 import { ColumnVisibilityToggle } from './ColumnVisibilityToggle';
 import { Skeleton } from '@/components/ui/skeleton';
+import { calculateOneRepMax, calculateTuchscherer, calculateWeightFromOneRepMax } from '@/lib/utils/rpe-calculator';
+import { updateRecentExercisePerformance, getRecentExercisePerformance } from '@/lib/firebase/services/clients';
+
+// Helper to convert between weight units
+const convertWeight = (weight: number, fromUnit: 'lbs' | 'kg', toUnit: 'lbs' | 'kg'): number => {
+  if (fromUnit === toUnit) return weight;
+  if (fromUnit === 'lbs' && toUnit === 'kg') {
+    return Math.round(weight / 2.205 * 10) / 10; // Convert lbs to kg, round to 1 decimal
+  }
+  if (fromUnit === 'kg' && toUnit === 'lbs') {
+    return Math.round(weight * 2.205 * 10) / 10; // Convert kg to lbs, round to 1 decimal
+  }
+  return weight;
+};
 
 const DEFAULT_TARGET_WORKLOAD: ClientWorkoutTargetWorkload = {
   useWeight: false,
@@ -138,13 +152,14 @@ interface WorkoutEditorProps {
   workout?: ClientWorkout | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (workoutData: Partial<ClientWorkout>) => Promise<void>;
+  onSave: (workoutData: Partial<ClientWorkout>, options?: { skipClose?: boolean }) => Promise<void>;
   isCreating?: boolean;
   isInline?: boolean;
   expandedInline?: boolean; // Full editor inline (for day view)
   initialRounds?: ClientWorkoutRound[];
   appliedTemplateId?: string;
   eventId?: string; // Calendar event ID for time sync
+  clientId?: string; // Client ID for performance logging
   // External column visibility control (optional - for page-level control)
   externalVisibleColumns?: {
     tempo?: boolean;
@@ -219,6 +234,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   initialRounds,
   appliedTemplateId,
   eventId,
+  clientId,
   hideTopActionBar = false,
   externalVisibleColumns,
   onExternalColumnVisibilityChange,
@@ -250,6 +266,18 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   const [expandedRounds, setExpandedRounds] = useState<Record<number, boolean>>({});
   const [currentTemplateId, setCurrentTemplateId] = useState<string | undefined>(appliedTemplateId);
   const [hasSyncedTime, setHasSyncedTime] = useState(false);
+
+  // Performance logging state
+  const [isLoggingMode, setIsLoggingMode] = useState(false);
+  const [prescribedRounds, setPrescribedRounds] = useState<ClientWorkoutRound[]>([]);
+  const [dirtyMovementIds, setDirtyMovementIds] = useState<Set<string>>(new Set());
+  const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [performanceData, setPerformanceData] = useState<Record<string, Array<{
+    weight?: string;
+    reps?: string;
+    rpe?: string;
+  }>>>({});
+  const [suggestedWeights, setSuggestedWeights] = useState<Record<string, { value: string; unit: string }>>({});
 
   // Column visibility state (use external if provided, otherwise internal)
   const [internalVisibleColumns, setInternalVisibleColumns] = useState<{
@@ -415,9 +443,32 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         if (draft.currentTemplateId) {
           setCurrentTemplateId(draft.currentTemplateId);
         }
+      } else {
+        // No draft - try to pre-fill first movement from last workout
+        if (clientId && isCreating) {
+          const savedFirstMovementId = localStorage.getItem(`pca-first-movement-${clientId}`);
+          if (savedFirstMovementId && rounds.length > 0 && !rounds[0].movementUsages?.[0]?.movementId) {
+            // Get the category for this movement from the movements list
+            const movements = useMovementStore.getState().movements;
+            const movement = movements.find(m => m.id === savedFirstMovementId);
+            if (movement) {
+              // Pre-populate the first movement in the first round
+              const updatedRounds = [...rounds];
+              if (updatedRounds[0] && updatedRounds[0].movementUsages?.[0]) {
+                updatedRounds[0].movementUsages[0] = {
+                  ...updatedRounds[0].movementUsages[0],
+                  movementId: savedFirstMovementId,
+                  categoryId: movement.categoryId,
+                };
+                setRounds(updatedRounds);
+                console.log('[WorkoutEditor] Pre-filled first movement:', savedFirstMovementId);
+              }
+            }
+          }
+        }
       }
     }
-  }, [draftKey]);
+  }, [draftKey, clientId, isCreating, rounds.length]);
 
   // Draft saving - save draft when form changes (debounced)
   const draftTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -477,6 +528,100 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   useEffect(() => {
     setHasSyncedTime(false);
   }, [eventId]);
+
+  // Load suggested weights when movements change (always available for reference)
+  useEffect(() => {
+    const loadSuggestedWeights = async () => {
+      if (!clientId || !rounds.length) {
+        setSuggestedWeights({});
+        return;
+      }
+
+      try {
+        const weights: Record<string, { value: string; unit: string }> = {};
+
+        // Get unique movements from the workout
+        const uniqueMovements = new Map<string, ClientWorkoutMovementUsage>();
+        rounds.forEach(round => {
+          round.movementUsages?.forEach(usage => {
+            if (!uniqueMovements.has(usage.movementId)) {
+              uniqueMovements.set(usage.movementId, usage);
+            }
+          });
+        });
+
+        // Calculate suggested weight for each movement
+        for (const [movementId, usage] of uniqueMovements.entries()) {
+          try {
+            const performance = await getRecentExercisePerformance(clientId, movementId);
+            
+            if (performance?.estimatedOneRepMax) {
+              let suggestedWeight = 0;
+              
+              // Priority order for calculating suggested weight:
+              
+              // 1. TEMPO: If tempo is set, use 67.5% of 1RM (midpoint of 65-70%)
+              if (usage.targetWorkload.useTempo && usage.targetWorkload.tempo) {
+                suggestedWeight = performance.estimatedOneRepMax * 0.675;
+              }
+              // 2. PERCENTAGE: If percentage is set, use that percentage of 1RM
+              else if (usage.targetWorkload.usePercentage && usage.targetWorkload.percentage) {
+                suggestedWeight = performance.estimatedOneRepMax * (usage.targetWorkload.percentage / 100);
+              }
+              // 3. RPE + REPS: If both RPE and reps are prescribed, use Tuchscherer
+              else if (usage.targetWorkload.useRPE && usage.targetWorkload.rpe && usage.targetWorkload.useReps && usage.targetWorkload.reps) {
+                const rpeValue = parseFloat(usage.targetWorkload.rpe);
+                const repParts = usage.targetWorkload.reps.split('-').map(r => parseInt(r.trim()));
+                const targetReps = repParts.length > 1 
+                  ? Math.round((repParts[0] + repParts[1]) / 2)
+                  : repParts[0];
+
+                if (!isNaN(rpeValue) && targetReps > 0) {
+                  suggestedWeight = calculateTuchscherer(
+                    performance.estimatedOneRepMax,
+                    targetReps,
+                    rpeValue
+                  );
+                }
+              }
+              // 4. REPS ONLY: If only reps are prescribed, use rep-based formula
+              else if (usage.targetWorkload.useReps && usage.targetWorkload.reps) {
+                const repsValue = typeof usage.targetWorkload.reps === 'number' 
+                  ? usage.targetWorkload.reps.toString() 
+                  : usage.targetWorkload.reps;
+                const repParts = repsValue.split('-').map(r => parseInt(r.trim()));
+                const targetReps = repParts.length > 1 
+                  ? Math.round((repParts[0] + repParts[1]) / 2)
+                  : repParts[0];
+
+                if (targetReps > 0) {
+                  suggestedWeight = calculateWeightFromOneRepMax(
+                    performance.estimatedOneRepMax,
+                    targetReps
+                  );
+                }
+              }
+              
+              if (suggestedWeight > 0) {
+                weights[movementId] = {
+                  value: Math.round(suggestedWeight * 10) / 10, // Round to 1 decimal
+                  unit: usage.targetWorkload.weightMeasure || 'lbs'
+                };
+              }
+            }
+          } catch (error) {
+            console.error(`Error loading performance for movement ${movementId}:`, error);
+          }
+        }
+
+        setSuggestedWeights(weights);
+      } catch (error) {
+        console.error('Error loading suggested weights:', error);
+      }
+    };
+
+    loadSuggestedWeights();
+  }, [clientId, rounds]);
 
   // Update calendar event when time changes (if eventId is present)
   const handleTimeChange = async (newTime: string) => {
@@ -787,9 +932,117 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     setCurrentTemplateId(newTemplateId);
   };
 
+  // Helper: Check if a specific movement's logged values differ from prescribed baseline
+  const hasMovementChanged = (
+    movementId: string,
+    currentRounds: ClientWorkoutRound[],
+    baselineRounds: ClientWorkoutRound[]
+  ): boolean => {
+    if (!baselineRounds || baselineRounds.length === 0) {
+      return true; // No baseline, any data is a change
+    }
+
+    // Find all instances of this movement in baseline
+    const baselineValues: Array<{ weight?: string; reps?: string; rpe?: string }> = [];
+    for (const round of baselineRounds) {
+      for (const usage of round.movementUsages) {
+        if (usage.movementId === movementId) {
+          baselineValues.push({
+            weight: usage.targetWorkload.weight,
+            reps: usage.targetWorkload.reps,
+            rpe: usage.targetWorkload.rpe
+          });
+        }
+      }
+    }
+
+    // Find all instances of this movement in current
+    const currentValues: Array<{ weight?: string; reps?: string; rpe?: string }> = [];
+    for (const round of currentRounds) {
+      for (const usage of round.movementUsages) {
+        if (usage.movementId === movementId) {
+          currentValues.push({
+            weight: usage.targetWorkload.weight,
+            reps: usage.targetWorkload.reps,
+            rpe: usage.targetWorkload.rpe
+          });
+        }
+      }
+    }
+
+    // Compare - if different counts or any values differ, it's changed
+    if (currentValues.length !== baselineValues.length) {
+      console.log(`[WorkoutEditor] Movement ${movementId} count changed: ${baselineValues.length} -> ${currentValues.length}`);
+      return true;
+    }
+
+    for (let i = 0; i < currentValues.length; i++) {
+      const current = currentValues[i];
+      const baseline = baselineValues[i];
+      if (current.weight !== baseline.weight || 
+          current.reps !== baseline.reps || 
+          current.rpe !== baseline.rpe) {
+        console.log(`[WorkoutEditor] Movement ${movementId} set ${i} changed`, { baseline, current });
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  // Debounced auto-save for logging mode edits
+  const triggerAutoSave = () => {
+    if (!isLoggingMode) return; // Only auto-save in logging mode
+
+    // Cancel any pending auto-save
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout);
+    }
+
+    // Schedule auto-save after 2.5 seconds of no edits
+    const timeout = setTimeout(async () => {
+      if (!validateForm()) {
+        console.log('[WorkoutEditor] Form validation failed before auto-save');
+        return;
+      }
+
+      try {
+        console.log('[WorkoutEditor] Auto-saving logging edits...');
+        const workoutTitle = title.trim() || (isInline ? 'Workout' : '');
+        const workoutData: Partial<ClientWorkout> = {
+          title: workoutTitle,
+          rounds,
+          isModified: true,
+        };
+
+        if (notes.trim()) workoutData.notes = notes.trim();
+        if (time.trim()) workoutData.time = time.trim();
+        if (warmups.length > 0) workoutData.warmups = warmups;
+        if (currentTemplateId) workoutData.appliedTemplateId = currentTemplateId;
+        workoutData.visibleColumns = visibleColumns;
+
+        console.log('[WorkoutEditor] Auto-save data:', workoutData);
+        await onSave(workoutData);
+        console.log('[WorkoutEditor] Auto-save completed successfully');
+        setAutoSaveTimeout(null);
+      } catch (error) {
+        console.error('[WorkoutEditor] Error during auto-save:', error);
+        // Don't throw - auto-save failures shouldn't break the UI
+      }
+    }, 2500); // 2.5 second debounce
+
+    setAutoSaveTimeout(timeout);
+  };
+
   // Save handler
   const handleSave = async () => {
     console.log('handleSave called');
+    
+    // Cancel any pending auto-save since we're doing a manual save
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout);
+      setAutoSaveTimeout(null);
+    }
     console.log('Validation result:', validateForm());
 
     if (!validateForm()) {
@@ -829,6 +1082,96 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
       console.log('Workout data to save:', workoutData);
       await onSave(workoutData);
       console.log('Save completed, closing editor');
+
+      // Save the first movement for next workout (for quick reference)
+      if (clientId && rounds.length > 0 && rounds[0].movementUsages?.length > 0) {
+        const firstMovementId = rounds[0].movementUsages[0].movementId;
+        if (firstMovementId) {
+          try {
+            localStorage.setItem(`pca-first-movement-${clientId}`, firstMovementId);
+            console.log('[WorkoutEditor] Saved first movement for next workout:', firstMovementId);
+          } catch (e) {
+            console.warn('Failed to save first movement:', e);
+          }
+        }
+      }
+
+      // Calculate and save 1RM in logging mode for all movements with weight+reps
+      if (isLoggingMode && clientId && prescribedRounds.length > 0) {
+        console.log('[WorkoutEditor] Logging mode - calculating 1RM for movements');
+
+        const movementsSeen = new Set<string>();
+
+        for (const round of rounds) {
+          for (const usage of round.movementUsages) {
+            const movementId = usage.movementId;
+            if (!movementId || movementsSeen.has(movementId)) continue;
+            movementsSeen.add(movementId);
+
+            try {
+              const weights: number[] = [];
+              const reps: number[] = [];
+              const rpeValues: number[] = [];
+
+              for (const r of rounds) {
+                for (const u of r.movementUsages) {
+                  if (u.movementId !== movementId) continue;
+
+                  const weight = u.targetWorkload.weight ? parseFloat(u.targetWorkload.weight) : 0;
+                  const rep = u.targetWorkload.reps ? parseInt(u.targetWorkload.reps) : 0;
+                  const rpe = u.targetWorkload.rpe ? parseFloat(u.targetWorkload.rpe) : undefined;
+
+                  if (weight > 0 && rep > 0) {
+                    weights.push(weight);
+                    reps.push(rep);
+                    if (rpe !== undefined && rpe > 0) rpeValues.push(rpe);
+                  }
+                }
+              }
+
+              if (weights.length === 0 || reps.length === 0) {
+                console.log(`[WorkoutEditor] Movement ${movementId} has no weight+reps to calculate 1RM`);
+                continue;
+              }
+
+              const avgWeight = weights.reduce((sum, w) => sum + w, 0) / weights.length;
+              const weightStr = Math.round(avgWeight).toString();
+              const minReps = Math.min(...reps);
+              const maxReps = Math.max(...reps);
+              const repRange = minReps === maxReps ? minReps.toString() : `${minReps}-${maxReps}`;
+              const repForCalculation = Math.round((minReps + maxReps) / 2);
+              const representativeRPE = rpeValues.length > 0 ? rpeValues[0] : undefined;
+
+              const oneRepMaxResults = calculateOneRepMax(
+                Math.round(avgWeight),
+                repForCalculation,
+                representativeRPE
+              );
+
+              const averageResult = oneRepMaxResults.find(r => r.formula === 'average');
+              const estimatedOneRepMax = averageResult?.estimatedOneRepMax ||
+                                        oneRepMaxResults[0]?.estimatedOneRepMax ||
+                                        Math.round(avgWeight);
+
+              const usedRPE = representativeRPE !== undefined && oneRepMaxResults.some(r => r.formula === 'tuchscherer');
+
+              console.log(`[WorkoutEditor] Saving 1RM: movement=${movementId}, weight=${weightStr}, reps=${repRange}, 1RM=${estimatedOneRepMax}`);
+
+              await updateRecentExercisePerformance(
+                clientId,
+                movementId,
+                weightStr,
+                repRange,
+                estimatedOneRepMax,
+                representativeRPE,
+                usedRPE
+              );
+            } catch (error) {
+              console.error(`[WorkoutEditor] Error saving 1RM for movement ${movementId}:`, error);
+            }
+          }
+        }
+      }
       
       // Clear draft on successful save
       if (draftKey) {
@@ -840,6 +1183,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     } catch (error) {
       console.error('Error saving workout:', error);
       setErrors({ general: 'Failed to save workout. Please try again.' });
+      // Don't close on error - let user see the error message
     } finally {
       setIsLoading(false);
     }
@@ -864,6 +1208,13 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         {!hideTopActionBar && (
           <div className="flex items-center justify-between px-2 py-1.5 bg-gray-100 border-b border-gray-200">
             <div className="flex items-center gap-2">
+              {/* Mode Indicator Badge */}
+              {clientId && (
+                <Badge variant={isLoggingMode ? "default" : "secondary"} className="text-xs">
+                  {isLoggingMode ? '📊 Logging Mode' : '📋 Prescribed Mode'}
+                </Badge>
+              )}
+              
               <Button
                 type="button"
                 variant="outline"
@@ -873,6 +1224,20 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
               >
                 Cancel
               </Button>
+              
+              {/* Mode Toggle - Show Prescribed vs Logging view */}
+              {clientId && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={isLoggingMode ? "default" : "outline"}
+                  onClick={() => setIsLoggingMode(!isLoggingMode)}
+                  className="h-7 text-xs"
+                >
+                  {isLoggingMode ? '📊 Logging' : '📋 Prescribed'}
+                </Button>
+              )}
+              
               <Button
                 type="button"
                 size="sm"
@@ -894,8 +1259,94 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           </div>
         )}
 
-        {/* Content */}
-        <div className="space-y-0">
+        {/* Content - with integrated edge toggle on right side */}
+        <div className="space-y-0 relative">
+          {/* Mode Glow Indicator - Subtle elegant fade */}
+          {clientId && (
+            <div className="absolute right-0 top-0 bottom-0 w-12 z-10 pointer-events-none">
+              <div className={`absolute right-0 top-0 bottom-0 w-full transition-all duration-500 ${
+                isLoggingMode 
+                  ? 'bg-gradient-to-l from-green-500/15 to-transparent'
+                  : 'bg-gradient-to-l from-blue-500/15 to-transparent'
+              }`} />
+            </div>
+          )}
+          
+          {/* Integrated Mode Toggle - Right edge, half-circle tab facing outward */}
+          {clientId && (
+            <div className="absolute right-0 top-1/3 z-20 transform -translate-y-1/2 translate-x-full">
+              <button
+                onClick={async () => {
+                  const switchingToLogging = !isLoggingMode;
+                  
+                  // When switching TO Logging: save the current workout first, then set baseline
+                  if (switchingToLogging) {
+                    console.log('[WorkoutEditor] Toggling to Logging - auto-saving workout first');
+                    
+                    // Cancel any pending timeout from previous auto-saves
+                    if (autoSaveTimeout) {
+                      clearTimeout(autoSaveTimeout);
+                      setAutoSaveTimeout(null);
+                    }
+                    
+                    // Save the current workout immediately to Firestore
+                    // This ensures if coach closes laptop, workout is persisted
+                    try {
+                      if (!validateForm()) {
+                        console.log('[WorkoutEditor] Form validation failed on toggle');
+                        setErrors({ general: 'Please fix validation errors before switching modes.' });
+                        return;
+                      }
+                      
+                      setIsLoading(true);
+                      
+                      const workoutTitle = title.trim() || (isInline ? 'Workout' : '');
+                      const workoutData: Partial<ClientWorkout> = {
+                        title: workoutTitle,
+                        rounds,
+                        isModified: true,
+                      };
+                      
+                      if (notes.trim()) workoutData.notes = notes.trim();
+                      if (time.trim()) workoutData.time = time.trim();
+                      if (warmups.length > 0) workoutData.warmups = warmups;
+                      if (currentTemplateId) workoutData.appliedTemplateId = currentTemplateId;
+                      workoutData.visibleColumns = visibleColumns;
+                      
+                      console.log('[WorkoutEditor] Auto-saving before logging toggle:', workoutData);
+                      await onSave(workoutData, { skipClose: true });
+                      
+                      // Now set the baseline after successful save
+                      setPrescribedRounds(JSON.parse(JSON.stringify(rounds)));
+                      console.log('[WorkoutEditor] Prescribed baseline set');
+                      setIsLoading(false);
+                    } catch (error) {
+                      console.error('[WorkoutEditor] Error auto-saving on toggle:', error);
+                      setIsLoading(false);
+                      setErrors({ general: 'Failed to save workout before switching modes. Please try again.' });
+                      return;
+                    }
+                  }
+                  
+                  setIsLoggingMode(!isLoggingMode);
+                  setDirtyMovementIds(new Set()); // Reset dirty tracking on mode change
+                }}
+                className={`flex items-center justify-center px-2 py-6 rounded-r-full transition-all duration-500 border-r-2 border-t-2 border-b-2 shadow-md hover:shadow-lg ${
+                  isLoggingMode
+                    ? 'bg-gradient-to-l from-green-50/50 to-white border-green-300 hover:border-green-400'
+                    : 'bg-gradient-to-l from-blue-50/50 to-white border-blue-300 hover:border-blue-400'
+                }`}
+                title={isLoggingMode ? "Switch to Prescribed view" : "Switch to Logging view"}
+              >
+                {isLoggingMode ? (
+                  <TrendingUp className="w-5 h-5 text-green-600" />
+                ) : (
+                  <ClipboardList className="w-5 h-5 text-blue-600" />
+                )}
+              </button>
+            </div>
+          )}
+
           {/* Loading skeleton while movements load */}
           {movementsLoading && movements.length === 0 && (
             <div className="p-4 space-y-4">
@@ -986,7 +1437,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
             </CardContent>
           </Card>
 
-          {/* Rounds */}
+          {/* Rounds - Same UI for both Prescribed and Logging modes */}
           <div className="space-y-0">
             {rounds.map((round, roundIndex) => (
               <RoundEditor
@@ -996,7 +1447,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                 movements={movements}
                 categories={categories}
                 workoutTypes={workoutTypes}
-                clientId={workout?.clientId}
+                clientId={clientId || workout?.clientId}
                 onUpdate={(updatedRound) => updateRound(roundIndex, updatedRound)}
                 onRemove={() => removeRound(roundIndex)}
                 canDelete={rounds.length > 1}
@@ -1008,6 +1459,14 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                 onDragEnd={handleDragEnd}
                 isDragging={draggingIndex === roundIndex}
                 isDropTarget={dropIndex === roundIndex && draggingIndex !== roundIndex}
+                onMovementFieldChange={(movementId) => {
+                  if (isLoggingMode) {
+                    // Mark this movement as dirty in logging mode
+                    setDirtyMovementIds(prev => new Set([...prev, movementId]));
+                    // Trigger debounced auto-save
+                    triggerAutoSave();
+                  }
+                }}
               />
             ))}
 
@@ -1310,176 +1769,6 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     );
   }
 
-  // Modal mode - original layout
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-2xl font-bold">
-            {isCreating ? 'Create Workout' : 'Edit Workout'}
-          </h2>
-          <div className="flex items-center gap-2">
-            {!externalVisibleColumns && (
-              <ColumnVisibilityToggle
-                visibleColumns={visibleColumns}
-                availableColumns={availableColumns}
-                onToggle={handleColumnVisibilityChange}
-              />
-            )}
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* General Error */}
-          {errors.general && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {errors.general}
-            </div>
-          )}
-
-          {/* Basic Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Workout Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="title">Title *</Label>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g., Upper Body Push Day"
-                    className={errors.title ? 'border-red-500' : ''}
-                  />
-                  {errors.title && (
-                    <p className="text-red-500 text-sm mt-1">{errors.title}</p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="time">Time</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={time}
-                    onChange={(e) => handleTimeChange(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="notes">Workout Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="General notes about this workout..."
-                  rows={3}
-                  className={errors.notes ? 'border-red-500' : ''}
-                />
-                {errors.notes && (
-                  <p className="text-red-500 text-sm mt-1">{errors.notes}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="structure">Workout Structure</Label>
-                <Select
-                  value={currentTemplateId || 'none'}
-                  onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select structure" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None (Custom)</SelectItem>
-                    {workoutStructureTemplates.map(template => {
-                      const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
-                      return (
-                        <SelectItem key={template.id} value={template.id}>
-                          <div className="flex items-center gap-2 w-full">
-                            <span>{template.name}</span>
-                            {abbrevList.length > 0 && (
-                              <div className="flex items-center gap-1 ml-auto">
-                                {abbrevList.map((item, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
-                                    style={{ backgroundColor: item.color }}
-                                  >
-                                    {item.abbrev}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-
-
-          {/* Rounds */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Rounds</CardTitle>
-              <Button onClick={addRound} size="sm">
-                <Plus className="w-4 h-4 mr-1.5 icon-add" />
-                Add Round
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {rounds.map((round, index) => (
-                  <RoundEditor
-                    key={index}
-                    round={round}
-                    index={index}
-                    movements={movements}
-                    clientId={workout?.clientId}
-                    categories={categories}
-                    workoutTypes={workoutTypes}
-                    onUpdate={(updatedRound) => updateRound(index, updatedRound)}
-                    onRemove={() => removeRound(index)}
-                    canDelete={rounds.length > 1}
-                    errors={errors}
-                    visibleColumns={visibleColumns}
-                    onColumnVisibilityChange={handleColumnVisibilityChange}
-                  />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
-          <Button variant="outline" onClick={onClose} disabled={isLoading}>
-            Cancel
-          </Button>
-          <Button variant="outline" onClick={handleSave} disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                Save Workout
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+  // Modal mode disabled - use inline/expanded inline mode instead
+  return null;
 });

@@ -275,7 +275,9 @@ export function QuickWorkoutBuilderDialog({
         
         console.log('✅ Created calendar event for workout:', createdWorkout.id, event.id);
       } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to create calendar event. Please reconnect Google Calendar.';
         console.error('❌ Error creating calendar event for workout:', error);
+        toastWarning(`Workout saved, but calendar event was not created: ${message}`);
       }
     }
     
@@ -297,9 +299,41 @@ export function QuickWorkoutBuilderDialog({
       
       const linkedTemplateId = category?.linkedWorkoutStructureTemplateId;
       const templateIdToUse = selectedTemplate || linkedTemplateId;
-      const appliedTemplateId = templateIdToUse && workoutStructureTemplates.find(t => t.id === templateIdToUse) 
-        ? templateIdToUse 
-        : undefined;
+      const template = templateIdToUse && workoutStructureTemplates.find(t => t.id === templateIdToUse);
+      const appliedTemplateId = template ? templateIdToUse : undefined;
+
+      // Build rounds from template if available
+      let rounds = [];
+      if (template && template.sections && template.sections.length > 0) {
+        rounds = template.sections
+          .sort((a, b) => a.order - b.order)
+          .map((section, index) => ({
+            ordinal: index + 1,
+            sets: 1,
+            sectionName: section.workoutTypeName,
+            sectionColor: workoutTypes.find(wt => wt.id === section.workoutTypeId)?.color,
+            workoutTypeId: section.workoutTypeId,
+            movementUsages: [{
+              ordinal: 1,
+              movementId: '',
+              categoryId: '',
+              note: '',
+              targetWorkload: {
+                useWeight: false,
+                weightMeasure: 'lbs' as const,
+                useReps: false,
+                useTempo: false,
+                useTime: false,
+                useDistance: false,
+                distanceMeasure: 'm' as const,
+                usePace: false,
+                paceMeasure: 'km' as const,
+                usePercentage: false,
+                useRPE: false
+              }
+            }]
+          }));
+      }
 
       const workoutData = {
         clientId,
@@ -310,7 +344,7 @@ export function QuickWorkoutBuilderDialog({
         time: workoutTime || '',
         categoryName: selectedCategory || '',
         appliedTemplateId,
-        rounds: [],
+        rounds,
         warmups: []
       };
       
@@ -351,9 +385,41 @@ export function QuickWorkoutBuilderDialog({
       
       const linkedTemplateId = category?.linkedWorkoutStructureTemplateId;
       const templateIdToUse = selectedTemplate || linkedTemplateId;
-      const appliedTemplateId = templateIdToUse && workoutStructureTemplates.find(t => t.id === templateIdToUse) 
-        ? templateIdToUse 
-        : undefined;
+      const template = templateIdToUse && workoutStructureTemplates.find(t => t.id === templateIdToUse);
+      const appliedTemplateId = template ? templateIdToUse : undefined;
+
+      // Build rounds from template if available
+      let rounds = [];
+      if (template && template.sections && template.sections.length > 0) {
+        rounds = template.sections
+          .sort((a, b) => a.order - b.order)
+          .map((section, index) => ({
+            ordinal: index + 1,
+            sets: 1,
+            sectionName: section.workoutTypeName,
+            sectionColor: workoutTypes.find(wt => wt.id === section.workoutTypeId)?.color,
+            workoutTypeId: section.workoutTypeId,
+            movementUsages: [{
+              ordinal: 1,
+              movementId: '',
+              categoryId: '',
+              note: '',
+              targetWorkload: {
+                useWeight: false,
+                weightMeasure: 'lbs' as const,
+                useReps: false,
+                useTempo: false,
+                useTime: false,
+                useDistance: false,
+                distanceMeasure: 'm' as const,
+                usePace: false,
+                paceMeasure: 'km' as const,
+                usePercentage: false,
+                useRPE: false
+              }
+            }]
+          }));
+      }
 
       const workoutData = {
         clientId,
@@ -364,7 +430,7 @@ export function QuickWorkoutBuilderDialog({
         time: workoutTime || '',
         categoryName: selectedCategory || '',
         appliedTemplateId,
-        rounds: [],
+        rounds,
         warmups: []
       };
 

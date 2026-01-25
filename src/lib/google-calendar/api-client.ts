@@ -69,8 +69,15 @@ export async function createSingleCalendarEvent(
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to create calendar event');
+    let error: any = {};
+    try {
+      error = await response.json();
+    } catch {
+      // ignore parse errors
+    }
+    const err = new Error(error.error || 'Failed to create calendar event');
+    (err as any).status = response.status;
+    throw err;
   }
 
   return response.json();
@@ -91,8 +98,15 @@ export async function createRecurringCalendarEvent(
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to create calendar event');
+    let error: any = {};
+    try {
+      error = await response.json();
+    } catch {
+      // ignore parse errors
+    }
+    const err = new Error(error.error || 'Failed to create calendar event');
+    (err as any).status = response.status;
+    throw err;
   }
 
   return response.json();
@@ -115,8 +129,15 @@ export async function fetchCalendarEvents(
   const response = await fetch(`/api/calendar/events?${params.toString()}`);
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch calendar events');
+    let error: any = {};
+    try {
+      error = await response.json();
+    } catch {
+      // ignore parse errors
+    }
+    const err = new Error(error.error || 'Failed to fetch calendar events');
+    (err as any).status = response.status;
+    throw err;
   }
 
   const data = await response.json();
@@ -138,8 +159,15 @@ export async function updateCalendarEvent(
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to update calendar event');
+    let error: any = {};
+    try {
+      error = await response.json();
+    } catch {
+      // ignore parse errors
+    }
+    const err = new Error(error.error || 'Failed to update calendar event');
+    (err as any).status = response.status;
+    throw err;
   }
 
   return response.json();
@@ -167,8 +195,15 @@ export async function deleteCalendarEvent(
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to delete calendar event');
+    let error: any = {};
+    try {
+      error = await response.json();
+    } catch {
+      // ignore parse errors
+    }
+    const err = new Error(error.error || 'Failed to delete calendar event');
+    (err as any).status = response.status;
+    throw err;
   }
 }
 

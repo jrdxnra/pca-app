@@ -290,8 +290,17 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
           console.log('✅ Created calendar event in Google Calendar:', googleCalendarEvent.id);
         } catch (googleError) {
           console.error('❌ Failed to create event in Google Calendar:', googleError);
+          const status = (googleError as any)?.status;
+          const message = googleError instanceof Error ? googleError.message : 'Unknown error';
+
+          // If auth is broken, mark disconnected so UI can prompt a reconnect
+          if (status === 401 || message.includes('valid access token') || message.includes('Not authenticated')) {
+            set({ isGoogleCalendarConnected: false });
+            throw new Error('Google Calendar connection expired. Please reconnect Google Calendar and try again.');
+          }
+
           // Continue to create in Firebase as fallback, but warn the user
-          throw new Error(`Failed to create event in Google Calendar: ${googleError instanceof Error ? googleError.message : 'Unknown error'}. Please check your Google Calendar connection.`);
+          throw new Error(`Failed to create event in Google Calendar: ${message}. Please check your Google Calendar connection.`);
         }
       } else {
         throw new Error('Google Calendar is not connected. Please connect Google Calendar to create events.');
