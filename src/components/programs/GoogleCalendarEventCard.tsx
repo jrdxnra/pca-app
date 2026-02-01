@@ -19,6 +19,7 @@ import { getAppTimezone } from '@/lib/utils/timezone';
 interface GoogleCalendarEventCardProps {
   event: GoogleCalendarEvent;
   onToggleCoachingSession: (eventId: string, isCoaching: boolean) => void;
+  onToggleClassSession: (eventId: string, isClass: boolean) => void;
   onCreateWorkout: (event: GoogleCalendarEvent) => void;
   onViewWorkout: (workoutId: string) => void;
   onOpenInCalendar: (event: GoogleCalendarEvent) => void;
@@ -29,6 +30,7 @@ interface GoogleCalendarEventCardProps {
 export const GoogleCalendarEventCard = React.memo(function GoogleCalendarEventCard({
   event,
   onToggleCoachingSession,
+  onToggleClassSession,
   onCreateWorkout,
   onViewWorkout,
   onOpenInCalendar,
@@ -172,6 +174,22 @@ export const GoogleCalendarEventCard = React.memo(function GoogleCalendarEventCa
             <ToggleLeft className="h-3 w-3 mr-1" />
           )}
           Coaching
+        </Button>
+
+        {/* Class Session Toggle */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onToggleClassSession(event.id, !event.isClassSession)}
+          className="h-6 px-2 text-xs"
+          title={event.isClassSession ? "Mark as personal event" : "Mark as class session"}
+        >
+          {event.isClassSession ? (
+            <ToggleRight className="h-3 w-3 mr-1" />
+          ) : (
+            <ToggleLeft className="h-3 w-3 mr-1" />
+          )}
+          Class
         </Button>
 
         {/* Workout Actions */}

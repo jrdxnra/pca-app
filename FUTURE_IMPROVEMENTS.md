@@ -76,6 +76,7 @@ This file contains notes and ideas for future improvements to the PCA app. Items
 - Individual performance tracking per client
 - Group session history and analytics
 - Shared programming, individual inputs (sets, reps, weight)
+
 ## Schedule Management
 
 ### Ongoing Period Workout Category Dropdown
@@ -194,8 +195,63 @@ Added error recovery pages with "Try Again" buttons:
 
 ---
 
+## Multi-Client Session Support (Shared Workouts)
+**Date Added:** January 20, 2026  
+**Priority:** High  
+**Status:** Planned (Phase 2)
+
+### Vision
+Transform the current duplicate-workout approach for multi-client sessions into a true shared workout system where one workout event is shared between multiple clients.
+
+### Current State (Phase 1 - Implemented)
+- Events with multiple attendees create separate match records for each client
+- Workout builder has multi-select client dropdown pre-populated with matched clients
+- Creating workout duplicates identical workout records (one per selected client)
+- Each workout is independent after creation
+- Session type badges: "1-on-1" | "Buddy (2)" | "Group (3+)"
+
+### Desired Future State (Phase 2)
+**Data Model:**
+- One shared `GroupWorkout` record
+- Multiple `ClientParticipation` records linking clients to the group workout
+- Each client has individual performance inputs (weights, reps, notes)
+- Shared workout structure (exercises, order, rest periods)
+
+**Editing Behavior:**
+- Edit workout structure → Updates for all participants
+- Edit client performance → Only affects that client
+- Archive/delete → Removes for all or option to remove individual
+
+**UI/UX:**
+- Single workout event shows all participants
+- Expandable view to see each client's performance
+- Side-by-side comparison of client performances
+- Group workout builder interface
+
+**Benefits:**
+- Single source of truth for workout structure
+- Easy comparison of client performances
+- Reduced data duplication
+- Better analytics (compare clients in same session)
+
+### Migration Path
+1. Add `GroupWorkout` and `ClientParticipation` tables
+2. Update workout builder to support group mode
+3. Migrate existing duplicate workouts to group format (optional)
+4. Add group workout viewing/editing UI
+
+### Related Components
+- `src/lib/services/clientMatching.ts` - Already returns multiple matches
+- Workout builder - Needs group workout creation mode
+- Client calendar views - Show group session participants
+- Workout history - Display group workouts differently
+
+---
+
 ## Notes
 
 Add additional notes and improvements below this line.
 
----*Last Updated: January 2026*
+---
+
+*Last Updated: January 2026*

@@ -298,10 +298,11 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   );
   
   // Use React Query for movements (with lazy loading and enhanced caching)
-  // Only fetch if there are existing movements to display
+  // Always fetch movements since they're filtered by category in InlineMovementEditor
+  // Movements are cached for 10 minutes so this isn't expensive
   const { data: movements = [], isLoading: movementsLoading } = useMovements(
     true, // includeCategory = true
-    hasExistingMovements, // Only fetch when there are existing movements to display
+    true, // Always fetch movements - they're needed when selecting categories
     {
       // Movements are cached for 10 minutes (configured in hook)
       // This prevents refetching when navigating between workouts

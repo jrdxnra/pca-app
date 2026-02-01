@@ -455,9 +455,22 @@ export async function getEvents(
       timeMax: timeMax.toISOString(),
       singleEvents: true, // Expand recurring events into individual instances
       orderBy: 'startTime',
+      // Request extendedProperties to access custom metadata (guest_emails, pcaClientId, etc.)
+      fields: 'items(id,summary,description,start,end,location,attendees,creator,htmlLink,extendedProperties,colorId,recurringEventId)',
     });
 
-    return response.data.items || [];
+    // Debug: Log all events with extendedProperties to find synced events
+    const events = response.data.items || [];
+    const eventsWithProps = events.filter(e => e.extendedProperties);
+    if (eventsWithProps.length > 0) {
+      console.log(`[getEvents] Found ${eventsWithProps.length} events with extendedProperties:`);
+      eventsWithProps.forEach(event => {
+        console.log(`  - "${event.summary}" at ${event.start?.dateTime || event.start?.date}:`, 
+          JSON.stringify(event.extendedProperties, null, 2));
+      });
+    }
+
+    return events;
   } catch (error: any) {
     console.error('Google Calendar API error in getEvents:', {
       message: error.message,

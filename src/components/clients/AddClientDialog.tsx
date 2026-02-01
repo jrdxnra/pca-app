@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Timestamp } from 'firebase/firestore';
 import {
   Dialog,
   DialogContent,
@@ -64,11 +65,28 @@ interface AddClientDialogProps {
 
 export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenChange: controlledOnOpenChange, periods = [], clientPrograms = [], onClientProgramsRefresh, onClientRefresh }: AddClientDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [scrollPosition, setScrollPosition] = useState(0);
   const { addClient, editClient, loading } = useClientStore();
+  const { assignPeriod } = useClientPrograms(client?.id);
+  const periodizationRef = useRef<any>(null);
   
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
+
+  // Handle scroll restoration when dialog closes
+  useEffect(() => {
+    if (open) {
+      // Dialog opening - save scroll position
+      setScrollPosition(window.scrollY);
+    } else {
+      // Dialog closing - wait for animations to complete, then restore scroll
+      const timer = setTimeout(() => {
+        window.scrollTo(0, scrollPosition);
+      }, 275);
+      return () => clearTimeout(timer);
+    }
+  }, [open, scrollPosition]);
   
   const isEditMode = !!client;
   
@@ -173,7 +191,9 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
 
       // Reset form and optionally close dialog
       form.reset();
-      setOpen(false);
+      if (shouldClose) {
+        setOpen(false);
+      }
     } catch (error) {
       console.error(`Failed to ${isEditMode ? 'update' : 'add'} client:`, error);
       // Error is handled by the store
@@ -239,8 +259,8 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
           {trigger || defaultTrigger}
         </DialogTrigger>
       )}
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="sticky top-0 bg-background z-10">
           <DialogTitle>{isEditMode ? 'Edit Client' : 'Add New Client'}</DialogTitle>
           <DialogDescription>
             {isEditMode 
@@ -251,34 +271,126 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+            <div className="grid grid-cols-12 gap-2">
               {/* Client Name */}
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Name *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., John Smith" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="col-span-3">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Name *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John Smith" {...field} className="text-sm h-8" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               {/* Email */}
+              <div className="col-span-3">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Email</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="email" 
+                          placeholder="john@example.com" 
+                          {...field}
+                          className="text-sm h-8"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Phone */}
+              <div className="col-span-2">
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Phone</FormLabel>
+                      <FormControl>
+                        <Input placeholder="(555) 123-4567" {...field} className="text-sm h-8" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Birthday */}
+              <div className="col-span-2">
+                <FormField
+                  control={form.control}
+                  name="birthday"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Birthday</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} className="text-sm h-8" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Target Sessions Per Week */}
+              <div className="col-span-2">
+                <FormField
+                  control={form.control}
+                  name="targetSessionsPerWeek"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Sessions/Week</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(value === 'none' ? undefined : parseInt(value, 10))}
+                        value={field.value?.toString() ?? 'none'}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="None" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map((num) => (
+                            <SelectItem key={num} value={num.toString()}>
+                              {num}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {/* Goals */}
               <FormField
                 control={form.control}
-                name="email"
+                name="goals"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel className="text-xs">Fitness Goals</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="email" 
-                        placeholder="e.g., john@example.com" 
+                      <Textarea 
+                        placeholder="e.g., lose weight, build muscle, improve performance"
+                        className="min-h-[60px] text-sm"
                         {...field} 
                       />
                     </FormControl>
@@ -286,94 +398,6 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                   </FormItem>
                 )}
               />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Phone */}
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., (555) 123-4567" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Birthday */}
-              <FormField
-                control={form.control}
-                name="birthday"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Birthday</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Target Sessions Per Week */}
-              <FormField
-                control={form.control}
-                name="targetSessionsPerWeek"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Sessions/Week</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value === 'none' ? undefined : parseInt(value, 10))}
-                      value={field.value?.toString() ?? 'none'}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select target" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map((num) => (
-                          <SelectItem key={num} value={num.toString()}>
-                            {num} {num === 1 ? 'session' : 'sessions'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription className="text-xs">
-                      Target sessions
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Goals */}
-            <FormField
-              control={form.control}
-              name="goals"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Fitness Goals</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="What does this client want to achieve? (e.g., lose weight, build muscle, improve performance...)"
-                      className="min-h-[80px]"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Their primary objectives and what they want to accomplish
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
               {/* Notes */}
               <FormField
@@ -411,19 +435,42 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
               </div>
             )}
 
-            <DialogFooter>
+            <DialogFooter className="sticky bottom-0 bg-background pt-3 border-t flex gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={loading}
+                disabled={loading || periodSaving}
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="outline" disabled={loading}>
-                {loading 
-                  ? (isEditMode ? 'Updating...' : 'Adding...') 
-                  : (isEditMode ? 'Update Client' : 'Add Client')
+              {isEditMode && clientPeriods.length > 0 && (
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  disabled={loading || periodSaving}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    form.handleSubmit((data) => onSubmit(data, false))();
+                  }}
+                >
+                  {loading || periodSaving ? 'Saving...' : 'Save'}
+                </Button>
+              )}
+              <Button 
+                type="button"
+                variant="outline" 
+                disabled={loading || periodSaving}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  form.handleSubmit((data) => onSubmit(data, true))();
+                }}
+              >
+                {loading || periodSaving
+                  ? (isEditMode ? 'Saving...' : 'Adding...') 
+                  : (isEditMode ? 'Save & Close' : 'Add Client')
                 }
               </Button>
             </DialogFooter>

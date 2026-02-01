@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +47,8 @@ import { WorkoutStructureTemplate } from '@/lib/types';
 import { TestEventInput, LocationAbbreviation } from '@/lib/google-calendar/types';
 import { initiateGoogleAuth, checkGoogleCalendarAuth, disconnectGoogleCalendar } from '@/lib/google-calendar/api-client';
 import { updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
+import { getGlobalQueryClient } from '@/lib/react-query/queryClientInstance';
+import { queryKeys } from '@/lib/react-query/queryKeys';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MapPin } from 'lucide-react';
 import {
@@ -70,6 +72,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { toastSuccess, toastError, toastWarning } from '@/components/ui/toaster';
 import { getAppTimezone, setAppTimezone, getBrowserTimezone, hasTimezoneChanged, COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/utils/timezone';
 import { Clock } from 'lucide-react';
+// import { ClientMatchingDiagnostic } from '@/components/calendar/ClientMatchingDiagnostic'; // Feature paused - re-enable when ready to automate client matching
 
 const AVAILABLE_COLORS = [
   { name: 'Blue', value: 'blue', class: 'bg-blue-500' },
@@ -307,6 +310,7 @@ export default function ConfigurePage() {
 
   const {
     calendars,
+    events: calendarEvents,
     config: calendarConfig,
     loading: calendarLoading,
     error: calendarError,
@@ -333,6 +337,7 @@ export default function ConfigurePage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
+  const oauthToastShownRef = useRef(false);  // Track if we've already shown the OAuth success toast
   
   // Sync local state with store state when it changes
   useEffect(() => {
@@ -341,6 +346,17 @@ export default function ConfigurePage() {
   
   // Tab state
   const [activeTab, setActiveTab] = useState<'workout' | 'app'>('workout');
+  
+  // Read tab from URL query param on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'app') {
+        setActiveTab('app');
+      }
+    }
+  }, []);
   
   // Location management state
   const [uniqueLocations, setUniqueLocations] = useState<string[]>([]);
@@ -360,6 +376,8 @@ export default function ConfigurePage() {
   // Keyword input states (local state to allow typing commas)
   const [coachingKeywordsInput, setCoachingKeywordsInput] = useState('');
   const [classKeywordsInput, setClassKeywordsInput] = useState('');
+  const [exclusionKeywordsInput, setExclusionKeywordsInput] = useState('');
+  const [coachEmailPatternsInput, setCoachEmailPatternsInput] = useState('');
   const [coachingColor, setCoachingColor] = useState('blue');
   const [classColor, setClassColor] = useState('purple');
   
@@ -370,6 +388,12 @@ export default function ConfigurePage() {
     }
     if (calendarConfig.classKeywords) {
       setClassKeywordsInput(calendarConfig.classKeywords.join(', '));
+    }
+    if (calendarConfig.exclusionKeywords) {
+      setExclusionKeywordsInput(calendarConfig.exclusionKeywords.join(', '));
+    }
+    if (calendarConfig.coachEmailPatterns) {
+      setCoachEmailPatternsInput(calendarConfig.coachEmailPatterns.join(', '));
     }
     if (calendarConfig.coachingColor) {
       setCoachingColor(calendarConfig.coachingColor);
@@ -449,11 +473,6 @@ export default function ConfigurePage() {
       const connected = useCalendarStore.getState().isGoogleCalendarConnected;
       setIsGoogleCalendarConnected(connected);
       setCheckingAuth(false);
-      
-      // If connected, test the actual connection to catch expired tokens
-      if (connected) {
-        handleTestConnection();
-      }
     });
 
     // Check if browser timezone differs from app timezone
@@ -476,12 +495,12 @@ export default function ConfigurePage() {
       }
       
       try {
-        // Fetch events for a wide date range to get all locations
+        // Fetch events for last 30 days to match work calendar sync window
         const today = new Date();
         const startDate = new Date(today);
-        startDate.setMonth(today.getMonth() - 3); // 3 months back
+        startDate.setDate(today.getDate() - 30); // 30 days back to catch all synced events
         const endDate = new Date(today);
-        endDate.setMonth(today.getMonth() + 3); // 3 months forward
+        endDate.setDate(today.getDate() + 30); // 30 days forward
         
         const { fetchEvents } = useCalendarStore.getState();
         await fetchEvents({ start: startDate, end: endDate });
@@ -2105,6 +2124,82 @@ export default function ConfigurePage() {
                 </div>
               </div>
 
+              {/* Exclusion Keywords - Feature paused */}
+              {false && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Exclude from Matching
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="hold, blocked, meeting, admin, huddle"
+                    value={exclusionKeywordsInput}
+                    onChange={(e) => setExclusionKeywordsInput(e.target.value)}
+                    className="text-sm flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const keywordArray = exclusionKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
+                        await updateCalendarConfig({
+                          ...calendarConfig,
+                          exclusionKeywords: keywordArray.length > 0 ? keywordArray : [],
+                        });
+                      } catch (error) {
+                        console.error('Error saving exclusion keywords:', error);
+                      }
+                    }}
+                    variant="outline"
+                  >
+                    <Save className="h-3 w-3 mr-1" />
+                    Save
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Events with these keywords will be filtered out from client matching
+                </p>
+              </div>
+              )}
+
+              {/* Coach Email Patterns - Feature paused */}
+              {false && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Coach/Trainer Email Patterns
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="@xwf.google.com, @teamexos.com, huntjordan@"
+                    value={coachEmailPatternsInput}
+                    onChange={(e) => setCoachEmailPatternsInput(e.target.value)}
+                    className="text-sm flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const patternArray = coachEmailPatternsInput.split(',').map(p => p.trim()).filter(p => p);
+                        await updateCalendarConfig({
+                          ...calendarConfig,
+                          coachEmailPatterns: patternArray.length > 0 ? patternArray : [],
+                        });
+                      } catch (error) {
+                        console.error('Error saving coach email patterns:', error);
+                      }
+                    }}
+                    variant="outline"
+                  >
+                    <Save className="h-3 w-3 mr-1" />
+                    Save
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Attendees matching these patterns will be filtered from client matching (e.g., your own email)
+                </p>
+              </div>
+              )}
+
               <p className="text-xs text-gray-500">
                 Separate keywords with commas. Events matching these keywords will be color-coded on the schedule.
               </p>
@@ -2689,6 +2784,36 @@ export default function ConfigurePage() {
               </Card>
             )}
           </div>
+
+          {/* Client Email Matching Diagnostic - Feature paused */}
+          {false && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-2xl font-semibold mb-2 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                Client Email Matching
+              </h2>
+              <p className="text-gray-600">View how calendar events are matched to clients using guest email metadata from your work calendar sync.</p>
+            </div>
+
+            {!isGoogleCalendarConnected ? (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <p className="text-gray-600">Connect Google Calendar to see client matching results.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <ClientMatchingDiagnostic />
+            )}
+            <Card>
+              <CardContent className="p-6 text-center">
+                <p className="text-gray-600">Automated client matching feature is paused. Using manual workflow for now.</p>
+              </CardContent>
+            </Card>
+          </div>
+          )}
         </TabsContent>
       </Tabs>
 

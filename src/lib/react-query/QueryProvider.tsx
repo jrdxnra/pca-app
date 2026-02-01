@@ -7,19 +7,11 @@ import { ReactNode, useState, useEffect } from 'react';
 let ReactQueryDevtools: any = null;
 
 // Check if we're in development mode (works in both client and server)
-const isDevelopment = typeof window !== 'undefined' 
+const isDevelopment = typeof window !== 'undefined'
   ? (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_NODE_ENV === 'development')
   : process.env.NODE_ENV === 'development';
 
-if (isDevelopment) {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const devtools = require('@tanstack/react-query-devtools');
-    ReactQueryDevtools = devtools.ReactQueryDevtools;
-  } catch {
-    // Devtools not available, that's okay
-  }
-}
+
 
 interface QueryProviderProps {
   children: ReactNode;
@@ -86,7 +78,7 @@ function getQueryClient(): QueryClient {
     // In Next.js App Router, this component should only render on client
     return makeQueryClient();
   }
-  
+
   // Client-side: reuse singleton instance
   if (!queryClientInstance) {
     queryClientInstance = makeQueryClient();
@@ -113,10 +105,15 @@ export function QueryProvider({ children }: QueryProviderProps) {
     return <>{children}</>;
   }
 
+  // Set the global queryClient so Zustand stores can access it for cache invalidation
+  useEffect(() => {
+    setGlobalQueryClient(queryClient);
+  }, [queryClient]);
+
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      {/* ReactQueryDevtools disabled temporarily due to QueryClient initialization issues */}
+      {/* ReactQueryDevtools currently disabled to ensure dev server stability */}
       {/* TODO: Re-enable once QueryClient setup is stable */}
     </QueryClientProvider>
   );

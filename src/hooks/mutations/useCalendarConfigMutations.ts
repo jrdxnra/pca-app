@@ -5,7 +5,8 @@ import { queryKeys } from '@/lib/react-query/queryKeys';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
 
 /**
- * Hook for updating calendar sync configuration
+ * Hook for updating calendar sync configuration via React Query
+ * NOTE: The Configure page uses Zustand's updateConfig directly instead of this
  */
 export function useUpdateCalendarConfig() {
   const queryClient = useQueryClient();
@@ -14,29 +15,16 @@ export function useUpdateCalendarConfig() {
     mutationFn: async (updates: Partial<CalendarSyncConfig>) => {
       return await updateCalendarSyncConfig(updates);
     },
-    onMutate: async (updates) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.calendarConfig.all });
-      const previousConfig = queryClient.getQueryData<CalendarSyncConfig>(queryKeys.calendarConfig.current());
-
-      // Optimistically update
-      queryClient.setQueryData<CalendarSyncConfig>(
-        queryKeys.calendarConfig.current(),
-        (old) => (old ? { ...old, ...updates } : old)
-      );
-
-      return { previousConfig };
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.calendarConfig.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
+      toastSuccess('Calendar configuration updated successfully');
     },
-    onError: (error, variables, context) => {
-      // Rollback on error
-      if (context?.previousConfig) {
-        queryClient.setQueryData(queryKeys.calendarConfig.current(), context.previousConfig);
-      }
+    onError: (error) => {
       console.error('Error updating calendar config:', error);
       toastError('Failed to update calendar configuration. Please try again.');
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.calendarConfig.all });
-      toastSuccess('Calendar configuration updated successfully');
-    },
   });
 }
+
+```

@@ -9,6 +9,8 @@ export interface Client {
   birthday?: string; // Format: YYYY-MM-DD
   notes?: string;
   goals?: string;
+  eventGoals?: EventGoal[]; // Event goals for periodization planning
+  trainingPhases?: TrainingPhase[]; // Visual training phase planning
   createdAt: Timestamp;
   updatedAt: Timestamp;
   isDeleted: boolean;
@@ -19,6 +21,21 @@ export interface Client {
   // Session tracking
   targetSessionsPerWeek?: number; // How many sessions client should do per week (baseline for billing)
   sessionCounts?: SessionCounts; // Actual session counts
+}
+
+export interface EventGoal {
+  id: string;
+  description: string;
+  date: string; // ISO date string (YYYY-MM-DD)
+}
+
+export interface TrainingPhase {
+  id: string;
+  periodConfigId: string;
+  periodName: string;
+  periodColor: string;
+  startDate: string; // ISO date string
+  endDate: string; // ISO date string
 }
 
 export interface SessionCounts {

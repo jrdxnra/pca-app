@@ -39,8 +39,14 @@ async function getDb() {
  * Store Google Calendar OAuth tokens in Firestore
  */
 export async function storeTokens(tokens: StoredTokens): Promise<void> {
+  console.log('[storeTokens] Starting token storage');
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    console.error('[storeTokens] ERROR: Database not initialized!');
+    return;
+  }
+  
+  console.log('[storeTokens] Database connected');
   const tokensRef = doc(db, 'googleCalendarTokens', TOKEN_DOC_ID);
   console.log('[storeTokens] Token reference:', TOKEN_DOC_ID);
   

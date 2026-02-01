@@ -60,11 +60,25 @@ export async function getCalendarEventsByDateRange(
     );
     console.log('[getCalendarEventsByDateRange] Fetched events from Google:', googleEvents.length);
     
+    // Helper functions to detect event types based on keywords
+    const isCoachingEvent = (event: any, keywords: string[]): boolean => {
+      const title = event.summary?.toLowerCase() || '';
+      return keywords.some(keyword => title.includes(keyword.toLowerCase()));
+    };
+    
+    const isClassEvent = (event: any, keywords: string[]): boolean => {
+      const title = event.summary?.toLowerCase() || '';
+      return keywords.some(keyword => title.includes(keyword.toLowerCase()));
+    };
+    
     // Convert Google Calendar API format to our format
     const events: GoogleCalendarEvent[] = googleEvents.map((event: any) => {
+      // Check shared first (from work calendar sync), then private (from PCA app)
       const clientId = event.extendedProperties?.private?.pcaClientId;
       const category = event.extendedProperties?.private?.pcaCategory;
       const workoutId = event.extendedProperties?.private?.pcaWorkoutId;
+      const guestEmails = event.extendedProperties?.shared?.guest_emails || event.extendedProperties?.private?.guest_emails;
+      const originalEventId = event.extendedProperties?.shared?.originalId || event.extendedProperties?.private?.originalId;
       
       return {
         id: event.id,
@@ -82,12 +96,17 @@ export async function getCalendarEventsByDateRange(
         htmlLink: event.htmlLink,
         creator: event.creator,
         attendees: event.attendees,
+        // Work calendar sync metadata
+        guestEmails: guestEmails,
+        originalEventId: originalEventId,
         // Extract metadata from extended properties
         preConfiguredClient: clientId,
         preConfiguredCategory: category,
         linkedWorkoutId: workoutId,
-        // Mark as coaching session if it has a client ID (from our app)
-        isCoachingSession: clientId ? true : undefined,
+        // Mark as coaching session if it has a client ID (from our app) OR matches coaching keywords
+        isCoachingSession: clientId ? true : isCoachingEvent(event, config.coachingKeywords || []),
+        // Mark as class session if it matches class keywords
+        isClassSession: isClassEvent(event, config.classKeywords || []),
       };
     });
     
