@@ -57,6 +57,7 @@ import { useClientStore } from '@/lib/stores/useClientStore';
 import { useProgramStore } from '@/lib/stores/useProgramStore';
 import { useClientPrograms } from '@/hooks/useClientPrograms';
 import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
+import { safeToDate } from '@/lib/utils/dateHelpers';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
 import { logger } from '@/lib/utils/logger';
 
@@ -66,7 +67,7 @@ export default function BuilderPage() {
   // Use Next.js useSearchParams for reactive URL param reading
   // This properly updates when navigating to this page with new params
   const searchParams = useSearchParams();
-  
+
   // Extract URL params - these update reactively when URL changes
   const urlClientId = searchParams.get('client');
   const dateParam = searchParams.get('date');
@@ -74,7 +75,7 @@ export default function BuilderPage() {
   const eventId = searchParams.get('eventId');
   const structureId = searchParams.get('structure');
   const categoryParam = searchParams.get('category');
-  
+
   // Log URL params for debugging (dev only)
   useEffect(() => {
     logger.debug('[Builder] URL params:', { urlClientId, dateParam, workoutId, eventId });
@@ -84,13 +85,13 @@ export default function BuilderPage() {
   const { linkToWorkout, updateEvent, deleteEvent, events: calendarEvents } = useCalendarStore();
 
   // Configuration store - shared periods, templates, categories
-  const { 
-    periods, 
-    weekTemplates, 
-    workoutCategories, 
-    workoutStructureTemplates, 
+  const {
+    periods,
+    weekTemplates,
+    workoutCategories,
+    workoutStructureTemplates,
     workoutTypes,
-    fetchAll: fetchAllConfig 
+    fetchAll: fetchAllConfig
   } = useConfigurationStore();
 
   // Client and Program stores - use cached data
@@ -108,11 +109,11 @@ export default function BuilderPage() {
     }
     return null;
   });
-  
+
   // Use deferred value to keep old UI visible while new data loads
   // This prevents the schedule from "flashing" during client switches
   const clientId = useDeferredValue(clientIdImmediate);
-  
+
 
   // Client programs hook - uses local client state (not URL) to avoid reloads
   const {
@@ -125,12 +126,12 @@ export default function BuilderPage() {
   // Simple local state - only day view is supported now
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('day');
   const [calendarDate, setCalendarDate] = useState(new Date());
-  
+
   // Use store data directly - no need for local state
   const clients = storeClients;
   const programs = storePrograms;
   const scheduledWorkouts = storeScheduledWorkouts;
-  
+
   const [loading, setLoading] = useState(false); // Start with false since we use cached data
 
   // Workout building state
@@ -146,13 +147,13 @@ export default function BuilderPage() {
     appliedTemplateId?: string;
   }>>({});
   const [openDates, setOpenDates] = useState<Set<string>>(new Set());
-  
+
   // Refs to workout editors for triggering save from header buttons
   const editorRefs = useRef<Record<string, WorkoutEditorHandle | null>>({});
-  
+
   // Track which workoutIds we've already opened (to prevent re-opening after close)
   const processedWorkoutIds = useRef<Set<string>>(new Set());
-  
+
   // Track which editors are currently saving (for button state)
   const [savingEditors, setSavingEditors] = useState<Set<string>>(new Set());
 
@@ -217,7 +218,7 @@ export default function BuilderPage() {
     if (!dateParam) {
       const today = new Date();
       const dayOfWeek = today.getDay(); // 0 = Sunday, 6 = Saturday
-      
+
       let targetDate = today;
       if (dayOfWeek === 0 || dayOfWeek === 6) {
         // It's weekend - advance to Monday of next week
@@ -228,7 +229,7 @@ export default function BuilderPage() {
       } else {
         logger.debug('[Builder] Setting calendar to today:', today.toISOString());
       }
-      
+
       setCalendarDate(targetDate);
     }
   }, [dateParam]);
@@ -249,7 +250,7 @@ export default function BuilderPage() {
 
         // Only set loading if we need to fetch core data
         const needsFetch = !hasClients || !hasPrograms;
-        
+
         if (needsFetch) {
           setLoading(true);
         }
@@ -280,18 +281,18 @@ export default function BuilderPage() {
       logger.debug('[Builder] loading:', loading);
       logger.debug('[Builder] clientId:', clientId);
       logger.debug('[Builder] ========================================');
-      
+
       if (!workoutId) {
         logger.debug('[Builder] SKIP - no workoutId in URL');
         return;
       }
-      
+
       // Check if we've already processed this workoutId (prevents re-opening after close)
       if (processedWorkoutIds.current.has(workoutId)) {
         logger.debug('[Builder] SKIP - workoutId already processed (was closed by user)');
         return;
       }
-      
+
       if (loading) {
         logger.debug('[Builder] SKIP - still loading initial data');
         return;
@@ -301,7 +302,7 @@ export default function BuilderPage() {
         logger.debug('[Builder] Fetching workout from Firebase:', workoutId);
         const workout = await getClientWorkout(workoutId);
         logger.debug('[Builder] Got workout result:', workout ? 'SUCCESS' : 'NULL');
-        
+
         if (workout) {
           logger.debug('[Builder] Workout details:', {
             id: workout.id,
@@ -309,7 +310,7 @@ export default function BuilderPage() {
             date: workout.date,
             categoryName: workout.categoryName
           });
-          
+
           // Set the workout in the workouts array if not already there
           setWorkouts(prev => {
             const exists = prev.find(w => w.id === workout.id);
@@ -334,10 +335,10 @@ export default function BuilderPage() {
           // Switch to day view and directly open the editor (bypass autoOpenWorkout to avoid race conditions)
           logger.debug('[Builder] Setting viewMode to day and opening editor directly');
           setViewMode('day');
-          
+
           // Get dateKey for this workout
           const dateKey = `${normalizedDate.getFullYear()}-${String(normalizedDate.getMonth() + 1).padStart(2, '0')}-${String(normalizedDate.getDate()).padStart(2, '0')}`;
-          
+
           // Directly set editing state - this ensures the workout opens in EDIT mode (red X, delete works)
           setEditingWorkouts(prev => ({
             ...prev,
@@ -454,24 +455,7 @@ export default function BuilderPage() {
       }));
   };
 
-  // Helper function to safely convert various date formats to Date object
-  const safeToDate = (dateValue: unknown): Date => {
-    if (dateValue instanceof Date) {
-      return dateValue;
-    }
-    if (dateValue && typeof dateValue === 'object') {
-      if ('toDate' in dateValue && typeof dateValue.toDate === 'function') {
-        return dateValue.toDate();
-      }
-      if ('seconds' in dateValue && typeof dateValue.seconds === 'number') {
-        return new Date(dateValue.seconds * 1000);
-      }
-    }
-    if (typeof dateValue === 'string' || typeof dateValue === 'number') {
-      return new Date(dateValue);
-    }
-    return new Date();
-  };
+
 
   // Calculate weeks from start to end date (limited to 12 weeks max)
   function calculateWeeks(startDate: Date, endDate: Date, periodName?: string): Date[][] {
@@ -530,7 +514,7 @@ export default function BuilderPage() {
   function getWorkoutsForDate(date: Date): any[] {
     // Return all workouts for this date for the selected client
     if (!clientId) return [];
-    
+
     const allWorkouts = workouts.filter(w => {
       const workoutDate = safeToDate(w.date);
       const dateMatches = (
@@ -540,7 +524,7 @@ export default function BuilderPage() {
       );
       return dateMatches && w.clientId === clientId;
     });
-    
+
     return allWorkouts;
   }
 
@@ -607,7 +591,7 @@ export default function BuilderPage() {
         setWorkouts([]);
         return;
       }
-      
+
       try {
         const fetchedWorkouts = await fetchWorkoutsByDateRange(
           clientId,
@@ -625,12 +609,12 @@ export default function BuilderPage() {
 
   const handleClientChange = (newClientId: string) => {
     console.log('Client changed to:', newClientId);
-    
+
     // Save to localStorage for persistence
     if (typeof window !== 'undefined') {
       localStorage.setItem('selectedClient', newClientId);
     }
-    
+
     // Just update state - don't touch URL at all
     // useDeferredValue will keep old UI visible while new data loads
     setClientIdImmediate(newClientId);
@@ -686,7 +670,7 @@ export default function BuilderPage() {
       targetDate = new Date();
       logger.debug('[Builder] Using today as target date:', targetDate.toISOString());
     }
-    
+
     targetDate.setHours(12, 0, 0, 0); // Normalize to midday
 
     // Find period containing target date
@@ -701,13 +685,13 @@ export default function BuilderPage() {
     if (period) {
       logger.debug('[Builder] Found period for target date:', period.periodName);
       setSelectedPeriod(period);
-      
+
       // Calculate weeks for this period
       const start = safeToDate(period.startDate);
       const end = safeToDate(period.endDate);
       const calculatedWeeks = calculateWeeks(start, end, period.periodName);
       setWeeks(calculatedWeeks);
-      
+
       // Only switch to week view if NOT loading a specific workout
       // When workoutId is present, let loadWorkoutById effect control the view
       if (!workoutId) {
@@ -728,7 +712,7 @@ export default function BuilderPage() {
       if (fallbackPeriod) {
         logger.debug('[Builder] Using fallback period:', fallbackPeriod.periodName);
         setSelectedPeriod(fallbackPeriod);
-        
+
         // Calculate weeks for fallback period
         const start = safeToDate(fallbackPeriod.startDate);
         const end = safeToDate(fallbackPeriod.endDate);
@@ -939,7 +923,7 @@ export default function BuilderPage() {
   // Auto-open workout editor when navigating to day view with a workout to edit
   useEffect(() => {
     logger.debug('[Builder] Auto-open effect:', { viewMode, autoOpenWorkout, hasAutoOpen: !!autoOpenWorkout });
-    
+
     if (viewMode === 'day' && autoOpenWorkout) {
       const { date, workout, categoryInfo } = autoOpenWorkout;
       const dateKey = getDateKey(date);
@@ -955,7 +939,7 @@ export default function BuilderPage() {
       // Small delay to ensure the view has rendered, then open the editor
       const timer = setTimeout(() => {
         logger.debug('[Builder] Timer fired, opening editor directly');
-        
+
         if (workout) {
           // Directly set state to open the editor (avoid calling handleEditWorkout which has toggle logic)
           logger.debug('[Builder] Opening editor for workout:', workout.id);
@@ -991,30 +975,30 @@ export default function BuilderPage() {
     time?: string;
     eventId?: string;
   }>({});
-  
+
   // Open workout editor when coming from a calendar event (eventId in URL)
   // Track if we've already processed this eventId
   const processedEventIdRef = useRef<string | null>(null);
-  
+
   useEffect(() => {
     if (!eventId || loading) return;
-    
+
     // Wait for calendar events to load
     if (calendarEvents.length === 0) return;
-    
+
     // Don't process the same eventId twice
     if (processedEventIdRef.current === eventId) return;
-    
+
     const event = calendarEvents.find(e => e.id === eventId);
     if (!event) return;
-    
+
     // If event already has a linked workout, let the workoutId effect handle it
     if (event.linkedWorkoutId) {
       logger.debug('[Builder] Event has linked workout, skipping');
       processedEventIdRef.current = eventId;
       return;
     }
-    
+
     // Get client from event
     const eventClientId = event.preConfiguredClient ||
       (event.description?.match(/\[Metadata:.*client=([^,}]+)/)?.[1]?.trim());
@@ -1022,31 +1006,31 @@ export default function BuilderPage() {
     if (eventClientId && eventClientId !== 'none' && !clientId) {
       handleClientChange(eventClientId);
     }
-    
+
     // Get event details
     const eventDate = new Date(event.start.dateTime);
-    
+
     // Set calendar date
     setCalendarDate(eventDate);
-    
+
     // Get the category from URL or event
-    const category = categoryParam || event.preConfiguredCategory || 
+    const category = categoryParam || event.preConfiguredCategory ||
       (event.description?.match(/category=([^,\s}\]]+)/)?.[1]);
-    
+
     // If event is already assigned to a client, open inline editor directly instead of Quick Workout dialog
     const hasAssignedClient = eventClientId && eventClientId !== 'none';
     const effectiveClientId = clientId || eventClientId;
-    
+
     if (hasAssignedClient && effectiveClientId) {
       logger.debug('[Builder] Event is assigned, opening inline editor directly');
       processedEventIdRef.current = eventId;
-      
+
       const dateKey = getDateKey(eventDate);
-      
+
       // Check if there's a draft or if we should create new
       const draftKey = `${dateKey}-${effectiveClientId}-new`;
       const hasDraft = localStorage.getItem(`pca-workout-draft-${draftKey}`);
-      
+
       // Open the inline editor for this date
       setCreatingWorkouts(prev => ({
         ...prev,
@@ -1057,23 +1041,23 @@ export default function BuilderPage() {
         }
       }));
       setOpenDates(prev => new Set(prev).add(dateKey));
-      
+
       logger.debug('[Builder] Opened inline editor for', dateKey, 'with category:', category, 'hasDraft:', !!hasDraft);
       return;
     }
-    
+
     // No assigned client - open Quick Workout dialog
-    const eventTime = event.start.dateTime ? 
+    const eventTime = event.start.dateTime ?
       new Date(event.start.dateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-    
-    logger.debug('[Builder] No client assigned, opening Quick Workout dialog with:', { 
-      date: dateParam, 
-      category: categoryParam, 
-      eventId 
+
+    logger.debug('[Builder] No client assigned, opening Quick Workout dialog with:', {
+      date: dateParam,
+      category: categoryParam,
+      eventId
     });
-    
+
     processedEventIdRef.current = eventId;
-    
+
     setQuickWorkoutInitialData({
       date: dateParam || undefined,
       category: category || undefined,
@@ -1081,7 +1065,7 @@ export default function BuilderPage() {
       eventId: eventId
     });
     setQuickWorkoutDialogOpen(true);
-    
+
   }, [eventId, loading, calendarEvents.length, clientId, categoryParam, dateParam, workoutCategories]);
 
   const handleSaveWorkout = async (workoutData: any, dateKey: string) => {
@@ -1167,14 +1151,14 @@ export default function BuilderPage() {
     if (closedWorkoutId) {
       processedWorkoutIds.current.add(closedWorkoutId);
     }
-    
+
     // Also check for workoutId in URL and mark it as processed
     const currentUrl = new URL(window.location.href);
     const urlWorkoutId = currentUrl.searchParams.get('workoutId');
     if (urlWorkoutId) {
       processedWorkoutIds.current.add(urlWorkoutId);
     }
-    
+
     // Always update all three states to ensure editor closes
     // Use functional updates and always create new objects/sets
     setCreatingWorkouts(prev => {
@@ -1199,7 +1183,7 @@ export default function BuilderPage() {
       newSet.delete(dateKey);
       return newSet;
     });
-    
+
     // Clear workoutId from URL to prevent useEffect from re-opening the editor
     if (currentUrl.searchParams.has('workoutId')) {
       currentUrl.searchParams.delete('workoutId');
@@ -1259,7 +1243,7 @@ export default function BuilderPage() {
 
     // Find if there's a linked calendar event
     const linkedEvent = calendarEvents.find(e => e.linkedWorkoutId === workoutId);
-    
+
     setDeleteDialogData({
       workoutId,
       dateKey,
@@ -1322,9 +1306,9 @@ export default function BuilderPage() {
 
       // Update event with new category and unlink workout
       if (linkedEventId) {
-        await updateEvent(linkedEventId, { 
+        await updateEvent(linkedEventId, {
           linkedWorkoutId: undefined,
-          preConfiguredCategory: deleteDialogNewCategory 
+          preConfiguredCategory: deleteDialogNewCategory
         });
         console.log('Updated event category and unlinked workout');
       }
@@ -1406,7 +1390,7 @@ export default function BuilderPage() {
 
     // Check if there's a linked event
     const linkedEvent = calendarEvents.find(e => e.linkedWorkoutId === workoutId);
-    
+
     if (linkedEvent) {
       // If there's a linked event, show the dialog instead
       showDeleteConfirmation(workoutId, dateKey);
@@ -1416,14 +1400,11 @@ export default function BuilderPage() {
     // No linked event, just delete the workout directly
     try {
       setLoading(true);
-      console.log('Calling deleteClientWorkout...');
       await deleteClientWorkout(workoutId);
-      console.log('deleteClientWorkout resolved');
 
       // Remove from local state
       setWorkouts(prev => {
         const activeWorkouts = prev.filter(w => w.id !== workoutId);
-        console.log('Updated local workouts state, count:', activeWorkouts.length);
         return activeWorkouts;
       });
 
@@ -1431,10 +1412,8 @@ export default function BuilderPage() {
       handleCloseEditor(dateKey, workoutId);
 
       // Also refresh scheduled workouts to keep data in sync
-      console.log('Refreshing scheduled workouts...');
       await fetchAllScheduledWorkouts();
 
-      console.log('Workout deleted successfully and state updated');
     } catch (error) {
       console.error('Error deleting workout:', error);
       toastError('Failed to delete workout. Please try again.');
@@ -1456,548 +1435,540 @@ export default function BuilderPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="w-full px-1 pt-1 pb-4 space-y-2">
         {/* Filters and Controls */}
-          <Card className="py-2">
-            <CardContent className="py-1 px-2">
-              {/* Navigation */}
-              <BuilderHeader
-                clients={clients}
-                clientId={clientId}
-                clientIdImmediate={clientIdImmediate}
-                onClientChange={handleClientChange}
-                loading={loading}
-                calendarDate={calendarDate}
-                onNavigate={handleNavigate}
-                navigationLabel={getNavigationLabel()}
-                periods={periods}
-                workoutCategories={workoutCategories}
-                weekTemplates={weekTemplates}
-                clientPrograms={clientPrograms}
-                onAssignPeriod={handleAssignPeriod}
-                onWorkoutCreated={() => {
-                  // Force re-fetch by updating calendarDate (triggers useEffect)
-                  setCalendarDate(new Date(calendarDate));
-                }}
-              />
+        <Card className="py-2">
+          <CardContent className="py-1 px-2">
+            {/* Navigation */}
+            <BuilderHeader
+              clients={clients}
+              clientId={clientId}
+              clientIdImmediate={clientIdImmediate}
+              onClientChange={handleClientChange}
+              loading={loading}
+              calendarDate={calendarDate}
+              onNavigate={handleNavigate}
+              navigationLabel={getNavigationLabel()}
+              periods={periods}
+              workoutCategories={workoutCategories}
+              weekTemplates={weekTemplates}
+              clientPrograms={clientPrograms}
+              onAssignPeriod={handleAssignPeriod}
+              onWorkoutCreated={() => {
+                // Force re-fetch by updating calendarDate (triggers useEffect)
+                setCalendarDate(new Date(calendarDate));
+              }}
+            />
 
-              {/* Workout Building Actions */}
-              {!clientId && (
-                <div className="col-span-full text-center py-8 text-muted-foreground">
-                  Please select a client to start building workouts.
-                </div>
-              )}
+            {/* Workout Building Actions */}
+            {!clientId && (
+              <div className="col-span-full text-center py-8 text-muted-foreground">
+                Please select a client to start building workouts.
+              </div>
+            )}
 
-              {/* Second Row - Column Toggle, Category Filter, Week Order */}
-              <BuilderFilters
-                visibleColumns={visibleColumns}
-                onColumnVisibilityChange={handleColumnVisibilityChange}
-                viewMode={viewMode}
-                workoutCategories={workoutCategories}
-                selectedCategories={selectedCategories}
-                onCategorySelectionChange={setSelectedCategories}
-                weekOrder={weekSettings.weekOrder}
-                onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
-              />
-            </CardContent>
-          </Card>
+            {/* Second Row - Column Toggle, Category Filter, Week Order */}
+            <BuilderFilters
+              visibleColumns={visibleColumns}
+              onColumnVisibilityChange={handleColumnVisibilityChange}
+              viewMode={viewMode}
+              workoutCategories={workoutCategories}
+              selectedCategories={selectedCategories}
+              onCategorySelectionChange={setSelectedCategories}
+              weekOrder={weekSettings.weekOrder}
+              onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
+            />
+          </CardContent>
+        </Card>
 
         {/* Content - Structure always visible, only cell data loads */}
         <>
           {/* Only day view is supported - show workouts for the selected week */}
           {/* Day View - Optimized for 2 workouts side-by-side */}
           <div className="space-y-6">
-              {(() => {
-                // Always show the schedule structure - never return null
-                // Calculate weeks based on period if available, otherwise use calendarDate
-                let start: Date;
-                let end: Date;
+            {(() => {
+              // Always show the schedule structure - never return null
+              // Calculate weeks based on period if available, otherwise use calendarDate
+              let start: Date;
+              let end: Date;
 
-                if (selectedPeriod) {
-                  start = safeToDate(selectedPeriod.startDate);
-                  end = safeToDate(selectedPeriod.endDate);
-                } else {
-                  // No period selected - calculate weeks around calendarDate
-                  start = new Date(calendarDate);
-                  start.setDate(calendarDate.getDate() - calendarDate.getDay()); // Start of week
-                  end = new Date(start);
-                  end.setDate(start.getDate() + (12 * 7) - 1); // 12 weeks ahead
+              if (selectedPeriod) {
+                start = safeToDate(selectedPeriod.startDate);
+                end = safeToDate(selectedPeriod.endDate);
+              } else {
+                // No period selected - calculate weeks around calendarDate
+                start = new Date(calendarDate);
+                start.setDate(calendarDate.getDate() - calendarDate.getDay()); // Start of week
+                end = new Date(start);
+                end.setDate(start.getDate() + (12 * 7) - 1); // 12 weeks ahead
+              }
+
+              const calculatedWeeks = calculateWeeks(start, end, selectedPeriod?.periodName);
+
+              // Find the week index that contains calendarDate
+              const targetWeekIndex = calculatedWeeks.findIndex(week => {
+                const weekStart = new Date(week[0]);
+                weekStart.setHours(0, 0, 0, 0);
+                const weekEnd = new Date(week[6]);
+                weekEnd.setHours(23, 59, 59, 999);
+                const normalizedCalendarDate = new Date(calendarDate);
+                normalizedCalendarDate.setHours(12, 0, 0, 0);
+                return normalizedCalendarDate >= weekStart && normalizedCalendarDate <= weekEnd;
+              });
+
+              // Show 1 week before, current week, and 2 weeks after (4 weeks total)
+              let weeksToDisplay: Date[][];
+              if (targetWeekIndex >= 0) {
+                // Get range: 1 week before to 2 weeks after
+                const startIdx = Math.max(0, targetWeekIndex - 1);
+                const endIdx = Math.min(calculatedWeeks.length, targetWeekIndex + 3);
+                weeksToDisplay = calculatedWeeks.slice(startIdx, endIdx);
+              } else {
+                // Generate weeks around calendarDate if not in calculated weeks
+                const weekStart = new Date(calendarDate);
+                const dayOfWeek = weekStart.getDay();
+                const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                weekStart.setDate(weekStart.getDate() + diff);
+                weekStart.setHours(12, 0, 0, 0);
+
+                // Generate 4 weeks: 1 before, current, 2 after
+                const generatedWeeks: Date[][] = [];
+                for (let w = -1; w <= 2; w++) {
+                  const week: Date[] = [];
+                  for (let i = 0; i < 7; i++) {
+                    const day = new Date(weekStart);
+                    day.setDate(weekStart.getDate() + (w * 7) + i);
+                    week.push(day);
+                  }
+                  generatedWeeks.push(week);
                 }
+                weeksToDisplay = generatedWeeks;
+              }
 
-                const calculatedWeeks = calculateWeeks(start, end, selectedPeriod?.periodName);
+              const orderedWeeks = weekSettings.weekOrder === 'descending'
+                ? [...weeksToDisplay].reverse()
+                : weeksToDisplay;
 
-                // Find the week index that contains calendarDate
-                const targetWeekIndex = calculatedWeeks.findIndex(week => {
-                  const weekStart = new Date(week[0]);
-                  weekStart.setHours(0, 0, 0, 0);
-                  const weekEnd = new Date(week[6]);
-                  weekEnd.setHours(23, 59, 59, 999);
-                  const normalizedCalendarDate = new Date(calendarDate);
-                  normalizedCalendarDate.setHours(12, 0, 0, 0);
-                  return normalizedCalendarDate >= weekStart && normalizedCalendarDate <= weekEnd;
+              return orderedWeeks.map((week, weekIndex) => {
+                // Find the original index in calculatedWeeks to get the correct week number
+                const originalIndex = calculatedWeeks.findIndex(w =>
+                  w[0].toDateString() === week[0].toDateString()
+                );
+                // If week not found in calculatedWeeks (generated week), use a placeholder number
+                const displayWeekNumber = originalIndex >= 0
+                  ? (weekSettings.weekOrder === 'descending'
+                    ? calculatedWeeks.length - originalIndex
+                    : originalIndex + 1)
+                  : 1; // Default to 1 for generated weeks
+
+                // Determine if this is the current week (contains TODAY, not calendarDate)
+                const weekStart = new Date(week[0]);
+                weekStart.setHours(0, 0, 0, 0);
+                const weekEnd = new Date(week[6]);
+                weekEnd.setHours(23, 59, 59, 999);
+                const today = new Date();
+                today.setHours(12, 0, 0, 0);
+                const isCurrentWeek = today >= weekStart && today <= weekEnd;
+                const isPastWeek = weekEnd < today;
+
+                // Determine if this is the viewed week (contains calendarDate - the week user navigated to)
+                const viewedDate = new Date(calendarDate);
+                viewedDate.setHours(12, 0, 0, 0);
+                const isViewedWeek = viewedDate >= weekStart && viewedDate <= weekEnd;
+                // Only show viewed indicator if it's different from current week
+                const showViewedIndicator = isViewedWeek && !isCurrentWeek;
+
+                // Calculate weeks offset from TODAY's week (not the viewed week)
+                // Get the start of the week containing TODAY
+                const todayWeekStart = new Date();
+                const dayOfWeek = todayWeekStart.getDay();
+                // Adjust to Monday (day 1), treating Sunday (0) as end of week
+                const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                todayWeekStart.setDate(todayWeekStart.getDate() - daysFromMonday);
+                todayWeekStart.setHours(0, 0, 0, 0);
+
+                // Calculate difference in weeks from TODAY
+                const msPerDay = 24 * 60 * 60 * 1000;
+                const daysDiff = Math.round((weekStart.getTime() - todayWeekStart.getTime()) / msPerDay);
+                const weekDiff = Math.round(daysDiff / 7);
+
+                // Get week label based on offset
+                const getWeekLabel = () => {
+                  if (isCurrentWeek) return 'Current Week';
+                  if (weekDiff === -1) return 'Last Week';
+                  if (weekDiff === 1) return '1 Week Out';
+                  if (weekDiff === 2) return '2 Weeks Out';
+                  if (weekDiff < 0) return `${Math.abs(weekDiff)} Weeks Ago`;
+                  return `${weekDiff} Weeks Out`;
+                };
+
+                // Check if this week has any active editors
+                // Convert to arrays to ensure we get fresh data on each render
+                const weekEditingWorkouts = Object.entries(editingWorkouts).filter(([dateKey]) => {
+                  return week.some(weekDate => getDateKey(weekDate) === dateKey);
                 });
 
-                // Show 1 week before, current week, and 2 weeks after (4 weeks total)
-                let weeksToDisplay: Date[][];
-                if (targetWeekIndex >= 0) {
-                  // Get range: 1 week before to 2 weeks after
-                  const startIdx = Math.max(0, targetWeekIndex - 1);
-                  const endIdx = Math.min(calculatedWeeks.length, targetWeekIndex + 3);
-                  weeksToDisplay = calculatedWeeks.slice(startIdx, endIdx);
-                } else {
-                  // Generate weeks around calendarDate if not in calculated weeks
-                  const weekStart = new Date(calendarDate);
-                  const dayOfWeek = weekStart.getDay();
-                  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-                  weekStart.setDate(weekStart.getDate() + diff);
-                  weekStart.setHours(12, 0, 0, 0);
+                const weekCreatingWorkouts = Object.entries(creatingWorkouts).filter(([dateKey]) => {
+                  return week.some(weekDate => getDateKey(weekDate) === dateKey);
+                });
 
-                  // Generate 4 weeks: 1 before, current, 2 after
-                  const generatedWeeks: Date[][] = [];
-                  for (let w = -1; w <= 2; w++) {
-                    const week: Date[] = [];
-                    for (let i = 0; i < 7; i++) {
-                      const day = new Date(weekStart);
-                      day.setDate(weekStart.getDate() + (w * 7) + i);
-                      week.push(day);
-                    }
-                    generatedWeeks.push(week);
-                  }
-                  weeksToDisplay = generatedWeeks;
+                // Also check openDates to ensure we have the latest state
+                const weekOpenDates = week.filter(weekDate => {
+                  const dateKey = getDateKey(weekDate);
+                  return openDates.has(dateKey);
+                });
+
+                const hasActiveEditors = weekEditingWorkouts.length > 0 || weekCreatingWorkouts.length > 0 || weekOpenDates.length > 0;
+
+                // Debug log
+                if (weekEditingWorkouts.length > 0 || weekCreatingWorkouts.length > 0) {
+                  console.log(`Week ${displayWeekNumber} hasActiveEditors:`, hasActiveEditors, {
+                    editing: weekEditingWorkouts.length,
+                    creating: weekCreatingWorkouts.length,
+                    openDates: weekOpenDates.length
+                  });
                 }
 
-                const orderedWeeks = weekSettings.weekOrder === 'descending'
-                  ? [...weeksToDisplay].reverse()
-                  : weeksToDisplay;
-
-                return orderedWeeks.map((week, weekIndex) => {
-                  // Find the original index in calculatedWeeks to get the correct week number
-                  const originalIndex = calculatedWeeks.findIndex(w =>
-                    w[0].toDateString() === week[0].toDateString()
-                  );
-                  // If week not found in calculatedWeeks (generated week), use a placeholder number
-                  const displayWeekNumber = originalIndex >= 0
-                    ? (weekSettings.weekOrder === 'descending'
-                      ? calculatedWeeks.length - originalIndex
-                      : originalIndex + 1)
-                    : 1; // Default to 1 for generated weeks
-
-                  // Determine if this is the current week (contains TODAY, not calendarDate)
-                  const weekStart = new Date(week[0]);
-                  weekStart.setHours(0, 0, 0, 0);
-                  const weekEnd = new Date(week[6]);
-                  weekEnd.setHours(23, 59, 59, 999);
-                  const today = new Date();
-                  today.setHours(12, 0, 0, 0);
-                  const isCurrentWeek = today >= weekStart && today <= weekEnd;
-                  const isPastWeek = weekEnd < today;
-                  
-                  // Determine if this is the viewed week (contains calendarDate - the week user navigated to)
-                  const viewedDate = new Date(calendarDate);
-                  viewedDate.setHours(12, 0, 0, 0);
-                  const isViewedWeek = viewedDate >= weekStart && viewedDate <= weekEnd;
-                  // Only show viewed indicator if it's different from current week
-                  const showViewedIndicator = isViewedWeek && !isCurrentWeek;
-                  
-                  // Calculate weeks offset from TODAY's week (not the viewed week)
-                  // Get the start of the week containing TODAY
-                  const todayWeekStart = new Date();
-                  const dayOfWeek = todayWeekStart.getDay();
-                  // Adjust to Monday (day 1), treating Sunday (0) as end of week
-                  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-                  todayWeekStart.setDate(todayWeekStart.getDate() - daysFromMonday);
-                  todayWeekStart.setHours(0, 0, 0, 0);
-                  
-                  // Calculate difference in weeks from TODAY
-                  const msPerDay = 24 * 60 * 60 * 1000;
-                  const daysDiff = Math.round((weekStart.getTime() - todayWeekStart.getTime()) / msPerDay);
-                  const weekDiff = Math.round(daysDiff / 7);
-                  
-                  // Get week label based on offset
-                  const getWeekLabel = () => {
-                    if (isCurrentWeek) return 'Current Week';
-                    if (weekDiff === -1) return 'Last Week';
-                    if (weekDiff === 1) return '1 Week Out';
-                    if (weekDiff === 2) return '2 Weeks Out';
-                    if (weekDiff < 0) return `${Math.abs(weekDiff)} Weeks Ago`;
-                    return `${weekDiff} Weeks Out`;
-                  };
-
-                  // Check if this week has any active editors
-                  // Convert to arrays to ensure we get fresh data on each render
-                  const weekEditingWorkouts = Object.entries(editingWorkouts).filter(([dateKey]) => {
-                    return week.some(weekDate => getDateKey(weekDate) === dateKey);
-                  });
-
-                  const weekCreatingWorkouts = Object.entries(creatingWorkouts).filter(([dateKey]) => {
-                    return week.some(weekDate => getDateKey(weekDate) === dateKey);
-                  });
-
-                  // Also check openDates to ensure we have the latest state
-                  const weekOpenDates = week.filter(weekDate => {
-                    const dateKey = getDateKey(weekDate);
-                    return openDates.has(dateKey);
-                  });
-
-                  const hasActiveEditors = weekEditingWorkouts.length > 0 || weekCreatingWorkouts.length > 0 || weekOpenDates.length > 0;
-
-                  // Debug log
-                  if (weekEditingWorkouts.length > 0 || weekCreatingWorkouts.length > 0) {
-                    console.log(`Week ${displayWeekNumber} hasActiveEditors:`, hasActiveEditors, {
-                      editing: weekEditingWorkouts.length,
-                      creating: weekCreatingWorkouts.length,
-                      openDates: weekOpenDates.length
-                    });
-                  }
-
-                  return (
-                    <div
-                      key={`week-${weekIndex}-${Object.keys(editingWorkouts).length}-${Object.keys(creatingWorkouts).length}-${openDates.size}`}
-                      className={`bg-white rounded-lg shadow-sm border overflow-hidden ${
-                        isCurrentWeek 
-                          ? 'border-blue-400 ring-2 ring-blue-100' 
-                          : showViewedIndicator
-                            ? 'border-purple-400 ring-2 ring-purple-100'
-                            : isPastWeek 
-                              ? 'border-gray-200 opacity-75' 
-                              : 'border-gray-200'
+                return (
+                  <div
+                    key={`week-${weekIndex}-${Object.keys(editingWorkouts).length}-${Object.keys(creatingWorkouts).length}-${openDates.size}`}
+                    className={`bg-white rounded-lg shadow-sm border overflow-hidden ${isCurrentWeek
+                      ? 'border-blue-400 ring-2 ring-blue-100'
+                      : showViewedIndicator
+                        ? 'border-purple-400 ring-2 ring-purple-100'
+                        : isPastWeek
+                          ? 'border-gray-200 opacity-75'
+                          : 'border-gray-200'
                       }`}
-                    >
-                      {/* Week Header */}
-                      <div className={`border-b border-gray-200 px-4 py-2 ${
-                        isCurrentWeek 
-                          ? 'bg-gradient-to-r from-blue-50 to-blue-100' 
-                          : showViewedIndicator
-                            ? 'bg-gradient-to-r from-purple-50 to-purple-100'
-                            : isPastWeek
-                              ? 'bg-gradient-to-r from-gray-100 to-gray-150'
-                              : 'bg-gradient-to-r from-gray-50 to-gray-100'
+                  >
+                    {/* Week Header */}
+                    <div className={`border-b border-gray-200 px-4 py-2 ${isCurrentWeek
+                      ? 'bg-gradient-to-r from-blue-50 to-blue-100'
+                      : showViewedIndicator
+                        ? 'bg-gradient-to-r from-purple-50 to-purple-100'
+                        : isPastWeek
+                          ? 'bg-gradient-to-r from-gray-100 to-gray-150'
+                          : 'bg-gradient-to-r from-gray-50 to-gray-100'
                       }`}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <h3 className={`text-sm ${
-                              isCurrentWeek 
-                                ? 'font-bold text-blue-800' 
-                                : showViewedIndicator 
-                                  ? 'font-bold text-purple-800'
-                                  : 'font-semibold text-gray-800'
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h3 className={`text-sm ${isCurrentWeek
+                            ? 'font-bold text-blue-800'
+                            : showViewedIndicator
+                              ? 'font-bold text-purple-800'
+                              : 'font-semibold text-gray-800'
                             }`}>
-                              {week[0]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {week[week.length - 1]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </h3>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              isCurrentWeek 
-                                ? 'bg-blue-500 text-white font-bold' 
-                                : showViewedIndicator
-                                  ? 'bg-purple-500 text-white font-bold'
-                                  : isPastWeek
-                                    ? 'bg-gray-400 text-white font-medium'
-                                    : 'bg-gray-200 text-gray-600 font-medium'
+                            {week[0]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {week[week.length - 1]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </h3>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${isCurrentWeek
+                            ? 'bg-blue-500 text-white font-bold'
+                            : showViewedIndicator
+                              ? 'bg-purple-500 text-white font-bold'
+                              : isPastWeek
+                                ? 'bg-gray-400 text-white font-medium'
+                                : 'bg-gray-200 text-gray-600 font-medium'
                             }`}>
-                              {getWeekLabel()}
-                              {showViewedIndicator && ' • Viewing'}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {hasActiveEditors && (
-                              <div className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-medium">
-                                {weekEditingWorkouts.length + weekCreatingWorkouts.length} editing
-                              </div>
-                            )}
-                          </div>
+                            {getWeekLabel()}
+                            {showViewedIndicator && ' • Viewing'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {hasActiveEditors && (
+                            <div className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-medium">
+                              {weekEditingWorkouts.length + weekCreatingWorkouts.length} editing
+                            </div>
+                          )}
                         </div>
                       </div>
+                    </div>
 
-                      {/* Days Grid */}
-                      <div className={`grid ${weekSettings.showWeekends ? 'grid-cols-7' : 'grid-cols-5'} divide-x divide-gray-200`}>
-                        {/* Day Headers */}
-                        {(weekSettings.showWeekends
-                          ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-                          : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-                        ).map((day, index) => (
-                          <div key={index} className="bg-gray-50 text-center text-xs font-semibold text-gray-700 py-3 border-b border-gray-200">
-                            <div className="hidden sm:block">{day}</div>
-                            <div className="sm:hidden">{day.slice(0, 3)}</div>
-                          </div>
-                        ))}
+                    {/* Days Grid */}
+                    <div className={`grid ${weekSettings.showWeekends ? 'grid-cols-7' : 'grid-cols-5'} divide-x divide-gray-200`}>
+                      {/* Day Headers */}
+                      {(weekSettings.showWeekends
+                        ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                        : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+                      ).map((day, index) => (
+                        <div key={index} className="bg-gray-50 text-center text-xs font-semibold text-gray-700 py-3 border-b border-gray-200">
+                          <div className="hidden sm:block">{day}</div>
+                          <div className="sm:hidden">{day.slice(0, 3)}</div>
+                        </div>
+                      ))}
 
-                        {/* Day Cells */}
-                        {week
-                          .filter((date) => {
-                            if (weekSettings.showWeekends) return true;
-                            const dayOfWeek = date.getDay();
-                            return dayOfWeek !== 0 && dayOfWeek !== 6;
-                          })
-                          .map((date, dayIndex) => {
-                            const workout = getWorkoutForDate(date);
-                            const inPeriod = isDateInPeriod(date);
-                            const categoryInfo = getCategoryForDate(date);
-                            const dateKey = getDateKey(date);
-                            const isEditingThisDate = openDates.has(dateKey);
-                            const editingWorkout = editingWorkouts[dateKey];
-                            const createWorkoutData = creatingWorkouts[dateKey];
-                            const isToday = date.toDateString() === new Date().toDateString();
+                      {/* Day Cells */}
+                      {week
+                        .filter((date) => {
+                          if (weekSettings.showWeekends) return true;
+                          const dayOfWeek = date.getDay();
+                          return dayOfWeek !== 0 && dayOfWeek !== 6;
+                        })
+                        .map((date, dayIndex) => {
+                          const workout = getWorkoutForDate(date);
+                          const inPeriod = isDateInPeriod(date);
+                          const categoryInfo = getCategoryForDate(date);
+                          const dateKey = getDateKey(date);
+                          const isEditingThisDate = openDates.has(dateKey);
+                          const editingWorkout = editingWorkouts[dateKey];
+                          const createWorkoutData = creatingWorkouts[dateKey];
+                          const isToday = date.toDateString() === new Date().toDateString();
 
-                            // Filter by selected categories
-                            const shouldShow = !categoryInfo || selectedCategories.length === 0 || selectedCategories.includes(categoryInfo.category);
+                          // Filter by selected categories
+                          const shouldShow = !categoryInfo || selectedCategories.length === 0 || selectedCategories.includes(categoryInfo.category);
 
-                            if (!shouldShow) {
-                              return (
-                                <div key={dayIndex} className="min-h-[160px] bg-gray-50 opacity-30">
-                                  <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
-                                    <div className="text-sm font-semibold text-gray-400">{date.getDate()}</div>
-                                  </div>
-                                </div>
-                              );
-                            }
-
+                          if (!shouldShow) {
                             return (
-                              <div key={dayIndex} className={`min-h-[160px] relative ${
-                                isEditingThisDate && !isToday 
-                                  ? 'bg-amber-50 border-2 border-amber-400' 
-                                  : isToday 
-                                    ? 'bg-blue-50 border-2 border-blue-300' 
-                                    : inPeriod 
-                                      ? 'bg-white' 
-                                      : 'bg-gray-50'
+                              <div key={dayIndex} className="min-h-[160px] bg-gray-50 opacity-30">
+                                <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+                                  <div className="text-sm font-semibold text-gray-400">{date.getDate()}</div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={dayIndex} className={`min-h-[160px] relative ${isEditingThisDate && !isToday
+                              ? 'bg-amber-50 border-2 border-amber-400'
+                              : isToday
+                                ? 'bg-blue-50 border-2 border-blue-300'
+                                : inPeriod
+                                  ? 'bg-white'
+                                  : 'bg-gray-50'
                               } ${!inPeriod && !isToday && !isEditingThisDate ? 'opacity-60' : ''}`}>
 
-                                {/* Date Header */}
-                                <div className={`px-3 py-2 border-b border-gray-100 ${
-                                  isEditingThisDate && !isToday
-                                    ? 'bg-amber-100'
-                                    : isToday 
-                                      ? 'bg-blue-100' 
-                                      : 'bg-gray-50'
+                              {/* Date Header */}
+                              <div className={`px-3 py-2 border-b border-gray-100 ${isEditingThisDate && !isToday
+                                ? 'bg-amber-100'
+                                : isToday
+                                  ? 'bg-blue-100'
+                                  : 'bg-gray-50'
                                 }`}>
-                                  <div className={`text-sm font-semibold ${
-                                    isEditingThisDate && !isToday
-                                      ? 'text-amber-800 font-bold'
-                                      : isToday 
-                                        ? 'text-blue-700 font-bold' 
-                                        : 'text-gray-700'
+                                <div className={`text-sm font-semibold ${isEditingThisDate && !isToday
+                                  ? 'text-amber-800 font-bold'
+                                  : isToday
+                                    ? 'text-blue-700 font-bold'
+                                    : 'text-gray-700'
                                   }`}>
-                                    {date.getDate()}
-                                  </div>
-                                  {isEditingThisDate && (
-                                    <div className={`text-xs font-medium ${
-                                      isToday ? 'text-blue-600' : 'text-amber-700'
-                                    }`}>
-                                      ✏️ Editing {editingWorkout?.categoryName || createWorkoutData?.category || ''}
-                                    </div>
-                                  )}
+                                  {date.getDate()}
                                 </div>
-
-                                {/* Workout Content - Show workout or empty state (no loading skeleton) */}
-                                {workout ? (
-                                  // Show workout title - clicking toggles editor
-                                  <div>
-                                    <button
-                                      className="w-full text-left p-0.5 hover:bg-gray-50 transition-colors"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEditWorkout(workout);
-                                      }}
-                                    >
-                                      {/* Show applied template indicator */}
-                                      {workout.appliedTemplateId && (
-                                        <div className="text-[8px] text-gray-500 px-1">
-                                          {workoutStructureTemplates.find(t => t.id === workout.appliedTemplateId)?.name}
-                                        </div>
-                                      )}
-                                      {/* Show workout's actual category (prioritize over period's category) */}
-                                      {workout.categoryName ? (
-                                        <div
-                                          className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5"
-                                          style={{ 
-                                            backgroundColor: workoutCategories.find((wc: any) => wc.name === workout.categoryName)?.color || categoryInfo?.color || '#6b7280'
-                                          }}
-                                        >
-                                          {workout.categoryName}
-                                        </div>
-                                      ) : categoryInfo ? (
-                                        <div
-                                          className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5"
-                                          style={{ backgroundColor: categoryInfo.color }}
-                                        >
-                                          {categoryInfo.category}
-                                        </div>
-                                      ) : null}
-                                      <div className="text-xs text-gray-700 font-medium px-1">
-                                        {workout.title || 'Untitled'}
-                                      </div>
-                                    </button>
-                                  </div>
-                                ) : categoryInfo ? (
-                                  // Show category with + button - clicking creates/toggles editor
-                                  <div>
-                                    <button
-                                      className="w-full text-left p-0.5 hover:bg-gray-100 transition-colors border border-dashed border-gray-300"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleCreateWorkout(date, categoryInfo.category, categoryInfo.color);
-                                      }}
-                                    >
-                                      <div
-                                        className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5 flex items-center justify-between"
-                                        style={{ backgroundColor: categoryInfo.color }}
-                                      >
-                                        <span>{categoryInfo.category}</span>
-                                        {workoutCategories.find((wc: any) => wc.name === categoryInfo.category)?.linkedWorkoutStructureTemplateId && (
-                                          <span className="text-[8px] opacity-75">★</span>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center justify-center text-gray-400 mt-0.5">
-                                        <Plus className="w-3 h-3 icon-add" />
-                                      </div>
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="p-3 flex flex-col items-center justify-center text-center h-full">
-                                    <div className="text-gray-400 text-xs">
-                                      {inPeriod ? (
-                                        <>
-                                          <div className="text-lg mb-1">📅</div>
-                                          <div>No category assigned</div>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <div className="text-lg mb-1">🚫</div>
-                                          <div>Outside training period</div>
-                                        </>
-                                      )}
-                                    </div>
+                                {isEditingThisDate && (
+                                  <div className={`text-xs font-medium ${isToday ? 'text-blue-600' : 'text-amber-700'
+                                    }`}>
+                                    ✏️ Editing {editingWorkout?.categoryName || createWorkoutData?.category || ''}
                                   </div>
                                 )}
                               </div>
-                            );
-                          })}
-                      </div>
 
-                      {/* Expandable Editors Section - Only show if this week has active editors */}
-                      {hasActiveEditors && (
-                        <div className="border-t border-gray-200 bg-gray-50">
-                          {/* Editors Horizontal Scroll - Optimized for 2 workouts side-by-side */}
-                          <div className="p-2 overflow-x-auto">
-                            <div className="flex gap-4 min-w-max border border-gray-200" style={{ maxWidth: 'calc(2 * 560px + 1rem)' }}>
-                              {/* All Editors in Chronological Order - Show max 2 at a time */}
-                              {[...weekEditingWorkouts, ...weekCreatingWorkouts]
-                                .sort(([dateKeyA], [dateKeyB]) => new Date(dateKeyA).getTime() - new Date(dateKeyB).getTime())
-                                .slice(0, 2) // Limit to 2 workouts for optimal viewing
-                                .map(([dateKey, workoutOrCreateData], index, array) => {
-                                  const isEditing = weekEditingWorkouts.some(([key]) => key === dateKey);
-                                  const workout = isEditing ? workoutOrCreateData : null;
-                                  const createData = !isEditing ? workoutOrCreateData : null;
-                                  const isLast = index === array.length - 1;
-
-                                  return (
-                                    <div
-                                      key={isEditing ? `editing-${dateKey}` : `creating-${dateKey}`}
-                                      className={`flex-shrink-0 w-[560px] bg-white shadow-lg overflow-visible ${!isLast ? 'border-r border-gray-200' : ''
-                                        }`}
-                                    >
-                                      <div className="border-b px-3 py-1.5 flex items-center justify-between bg-gray-50 border-gray-200 sticky top-0 z-20">
-                                        <h3 className="text-sm font-semibold text-gray-900">
-                                          {isEditing ? '📝 Edit' : '➕ Create'} - {(() => {
-                                            // Parse dateKey (YYYY-MM-DD) as local date to avoid timezone issues
-                                            const [year, month, day] = dateKey.split('-').map(Number);
-                                            const date = new Date(year, month - 1, day);
-                                            return date.toLocaleDateString('en-US', {
-                                              weekday: 'short',
-                                              month: 'short',
-                                              day: 'numeric'
-                                            });
-                                          })()}
-                                        </h3>
-                                        <div className="flex items-center gap-1 relative z-30">
-                                          {/* Cancel button */}
-                                          <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              handleCloseEditor(dateKey, workout?.id);
-                                            }}
-                                            className="h-6 text-xs px-2 relative z-30"
-                                          >
-                                            Cancel
-                                          </Button>
-                                          {/* Save button */}
-                                          <Button
-                                            type="button"
-                                            size="sm"
-                                            onClick={async (e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              const editor = editorRefs.current[dateKey];
-                                              if (editor) {
-                                                setSavingEditors(prev => new Set(prev).add(dateKey));
-                                                try {
-                                                  await editor.save();
-                                                } finally {
-                                                  setSavingEditors(prev => {
-                                                    const next = new Set(prev);
-                                                    next.delete(dateKey);
-                                                    return next;
-                                                  });
-                                                }
-                                              }
-                                            }}
-                                            disabled={savingEditors.has(dateKey)}
-                                            className="h-6 text-xs px-2 relative z-30"
-                                          >
-                                            {savingEditors.has(dateKey) ? 'Saving...' : 'Save'}
-                                          </Button>
-                                          {/* Delete/Discard button */}
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              if (isEditing && workout?.id) {
-                                                showDeleteConfirmation(workout.id, dateKey);
-                                              } else {
-                                                handleCloseEditor(dateKey, workout?.id);
-                                              }
-                                            }}
-                                            className={`p-1 rounded cursor-pointer relative z-30 ${isEditing ? 'text-red-500 hover:text-red-700 hover:bg-red-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'}`}
-                                            title={isEditing ? 'Delete workout' : 'Discard'}
-                                          >
-                                            ✕
-                                          </button>
-                                        </div>
+                              {/* Workout Content - Show workout or empty state (no loading skeleton) */}
+                              {workout ? (
+                                // Show workout title - clicking toggles editor
+                                <div>
+                                  <button
+                                    className="w-full text-left p-0.5 hover:bg-gray-50 transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditWorkout(workout);
+                                    }}
+                                  >
+                                    {/* Show applied template indicator */}
+                                    {workout.appliedTemplateId && (
+                                      <div className="text-[8px] text-gray-500 px-1">
+                                        {workoutStructureTemplates.find(t => t.id === workout.appliedTemplateId)?.name}
                                       </div>
-                                      <div className="p-0 relative z-10">
-                                        <WorkoutEditor
-                                          ref={(el) => { editorRefs.current[dateKey] = el; }}
-                                          workout={workout}
-                                          isOpen={true}
-                                          onClose={() => handleCloseEditor(dateKey, workout?.id)}
-                                          onSave={(workoutData) => handleSaveWorkout(workoutData, dateKey)}
-                                          onDelete={() => handleDeleteWorkout(workout?.id, dateKey)}
-                                          isCreating={!isEditing}
-                                          expandedInline={true}
-                                          hideTopActionBar={true}
-                                          initialRounds={createData ? generateInitialRounds(createData?.appliedTemplateId) : undefined}
-                                          appliedTemplateId={createData?.appliedTemplateId}
-                                          eventId={getEventIdForWorkout(workout, dateKey)}
-                                          externalVisibleColumns={visibleColumns}
-                                          onExternalColumnVisibilityChange={handleColumnVisibilityChange}
-                                          draftKey={clientId ? `${dateKey}-${clientId}${workout?.id ? `-${workout.id}` : '-new'}` : undefined}
-                                        />
+                                    )}
+                                    {/* Show workout's actual category (prioritize over period's category) */}
+                                    {workout.categoryName ? (
+                                      <div
+                                        className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5"
+                                        style={{
+                                          backgroundColor: workoutCategories.find((wc: any) => wc.name === workout.categoryName)?.color || categoryInfo?.color || '#6b7280'
+                                        }}
+                                      >
+                                        {workout.categoryName}
+                                      </div>
+                                    ) : categoryInfo ? (
+                                      <div
+                                        className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5"
+                                        style={{ backgroundColor: categoryInfo.color }}
+                                      >
+                                        {categoryInfo.category}
+                                      </div>
+                                    ) : null}
+                                    <div className="text-xs text-gray-700 font-medium px-1">
+                                      {workout.title || 'Untitled'}
+                                    </div>
+                                  </button>
+                                </div>
+                              ) : categoryInfo ? (
+                                // Show category with + button - clicking creates/toggles editor
+                                <div>
+                                  <button
+                                    className="w-full text-left p-0.5 hover:bg-gray-100 transition-colors border border-dashed border-gray-300"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCreateWorkout(date, categoryInfo.category, categoryInfo.color);
+                                    }}
+                                  >
+                                    <div
+                                      className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5 flex items-center justify-between"
+                                      style={{ backgroundColor: categoryInfo.color }}
+                                    >
+                                      <span>{categoryInfo.category}</span>
+                                      {workoutCategories.find((wc: any) => wc.name === categoryInfo.category)?.linkedWorkoutStructureTemplateId && (
+                                        <span className="text-[8px] opacity-75">★</span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center justify-center text-gray-400 mt-0.5">
+                                      <Plus className="w-3 h-3 icon-add" />
+                                    </div>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="p-3 flex flex-col items-center justify-center text-center h-full">
+                                  <div className="text-gray-400 text-xs">
+                                    {inPeriod ? (
+                                      <>
+                                        <div className="text-lg mb-1">📅</div>
+                                        <div>No category assigned</div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="text-lg mb-1">🚫</div>
+                                        <div>Outside training period</div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+
+                    {/* Expandable Editors Section - Only show if this week has active editors */}
+                    {hasActiveEditors && (
+                      <div className="border-t border-gray-200 bg-gray-50">
+                        {/* Editors Horizontal Scroll - Optimized for 2 workouts side-by-side */}
+                        <div className="p-2 overflow-x-auto">
+                          <div className="flex gap-4 min-w-max border border-gray-200" style={{ maxWidth: 'calc(2 * 560px + 1rem)' }}>
+                            {/* All Editors in Chronological Order - Show max 2 at a time */}
+                            {[...weekEditingWorkouts, ...weekCreatingWorkouts]
+                              .sort(([dateKeyA], [dateKeyB]) => new Date(dateKeyA).getTime() - new Date(dateKeyB).getTime())
+                              .slice(0, 2) // Limit to 2 workouts for optimal viewing
+                              .map(([dateKey, workoutOrCreateData], index, array) => {
+                                const isEditing = weekEditingWorkouts.some(([key]) => key === dateKey);
+                                const workout = isEditing ? workoutOrCreateData : null;
+                                const createData = !isEditing ? workoutOrCreateData : null;
+                                const isLast = index === array.length - 1;
+
+                                return (
+                                  <div
+                                    key={isEditing ? `editing-${dateKey}` : `creating-${dateKey}`}
+                                    className={`flex-shrink-0 w-[560px] bg-white shadow-lg overflow-visible ${!isLast ? 'border-r border-gray-200' : ''
+                                      }`}
+                                  >
+                                    <div className="border-b px-3 py-1.5 flex items-center justify-between bg-gray-50 border-gray-200 sticky top-0 z-20">
+                                      <h3 className="text-sm font-semibold text-gray-900">
+                                        {isEditing ? '📝 Edit' : '➕ Create'} - {(() => {
+                                          // Parse dateKey (YYYY-MM-DD) as local date to avoid timezone issues
+                                          const [year, month, day] = dateKey.split('-').map(Number);
+                                          const date = new Date(year, month - 1, day);
+                                          return date.toLocaleDateString('en-US', {
+                                            weekday: 'short',
+                                            month: 'short',
+                                            day: 'numeric'
+                                          });
+                                        })()}
+                                      </h3>
+                                      <div className="flex items-center gap-1 relative z-30">
+                                        {/* Cancel button */}
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleCloseEditor(dateKey, workout?.id);
+                                          }}
+                                          className="h-6 text-xs px-2 relative z-30"
+                                        >
+                                          Cancel
+                                        </Button>
+                                        {/* Save button */}
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={async (e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            const editor = editorRefs.current[dateKey];
+                                            if (editor) {
+                                              setSavingEditors(prev => new Set(prev).add(dateKey));
+                                              try {
+                                                await editor.save();
+                                              } finally {
+                                                setSavingEditors(prev => {
+                                                  const next = new Set(prev);
+                                                  next.delete(dateKey);
+                                                  return next;
+                                                });
+                                              }
+                                            }
+                                          }}
+                                          disabled={savingEditors.has(dateKey)}
+                                          className="h-6 text-xs px-2 relative z-30"
+                                        >
+                                          {savingEditors.has(dateKey) ? 'Saving...' : 'Save'}
+                                        </Button>
+                                        {/* Delete/Discard button */}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (isEditing && workout?.id) {
+                                              showDeleteConfirmation(workout.id, dateKey);
+                                            } else {
+                                              handleCloseEditor(dateKey, workout?.id);
+                                            }
+                                          }}
+                                          className={`p-1 rounded cursor-pointer relative z-30 ${isEditing ? 'text-red-500 hover:text-red-700 hover:bg-red-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'}`}
+                                          title={isEditing ? 'Delete workout' : 'Discard'}
+                                        >
+                                          ✕
+                                        </button>
                                       </div>
                                     </div>
-                                  );
-                                })}
-                            </div>
+                                    <div className="p-0 relative z-10">
+                                      <WorkoutEditor
+                                        ref={(el) => { editorRefs.current[dateKey] = el; }}
+                                        workout={workout}
+                                        isOpen={true}
+                                        onClose={() => handleCloseEditor(dateKey, workout?.id)}
+                                        onSave={(workoutData) => handleSaveWorkout(workoutData, dateKey)}
+                                        onDelete={() => handleDeleteWorkout(workout?.id, dateKey)}
+                                        isCreating={!isEditing}
+                                        expandedInline={true}
+                                        hideTopActionBar={true}
+                                        initialRounds={createData ? generateInitialRounds(createData?.appliedTemplateId) : undefined}
+                                        appliedTemplateId={createData?.appliedTemplateId}
+                                        eventId={getEventIdForWorkout(workout, dateKey)}
+                                        externalVisibleColumns={visibleColumns}
+                                        onExternalColumnVisibilityChange={handleColumnVisibilityChange}
+                                        draftKey={clientId ? `${dateKey}-${clientId}${workout?.id ? `-${workout.id}` : '-new'}` : undefined}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
                           </div>
                         </div>
-                      )}
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-          </>
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </>
 
       </div>
 
@@ -2013,7 +1984,7 @@ export default function BuilderPage() {
           <DialogHeader>
             <DialogTitle>Delete Workout</DialogTitle>
             <DialogDescription>
-              {deleteDialogData?.linkedEventId 
+              {deleteDialogData?.linkedEventId
                 ? 'This workout is linked to a calendar event. What would you like to do?'
                 : 'Are you sure you want to delete this workout? This cannot be undone.'
               }
@@ -2056,8 +2027,8 @@ export default function BuilderPage() {
                 ) : (
                   <div className="border rounded-lg p-3 space-y-3">
                     <div className="text-sm font-medium">Select new category:</div>
-                    <Select 
-                      value={deleteDialogNewCategory} 
+                    <Select
+                      value={deleteDialogNewCategory}
                       onValueChange={setDeleteDialogNewCategory}
                     >
                       <SelectTrigger className="w-full">
@@ -2068,8 +2039,8 @@ export default function BuilderPage() {
                           cat.name && (
                             <SelectItem key={cat.id} value={cat.name}>
                               <div className="flex items-center gap-2">
-                                <div 
-                                  className="w-3 h-3 rounded-full" 
+                                <div
+                                  className="w-3 h-3 rounded-full"
                                   style={{ backgroundColor: cat.color }}
                                 />
                                 {cat.name}
@@ -2127,8 +2098,8 @@ export default function BuilderPage() {
           </div>
 
           <DialogFooter>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={() => {
                 setDeleteDialogOpen(false);
                 setDeleteDialogData(null);

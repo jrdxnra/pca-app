@@ -1,0 +1,44 @@
+# Run these commands one at a time from ~/projects/pca-main
+# Each command will prompt you to paste the value
+
+# GOOGLE_CLIENT_ID (Production)
+vercel env add GOOGLE_CLIENT_ID production
+# Paste: 63362206075-2lkbi4ilk5n41eroa9oo36gtuh9hlddd.apps.googleusercontent.com
+
+# GOOGLE_CLIENT_ID (Preview)
+vercel env add GOOGLE_CLIENT_ID preview
+# Paste: 63362206075-2lkbi4ilk5n41eroa9oo36gtuh9hlddd.apps.googleusercontent.com
+
+# GOOGLE_CLIENT_ID (Development)
+vercel env add GOOGLE_CLIENT_ID development
+# Paste: 63362206075-2lkbi4ilk5n41eroa9oo36gtuh9hlddd.apps.googleusercontent.com
+
+# GOOGLE_CLIENT_SECRET (Production)
+vercel env add GOOGLE_CLIENT_SECRET production
+# Paste: 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
+
+# GOOGLE_CLIENT_SECRET (Preview)
+vercel env add GOOGLE_CLIENT_SECRET preview
+# Paste: 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
+
+# GOOGLE_CLIENT_SECRET (Development)
+vercel env add GOOGLE_CLIENT_SECRET development
+# Paste: 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
+
+# GOOGLE_REDIRECT_URI (Production)
+vercel env add GOOGLE_REDIRECT_URI production
+# Paste: https://pca-app-eta.vercel.app/api/auth/google/callback
+
+# GOOGLE_REDIRECT_URI (Preview)
+vercel env add GOOGLE_REDIRECT_URI preview
+# Paste: https://pca-app-eta.vercel.app/api/auth/google/callback
+
+# GOOGLE_REDIRECT_URI (Development)
+vercel env add GOOGLE_REDIRECT_URI development
+# Paste: http://localhost:3000/api/auth/google/callback
+
+# Then verify:
+vercel env ls
+
+# Then redeploy:
+vercel --prod

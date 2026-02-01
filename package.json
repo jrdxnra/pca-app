@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-  "dev": "CHOKIDAR_USEPOLLING=true next dev -H 0.0.0.0 --webpack",
-  "dev:emulator": "CHOKIDAR_USEPOLLING=true NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true next dev -H 0.0.0.0 --webpack",
+    "dev": "next dev --webpack",
+    "dev:emulator": " NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true next dev -H 0.0.0.0 --webpack",
     "emulators": "firebase emulators:start",
     "emulators:exec": "firebase emulators:exec",
     "build": "next build",

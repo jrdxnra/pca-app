@@ -9,10 +9,12 @@ import { Trash2, MoreVertical } from 'lucide-react';
 import { RepWheelPicker } from './RepWheelPicker';
 import { RPEWheelPicker } from './RPEWheelPicker';
 import { CategoryWheelPicker } from './CategoryWheelPicker';
-import { 
+import { MovementWheelPicker } from './MovementWheelPicker';
+import { DistanceUnitPicker } from './DistanceUnitPicker';
+import {
   ClientWorkoutMovementUsage,
   Movement,
-  MovementCategory 
+  MovementCategory
 } from '@/lib/types';
 import { getRecentExercisePerformance } from '@/lib/firebase/services/clients';
 import { calculateWeightFromOneRepMax, calculateOneRepMax } from '@/lib/utils/rpe-calculator';
@@ -62,12 +64,12 @@ export function InlineMovementEditor({
   gridTemplateColumns,
   unifiedEnabledFields
 }: InlineMovementEditorProps) {
-  
+
   // State for context menu and notes
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [showNotes, setShowNotes] = useState(!!usage.note);
   const contextMenuRef = useRef<HTMLButtonElement>(null);
-  
+
   // Get movement and category info
   const selectedMovement = movements.find(m => m.id === usage.movementId);
   const selectedCategory = categories.find(c => c.id === usage.categoryId);
@@ -76,21 +78,21 @@ export function InlineMovementEditor({
   // Auto-populate weight/reps from recent performance when movement is selected
   const previousMovementIdRef = useRef<string | undefined>(usage.movementId);
   const previousRepsRef = useRef<string | number | undefined>(usage.targetWorkload.reps);
-  
+
   // Calculate weight from 1RM when reps are entered or changed
   useEffect(() => {
     // Track if reps actually changed
     const repsChanged = previousRepsRef.current !== usage.targetWorkload.reps;
     previousRepsRef.current = usage.targetWorkload.reps;
-    
+
     // Proceed even if movement metadata isn't loaded yet; fall back to defaults
     if (!clientId || !usage.movementId) return;
     const supportsWeight = selectedMovement?.configuration?.use_weight ?? true;
     if (!supportsWeight) return;
-    
+
     // Only process if reps are set
     const repsValue = usage.targetWorkload.reps;
-    
+
     // Parse reps - handle ranges like "8-12" by using the average
     let repCount: number | null = null;
     if (typeof repsValue === 'string') {
@@ -105,15 +107,15 @@ export function InlineMovementEditor({
     } else if (typeof repsValue === 'number') {
       repCount = repsValue;
     }
-    
+
     if (!repCount || repCount < 1 || isNaN(repCount)) return;
-    
+
     console.log('[InlineMovementEditor] Reps effect triggered', {
       repsChanged,
       repCount,
       movementId: usage.movementId
     });
-    
+
     // Fetch recent performance and calculate weight from 1RM
     getRecentExercisePerformance(clientId, usage.movementId)
       .then(performance => {
@@ -170,14 +172,14 @@ export function InlineMovementEditor({
           oneRepMax,
           repCount
         );
-        
+
         console.log('[InlineMovementEditor] Updating weight to:', calculatedWeight, 'for', repCount, 'reps from 1RM:', oneRepMax);
         // Batch both updates into a single call to avoid race condition
         onUpdate({
           ...usage,
           targetWorkload: {
             ...usage.targetWorkload,
-            weight: calculatedWeight,
+            weight: calculatedWeight.toString(),
             useWeight: true
           }
         });
@@ -187,19 +189,19 @@ export function InlineMovementEditor({
         // Silent fail - don't interrupt user experience
       });
   }, [usage.targetWorkload.reps, clientId, usage.movementId]); // Trigger when reps change
-  
+
   useEffect(() => {
     // Only auto-populate when movementId changes (newly selected)
     const movementChanged = previousMovementIdRef.current !== usage.movementId;
-    
+
     // Always update the ref to track current movement
     previousMovementIdRef.current = usage.movementId;
-    
+
     // Don't run on initial mount or if movement didn't change
     if (!movementChanged) {
       return;
     }
-    
+
     if (clientId && usage.movementId && selectedMovement) {
       console.log('[InlineMovementEditor] Movement changed, checking recent performance', {
         movementId: usage.movementId,
@@ -208,7 +210,7 @@ export function InlineMovementEditor({
       // Only auto-populate if weight/reps are not already set
       const hasWeight = usage.targetWorkload.weight && usage.targetWorkload.weight.toString().trim() !== '';
       const hasReps = usage.targetWorkload.reps && usage.targetWorkload.reps.toString().trim() !== '';
-      
+
       // Only fetch if BOTH are empty (completely new movement selection)
       if (!hasWeight && !hasReps) {
         getRecentExercisePerformance(clientId, usage.movementId)
@@ -220,22 +222,22 @@ export function InlineMovementEditor({
                   ...usage.targetWorkload,
                 }
               };
-              
+
               let needsUpdate = false;
-              
+
               // Only update if not already set
               if (!hasWeight && performance.weight && selectedMovement.configuration.use_weight) {
                 updates.targetWorkload!.weight = performance.weight;
                 updates.targetWorkload!.useWeight = true;
                 needsUpdate = true;
               }
-              
+
               if (!hasReps && performance.repRange && selectedMovement.configuration.use_reps) {
                 updates.targetWorkload!.reps = performance.repRange;
                 updates.targetWorkload!.useReps = true;
                 needsUpdate = true;
               }
-              
+
               // Only update if we actually changed something
               if (needsUpdate) {
                 console.log('[InlineMovementEditor] Applied recent performance defaults', {
@@ -254,10 +256,10 @@ export function InlineMovementEditor({
       }
     }
   }, [usage.movementId, clientId]); // Only run when movement or client changes
-  
+
   // Debug logging
   if (usage.categoryId && filteredMovements.length === 0) {
-     // (noise removed) Previously logged when a category had no movements loaded
+    // (noise removed) Previously logged when a category had no movements loaded
   }
 
   // Close context menu when clicking outside
@@ -284,7 +286,7 @@ export function InlineMovementEditor({
           [workloadField]: value
         }
       };
-      console.log('[InlineMovementEditor] updateField calling onUpdate:', {field, value, workloadField, updatedWeight: updated.targetWorkload.weight});
+      console.log('[InlineMovementEditor] updateField calling onUpdate:', { field, value, workloadField, updatedWeight: updated.targetWorkload.weight });
       onUpdate(updated);
     } else {
       onUpdate({
@@ -307,11 +309,11 @@ export function InlineMovementEditor({
       'minmax(200px, 1fr)', // Exercise name (category dot + movement)
       selectedMovement?.configuration?.use_tempo ? '70px' : '', // 4 digits
       selectedMovement?.configuration?.use_reps ? '48px' : '', // 2 digits
-      selectedMovement?.configuration?.use_weight ? '80px' : '', // 3 digits + unit
+      selectedMovement?.configuration?.use_weight ? '58px' : '', // Input(40) + Unit(18) = 58
       selectedMovement?.configuration?.use_time ? '70px' : '', // 4 chars (2:30)
-      selectedMovement?.configuration?.use_distance ? '110px' : '', // 3 digits + unit
+      selectedMovement?.configuration?.use_distance ? '48px' : '', // Input(28) + Unit(20) = 48
       selectedMovement?.configuration?.use_percentage ? '58px' : '', // 2 digits + %
-      selectedMovement?.configuration?.use_rpe ? '60px' : '', // RPE dropdown
+      selectedMovement?.configuration?.use_rpe ? '25px' : '', // RPE dropdown
       '40px', // Three dots menu
     ].filter(col => col !== '').join(' ');
     return fallbackGrid;
@@ -326,7 +328,7 @@ export function InlineMovementEditor({
   const gridHasDistance = unifiedEnabledFields?.distance ?? (selectedMovement?.configuration?.use_distance ?? false);
   const gridHasRPE = unifiedEnabledFields?.rpe ?? (selectedMovement?.configuration?.use_rpe ?? false);
   const gridHasPercentage = unifiedEnabledFields?.percentage ?? (selectedMovement?.configuration?.use_percentage ?? false);
-  
+
   // Check if this specific movement supports each field
   const movementSupportsReps = selectedMovement?.configuration?.use_reps ?? false;
   const movementSupportsWeight = selectedMovement?.configuration?.use_weight ?? false;
@@ -338,12 +340,11 @@ export function InlineMovementEditor({
 
   return (
     <>
-      <div 
-        className={`grid items-center text-sm border-b border-r-0 border-gray-300 relative cursor-move overflow-visible ${
-          isDragging ? 'bg-blue-100 opacity-50' : 
-          isDropTarget ? 'bg-blue-100' : 
-          'bg-white hover:bg-gray-50'
-        }`}
+      <div
+        className={`grid items-center text-sm border-b border-r-0 border-gray-300 relative cursor-move overflow-visible ${isDragging ? 'bg-blue-100 opacity-50' :
+          isDropTarget ? 'bg-blue-100' :
+            'bg-white hover:bg-gray-50'
+          }`}
         style={{
           gridTemplateColumns: gridColumns
         }}
@@ -359,223 +360,232 @@ export function InlineMovementEditor({
         }}
         onDragEnd={onDragEnd}
       >
-      {/* Exercise Name (Category + Movement) */}
-      <div className="flex items-center gap-2 min-w-0 px-1 py-1.5">
-        <CategoryWheelPicker
-          value={usage.categoryId || ''}
-          onChange={(value) => updateField('categoryId', value)}
-          categories={categories}
-        />
-        <Select value={usage.movementId || ''} onValueChange={(value) => updateField('movementId', value)}>
-          <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs bg-white py-0">
-            <SelectValue placeholder="Movement" />
-          </SelectTrigger>
-          <SelectContent>
-            {filteredMovements.map(movement => (
-              <SelectItem key={movement.id} value={movement.id}>
-                {movement.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+        {/* Exercise Name (Category + Movement) */}
+        <div className="flex items-center gap-2 min-w-0 px-1 py-1.5">
+          <CategoryWheelPicker
+            value={usage.categoryId || ''}
+            onChange={(categoryId) => {
+              // When category changes, we MUST reset the movementId
+              const resetWorkload: ClientWorkoutMovementUsage['targetWorkload'] = {
+                useWeight: false,
+                weightMeasure: 'lbs',
+                useReps: false,
+                useTempo: false,
+                useTime: false,
+                useDistance: false,
+                distanceMeasure: 'mi',
+                usePace: false,
+                paceMeasure: 'mi',
+                usePercentage: false,
+                useRPE: false,
+                unilateral: false,
+              };
 
-      {/* Tempo Column */}
-      {gridHasTempo && (
-        <div className="px-1 py-1.5">
-          {movementSupportsTempo ? (
-            <Input
-              placeholder="Tempo"
-              value={usage.targetWorkload.tempo || ''}
-              onChange={(e) => updateField('targetWorkload.tempo', e.target.value)}
-              className="h-8 min-h-[32px] max-h-[32px] w-full text-xs bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300"
-            />
-          ) : null}
+              onUpdate({
+                ...usage,
+                categoryId,
+                movementId: '', // Reset movement selection
+                targetWorkload: resetWorkload // Reset workload data
+              });
+            }}
+            categories={categories}
+          />
+          <MovementWheelPicker
+            value={usage.movementId || ''}
+            onChange={(value) => updateField('movementId', value)}
+            movements={filteredMovements}
+          />
         </div>
-      )}
 
-      {/* Reps Column */}
-      {gridHasReps && (
-        <div className="px-1 py-1.5">
-          {movementSupportsReps ? (
-            <RepWheelPicker
-              value={typeof usage.targetWorkload.reps === 'number' ? usage.targetWorkload.reps : null}
-              onChange={(value) => updateField('targetWorkload.reps', value)}
-            />
-          ) : null}
-        </div>
-      )}
-
-      {/* Weight Column */}
-      {gridHasWeight && (
-        <div className="px-1 py-1.5">
-          {movementSupportsWeight ? (
-            <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-8 min-h-[32px] max-h-[32px] shadow-sm rounded-md">
+        {/* Tempo Column */}
+        {gridHasTempo && (
+          <div className="px-1 py-1.5">
+            {movementSupportsTempo ? (
               <Input
-                type="number"
-                placeholder="Wt"
-                value={usage.targetWorkload.weight?.toString() || ''}
-                onChange={(e) => updateField('targetWorkload.weight', parseFloat(e.target.value) || null)}
-                className="h-8 min-h-[32px] max-h-[32px] w-10 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
+                placeholder="Tempo"
+                value={usage.targetWorkload.tempo || ''}
+                onChange={(e) => updateField('targetWorkload.tempo', e.target.value)}
+                className="h-6 min-h-[24px] max-h-[24px] w-full text-sm bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300"
               />
-              <button
-                type="button"
-                onClick={() => {
-                  const newMeasure = weightMeasure === 'lbs' ? 'kg' : 'lbs';
-                  updateField('targetWorkload.weightMeasure', newMeasure);
-                }}
-                className="h-8 min-h-[32px] max-h-[32px] w-10 text-sm border-0 rounded-none bg-white px-0.5 py-0 cursor-pointer hover:bg-gray-50"
-              >
-                {weightMeasure}
-              </button>
-            </div>
-          ) : null}
-        </div>
-      )}
+            ) : null}
+          </div>
+        )}
 
-      {/* Time Column */}
-      {gridHasTime && (
-        <div className="px-1 py-1.5">
-          {movementSupportsTime ? (
-            <Input
-              type="text"
-              placeholder="Time"
-              value={usage.targetWorkload.time?.toString() || ''}
-              onChange={(e) => updateField('targetWorkload.time', e.target.value || null)}
-              className="h-8 min-h-[32px] max-h-[32px] w-full text-xs bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300"
-            />
-          ) : null}
-        </div>
-      )}
+        {/* Reps Column */}
+        {gridHasReps && (
+          <div className="px-1 py-1.5">
+            {movementSupportsReps ? (
+              <RepWheelPicker
+                value={usage.targetWorkload.reps ? parseInt(usage.targetWorkload.reps) || null : null}
+                onChange={(value) => updateField('targetWorkload.reps', value.toString())}
+              />
+            ) : null}
+          </div>
+        )}
 
-      {/* Distance Column */}
-      {gridHasDistance && (
-        <div className="px-1 py-1.5">
-          {movementSupportsDistance ? (
-            <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-8 min-h-[32px] max-h-[32px] shadow-sm rounded-md">
+        {/* Weight Column */}
+        {gridHasWeight && (
+          <div className="px-0 py-1.5">
+            {movementSupportsWeight ? (
+              <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
+                <Input
+                  type="number"
+                  placeholder="Wt"
+                  value={usage.targetWorkload.weight?.toString() || ''}
+                  onChange={(e) => updateField('targetWorkload.weight', e.target.value || null)}
+                  className="h-6 min-h-[24px] max-h-[24px] w-10 text-sm text-right border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newMeasure = weightMeasure === 'lbs' ? 'kg' : 'lbs';
+                    updateField('targetWorkload.weightMeasure', newMeasure);
+                  }}
+                  className="h-6 min-h-[24px] max-h-[24px] w-[18px] text-[10px] font-medium border-0 rounded-none bg-white px-0 py-0 cursor-pointer hover:bg-gray-50 text-center tracking-tighter"
+                >
+                  {weightMeasure}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Time Column */}
+        {gridHasTime && (
+          <div className="px-1 py-1.5">
+            {movementSupportsTime ? (
               <Input
-                type="number"
-                placeholder="Dist"
-                value={usage.targetWorkload.distance?.toString() || ''}
-                onChange={(e) => updateField('targetWorkload.distance', parseFloat(e.target.value) || null)}
-                className="h-8 min-h-[32px] max-h-[32px] w-10 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                type="text"
+                placeholder="Time"
+                value={usage.targetWorkload.time?.toString() || ''}
+                onChange={(e) => updateField('targetWorkload.time', e.target.value || null)}
+                className="h-6 min-h-[24px] max-h-[24px] w-full text-sm bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300"
               />
-              <select
-                value={distanceMeasure}
-                onChange={(e) => updateField('targetWorkload.distanceMeasure', e.target.value)}
-                className="h-8 min-h-[32px] max-h-[32px] w-12 text-sm border-0 rounded-none bg-white px-0.5 py-0 focus:ring-0 focus:outline-none"
-              >
-                <option value="mi">mi</option>
-                <option value="km">km</option>
-                <option value="m">m</option>
-                <option value="yd">yd</option>
-                <option value="ft">ft</option>
-              </select>
-            </div>
-          ) : null}
-        </div>
-      )}
+            ) : null}
+          </div>
+        )}
 
-      {/* Percentage Column */}
-      {gridHasPercentage && (
-        <div className="px-1 py-1.5">
-          {movementSupportsPercentage ? (
-            <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-8 min-h-[32px] max-h-[32px] shadow-sm rounded-md">
-              <Input
-                type="number"
-                placeholder="%"
-                value={usage.targetWorkload.percentage?.toString() || ''}
-                onChange={(e) => updateField('targetWorkload.percentage', parseInt(e.target.value) || null)}
-                className="h-8 min-h-[32px] max-h-[32px] w-10 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        {/* Distance Column */}
+        {gridHasDistance && (
+          <div className="px-0 py-1.5">
+            {movementSupportsDistance ? (
+              <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
+                <Input
+                  type="number"
+                  placeholder="Dist"
+                  value={usage.targetWorkload.distance?.toString() || ''}
+                  onChange={(e) => updateField('targetWorkload.distance', parseFloat(e.target.value) || null)}
+                  className="h-6 min-h-[24px] max-h-[24px] w-7 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <DistanceUnitPicker
+                  value={distanceMeasure}
+                  onChange={(value) => updateField('targetWorkload.distanceMeasure', value)}
+                />
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Percentage Column */}
+        {gridHasPercentage && (
+          <div className="px-1 py-1.5">
+            {movementSupportsPercentage ? (
+              <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
+                <Input
+                  type="number"
+                  placeholder="%"
+                  value={usage.targetWorkload.percentage?.toString() || ''}
+                  onChange={(e) => updateField('targetWorkload.percentage', parseInt(e.target.value) || null)}
+                  className="h-6 min-h-[24px] max-h-[24px] w-10 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="h-6 min-h-[24px] max-h-[24px] w-6 text-sm flex items-center justify-center bg-white">%</span>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* RPE Column */}
+        {gridHasRPE && (
+          <div className="px-0 py-1.5">
+            {movementSupportsRPE ? (
+              <RPEWheelPicker
+                value={usage.targetWorkload.rpe ? parseInt(usage.targetWorkload.rpe) || null : null}
+                onChange={(value) => updateField('targetWorkload.rpe', value.toString())}
               />
-              <span className="h-8 min-h-[32px] max-h-[32px] w-6 text-sm flex items-center justify-center bg-white">%</span>
-            </div>
-          ) : null}
-        </div>
-      )}
+            ) : null}
+          </div>
+        )}
 
-      {/* RPE Column */}
-      {gridHasRPE && (
-        <div className="px-1 py-1.5">
-          {movementSupportsRPE ? (
-            <RPEWheelPicker
-              value={typeof usage.targetWorkload.rpe === 'number' ? usage.targetWorkload.rpe : null}
-              onChange={(value) => updateField('targetWorkload.rpe', value)}
-            />
-          ) : null}
-        </div>
-      )}
+        {/* Three Dots Menu - All the way to the right */}
+        <div className="relative flex-none px-1 py-1.5 flex items-center justify-center overflow-visible">
+          <Button
+            ref={contextMenuRef}
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setShowContextMenu(!showContextMenu);
+            }}
+            className="h-6 w-6 p-0 text-gray-500 hover:text-indigo-500"
+            title="Open options"
+          >
+            <MoreVertical className="w-5 h-5" />
+          </Button>
 
-      {/* Three Dots Menu - All the way to the right */}
-      <div className="relative flex-none px-1 py-1.5 flex items-center justify-center overflow-visible">
-        <Button
-          ref={contextMenuRef}
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            setShowContextMenu(!showContextMenu);
-          }}
-          className="h-8 w-8 p-0 text-gray-500 hover:text-indigo-500"
-          title="Open options"
-        >
-          <MoreVertical className="w-5 h-5" />
-        </Button>
-        
-        {showContextMenu && (
-          <div className="absolute right-0 top-full z-[9999] mt-1 w-32 origin-top-right rounded-md bg-white py-2 shadow-xl ring-1 ring-gray-900/5 focus:outline-none"
-               onMouseDown={(e) => e.stopPropagation()}>
-            {!showNotes && (
-              <button
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  console.log('Add Note clicked');
-                  setShowNotes(true);
-                  setShowContextMenu(false);
-                }}
-                className="w-full text-left px-3 py-1 text-sm leading-6 text-gray-900 hover:bg-gray-50"
-              >
-                Add Note
-              </button>
-            )}
-            {showNotes && (
-              <button
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  console.log('Remove Note clicked');
-                  setShowNotes(false);
-                  updateField('note', '');
-                  setShowContextMenu(false);
-                }}
-                className="w-full text-left px-3 py-1 text-sm leading-6 text-gray-900 hover:bg-gray-50"
-              >
-                Remove Note
-              </button>
-            )}
-            {canDelete && (
-              <>
-                <div className="border-t border-gray-200 my-1"></div>
+          {showContextMenu && (
+            <div className="absolute right-0 top-full z-[9999] mt-1 w-32 origin-top-right rounded-md bg-white py-2 shadow-xl ring-1 ring-gray-900/5 focus:outline-none"
+              onMouseDown={(e) => e.stopPropagation()}>
+              {!showNotes && (
                 <button
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
-                    onRemove();
+                    console.log('Add Note clicked');
+                    setShowNotes(true);
                     setShowContextMenu(false);
                   }}
-                  className="w-full text-left px-3 py-1 text-sm leading-6 text-red-600 hover:bg-red-50"
+                  className="w-full text-left px-3 py-1 text-sm leading-6 text-gray-900 hover:bg-gray-50"
                 >
-                  Delete
+                  Add Note
                 </button>
-              </>
-            )}
-          </div>
-        )}
+              )}
+              {showNotes && (
+                <button
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    console.log('Remove Note clicked');
+                    setShowNotes(false);
+                    updateField('note', '');
+                    setShowContextMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-1 text-sm leading-6 text-gray-900 hover:bg-gray-50"
+                >
+                  Remove Note
+                </button>
+              )}
+              {canDelete && (
+                <>
+                  <div className="border-t border-gray-200 my-1"></div>
+                  <button
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      onRemove();
+                      setShowContextMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-1 text-sm leading-6 text-red-600 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-    
+
       {/* Notes Section - Appears below when activated */}
       {showNotes && (
         <div className="mt-2 ml-6">
@@ -583,7 +593,7 @@ export function InlineMovementEditor({
             placeholder="Note"
             value={usage.note || ''}
             onChange={(e) => updateField('note', e.target.value)}
-            className="h-8 text-xs"
+            className="h-6 text-sm"
           />
         </div>
       )}

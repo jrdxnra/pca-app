@@ -106,7 +106,7 @@ export default function ProgramsPage() {
   const { data: programsByClient = [], isLoading: programsByClientLoading } = useProgramsByClient(selectedClient);
   const { data: scheduledWorkoutsByClient = [], isLoading: scheduledWorkoutsByClientLoading } = useScheduledWorkoutsByClient(selectedClient);
   const { data: allScheduledWorkouts = [], isLoading: allScheduledWorkoutsLoading } = useScheduledWorkouts();
-  
+
   logger.debug('[ProgramsPage] React Query data loaded:', {
     clientsCount: clients.length,
     allProgramsCount: allPrograms.length,
@@ -119,12 +119,12 @@ export default function ProgramsPage() {
     scheduledWorkoutsByClientLoading,
     allScheduledWorkoutsLoading
   });
-  
+
   // Use client-specific or all data based on selectedClient
   const programs = selectedClient ? programsByClient : allPrograms;
   const scheduledWorkouts = selectedClient ? scheduledWorkoutsByClient : allScheduledWorkouts;
   const loading = programsLoading || programsByClientLoading || scheduledWorkoutsByClientLoading || allScheduledWorkoutsLoading || clientsLoading;
-  
+
   logger.debug('[ProgramsPage] Computed data:', {
     programsCount: programs.length,
     scheduledWorkoutsCount: scheduledWorkouts.length,
@@ -157,21 +157,21 @@ export default function ProgramsPage() {
     start: calendarDateRange?.start?.toISOString(),
     end: calendarDateRange?.end?.toISOString()
   });
-  
+
   const { data: calendarEvents = [], isLoading: calendarEventsLoading, error: calendarEventsError } = useCalendarEvents(
     calendarDateRange?.start,
     calendarDateRange?.end
   );
-  
+
   // Simply use calendarEvents directly - React Query handles memoization
   const stableCalendarEvents = calendarEvents;
-  
+
   logger.debug('[ProgramsPage] Calendar events loaded:', {
     eventsCount: calendarEvents.length,
     isLoading: calendarEventsLoading,
     hasError: !!calendarEventsError
   });
-  
+
   // Check if Google Calendar auth failed
   const isGoogleCalendarAuthError = calendarEventsError?.message?.includes('Failed to get valid access token') ||
     calendarEventsError?.message?.includes('Not authenticated') ||
@@ -207,12 +207,12 @@ export default function ProgramsPage() {
     // Fallback to today if calendarDate is null
     return new Date();
   });
-  
+
   // Track mounted state to avoid hydration mismatch with date-dependent UI
   const [mounted, setMounted] = useState(false);
-  
+
   logger.debug('[ProgramsPage] mounted state:', mounted);
-  
+
   // Timezone notification state
   const [appTimezone, setAppTimezoneState] = useState<string>(() => {
     logger.debug('[ProgramsPage] Initializing appTimezone state');
@@ -226,19 +226,19 @@ export default function ProgramsPage() {
   });
   const [showTimezonePrompt, setShowTimezonePrompt] = useState(false);
   const TIMEZONE_DISMISS_KEY = 'pca-timezone-prompt-dismissed';
-  
+
   useEffect(() => {
     logger.debug('[ProgramsPage] Mount effect running');
     setMounted(true);
     logger.debug('[ProgramsPage] Set mounted to true');
-    
+
     // Check if timezone prompt was dismissed
-    const wasDismissed = typeof window !== 'undefined' 
+    const wasDismissed = typeof window !== 'undefined'
       ? localStorage.getItem(TIMEZONE_DISMISS_KEY) === 'true'
       : false;
-    
+
     logger.debug('[ProgramsPage] Timezone prompt dismissed?', wasDismissed);
-    
+
     // Check if browser timezone differs from app timezone
     if (!wasDismissed && hasTimezoneChanged()) {
       const savedTimezone = getAppTimezone();
@@ -254,7 +254,7 @@ export default function ProgramsPage() {
         setShowTimezonePrompt(true);
       }
     }
-    
+
     return () => {
       logger.debug('[ProgramsPage] Mount effect cleanup');
     };
@@ -264,10 +264,10 @@ export default function ProgramsPage() {
   // Use ref to track if we've initialized to prevent unnecessary updates
   const hasInitializedSelectedDate = React.useRef(false);
   const lastCalendarDateRef = React.useRef<number | null>(null);
-  
+
   useEffect(() => {
     const calendarDateTimestamp = calendarDate?.getTime() ?? null;
-    
+
     if (!hasInitializedSelectedDate.current && calendarDate) {
       // Initialize once on mount
       logger.debug('[ProgramsPage] Initializing selectedDate from calendarDate');
@@ -294,14 +294,14 @@ export default function ProgramsPage() {
     clearAllPeriods: hookClearAllPeriods,
     fetchClientPrograms
   } = useClientPrograms(selectedClient);
-  
+
   // Use ref to track stable clientPrograms reference
   const clientProgramsRef = React.useRef(clientPrograms);
   if (clientPrograms.length !== clientProgramsRef.current.length) {
     clientProgramsRef.current = clientPrograms;
   }
   const stableClientPrograms = clientProgramsRef.current;
-  
+
   logger.debug('[ProgramsPage] useClientPrograms result:', {
     clientProgramsCount: clientPrograms.length,
     isLoading: clientProgramsLoading
@@ -318,7 +318,7 @@ export default function ProgramsPage() {
   const [createEventTime, setCreateEventTime] = useState<Date | null>(null);
   const [periodListDialogOpen, setPeriodListDialogOpen] = useState(false);
   const [dialogPeriods, setDialogPeriods] = useState<ClientProgramPeriod[]>([]);
-  
+
   // Use dialogPeriods directly
   const stableDialogPeriods = dialogPeriods;
   const [scheduleEventEditDialogOpen, setScheduleEventEditDialogOpen] = useState(false);
@@ -348,24 +348,24 @@ export default function ProgramsPage() {
   // React Query handles data fetching automatically based on selectedClient
   // No need for manual fetch calls - hooks will refetch when dependencies change
 
-// Track navigation to force refresh when returning to this page
+  // Track navigation to force refresh when returning to this page
   const pathname = usePathname();
   const lastFetchTimeRef = React.useRef(0); // Use ref instead of state to avoid re-renders
-  
+
   // Fetch calendar events when calendar date changes or when navigating to this page
   // REMOVED: ModernCalendarView now handles its own event fetching to avoid duplicate requests
   // This prevents the double-fetch that was causing performance issues
-  
+
   // Force refresh when page becomes visible or receives focus (user navigates back)
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | null = null;
-    
+
     const refreshEvents = () => {
       if (!calendarDate) return;
-      
+
       // Only refresh if it's been more than 1 second since last fetch (debounce)
       if (Date.now() - lastFetchTimeRef.current < 1000) return;
-      
+
       const startDate = new Date(calendarDate);
       startDate.setDate(calendarDate.getDate() - calendarDate.getDay());
       const endDate = new Date(startDate);
@@ -378,7 +378,7 @@ export default function ProgramsPage() {
       // No manual fetch needed
       lastFetchTimeRef.current = Date.now(); // Update ref instead of state
     };
-    
+
     // Refresh on visibility change (tab switch) and focus (window focus)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
@@ -387,14 +387,14 @@ export default function ProgramsPage() {
         timeoutId = setTimeout(refreshEvents, 100);
       }
     };
-    
+
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('focus', refreshEvents);
-    
+
     // Also refresh immediately on mount (handles Next.js navigation)
     // Use a small delay to avoid blocking initial render
     timeoutId = setTimeout(refreshEvents, 50);
-    
+
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
       document.removeEventListener('visibilitychange', handleVisibility);
@@ -436,7 +436,7 @@ export default function ProgramsPage() {
   const getNavigationLabel = () => {
     // Return placeholder during SSR to avoid hydration mismatch
     if (!mounted) return 'Loading...';
-    
+
     // Only week view is supported
     const weekStart = new Date(calendarDate);
     weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
@@ -560,90 +560,13 @@ export default function ProgramsPage() {
     }
 
     try {
-      // Fetch fresh data first to ensure we have the latest
-      const freshPrograms = await getClientProgramsByClient(selectedClient);
-      const clientProgram = freshPrograms.find(cp => cp.clientId === selectedClient);
-
-      if (!clientProgram) {
-        console.error('Client program not found for client:', selectedClient);
-        throw new Error('Client program not found');
-      }
-
-      const periodToDelete = clientProgram.periods.find(p => p.id === periodId);
-      if (!periodToDelete) {
-        console.error('Period not found:', periodId);
-        throw new Error('Period not found');
-      }
-
-      // Fetch ALL events for the period's date range (not just visible week)
-      const periodStart = safeToDate(periodToDelete.startDate);
-      const periodEnd = safeToDate(periodToDelete.endDate);
-      periodStart.setHours(0, 0, 0, 0);
-      periodEnd.setHours(23, 59, 59, 999);
-
-      // Fetch events for the entire period range
-      // React Query will automatically refetch calendar events when date range changes
-
-      // Wait a bit for store to update
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Now find events for this period from the freshly fetched events
-      const eventsToDelete = findEventsForPeriod(periodToDelete, selectedClient);
-
-      for (const event of eventsToDelete) {
-        try {
-          await deleteEvent(event.id);
-        } catch (eventError) {
-          console.error(`Error deleting calendar event ${event.id}:`, eventError);
-          // Continue with other events even if one fails
-        }
-      }
-
-      // NEW: Also delete all Firebase workouts associated with this period
-      // Strategy: Delete by date range to catch any workouts that might have missed the periodId link
-      // This is more robust for "wiping the slate clean"
-      try {
-        const startTimestamp = Timestamp.fromDate(periodStart);
-        const endTimestamp = Timestamp.fromDate(periodEnd);
-
-        // Fetch by date range to ensure we catch everything in this period's timeframe
-        const rangeWorkouts = await fetchWorkoutsByDateRange(selectedClient, startTimestamp, endTimestamp);
-
-        for (const workout of rangeWorkouts) {
-          await deleteClientWorkout(workout.id);
-        }
-      } catch (workoutError) {
-        console.error('Error deleting associated workouts:', workoutError);
-      }
-
-      // Delete the period from Firebase
-      await deletePeriodFromClientProgram(clientProgram.id, periodId);
-
-      // Refresh client programs from Firebase - multiple times to ensure sync
-      await fetchClientPrograms(selectedClient);
-      await new Promise(resolve => setTimeout(resolve, 300));
-      await fetchClientPrograms(selectedClient);
-
-      // Also refresh dialog periods if dialog is open
-      const updatedPrograms = await getClientProgramsByClient(selectedClient);
-      const updatedProgram = updatedPrograms.find(cp => cp.clientId === selectedClient);
-      if (updatedProgram) {
-        setDialogPeriods(updatedProgram.periods || []);
-      }
-
-      // Refresh scheduled workouts via React Query
-      queryClient.invalidateQueries({ queryKey: queryKeys.scheduledWorkouts.all });
-      const weekStart = new Date(calendarDate);
-      weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      // React Query will automatically refetch calendar events when date range changes
+      await hookDeletePeriod(periodId, selectedClient);
 
       // Force calendar refresh
       setCalendarKey(prev => prev + 1);
     } catch (error) {
       console.error('Error deleting period:', error);
-      throw error; // Re-throw so the dialog can handle it
+      // No need to re-throw, error is logged
     }
   };
 
@@ -665,7 +588,7 @@ export default function ProgramsPage() {
 
       // Find all periods to delete
       const periodsToDelete = clientProgram.periods.filter(p => periodIds.includes(p.id));
-      
+
       if (periodsToDelete.length === 0) {
         return;
       }
@@ -678,7 +601,7 @@ export default function ProgramsPage() {
       for (const period of periodsToDelete) {
         const periodStart = safeToDate(period.startDate);
         const periodEnd = safeToDate(period.endDate);
-        
+
         if (!initialized) {
           overallStart = periodStart;
           overallEnd = periodEnd;
@@ -699,7 +622,7 @@ export default function ProgramsPage() {
       // Delete events for all periods
       for (const period of periodsToDelete) {
         const eventsToDelete = findEventsForPeriod(period, selectedClient);
-        
+
         for (const event of eventsToDelete) {
           try {
             await deleteEvent(event.id);
@@ -713,7 +636,7 @@ export default function ProgramsPage() {
       const startTimestamp = Timestamp.fromDate(overallStart);
       const endTimestamp = Timestamp.fromDate(overallEnd);
       const rangeWorkouts = await fetchWorkoutsByDateRange(selectedClient, startTimestamp, endTimestamp);
-      
+
       for (const workout of rangeWorkouts) {
         try {
           await deleteClientWorkout(workout.id);
@@ -734,7 +657,7 @@ export default function ProgramsPage() {
       // Refresh everything
       await fetchClientPrograms(selectedClient);
       await new Promise(resolve => setTimeout(resolve, 300));
-      
+
       const updatedPrograms = await getClientProgramsByClient(selectedClient);
       const updatedProgram = updatedPrograms.find(cp => cp.clientId === selectedClient);
       if (updatedProgram) {
@@ -835,11 +758,11 @@ export default function ProgramsPage() {
       // Use fetchClientWorkouts to get ALL workouts regardless of date to ensure we catch everything
       // -----------------------------------------------------------------------
       const allWorkouts = await fetchClientWorkouts(selectedClient);
-      
+
       // Filter by date range to match the calendar events we're deleting
       const workoutsToDelete = allWorkouts.filter(workout => {
-        const workoutDate = workout.date instanceof Timestamp 
-          ? workout.date.toDate() 
+        const workoutDate = workout.date instanceof Timestamp
+          ? workout.date.toDate()
           : new Date(workout.date);
         return workoutDate >= dateRangeStart && workoutDate <= dateRangeEnd;
       });
@@ -1674,8 +1597,8 @@ export default function ProgramsPage() {
                   Timezone Change Detected
                 </h3>
                 <p className="text-sm text-amber-700 mb-3">
-                  Your browser timezone ({formatTimezoneLabel(getBrowserTimezone())}) differs from 
-                  the app timezone ({formatTimezoneLabel(appTimezone)}). 
+                  Your browser timezone ({formatTimezoneLabel(getBrowserTimezone())}) differs from
+                  the app timezone ({formatTimezoneLabel(appTimezone)}).
                   Would you like to update the app timezone to match your current location?
                 </p>
                 <div className="flex gap-2">
@@ -1864,110 +1787,110 @@ export default function ProgramsPage() {
       </Card>
 
       {/* Calendar View and Current Day Schedule Sidebar - Always rendered to prevent flashing */}
-        <div className="flex gap-1 mt-1">
-          {/* Week View - Scrollable, constrained to leave space for sidebar */}
-          <div className="flex-1 min-w-0 overflow-x-auto" style={{ maxWidth: 'calc(100% - 272px)' }}>
-            {/* Show Google Calendar connection warning if auth failed */}
-            {isGoogleCalendarAuthError && (
-              <Card className="mb-4 border-yellow-500 bg-yellow-50">
-                <CardContent className="pt-4">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-yellow-800">
-                        ⚠️ Google Calendar Not Connected
-                      </p>
-                      <p className="text-xs text-yellow-700 mt-1">
-                        Calendar events won't appear until you connect Google Calendar. Workouts will still be visible.
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-2"
-                        onClick={() => router.push('/configure')}
-                      >
-                        Go to Configure → Connect Google Calendar
-                      </Button>
-                    </div>
+      <div className="flex gap-1 mt-1">
+        {/* Week View - Scrollable, constrained to leave space for sidebar */}
+        <div className="flex-1 min-w-0 overflow-x-auto" style={{ maxWidth: 'calc(100% - 272px)' }}>
+          {/* Show Google Calendar connection warning if auth failed */}
+          {isGoogleCalendarAuthError && (
+            <Card className="mb-4 border-yellow-500 bg-yellow-50">
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-yellow-800">
+                      ⚠️ Google Calendar Not Connected
+                    </p>
+                    <p className="text-xs text-yellow-700 mt-1">
+                      Calendar events won't appear until you connect Google Calendar. Workouts will still be visible.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2"
+                      onClick={() => router.push('/configure')}
+                    >
+                      Go to Configure → Connect Google Calendar
+                    </Button>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-            <ErrorBoundary fallback={<div className="p-4 text-center text-destructive">Error loading calendar. Please refresh the page.</div>}>
-              <React.Suspense fallback={<CalendarSkeleton includeWeekends={includeWeekends} />}>
-                <ModernCalendarView
-                  viewMode="week"
-                  calendarDate={calendarDate}
-                  scheduledWorkouts={scheduledWorkouts}
-                  selectedClient={selectedClient}
-                  programs={programs}
-                  clients={clients}
-                  clientPrograms={stableClientPrograms}
-                  includeWeekends={includeWeekends}
-                  refreshKey={calendarKey}
-                  calendarEvents={stableCalendarEvents} // Pass events from React Query instead of Zustand fetching
-                  onPeriodClick={handlePeriodClick}
-                  onDateClick={handleDateClick}
-                  onScheduleCellClick={handleWeekCellClick}
-                  onWorkoutCellClick={(date: Date, timeSlot: Date, period?: ClientProgramPeriod) => {
-                    // When clicking workout cell, navigate to builder
-                    const dateParam = format(date, 'yyyy-MM-dd');
-                    const clientParam = selectedClient ? `client=${selectedClient}&` : '';
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <ErrorBoundary fallback={<div className="p-4 text-center text-destructive">Error loading calendar. Please refresh the page.</div>}>
+            <React.Suspense fallback={<CalendarSkeleton includeWeekends={includeWeekends} />}>
+              <ModernCalendarView
+                viewMode="week"
+                calendarDate={calendarDate}
+                scheduledWorkouts={scheduledWorkouts}
+                selectedClient={selectedClient}
+                programs={programs}
+                clients={clients}
+                clientPrograms={stableClientPrograms}
+                includeWeekends={includeWeekends}
+                refreshKey={calendarKey}
+                calendarEvents={stableCalendarEvents} // Pass events from React Query instead of Zustand fetching
+                onPeriodClick={handlePeriodClick}
+                onDateClick={handleDateClick}
+                onScheduleCellClick={handleWeekCellClick}
+                onWorkoutCellClick={(date: Date, timeSlot: Date, period?: ClientProgramPeriod) => {
+                  // When clicking workout cell, navigate to builder
+                  const dateParam = format(date, 'yyyy-MM-dd');
+                  const clientParam = selectedClient ? `client=${selectedClient}&` : '';
 
-                    // Navigate to builder - if there's a period, the builder will handle it
-                    const buildWorkoutUrl = `/workouts/builder?${clientParam}date=${dateParam}`;
-                    window.location.href = buildWorkoutUrl;
-                  }}
-                  onMoveWorkoutCategory={handleMoveWorkoutCategory}
-                  onEventClick={handleScheduleEventClick}
-                />
-              </React.Suspense>
-            </ErrorBoundary>
-          </div>
-
-          {/* Current Day Schedule - Side view - Always visible, fixed width */}
-          {/* Note: selectedClientId is null to show ALL events for the day, regardless of client selection */}
-          <div className="w-64 flex-shrink-0 sticky top-2 self-start">
-            {/* Show Google Calendar connection warning if auth failed */}
-            {isGoogleCalendarAuthError && (
-              <Card className="mb-4 border-yellow-500 bg-yellow-50">
-                <CardContent className="pt-4">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-yellow-800">
-                        Google Calendar Not Connected
-                      </p>
-                      <p className="text-xs text-yellow-700 mt-1">
-                        Calendar events won't appear until you connect Google Calendar.
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-2"
-                        onClick={() => router.push('/configure')}
-                      >
-                        Connect Google Calendar
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            <DayEventList
-              selectedDate={selectedDate}
-              events={calendarEvents}
-              clients={clients}
-              selectedClientId={null}
-              headerActions={
-                <MiniCalendarTooltip
-                  currentDate={calendarDate}
-                  selectedDate={selectedDate}
-                  onDateSelect={handleMiniCalendarDateSelect}
-                />
-              }
-              onEventClick={handleScheduleEventClick}
-            />
-          </div>
+                  // Navigate to builder - if there's a period, the builder will handle it
+                  const buildWorkoutUrl = `/workouts/builder?${clientParam}date=${dateParam}`;
+                  window.location.href = buildWorkoutUrl;
+                }}
+                onMoveWorkoutCategory={handleMoveWorkoutCategory}
+                onEventClick={handleScheduleEventClick}
+              />
+            </React.Suspense>
+          </ErrorBoundary>
         </div>
+
+        {/* Current Day Schedule - Side view - Always visible, fixed width */}
+        {/* Note: selectedClientId is null to show ALL events for the day, regardless of client selection */}
+        <div className="w-64 flex-shrink-0 sticky top-2 self-start">
+          {/* Show Google Calendar connection warning if auth failed */}
+          {isGoogleCalendarAuthError && (
+            <Card className="mb-4 border-yellow-500 bg-yellow-50">
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-yellow-800">
+                      Google Calendar Not Connected
+                    </p>
+                    <p className="text-xs text-yellow-700 mt-1">
+                      Calendar events won't appear until you connect Google Calendar.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2"
+                      onClick={() => router.push('/configure')}
+                    >
+                      Connect Google Calendar
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <DayEventList
+            selectedDate={selectedDate}
+            events={calendarEvents}
+            clients={clients}
+            selectedClientId={null}
+            headerActions={
+              <MiniCalendarTooltip
+                currentDate={calendarDate}
+                selectedDate={selectedDate}
+                onDateSelect={handleMiniCalendarDateSelect}
+              />
+            }
+            onEventClick={handleScheduleEventClick}
+          />
+        </div>
+      </div>
 
       {/* Error Display */}
       {error && (
@@ -2068,47 +1991,47 @@ export default function ProgramsPage() {
           }
         }}
         periods={(() => {
-            // CRITICAL: Do NOT use useMemo here - it causes React error #310
-            // During rapid re-renders, useMemo with array.length dependencies causes
-            // React to see hooks being called in different orders, triggering error #310
-            // Simple calculations like this don't need memoization - they're fast enough
-            if (!selectedClient || !periodListDialogOpen) {
-              return [];
+          // CRITICAL: Do NOT use useMemo here - it causes React error #310
+          // During rapid re-renders, useMemo with array.length dependencies causes
+          // React to see hooks being called in different orders, triggering error #310
+          // Simple calculations like this don't need memoization - they're fast enough
+          if (!selectedClient || !periodListDialogOpen) {
+            return [];
+          }
+
+          const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
+          const statePeriods = clientProgram?.periods || [];
+          return dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
+        })()}
+        clientName={selectedClientData?.name || 'Unknown Client'}
+        onDeletePeriod={handleDeletePeriod}
+        onDeletePeriods={handleDeletePeriods}
+        onClearAll={handleClearAllPeriods}
+        onClearAllCalendarEvents={handleClearAllCalendarEvents}
+        onForceClearLocalEvents={handleForceClearLocalEvents}
+        calendarEventsCount={(() => {
+          // CRITICAL: Do NOT use useMemo here - it causes React error #310
+          // During rapid re-renders, useMemo with array.length dependencies causes
+          // React to see hooks being called in different orders, triggering error #310
+          // Simple calculations like this don't need memoization - they're fast enough
+          if (!selectedClient) return 0;
+
+          const clientName = selectedClientData?.name;
+          return calendarEvents.filter(event => {
+            const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
+              event.description?.includes(`client=${selectedClient},`) ||
+              event.preConfiguredClient === selectedClient;
+
+            if (hasMatchingClient) return true;
+
+            if (clientName && event.summary && event.summary.includes(clientName)) {
+              return true;
             }
-            
-            const clientProgram = clientPrograms.find(cp => cp.clientId === selectedClient);
-            const statePeriods = clientProgram?.periods || [];
-            return dialogPeriods.length > 0 ? dialogPeriods : statePeriods;
-          })()}
-          clientName={selectedClientData?.name || 'Unknown Client'}
-          onDeletePeriod={handleDeletePeriod}
-          onDeletePeriods={handleDeletePeriods}
-          onClearAll={handleClearAllPeriods}
-          onClearAllCalendarEvents={handleClearAllCalendarEvents}
-          onForceClearLocalEvents={handleForceClearLocalEvents}
-          calendarEventsCount={(() => {
-            // CRITICAL: Do NOT use useMemo here - it causes React error #310
-            // During rapid re-renders, useMemo with array.length dependencies causes
-            // React to see hooks being called in different orders, triggering error #310
-            // Simple calculations like this don't need memoization - they're fast enough
-            if (!selectedClient) return 0;
-            
-            const clientName = selectedClientData?.name;
-            return calendarEvents.filter(event => {
-              const hasMatchingClient = event.description?.includes(`client=${selectedClient}`) ||
-                event.description?.includes(`client=${selectedClient},`) ||
-                event.preConfiguredClient === selectedClient;
 
-              if (hasMatchingClient) return true;
-
-              if (clientName && event.summary && event.summary.includes(clientName)) {
-                return true;
-              }
-
-              return false;
-            }).length;
-          })()}
-        />
+            return false;
+          }).length;
+        })()}
+      />
 
       {/* Schedule Event Edit Dialog */}
       {selectedClient && (
@@ -2139,14 +2062,14 @@ export default function ProgramsPage() {
           onClientAssigned={async () => {
             // Clear the selected event so it gets fresh data when clicked again
             setSelectedEventForAction(null);
-            
+
             // Refresh calendar events after client assignment/unassignment
             const weekStart = new Date(calendarDate);
             weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
             const weekEnd = new Date(weekStart);
             weekEnd.setDate(weekStart.getDate() + 6);
             // React Query will automatically refetch calendar events when date range changes
-            
+
             // Force calendar view to refresh
             setCalendarKey(prev => prev + 1);
           }}

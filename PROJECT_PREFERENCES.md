@@ -107,7 +107,11 @@ GOOGLE_REDIRECT_URI (different for Vercel vs Firebase)
 ## Git Workflow
 
 ### Branching
-- `main` branch = production-ready code
+- `main` branch = production-ready code (Firebase deployment)
+- `dev` branch = Google Calendar API integration (Isolated Workspace)
+  - **Connection to Google API**: Strictly kept on this branch.
+  - **Purpose**: Testing new calendar features without affecting the stable `main` codebase.
+  - **Do NOT merge to main** until fully validated and user explicit approval.
 - Feature branches for new development
 - Test on Vercel before merging to main
 
