@@ -35,7 +35,13 @@ retry: false,              // No retries (prevents loops)
 The `dev` branch uses React Query selectors to prevent entire page re-renders when a single store value changes.
 *Why*: Essential for typing and UI responsiveness.
 
-## Merge Strategy
+
+## Branch Content Policy
+- **Main Branch**: production code + essential documentation (README.md, DEPLOYMENT_*.md).
+- **Dev Branch**: all of main + development process artifacts (ANALYSIS.md, FUTURE_IMPROVEMENTS.md, ARCHITECTURE_*.md, etc.).
+- **Merge Strategy**: When merging `main` -> `dev`, keep dev-only files. If `dev` content is deleted in `main`, verify if it should be restored/preserved in `dev`.
+
+## Conflict Resolution Strategy
 When merging `main` (UI features) into `dev`:
 1. **Preserve** `src/hooks/queries/useCalendarEvents.ts` from `dev`.
 2. **Preserve** `src/app/programs/page.tsx` structural logic from `dev`.
