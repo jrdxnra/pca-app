@@ -41,6 +41,16 @@ The `dev` branch uses React Query selectors to prevent entire page re-renders wh
 - **Dev Branch**: all of main + development process artifacts (ANALYSIS.md, FUTURE_IMPROVEMENTS.md, ARCHITECTURE_*.md, etc.).
 - **Merge Strategy**: When merging `main` -> `dev`, keep dev-only files. If `dev` content is deleted in `main`, verify if it should be restored/preserved in `dev`.
 
+## Promoting Dev to Main
+To protect `main` from dev-only artifacts (like `FUTURE_IMPROVEMENTS.md`), follow this workflow when merging `dev -> main`:
+
+1. Checkout main: `git checkout main`
+2. Merge dev: `git merge dev`
+3. **Execute Cleanup**: Run `npm run clean:main`
+4. Commit: `git commit -a -m "cleanup: remove dev artifacts after merge"`
+
+This ensures features are promoted but process documentation remains in `dev`.
+
 ## Conflict Resolution Strategy
 When merging `main` (UI features) into `dev`:
 1. **Preserve** `src/hooks/queries/useCalendarEvents.ts` from `dev`.

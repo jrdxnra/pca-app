@@ -9,7 +9,8 @@
     "emulators:exec": "firebase emulators:exec",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "next lint",
+    "clean:main": "./scripts/clean-dev-artifacts.sh",
     "deploy:firebase": "./deploy-firebase.sh",
     "deploy:firestore": "firebase deploy --only firestore:rules",
     "deploy:hosting": "firebase deploy --only hosting"
