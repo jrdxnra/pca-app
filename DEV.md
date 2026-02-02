@@ -84,4 +84,31 @@ Once connected (window bottom-left is green/blue):
 1.  Open Terminal (`Ctrl+~`).
 2.  Navigate to workspace: `cd /workspaces/pca-app`.
 3.  Start Server: `npm run dev`.
-4.  Localhost:3000 will automatically forward to your browser.
+### 4) Codespaces Lifecycle (The 3 Loops)
+
+This workflow separates "seeing it work" from "saving it forever".
+
+#### Loop 1: The "Live" Loop (Speed: Instant)
+**Goal:** See your changes on the screen.
+*   **Action:** Edit a file in the remote window and hit `Ctrl+S` (Save).
+*   **What Happens:** File saves directly to the cloud server; Next.js detects it.
+*   **Result:** Browser (`localhost:3000`) refreshes **instantly**.
+*   *Note: No `git push` needed here.*
+
+#### Loop 2: The "Save" Loop (Speed: Daily/Hourly)
+**Goal:** Back up your work to version control.
+*   **Action:** In the Remote Terminal:
+    ```bash
+    git add .
+    git commit -m "feat: my new feature"
+    git push origin dev
+    ```
+*   **Result:** Work is safe on GitHub.
+
+#### Loop 3: The "Deploy" Loop (Speed: Weekly)
+**Goal:** Update the public website (`performancecoach.web.app`).
+*   **Action:**
+    ```bash
+    npm run deploy:firebase
+    ```
+*   **Result:** Real users see the changes.
