@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode, useState, useEffect } from 'react';
+import { setGlobalQueryClient } from './queryClientInstance';
 
 // Dynamically import devtools only in development to avoid build errors
 let ReactQueryDevtools: any = null;
