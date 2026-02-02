@@ -56,3 +56,32 @@ When merging `main` (UI features) into `dev`:
 1. **Preserve** `src/hooks/queries/useCalendarEvents.ts` from `dev`.
 2. **Preserve** `src/app/programs/page.tsx` structural logic from `dev`.
 3. **Accept** only the UX additions (new buttons, layout changes) from `main`.
+
+## Codespaces Development Guide
+
+This repo is set up to run cleanly in **GitHub Codespaces** (Hybrid Workflow).
+
+### 1) Connect Local Editor (Antigravity/VS Code)
+1.  Install **GitHub Codespaces** extension.
+2.  Click the Remote Explorer icon (monitor with >_).
+3.  Select "GitHub Codespaces" -> Connect to your codespace on `dev` branch.
+
+### 2) Troubleshooting: Connect via Standard SSH
+**If the official extension fails** (e.g. Antigravity compatibility issues), use this backdoor:
+
+1.  **Generate SSH Config** (Local Terminal):
+    ```bash
+    mkdir -p ~/.ssh
+    gh codespace ssh -c <your-codespace-name> --config > ~/.ssh/codespaces_config
+    cat ~/.ssh/codespaces_config >> ~/.ssh/config
+    ```
+2.  **Connect**:
+    - Press `Ctrl+Shift+P` -> **"Remote-SSH: Connect to Host..."**
+    - Select the host starting with `cs.<name>...`
+
+### 3) Daily Workflow (Remote)
+Once connected (window bottom-left is green/blue):
+1.  Open Terminal (`Ctrl+~`).
+2.  Navigate to workspace: `cd /workspaces/pca-app`.
+3.  Start Server: `npm run dev`.
+4.  Localhost:3000 will automatically forward to your browser.
