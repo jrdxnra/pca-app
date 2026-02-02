@@ -4,6 +4,7 @@
     "indexes": "firestore.indexes.json"
   },
   "emulators": {
+    "host": "0.0.0.0",
     "firestore": {
       "port": 8080
     },
@@ -53,6 +54,3 @@
     ]
   }
 }
-
-
-

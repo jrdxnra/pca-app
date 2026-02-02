@@ -4,11 +4,24 @@ This repo is set up to run cleanly in **GitHub Codespaces** using the devcontain
 
 ## One-time setup
 
-### 1) Create a Codespace
+### 1) Create or Open a Codespace
 
+**Option A: Browser**
 GitHub → **Code** → **Codespaces** → **Create codespace on main**
 
-### 2) Add Codespaces secrets
+**Option B: Local Editor (Hybrid Workflow - Recommended)**
+1. Install **GitHub Codespaces** extension in Antigravity/VS Code.
+2. Click the Remote Explorer icon (monitor with >_).
+3. Select "GitHub Codespaces" from the dropdown.
+4. Click the `+` to create new or the `->` arrow to connect to an existing one.
+
+### 2) Important: "Rebuild" if updating
+If you are re-using an old Codespace after pulling new changes (specifically to `.devcontainer` or `firebase.json`), you **MUST** rebuild the container to apply the fixes:
+- `Ctrl+Shift+P` (Command Palette)
+- Type: `Codespaces: Rebuild Container`
+- Select it. This will re-run the setup scripts and install the correct tools.
+
+### 3) Add Codespaces secrets
 
 GitHub → Repo → **Settings** → **Secrets and variables** → **Codespaces** → **New repository secret**
 
