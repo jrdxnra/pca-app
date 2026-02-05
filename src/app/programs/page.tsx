@@ -1690,7 +1690,6 @@ export default function ProgramsPage() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 icon-clients" />
-                <label className="text-sm font-medium">Client:</label>
               </div>
               <Select value={selectedClient || 'all'} onValueChange={handleClientChange}>
                 <SelectTrigger className="w-[200px]">
@@ -1754,7 +1753,7 @@ export default function ProgramsPage() {
                     className="gap-2"
                   >
                     <Calendar className="h-4 w-4 icon-schedule" />
-                    Manage Periods
+                    Manage<span className="hidden lg:inline"> Periods</span>
                     {clientPrograms.find(cp => cp.clientId === selectedClient)?.periods.length ? (
                       <span className="ml-1 bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-xs">
                         {clientPrograms.find(cp => cp.clientId === selectedClient)?.periods.length}
@@ -1799,7 +1798,7 @@ export default function ProgramsPage() {
                 >
                   <ChevronLeft className="h-3 w-3 md:h-4 md:w-4 icon-schedule" />
                 </Button>
-                <div className="min-w-[90px] md:min-w-[110px] text-center font-medium text-xs md:text-sm">
+                <div className="min-w-[80px] md:min-w-[110px] text-center font-medium text-xs md:text-sm px-2">
                   {getNavigationLabel()}
                 </div>
                 <Button

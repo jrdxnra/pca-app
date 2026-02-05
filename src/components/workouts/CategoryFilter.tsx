@@ -12,7 +12,7 @@ interface CategoryFilterProps {
 
 export function CategoryFilter({
   categories,
-  selectedCategories,
+  selectedCategories = [],
   onSelectionChange
 }: CategoryFilterProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -33,7 +33,7 @@ export function CategoryFilter({
   }, [isExpanded]);
 
   // Normalize categories to always work with strings
-  const normalizedCategories = categories.map(cat => 
+  const normalizedCategories = categories.map(cat =>
     typeof cat === 'string' ? cat : cat.name
   );
 
@@ -101,7 +101,7 @@ export function CategoryFilter({
           {normalizedCategories.map((categoryName, index) => {
             const categoryObj = typeof categories[index] === 'object' ? categories[index] as { id: string; name: string; color?: string } : null;
             const categoryId = categoryObj?.id || categoryName;
-            
+
             return (
               <label
                 key={categoryId}

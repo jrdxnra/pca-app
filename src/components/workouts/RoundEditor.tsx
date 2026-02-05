@@ -7,11 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2 } from 'lucide-react';
-import { 
-  ClientWorkoutRound, 
+import {
+  ClientWorkoutRound,
   ClientWorkoutMovementUsage,
   Movement,
-  MovementCategory 
+  MovementCategory
 } from '@/lib/types';
 import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
 import { MovementUsageEditor } from './MovementUsageEditor';
@@ -63,7 +63,7 @@ export function RoundEditor({
   onColumnVisibilityChange,
   onMovementFieldChange
 }: RoundEditorProps) {
-  
+
   // Movement drag and drop state
   const [draggingMovementIndex, setDraggingMovementIndex] = useState<number | null>(null);
   const [dropMovementIndex, setDropMovementIndex] = useState<number | null>(null);
@@ -80,7 +80,7 @@ export function RoundEditor({
   const updateSectionType = (workoutTypeId: string) => {
     const workoutType = workoutTypes.find(wt => wt.id === workoutTypeId);
     if (!workoutType) return;
-    
+
     onUpdate({
       ...round,
       sectionName: workoutType.name,
@@ -121,7 +121,7 @@ export function RoundEditor({
   const updateMovementUsage = (usageIndex: number, updatedUsage: ClientWorkoutMovementUsage) => {
     const updated = [...round.movementUsages];
     updated[usageIndex] = updatedUsage;
-    
+
     onUpdate({
       ...round,
       movementUsages: updated
@@ -131,15 +131,15 @@ export function RoundEditor({
   const removeMovementUsage = (usageIndex: number) => {
     console.log('removeMovementUsage called with index:', usageIndex);
     console.log('Current movementUsages length:', round.movementUsages.length);
-    
+
     const updated = round.movementUsages.filter((_, i) => i !== usageIndex);
     console.log('Updated usages after removal:', updated.length, 'movements');
-    
+
     // Reorder ordinals
     updated.forEach((usage, i) => {
       usage.ordinal = i + 1;
     });
-    
+
     console.log('About to call onUpdate...');
     onUpdate({
       ...round,
@@ -162,18 +162,18 @@ export function RoundEditor({
       const updated = [...round.movementUsages];
       const [movedUsage] = updated.splice(draggingMovementIndex, 1);
       updated.splice(dropMovementIndex, 0, movedUsage);
-      
+
       // Reorder ordinals
       updated.forEach((usage, i) => {
         usage.ordinal = i + 1;
       });
-      
+
       onUpdate({
         ...round,
         movementUsages: updated
       });
     }
-    
+
     setDraggingMovementIndex(null);
     setDropMovementIndex(null);
   };
@@ -186,7 +186,7 @@ export function RoundEditor({
     // This is based on movement configuration, not data - so users can always add data
     const enabledFields = new Set<string>();
     const availableFields = new Set<string>(); // Fields that could be shown (for toggle UI)
-    
+
     round.movementUsages.forEach(usage => {
       const movement = movements.find(m => m.id === usage.movementId);
       if (movement?.configuration) {
@@ -194,7 +194,7 @@ export function RoundEditor({
         if (movement.configuration.use_reps) enabledFields.add('reps');
         if (movement.configuration.use_weight) enabledFields.add('weight');
         if (movement.configuration.use_time) enabledFields.add('time');
-        
+
         // Less common columns (show only if visibility is enabled)
         if (movement.configuration.use_tempo) {
           availableFields.add('tempo');
@@ -235,12 +235,17 @@ export function RoundEditor({
 
   const { gridColumns: unifiedGridTemplate, enabledFields: unifiedEnabledFields, availableFields } = calculateUnifiedGrid();
 
+  const selectedWorkoutType = workoutTypes.find(wt => wt.id === round.workoutTypeId);
+  const headerBackgroundColor = selectedWorkoutType?.color ? `${selectedWorkoutType.color}15` : 'transparent'; // 15 = ~8% opacity
+
   return (
-    <Card 
-      className={`py-0 rounded-none border-0 cursor-move gap-1 ${
-        isDragging ? 'bg-blue-50 opacity-50' : 
+    <Card
+      className={`py-0 rounded-none border-x-0 border-b-0 cursor-move gap-0 ${isDragging ? 'bg-blue-50 opacity-50' :
         isDropTarget ? 'bg-blue-50' : ''
-      }`}
+        }`}
+      style={{
+        // borderTopColor removed
+      }}
       draggable={true}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = "move";
@@ -253,14 +258,20 @@ export function RoundEditor({
       }}
       onDragEnd={onDragEnd}
     >
-      <CardHeader className="pb-0 pt-1 px-2">
+      <CardHeader
+        className="pb-0 pt-1 px-2 border-l-4"
+        style={{
+          backgroundColor: headerBackgroundColor,
+          borderLeftColor: selectedWorkoutType?.color || 'transparent'
+        }}
+      >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 flex-1">
+          <div className="flex items-center gap-2 flex-1">
             {/* Workout Type Selector */}
             <select
               value={round.workoutTypeId || ''}
               onChange={(e) => updateSectionType(e.target.value)}
-              className="text-sm border rounded px-2 py-1 min-w-[120px]"
+              className="text-xs border rounded px-1 py-0 h-6 min-w-[100px] bg-white text-gray-900"
             >
               <option value="">Round {round.ordinal}</option>
               {workoutTypes.map(type => (
@@ -269,43 +280,48 @@ export function RoundEditor({
                 </option>
               ))}
             </select>
-            
+
             {/* Round Controls */}
             <div className="flex items-center gap-1">
               {canDelete && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={onRemove}
-                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                  className="h-6 w-6 p-0 text-red-400 hover:text-red-700 hover:bg-red-50"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3 h-3" />
                 </Button>
               )}
             </div>
           </div>
 
           {/* Sets Input */}
-          <div className="flex items-center gap-2">
-            <Label htmlFor={`sets-${index}`} className="text-sm">Sets:</Label>
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor={`sets-${index}`} className="text-xs text-gray-500">Sets</Label>
             <Input
               id={`sets-${index}`}
               type="number"
               min="1"
               value={round.sets}
               onChange={(e) => updateSets(parseInt(e.target.value) || 1)}
-              className={`w-20 ${errors[`round-${index}-sets`] ? 'border-red-500' : ''}`}
+              className={`w-12 h-6 text-xs px-1 text-center text-gray-900 ${errors[`round-${index}-sets`] ? 'border-red-500' : ''}`}
             />
-            {errors[`round-${index}-sets`] && (
-              <p className="text-red-500 text-sm">{errors[`round-${index}-sets`]}</p>
-            )}
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-1 pt-0 pb-1 px-2">
-        {/* Movement Usages - Google Sheets Style Table */}
-        <div className="border border-gray-300 rounded overflow-visible shadow-md">
+      {/* Bottom Separator Line (Shaded) - 1px, same as movements */}
+      <div
+        className="h-px w-full"
+        style={{
+          backgroundColor: selectedWorkoutType?.color || '#e5e7eb',
+        }}
+      />
+
+      <CardContent className="p-0 space-y-0">
+        {/* Movement Usages - Flat List */}
+        <div>
           {/* Table Data Rows */}
           <div>
             {round.movementUsages.map((usage, usageIndex) => (
@@ -317,6 +333,8 @@ export function RoundEditor({
                 movements={movements}
                 categories={categories}
                 clientId={clientId}
+                sectionColor={selectedWorkoutType?.color}
+                isFirstMovement={usageIndex === 0}
                 onUpdate={(updatedUsage) => {
                   updateMovementUsage(usageIndex, updatedUsage);
                   // Use the latest movement id so dirty tracking follows the new selection
@@ -344,16 +362,20 @@ export function RoundEditor({
           </div>
         </div>
 
-        {/* Add Movement Button */}
-        <Button 
-          variant="outline" 
+        {/* Add Movement Button - Minimal Row Style */}
+        <Button
+          variant="ghost"
           onClick={addMovementUsage}
-          className="w-full border-dashed"
+          className="w-full h-6 rounded-none border-b border-gray-100 hover:bg-gray-50 text-xs text-gray-400 hover:text-blue-600 justify-start px-4"
+          style={{
+            backgroundColor: headerBackgroundColor,
+            color: selectedWorkoutType?.color ? '#6b7280' : undefined
+          }}
         >
-          <Plus className="w-4 h-4 mr-1.5 icon-add" />
-          Add Movement to Round {round.ordinal}
+          <Plus className="w-3 h-3 mr-2 icon-add" />
+          Add Movement
         </Button>
       </CardContent>
-    </Card>
+    </Card >
   );
 }

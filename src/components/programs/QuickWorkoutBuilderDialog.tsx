@@ -36,7 +36,7 @@ import { WorkoutStructureTemplate } from '@/lib/types';
 function abbreviateWorkoutType(name: string): string {
   // Normalize the name: lowercase, trim, and replace multiple spaces with single space
   const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
-  
+
   // Check for exact matches first
   const exactMatches: Record<string, string> = {
     'power prep': 'PREP',
@@ -78,11 +78,11 @@ function abbreviateWorkoutType(name: string): string {
     'mobility': 'MOB',
     'activation': 'ACT',
   };
-  
+
   if (exactMatches[normalized]) {
     return exactMatches[normalized];
   }
-  
+
   // Check for partial matches (contains the key phrase)
   if (normalized.includes('power prep') || normalized.includes('performance prep') || normalized.includes('movement prep') || normalized.includes('ballistic')) {
     return 'PREP';
@@ -102,7 +102,7 @@ function abbreviateWorkoutType(name: string): string {
   if (normalized.includes('pre-hab') || normalized.includes('pre hab')) {
     return 'PRE/HAB';
   }
-  
+
   return name.substring(0, 3).toUpperCase();
 }
 
@@ -111,7 +111,7 @@ function getTemplateAbbreviationList(template: WorkoutStructureTemplate, workout
   if (!template.sections || template.sections.length === 0) {
     return [];
   }
-  
+
   return template.sections
     .sort((a, b) => a.order - b.order)
     .map(section => {
@@ -217,25 +217,25 @@ export function QuickWorkoutBuilderDialog({
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
-    
+
     const workouts = await fetchWorkoutsByDateRange(
       clientId,
       Timestamp.fromDate(startOfDay),
       Timestamp.fromDate(endOfDay)
     );
-    
+
     return workouts.find(w => {
       const workoutDate = w.date instanceof Timestamp ? w.date.toDate() : new Date(w.date);
       return workoutDate.getDate() === date.getDate() &&
-             workoutDate.getMonth() === date.getMonth() &&
-             workoutDate.getFullYear() === date.getFullYear();
+        workoutDate.getMonth() === date.getMonth() &&
+        workoutDate.getFullYear() === date.getFullYear();
     }) || null;
   };
 
   const createQuickWorkout = async (workoutData: any) => {
     // Firestore returns various shapes depending on source/serialization; keep this permissive here.
     const createdWorkout = (await createClientWorkout(workoutData)) as any;
-    
+
     // If we have an eventId to link to (from calendar event), link it
     if (eventIdToLink && createdWorkout?.id) {
       try {
@@ -250,18 +250,18 @@ export function QuickWorkoutBuilderDialog({
       try {
         const client = clients.find(c => c.id === workoutData.clientId);
         const clientNameForEvent = client?.name || 'Unknown Client';
-        const date = workoutData.date instanceof Timestamp 
-          ? workoutData.date.toDate() 
+        const date = workoutData.date instanceof Timestamp
+          ? workoutData.date.toDate()
           : new Date(workoutData.date);
         const dateStr = format(date, 'yyyy-MM-dd');
         const timeStr = workoutData.time;
-        
+
         // Calculate end time (default 1 hour)
         const endTime = new Date(date);
         const [hours, minutes] = timeStr.split(':').map(Number);
         endTime.setHours(hours, minutes || 0, 0, 0);
         endTime.setHours(endTime.getHours() + 1);
-        
+
         const event = await createTestEvent({
           summary: workoutData.title || `${workoutData.categoryName || 'Workout'} with ${clientNameForEvent}`,
           date: dateStr,
@@ -272,7 +272,7 @@ export function QuickWorkoutBuilderDialog({
 
         // Link event to workout
         await linkToWorkout(event.id, createdWorkout.id);
-        
+
         console.log('✅ Created calendar event for workout:', createdWorkout.id, event.id);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to create calendar event. Please reconnect Google Calendar.';
@@ -280,7 +280,7 @@ export function QuickWorkoutBuilderDialog({
         toastWarning(`Workout saved, but calendar event was not created: ${message}`);
       }
     }
-    
+
     return createdWorkout;
   };
 
@@ -296,7 +296,7 @@ export function QuickWorkoutBuilderDialog({
       const date = new Date(year, month - 1, day);
       const period = findPeriodForDate(date, clientId);
       const category = workoutCategories.find(cat => cat.name === selectedCategory);
-      
+
       const linkedTemplateId = category?.linkedWorkoutStructureTemplateId;
       const templateIdToUse = selectedTemplate || linkedTemplateId;
       const template = templateIdToUse && workoutStructureTemplates.find(t => t.id === templateIdToUse);
@@ -347,7 +347,7 @@ export function QuickWorkoutBuilderDialog({
         rounds,
         warmups: []
       };
-      
+
       const existing = await checkForConflict(date);
       if (existing) {
         setConflictWorkout(existing);
@@ -355,7 +355,7 @@ export function QuickWorkoutBuilderDialog({
         setIsSaving(false);
         return;
       }
-      
+
       await createQuickWorkout(workoutData);
       setOpen(false);
       onWorkoutCreated?.();
@@ -376,13 +376,13 @@ export function QuickWorkoutBuilderDialog({
     }
 
     setIsSaving(true);
-    
+
     try {
       const [year, month, day] = workoutDate.split('-').map(Number);
       const date = new Date(year, month - 1, day);
       const period = findPeriodForDate(date, clientId);
       const category = workoutCategories.find(cat => cat.name === selectedCategory);
-      
+
       const linkedTemplateId = category?.linkedWorkoutStructureTemplateId;
       const templateIdToUse = selectedTemplate || linkedTemplateId;
       const template = templateIdToUse && workoutStructureTemplates.find(t => t.id === templateIdToUse);
@@ -478,7 +478,7 @@ export function QuickWorkoutBuilderDialog({
             const [hours, minutes] = timeStr.split(':').map(Number);
             endTime.setHours(hours, minutes || 0, 0, 0);
             endTime.setHours(endTime.getHours() + 1);
-            
+
             await updateEvent(existingEvent.id, {
               start: {
                 dateTime: `${dateStr}T${timeStr}:00`,
@@ -513,7 +513,7 @@ export function QuickWorkoutBuilderDialog({
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
           <Dumbbell className="h-4 w-4" />
-          Quick Workout
+          <span className="hidden lg:inline">Quick </span>Workout
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
@@ -563,8 +563,8 @@ export function QuickWorkoutBuilderDialog({
 
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select 
-                  value={selectedCategory} 
+                <Select
+                  value={selectedCategory}
                   onValueChange={(value) => {
                     setSelectedCategory(value);
                     const category = workoutCategories.find(cat => cat.name === value);

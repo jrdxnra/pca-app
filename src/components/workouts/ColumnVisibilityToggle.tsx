@@ -71,7 +71,7 @@ export function ColumnVisibilityToggle({
         onClick={() => setIsExpanded(!isExpanded)}
         className="text-xs h-8 px-2 gap-1"
       >
-        <Columns className="w-3 h-3" />
+        {/* Icon removed */}
         Columns
         {hiddenCount > 0 && (
           <span className="bg-gray-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center ml-1">

@@ -74,7 +74,7 @@ interface PeriodAssignmentDialogProps {
     weekTemplateId?: string;
     defaultTime?: string;
     isAllDay?: boolean;
-    dayTimes?: Array<{time?: string; isAllDay: boolean}>;
+    dayTimes?: Array<{ time?: string; isAllDay: boolean }>;
   }) => void;
   existingAssignments: ClientProgramPeriod[];
   open?: boolean;
@@ -100,7 +100,7 @@ export function PeriodAssignmentDialog({
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [selectedWeekTemplate, setSelectedWeekTemplate] = useState<string>('');
-  
+
   // Unified editor state - used for both existing templates and new custom ones
   const [editorOpen, setEditorOpen] = useState(false);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
@@ -150,7 +150,7 @@ export function PeriodAssignmentDialog({
   // Handle template selection from dropdown
   const handleTemplateSelect = (templateId: string) => {
     setSelectedWeekTemplate(templateId);
-    
+
     if (templateId === 'none' || !templateId) {
       setEditorOpen(false);
       setEditorState(null);
@@ -265,7 +265,7 @@ export function PeriodAssignmentDialog({
     // Create dates at noon to avoid timezone issues
     const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
     const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
-    
+
     const startDateObj = new Date(startYear, startMonth - 1, startDay, 12, 0, 0);
     const endDateObj = new Date(endYear, endMonth - 1, endDay, 12, 0, 0);
 
@@ -276,7 +276,7 @@ export function PeriodAssignmentDialog({
         if (isRestDay(day.workoutCategory)) return true;
         return day.time && day.time.trim() !== '';
       });
-      
+
       if (!hasAllTimes) {
         alert('Please set a time for all workout days.');
         return;
@@ -337,53 +337,53 @@ export function PeriodAssignmentDialog({
   // Check for overlap with ANY existing assignment (not just same period type)
   const hasOverlap = () => {
     if (!startDate || !endDate) return false;
-    
+
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
-    
+
     return existingAssignments.some(assignment => {
       const assignmentStart = safeToDate(assignment.startDate);
       assignmentStart.setHours(0, 0, 0, 0);
       const assignmentEnd = safeToDate(assignment.endDate);
       assignmentEnd.setHours(23, 59, 59, 999);
-      
+
       // Check if date ranges overlap (regardless of period type)
       return start <= assignmentEnd && end >= assignmentStart;
     });
   };
-  
+
   // Get the overlapping assignment details
   const getOverlappingAssignment = () => {
     if (!startDate || !endDate) return null;
-    
+
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
-    
+
     return existingAssignments.find(assignment => {
       const assignmentStart = safeToDate(assignment.startDate);
       assignmentStart.setHours(0, 0, 0, 0);
       const assignmentEnd = safeToDate(assignment.endDate);
       assignmentEnd.setHours(23, 59, 59, 999);
-      
+
       return start <= assignmentEnd && end >= assignmentStart;
     });
   };
-  
+
   // Check if a specific date is within an existing assignment
   const isDateAssigned = (date: Date) => {
     const checkDate = new Date(date);
     checkDate.setHours(12, 0, 0, 0);
-    
+
     return existingAssignments.some(assignment => {
       const assignmentStart = safeToDate(assignment.startDate);
       assignmentStart.setHours(0, 0, 0, 0);
       const assignmentEnd = safeToDate(assignment.endDate);
       assignmentEnd.setHours(23, 59, 59, 999);
-      
+
       return checkDate >= assignmentStart && checkDate <= assignmentEnd;
     });
   };
@@ -393,12 +393,12 @@ export function PeriodAssignmentDialog({
     if (!selectedPeriod || !startDate || !endDate || !isDateRangeValid()) {
       return false;
     }
-    
+
     // Block if there's any overlap with existing assignments
     if (hasOverlap()) {
       return false;
     }
-    
+
     if (editorOpen && editorState) {
       const activeDays = editorState.days.filter(d => !d.deleted);
       return activeDays.every(day => {
@@ -406,7 +406,7 @@ export function PeriodAssignmentDialog({
         return day.time && day.time.trim() !== '';
       });
     }
-    
+
     return true;
   };
 
@@ -416,7 +416,7 @@ export function PeriodAssignmentDialog({
         <DialogTrigger asChild>
           <Button size="sm" variant="outline" type="button">
             <Layers className="h-4 w-4 mr-2 icon-template" />
-            Assign Period
+            Assign<span className="hidden lg:inline"> Period</span>
           </Button>
         </DialogTrigger>
       )}
@@ -442,8 +442,8 @@ export function PeriodAssignmentDialog({
               <SelectContent>
                 {periods.map((period) => (
                   <SelectItem key={period.id} value={period.id}>
-                    <div 
-                      className="w-3 h-3 rounded-full shrink-0" 
+                    <div
+                      className="w-3 h-3 rounded-full shrink-0"
                       style={{ backgroundColor: period.color }}
                     />
                     <span>{period.name}</span>
@@ -456,8 +456,8 @@ export function PeriodAssignmentDialog({
             </Select>
             {getSelectedPeriod() && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <div 
-                  className="w-3 h-3 rounded-full" 
+                <div
+                  className="w-3 h-3 rounded-full"
                   style={{ backgroundColor: getSelectedPeriod()?.color }}
                 />
                 <span>Selected: {getSelectedPeriod()?.name}</span>
@@ -487,7 +487,7 @@ export function PeriodAssignmentDialog({
                 />
               </div>
             </div>
-            
+
             {/* Mini Calendar Preview showing assigned dates */}
             {existingAssignments.length > 0 && (
               <div className="p-3 bg-muted/30 rounded-lg border">
@@ -511,8 +511,8 @@ export function PeriodAssignmentDialog({
                   Existing periods:{' '}
                   {existingAssignments.map((a, i) => (
                     <span key={a.id || i} className="inline-flex items-center gap-1 mr-2">
-                      <span 
-                        className="w-2 h-2 rounded-full" 
+                      <span
+                        className="w-2 h-2 rounded-full"
                         style={{ backgroundColor: a.periodColor || '#6b7280' }}
                       />
                       {a.periodName} ({safeToDate(a.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {safeToDate(a.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
@@ -535,8 +535,8 @@ export function PeriodAssignmentDialog({
                   <SelectItem value="none">No template</SelectItem>
                   {weekTemplates.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
-                      <div 
-                        className="w-3 h-3 rounded-full shrink-0" 
+                      <div
+                        className="w-3 h-3 rounded-full shrink-0"
                         style={{ backgroundColor: template.color }}
                       />
                       <span>{template.name}</span>
@@ -544,9 +544,9 @@ export function PeriodAssignmentDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleNewCustomWeek}
                 className="shrink-0"
               >
@@ -565,8 +565,8 @@ export function PeriodAssignmentDialog({
                     {isCreatingNew ? 'New Custom Week' : `Customize: ${editorState.name}`}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {isCreatingNew 
-                      ? 'Build a week template and set times for each day.' 
+                    {isCreatingNew
+                      ? 'Build a week template and set times for each day.'
                       : 'Customize workout categories and times for each day.'}
                   </p>
                 </div>
@@ -709,7 +709,7 @@ export function PeriodAssignmentDialog({
 
           {hasOverlap() && (() => {
             const overlappingPeriod = getOverlappingAssignment();
-            
+
             if (overlappingPeriod) {
               const overlapStart = safeToDate(overlappingPeriod.startDate);
               const overlapEnd = safeToDate(overlappingPeriod.endDate);
@@ -717,7 +717,7 @@ export function PeriodAssignmentDialog({
                 <div className="text-sm text-red-600 bg-red-50 p-3 rounded border border-red-200">
                   <div className="font-medium mb-1">🚫 Cannot Assign - Date Range Conflict</div>
                   <div className="text-xs">
-                    The selected dates overlap with an existing &quot;{overlappingPeriod.periodName}&quot; period 
+                    The selected dates overlap with an existing &quot;{overlappingPeriod.periodName}&quot; period
                     ({overlapStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {' '}
                     {overlapEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}).
                   </div>
@@ -735,7 +735,7 @@ export function PeriodAssignmentDialog({
             <Button variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleSubmit}
               disabled={!canSubmit()}
             >

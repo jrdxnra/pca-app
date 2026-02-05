@@ -44,6 +44,8 @@ interface InlineMovementEditorProps {
     rpe?: boolean;
     percentage?: boolean;
   };
+  sectionColor?: string;
+  isFirstMovement?: boolean; // Hide separator on first movement to avoid doubling with round separator
 }
 
 export function InlineMovementEditor({
@@ -62,7 +64,9 @@ export function InlineMovementEditor({
   isDragging,
   isDropTarget,
   gridTemplateColumns,
-  unifiedEnabledFields
+  unifiedEnabledFields,
+  sectionColor,
+  isFirstMovement
 }: InlineMovementEditorProps) {
 
   // State for context menu and notes
@@ -338,15 +342,20 @@ export function InlineMovementEditor({
   const movementSupportsRPE = selectedMovement?.configuration?.use_rpe ?? false;
   const movementSupportsPercentage = selectedMovement?.configuration?.use_percentage ?? false;
 
+  const rowBackgroundColor = sectionColor ? `${sectionColor}15` : 'transparent'; // 15 = ~8% opacity
+
   return (
     <>
       <div
-        className={`grid items-center text-sm border-b border-r-0 border-gray-300 relative cursor-move overflow-visible ${isDragging ? 'bg-blue-100 opacity-50' :
+        className={`grid items-center text-sm border-l-4 relative cursor-move overflow-visible ${isDragging ? 'bg-blue-100 opacity-50' :
           isDropTarget ? 'bg-blue-100' :
-            'bg-white hover:bg-gray-50'
+            'hover:bg-gray-50'
           }`}
         style={{
-          gridTemplateColumns: gridColumns
+          gridTemplateColumns: gridColumns,
+          backgroundColor: isDragging || isDropTarget ? undefined : rowBackgroundColor,
+          borderLeftColor: sectionColor || 'transparent',
+          // borderBottomColor removed
         }}
         draggable={true}
         onDragStart={(e) => {
@@ -361,7 +370,7 @@ export function InlineMovementEditor({
         onDragEnd={onDragEnd}
       >
         {/* Exercise Name (Category + Movement) */}
-        <div className="flex items-center gap-2 min-w-0 px-1 py-1.5">
+        <div className="flex items-center gap-2 min-w-0 px-1 py-0.5">
           <CategoryWheelPicker
             value={usage.categoryId || ''}
             onChange={(categoryId) => {
@@ -399,13 +408,13 @@ export function InlineMovementEditor({
 
         {/* Tempo Column */}
         {gridHasTempo && (
-          <div className="px-1 py-1.5">
+          <div className="px-1 py-0.5">
             {movementSupportsTempo ? (
               <Input
                 placeholder="Tempo"
                 value={usage.targetWorkload.tempo || ''}
                 onChange={(e) => updateField('targetWorkload.tempo', e.target.value)}
-                className="h-6 min-h-[24px] max-h-[24px] w-full text-sm bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300"
+                className="h-6 min-h-[24px] max-h-[24px] w-full text-sm bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300 text-gray-900"
               />
             ) : null}
           </div>
@@ -413,7 +422,7 @@ export function InlineMovementEditor({
 
         {/* Reps Column */}
         {gridHasReps && (
-          <div className="px-1 py-1.5">
+          <div className="px-1 py-0.5">
             {movementSupportsReps ? (
               <RepWheelPicker
                 value={usage.targetWorkload.reps ? parseInt(usage.targetWorkload.reps) || null : null}
@@ -425,7 +434,7 @@ export function InlineMovementEditor({
 
         {/* Weight Column */}
         {gridHasWeight && (
-          <div className="px-0 py-1.5">
+          <div className="px-0 py-0.5">
             {movementSupportsWeight ? (
               <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
                 <Input
@@ -433,7 +442,7 @@ export function InlineMovementEditor({
                   placeholder="Wt"
                   value={usage.targetWorkload.weight?.toString() || ''}
                   onChange={(e) => updateField('targetWorkload.weight', e.target.value || null)}
-                  className="h-6 min-h-[24px] max-h-[24px] w-10 text-sm text-right border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
+                  className="h-6 min-h-[24px] max-h-[24px] w-10 text-sm text-right border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
                 />
                 <button
                   type="button"
@@ -452,14 +461,14 @@ export function InlineMovementEditor({
 
         {/* Time Column */}
         {gridHasTime && (
-          <div className="px-1 py-1.5">
+          <div className="px-1 py-0.5">
             {movementSupportsTime ? (
               <Input
                 type="text"
                 placeholder="Time"
                 value={usage.targetWorkload.time?.toString() || ''}
                 onChange={(e) => updateField('targetWorkload.time', e.target.value || null)}
-                className="h-6 min-h-[24px] max-h-[24px] w-full text-sm bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300"
+                className="h-6 min-h-[24px] max-h-[24px] w-full text-sm bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300 text-gray-900"
               />
             ) : null}
           </div>
@@ -467,7 +476,7 @@ export function InlineMovementEditor({
 
         {/* Distance Column */}
         {gridHasDistance && (
-          <div className="px-0 py-1.5">
+          <div className="px-0 py-0.5">
             {movementSupportsDistance ? (
               <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
                 <Input
@@ -475,7 +484,7 @@ export function InlineMovementEditor({
                   placeholder="Dist"
                   value={usage.targetWorkload.distance?.toString() || ''}
                   onChange={(e) => updateField('targetWorkload.distance', parseFloat(e.target.value) || null)}
-                  className="h-6 min-h-[24px] max-h-[24px] w-7 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="h-6 min-h-[24px] max-h-[24px] w-7 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <DistanceUnitPicker
                   value={distanceMeasure}
@@ -488,7 +497,7 @@ export function InlineMovementEditor({
 
         {/* Percentage Column */}
         {gridHasPercentage && (
-          <div className="px-1 py-1.5">
+          <div className="px-1 py-0.5">
             {movementSupportsPercentage ? (
               <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
                 <Input
@@ -496,7 +505,7 @@ export function InlineMovementEditor({
                   placeholder="%"
                   value={usage.targetWorkload.percentage?.toString() || ''}
                   onChange={(e) => updateField('targetWorkload.percentage', parseInt(e.target.value) || null)}
-                  className="h-6 min-h-[24px] max-h-[24px] w-10 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="h-6 min-h-[24px] max-h-[24px] w-10 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <span className="h-6 min-h-[24px] max-h-[24px] w-6 text-sm flex items-center justify-center bg-white">%</span>
               </div>
@@ -506,7 +515,7 @@ export function InlineMovementEditor({
 
         {/* RPE Column */}
         {gridHasRPE && (
-          <div className="px-0 py-1.5">
+          <div className="px-0 py-0.5">
             {movementSupportsRPE ? (
               <RPEWheelPicker
                 value={usage.targetWorkload.rpe ? parseInt(usage.targetWorkload.rpe) || null : null}
@@ -517,7 +526,7 @@ export function InlineMovementEditor({
         )}
 
         {/* Three Dots Menu - All the way to the right */}
-        <div className="relative flex-none px-1 py-1.5 flex items-center justify-center overflow-visible">
+        <div className="relative flex-none px-1 py-0.5 flex items-center justify-center overflow-visible">
           <Button
             ref={contextMenuRef}
             variant="ghost"
@@ -586,16 +595,32 @@ export function InlineMovementEditor({
         </div>
       </div>
 
-      {/* Notes Section - Appears below when activated */}
+      {/* Notes Section - Integrated into the row look */}
       {showNotes && (
-        <div className="mt-2 ml-6">
+        <div
+          className="border-t border-gray-100 px-1 py-0.5 border-l-4"
+          style={{
+            backgroundColor: rowBackgroundColor,
+            borderLeftColor: sectionColor || 'transparent'
+          }}
+        >
           <Input
-            placeholder="Note"
+            placeholder="Add note..."
             value={usage.note || ''}
             onChange={(e) => updateField('note', e.target.value)}
-            className="h-6 text-sm"
+            className="h-6 text-xs w-full bg-transparent border-none shadow-none focus-visible:ring-0 px-1 text-gray-900 placeholder:text-gray-400 italic"
           />
         </div>
+      )}
+
+      {/* Explicit Separator Line - Skip on first movement to avoid doubling with round separator */}
+      {!isFirstMovement && (
+        <div
+          className="h-px w-full"
+          style={{
+            backgroundColor: sectionColor ? `${sectionColor}33` : '#f3f4f6'
+          }}
+        />
       )}
     </>
   );

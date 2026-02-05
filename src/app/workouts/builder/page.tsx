@@ -1456,6 +1456,9 @@ export default function BuilderPage() {
                 // Force re-fetch by updating calendarDate (triggers useEffect)
                 setCalendarDate(new Date(calendarDate));
               }}
+              weekOrder={weekSettings.weekOrder}
+              onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
+              viewMode={viewMode}
             />
 
             {/* Workout Building Actions */}
@@ -1635,7 +1638,7 @@ export default function BuilderPage() {
                       : showViewedIndicator
                         ? 'border-purple-400 ring-2 ring-purple-100'
                         : isPastWeek
-                          ? 'border-gray-200 opacity-75'
+                          ? 'border-gray-200 bg-gray-50/30' // Visual indication without opacity
                           : 'border-gray-200'
                       }`}
                   >

@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
@@ -16,12 +16,12 @@ interface BuilderHeaderProps {
   clientIdImmediate: string | null;
   onClientChange: (clientId: string) => void;
   loading: boolean;
-  
+
   // Date navigation
   calendarDate: Date;
   onNavigate: (direction: 'prev' | 'next' | 'today') => void;
   navigationLabel: string;
-  
+
   // Period assignment
   periods: any[];
   workoutCategories: any[];
@@ -39,14 +39,14 @@ interface BuilderHeaderProps {
     isAllDay?: boolean;
     dayTimes?: Array<{ time?: string; isAllDay: boolean; category?: string; deleted?: boolean }>;
   }) => Promise<void>;
-  
+
   // Quick workout
   onWorkoutCreated: () => void;
-  
+
   // Week order
   weekOrder: 'ascending' | 'descending';
   onWeekOrderChange: (order: 'ascending' | 'descending') => void;
-  
+
   // Column visibility
   viewMode: 'month' | 'week' | 'day';
 }
@@ -81,11 +81,10 @@ export function BuilderHeader({
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 icon-clients" />
-          <label className="text-sm font-medium">Client:</label>
         </div>
-        <Select 
-          value={clientIdImmediate || ''} 
-          onValueChange={onClientChange} 
+        <Select
+          value={clientIdImmediate || ''}
+          onValueChange={onClientChange}
           disabled={loading}
         >
           <SelectTrigger className={`w-[200px] ${!clientId ? 'border-green-300 bg-green-50' : ''}`}>
@@ -117,7 +116,7 @@ export function BuilderHeader({
           onAssignPeriod={onAssignPeriod}
           existingAssignments={existingAssignments}
         />
-        
+
         {/* Filters - Category and Column Visibility */}
         {viewMode === 'day' && workoutCategories.length > 0 && (
           <CategoryFilter
@@ -126,7 +125,7 @@ export function BuilderHeader({
             onSelectionChange={onCategorySelectionChange}
           />
         )}
-        
+
         <ColumnVisibilityToggle
           visibleColumns={{}}
           availableColumns={{
@@ -135,7 +134,7 @@ export function BuilderHeader({
             rpe: true,
             percentage: true
           }}
-          onToggle={() => {}}
+          onToggle={() => { }}
         />
       </div>
 
@@ -143,21 +142,18 @@ export function BuilderHeader({
       <div className="flex items-center gap-0.5 md:gap-1">
         {/* Week order dropdown */}
         <div className="flex items-center gap-1">
-          <label htmlFor="weekOrder" className="text-xs md:text-sm font-medium">Week:</label>
-          <Select 
-            value={weekOrder} 
-            onValueChange={(value) => onWeekOrderChange(value as 'ascending' | 'descending')}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onWeekOrderChange(weekOrder === 'ascending' ? 'descending' : 'ascending')}
+            className="h-8 px-2 text-xs gap-1"
+            title={`Sort weeks: ${weekOrder} (click to toggle)`}
           >
-            <SelectTrigger className="w-[90px] md:w-[110px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ascending">Ascending</SelectItem>
-              <SelectItem value="descending">Descending</SelectItem>
-            </SelectContent>
-          </Select>
+            <ArrowUpDown className="h-3 w-3" />
+            <span className="hidden md:inline">Sort</span>
+          </Button>
         </div>
-        
+
         <Button variant="outline" size="sm" onClick={() => onNavigate('today')} className="text-xs md:text-sm px-2 h-8">
           Today
         </Button>
@@ -169,7 +165,7 @@ export function BuilderHeader({
         >
           <ChevronLeft className="h-3 w-3 md:h-4 md:w-4 icon-builder" />
         </Button>
-        <div className="min-w-[90px] md:min-w-[110px] text-center font-medium text-xs md:text-sm">
+        <div className="min-w-[80px] md:min-w-[110px] text-center font-medium text-xs md:text-sm px-2">
           {navigationLabel}
         </div>
         <Button

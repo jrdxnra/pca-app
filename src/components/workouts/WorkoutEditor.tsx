@@ -22,7 +22,7 @@ import {
 function abbreviateWorkoutType(name: string): string {
   // Normalize the name: lowercase, trim, and replace multiple spaces with single space
   const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
-  
+
   // Check for exact matches first
   const exactMatches: Record<string, string> = {
     'power prep': 'PREP',
@@ -64,11 +64,11 @@ function abbreviateWorkoutType(name: string): string {
     'mobility': 'MOB',
     'activation': 'ACT',
   };
-  
+
   if (exactMatches[normalized]) {
     return exactMatches[normalized];
   }
-  
+
   // Check for partial matches (contains the key phrase)
   if (normalized.includes('power prep') || normalized.includes('performance prep') || normalized.includes('movement prep') || normalized.includes('ballistic')) {
     return 'PREP';
@@ -88,7 +88,7 @@ function abbreviateWorkoutType(name: string): string {
   if (normalized.includes('pre-hab') || normalized.includes('pre hab')) {
     return 'PRE/HAB';
   }
-  
+
   return name.substring(0, 3).toUpperCase();
 }
 
@@ -97,7 +97,7 @@ function getTemplateAbbreviationList(template: WorkoutStructureTemplate, workout
   if (!template.sections || template.sections.length === 0) {
     return [];
   }
-  
+
   return template.sections
     .sort((a, b) => a.order - b.order)
     .map(section => {
@@ -293,10 +293,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   // 1. If there are existing movementUsages with movementId (need to display them)
   // 2. MovementUsageRow components will trigger their own loading when category is selected
   // Simple calculation - no useMemo needed (avoids React error #310)
-  const hasExistingMovements = rounds.some(round => 
+  const hasExistingMovements = rounds.some(round =>
     round.movementUsages?.some(usage => usage.movementId && usage.movementId !== '')
   );
-  
+
   // Use React Query for movements (with lazy loading and enhanced caching)
   // Always fetch movements since they're filtered by category in InlineMovementEditor
   // Movements are cached for 10 minutes so this isn't expensive
@@ -475,12 +475,12 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   const draftTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     if (!draftKey) return;
-    
+
     // Clear any pending save
     if (draftTimeoutRef.current) {
       clearTimeout(draftTimeoutRef.current);
     }
-    
+
     // Debounce draft saves to avoid excessive writes
     draftTimeoutRef.current = setTimeout(() => {
       // Only save if there's actual content
@@ -496,7 +496,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         console.log('[WorkoutEditor] Draft saved for', draftKey);
       }
     }, 1000); // Save after 1 second of no changes
-    
+
     return () => {
       if (draftTimeoutRef.current) {
         clearTimeout(draftTimeoutRef.current);
@@ -555,12 +555,12 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         for (const [movementId, usage] of uniqueMovements.entries()) {
           try {
             const performance = await getRecentExercisePerformance(clientId, movementId);
-            
+
             if (performance?.estimatedOneRepMax) {
               let suggestedWeight = 0;
-              
+
               // Priority order for calculating suggested weight:
-              
+
               // 1. TEMPO: If tempo is set, use 67.5% of 1RM (midpoint of 65-70%)
               if (usage.targetWorkload.useTempo && usage.targetWorkload.tempo) {
                 suggestedWeight = performance.estimatedOneRepMax * 0.675;
@@ -573,7 +573,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
               else if (usage.targetWorkload.useRPE && usage.targetWorkload.rpe && usage.targetWorkload.useReps && usage.targetWorkload.reps) {
                 const rpeValue = parseFloat(usage.targetWorkload.rpe);
                 const repParts = usage.targetWorkload.reps.split('-').map(r => parseInt(r.trim()));
-                const targetReps = repParts.length > 1 
+                const targetReps = repParts.length > 1
                   ? Math.round((repParts[0] + repParts[1]) / 2)
                   : repParts[0];
 
@@ -587,11 +587,11 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
               }
               // 4. REPS ONLY: If only reps are prescribed, use rep-based formula
               else if (usage.targetWorkload.useReps && usage.targetWorkload.reps) {
-                const repsValue = typeof usage.targetWorkload.reps === 'number' 
-                  ? usage.targetWorkload.reps.toString() 
+                const repsValue = typeof usage.targetWorkload.reps === 'number'
+                  ? usage.targetWorkload.reps.toString()
                   : usage.targetWorkload.reps;
                 const repParts = repsValue.split('-').map(r => parseInt(r.trim()));
-                const targetReps = repParts.length > 1 
+                const targetReps = repParts.length > 1
                   ? Math.round((repParts[0] + repParts[1]) / 2)
                   : repParts[0];
 
@@ -602,7 +602,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                   );
                 }
               }
-              
+
               if (suggestedWeight > 0) {
                 weights[movementId] = {
                   value: Math.round(suggestedWeight * 10) / 10, // Round to 1 decimal
@@ -980,9 +980,9 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     for (let i = 0; i < currentValues.length; i++) {
       const current = currentValues[i];
       const baseline = baselineValues[i];
-      if (current.weight !== baseline.weight || 
-          current.reps !== baseline.reps || 
-          current.rpe !== baseline.rpe) {
+      if (current.weight !== baseline.weight ||
+        current.reps !== baseline.reps ||
+        current.rpe !== baseline.rpe) {
         console.log(`[WorkoutEditor] Movement ${movementId} set ${i} changed`, { baseline, current });
         return true;
       }
@@ -1038,7 +1038,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   // Save handler
   const handleSave = async () => {
     console.log('handleSave called');
-    
+
     // Cancel any pending auto-save since we're doing a manual save
     if (autoSaveTimeout) {
       clearTimeout(autoSaveTimeout);
@@ -1151,8 +1151,8 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
               const averageResult = oneRepMaxResults.find(r => r.formula === 'average');
               const estimatedOneRepMax = averageResult?.estimatedOneRepMax ||
-                                        oneRepMaxResults[0]?.estimatedOneRepMax ||
-                                        Math.round(avgWeight);
+                oneRepMaxResults[0]?.estimatedOneRepMax ||
+                Math.round(avgWeight);
 
               const usedRPE = representativeRPE !== undefined && oneRepMaxResults.some(r => r.formula === 'tuchscherer');
 
@@ -1173,13 +1173,13 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           }
         }
       }
-      
+
       // Clear draft on successful save
       if (draftKey) {
         clearDraft(draftKey);
         console.log('[WorkoutEditor] Draft cleared for', draftKey);
       }
-      
+
       onClose();
     } catch (error) {
       console.error('Error saving workout:', error);
@@ -1215,17 +1215,17 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                   {isLoggingMode ? '📊 Logging Mode' : '📋 Prescribed Mode'}
                 </Badge>
               )}
-              
+
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={onClose}
-                className="h-7 text-xs"
+                className="h-7 text-xs flex-1"
               >
                 Cancel
               </Button>
-              
+
               {/* Mode Toggle - Show Prescribed vs Logging view */}
               {clientId && (
                 <Button
@@ -1233,18 +1233,18 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                   size="sm"
                   variant={isLoggingMode ? "default" : "outline"}
                   onClick={() => setIsLoggingMode(!isLoggingMode)}
-                  className="h-7 text-xs"
+                  className="h-7 text-xs flex-1"
                 >
                   {isLoggingMode ? '📊 Logging' : '📋 Prescribed'}
                 </Button>
               )}
-              
+
               <Button
                 type="button"
                 size="sm"
                 onClick={handleSave}
                 disabled={isLoading}
-                className="h-7 text-xs"
+                className="h-7 text-xs flex-1"
               >
                 {isLoading ? 'Saving...' : 'Save'}
               </Button>
@@ -1265,31 +1265,30 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           {/* Mode Glow Indicator - Subtle elegant fade */}
           {clientId && (
             <div className="absolute right-0 top-0 bottom-0 w-12 z-10 pointer-events-none">
-              <div className={`absolute right-0 top-0 bottom-0 w-full transition-all duration-500 ${
-                isLoggingMode 
-                  ? 'bg-gradient-to-l from-green-500/15 to-transparent'
-                  : 'bg-gradient-to-l from-blue-500/15 to-transparent'
-              }`} />
+              <div className={`absolute right-0 top-0 bottom-0 w-full transition-all duration-500 ${isLoggingMode
+                ? 'bg-gradient-to-l from-green-500/15 to-transparent'
+                : 'bg-gradient-to-l from-blue-500/15 to-transparent'
+                }`} />
             </div>
           )}
-          
+
           {/* Integrated Mode Toggle - Right edge, half-circle tab facing outward */}
           {clientId && (
             <div className="absolute right-0 top-1/3 z-20 transform -translate-y-1/2 translate-x-full">
               <button
                 onClick={async () => {
                   const switchingToLogging = !isLoggingMode;
-                  
+
                   // When switching TO Logging: save the current workout first, then set baseline
                   if (switchingToLogging) {
                     console.log('[WorkoutEditor] Toggling to Logging - auto-saving workout first');
-                    
+
                     // Cancel any pending timeout from previous auto-saves
                     if (autoSaveTimeout) {
                       clearTimeout(autoSaveTimeout);
                       setAutoSaveTimeout(null);
                     }
-                    
+
                     // Save the current workout immediately to Firestore
                     // This ensures if coach closes laptop, workout is persisted
                     try {
@@ -1298,25 +1297,25 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                         setErrors({ general: 'Please fix validation errors before switching modes.' });
                         return;
                       }
-                      
+
                       setIsLoading(true);
-                      
+
                       const workoutTitle = title.trim() || (isInline ? 'Workout' : '');
                       const workoutData: Partial<ClientWorkout> = {
                         title: workoutTitle,
                         rounds,
                         isModified: true,
                       };
-                      
+
                       if (notes.trim()) workoutData.notes = notes.trim();
                       if (time.trim()) workoutData.time = time.trim();
                       if (warmups.length > 0) workoutData.warmups = warmups;
                       if (currentTemplateId) workoutData.appliedTemplateId = currentTemplateId;
                       workoutData.visibleColumns = visibleColumns;
-                      
+
                       console.log('[WorkoutEditor] Auto-saving before logging toggle:', workoutData);
                       await onSave(workoutData, { skipClose: true });
-                      
+
                       // Now set the baseline after successful save
                       setPrescribedRounds(JSON.parse(JSON.stringify(rounds)));
                       console.log('[WorkoutEditor] Prescribed baseline set');
@@ -1328,15 +1327,14 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                       return;
                     }
                   }
-                  
+
                   setIsLoggingMode(!isLoggingMode);
                   setDirtyMovementIds(new Set()); // Reset dirty tracking on mode change
                 }}
-                className={`flex items-center justify-center px-2 py-6 rounded-r-full transition-all duration-500 border-r-2 border-t-2 border-b-2 shadow-md hover:shadow-lg ${
-                  isLoggingMode
-                    ? 'bg-gradient-to-l from-green-50/50 to-white border-green-300 hover:border-green-400'
-                    : 'bg-gradient-to-l from-blue-50/50 to-white border-blue-300 hover:border-blue-400'
-                }`}
+                className={`flex items-center justify-center px-2 py-6 rounded-r-full transition-all duration-500 border-r-2 border-t-2 border-b-2 shadow-md hover:shadow-lg ${isLoggingMode
+                  ? 'bg-gradient-to-l from-green-50/50 to-white border-green-300 hover:border-green-400'
+                  : 'bg-gradient-to-l from-blue-50/50 to-white border-blue-300 hover:border-blue-400'
+                  }`}
                 title={isLoggingMode ? "Switch to Prescribed view" : "Switch to Logging view"}
               >
                 {isLoggingMode ? (
@@ -1372,68 +1370,67 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           {/* Basic Info */}
           <Card className="py-0 rounded-none gap-1">
             <CardContent className="space-y-1 pt-1 pb-1 px-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <div>
-                  <Label htmlFor="title">Title *</Label>
+              <div className="flex items-center gap-2">
+                {/* Title - Flex Grow */}
+                <div className="flex-1">
                   <Input
                     id="title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g., Upper Body Push Day"
-                    className={errors.title ? 'border-red-500' : ''}
+                    placeholder="Workout Title (e.g. Upper Body Push)"
+                    className={`h-9 text-sm text-gray-900 ${errors.title ? 'border-red-500' : ''}`}
                   />
-                  {errors.title && (
-                    <p className="text-red-500 text-sm mt-1">{errors.title}</p>
-                  )}
                 </div>
-                <div>
-                  <Label htmlFor="time">Time</Label>
+
+                {/* Time - Fixed Width */}
+                <div className="w-28">
                   <Input
                     id="time"
                     type="time"
                     value={time}
                     onChange={(e) => handleTimeChange(e.target.value)}
+                    className="h-9 text-sm px-1 text-gray-900"
+                    title="Workout Time"
                   />
                 </div>
-              </div>
 
-              {/* Template Selector */}
-              <div>
-                <Label htmlFor="template">Workout Structure Template</Label>
-                <Select
-                  value={currentTemplateId || 'none'}
-                  onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None (Custom)</SelectItem>
-                    {workoutStructureTemplates.map(template => {
-                      const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
-                      return (
-                        <SelectItem key={template.id} value={template.id}>
-                          <div className="flex items-center gap-2 w-full">
-                            <span>{template.name}</span>
-                            {abbrevList.length > 0 && (
-                              <div className="flex items-center gap-1 ml-auto">
-                                {abbrevList.map((item, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
-                                    style={{ backgroundColor: item.color }}
-                                  >
-                                    {item.abbrev}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                {/* Template Selector - Fixed Width (Widened for tags) */}
+                <div className="w-64">
+                  <Select
+                    value={currentTemplateId || "none"}
+                    onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
+                  >
+                    <SelectTrigger className="h-9 text-xs w-full px-2 text-gray-900 flex items-center">
+                      <SelectValue placeholder="Structure" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Custom Structure</SelectItem>
+                      {workoutStructureTemplates.map((template) => {
+                        const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
+                        return (
+                          <SelectItem key={template.id} value={template.id}>
+                            <div className="flex items-center gap-2 w-full">
+                              <span className="truncate">{template.name}</span>
+                              {abbrevList.length > 0 && (
+                                <div className="flex items-center gap-1 ml-auto shrink-0">
+                                  {abbrevList.map((item, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="inline-flex items-center justify-center rounded-md px-1 py-0.5 text-[10px] h-4 font-medium text-white border-0"
+                                      style={{ backgroundColor: item.color }}
+                                    >
+                                      {item.abbrev}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1473,29 +1470,27 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={addRound}
-              className="w-full"
+              className="w-full h-8 rounded-none border-t border-b border-gray-200 hover:bg-gray-50 text-xs text-gray-500 hover:text-blue-600 justify-center"
             >
-              <Plus className="w-4 h-4 mr-1.5 icon-add" />
+              <Plus className="w-3 h-3 mr-2 icon-add" />
               Add Round
             </Button>
           </div>
 
-          {/* Notes */}
-          <Card className="py-0 rounded-none gap-1">
-            <CardContent className="pt-1 pb-1 px-2">
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Notes..."
-                className="min-h-[32px]"
-              />
-            </CardContent>
-          </Card>
+          {/* Notes - Compact & Integrated */}
+          <div className="px-1 pt-1">
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add notes..."
+              className="min-h-[32px] text-xs resize-y bg-gray-50/50 focus:bg-white transition-colors"
+            />
+          </div>
 
           {/* Actions */}
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-2 pt-2 px-1 pb-1">
             <Button
               type="button"
               variant="outline"
@@ -1504,7 +1499,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                 e.stopPropagation();
                 onClose();
               }}
-              className="flex-1"
+              className="h-7 text-xs flex-1"
             >
               Cancel
             </Button>
@@ -1512,7 +1507,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
               type="button"
               onClick={handleSave}
               disabled={isLoading}
-              className="flex-1"
+              className="h-7 text-xs flex-1"
             >
               {isLoading ? 'Saving...' : 'Save Workout'}
             </Button>
@@ -1568,19 +1563,19 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                     <SelectItem key={template.id} value={template.id}>
                       <div className="flex items-center gap-2 w-full">
                         <span>{template.name}</span>
-                            {abbrevList.length > 0 && (
-                              <div className="flex items-center gap-1 ml-auto">
-                                {abbrevList.map((item, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
-                                    style={{ backgroundColor: item.color }}
-                                  >
-                                    {item.abbrev}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
+                        {abbrevList.length > 0 && (
+                          <div className="flex items-center gap-1 ml-auto">
+                            {abbrevList.map((item, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
+                                style={{ backgroundColor: item.color }}
+                              >
+                                {item.abbrev}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </SelectItem>
                   );
