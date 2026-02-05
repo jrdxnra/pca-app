@@ -1643,7 +1643,7 @@ export default function BuilderPage() {
                       }`}
                   >
                     {/* Week Header */}
-                    <div className={`border-b border-gray-200 px-4 py-2 ${isCurrentWeek
+                    <div className={`border-b border-gray-200 px-3 py-1.5 ${isCurrentWeek
                       ? 'bg-gradient-to-r from-blue-50 to-blue-100'
                       : showViewedIndicator
                         ? 'bg-gradient-to-r from-purple-50 to-purple-100'
@@ -1690,7 +1690,7 @@ export default function BuilderPage() {
                         ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
                         : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
                       ).map((day, index) => (
-                        <div key={index} className="bg-gray-50 text-center text-xs font-semibold text-gray-700 py-3 border-b border-gray-200">
+                        <div key={index} className="bg-gray-50 text-center text-xs font-semibold text-gray-700 py-2 border-b border-gray-200">
                           <div className="hidden sm:block">{day}</div>
                           <div className="sm:hidden">{day.slice(0, 3)}</div>
                         </div>
@@ -1727,7 +1727,7 @@ export default function BuilderPage() {
                           }
 
                           return (
-                            <div key={dayIndex} className={`min-h-[160px] relative ${isEditingThisDate && !isToday
+                            <div key={dayIndex} className={`min-h-[120px] relative ${isEditingThisDate && !isToday
                               ? 'bg-amber-50 border-2 border-amber-400'
                               : isToday
                                 ? 'bg-blue-50 border-2 border-blue-300'
@@ -1737,7 +1737,7 @@ export default function BuilderPage() {
                               } ${!inPeriod && !isToday && !isEditingThisDate ? 'opacity-60' : ''}`}>
 
                               {/* Date Header */}
-                              <div className={`px-3 py-2 border-b border-gray-100 ${isEditingThisDate && !isToday
+                              <div className={`px-2 py-1 border-b border-gray-100 flex items-center justify-between ${isEditingThisDate && !isToday
                                 ? 'bg-amber-100'
                                 : isToday
                                   ? 'bg-blue-100'
@@ -1752,9 +1752,8 @@ export default function BuilderPage() {
                                   {date.getDate()}
                                 </div>
                                 {isEditingThisDate && (
-                                  <div className={`text-xs font-medium ${isToday ? 'text-blue-600' : 'text-amber-700'
-                                    }`}>
-                                    ✏️ Editing {editingWorkout?.categoryName || createWorkoutData?.category || ''}
+                                  <div className="flex items-center gap-1">
+                                    <div className={`w-2 h-2 rounded-full animate-pulse ${isToday ? 'bg-blue-500' : 'bg-amber-500'}`} />
                                   </div>
                                 )}
                               </div>
@@ -1770,32 +1769,21 @@ export default function BuilderPage() {
                                       handleEditWorkout(workout);
                                     }}
                                   >
-                                    {/* Show applied template indicator */}
-                                    {workout.appliedTemplateId && (
-                                      <div className="text-[8px] text-gray-500 px-1">
-                                        {workoutStructureTemplates.find(t => t.id === workout.appliedTemplateId)?.name}
-                                      </div>
-                                    )}
-                                    {/* Show workout's actual category (prioritize over period's category) */}
-                                    {workout.categoryName ? (
+                                    {/* Streamlined display: category badge with title inline */}
+                                    <div className="px-1 py-0.5">
                                       <div
-                                        className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5"
+                                        className="text-xs px-2 py-1 rounded text-white font-medium flex items-center justify-between gap-1"
                                         style={{
                                           backgroundColor: workoutCategories.find((wc: any) => wc.name === workout.categoryName)?.color || categoryInfo?.color || '#6b7280'
                                         }}
                                       >
-                                        {workout.categoryName}
+                                        <span className="truncate flex-1">
+                                          {workout.title || workout.categoryName || categoryInfo?.category || 'Untitled'}
+                                        </span>
+                                        {workout.appliedTemplateId && (
+                                          <span className="text-[10px] opacity-75 flex-shrink-0">★</span>
+                                        )}
                                       </div>
-                                    ) : categoryInfo ? (
-                                      <div
-                                        className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5"
-                                        style={{ backgroundColor: categoryInfo.color }}
-                                      >
-                                        {categoryInfo.category}
-                                      </div>
-                                    ) : null}
-                                    <div className="text-xs text-gray-700 font-medium px-1">
-                                      {workout.title || 'Untitled'}
                                     </div>
                                   </button>
                                 </div>
