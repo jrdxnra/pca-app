@@ -63,6 +63,35 @@ This repo is set up to run cleanly in **GitHub Codespaces** using the devcontain
 *   **Start Dev Server**: `npm run dev` (or `npm run dev:stable` if Turbopack is flaky).
 *   **Google OAuth**: Ensure your Codespace URL (e.g., `https://<CODESPACE_NAME>-3000.<domain>/api/auth/google/callback`) is added to the Authorized Redirect URIs in Google Cloud Console.
 
+### Codespaces Lifecycle (The 3 Loops)
+
+This workflow separates "seeing it work" from "saving it forever".
+
+#### Loop 1: The "Live" Loop (Speed: Instant)
+**Goal:** See your changes on the screen.
+*   **Action:** Edit a file in the remote window and hit `Ctrl+S` (Save).
+*   **What Happens:** File saves directly to the cloud server; Next.js detects it.
+*   **Result:** Browser (`localhost:3000`) refreshes **instantly**.
+*   *Note: No `git push` needed here.*
+
+#### Loop 2: The "Save" Loop (Speed: Daily/Hourly)
+**Goal:** Back up your work to version control.
+*   **Action:** In the Remote Terminal:
+    ```bash
+    git add .
+    git commit -m "feat: my new feature"
+    git push origin dev
+    ```
+*   **Result:** Work is safe on GitHub.
+
+#### Loop 3: The "Deploy" Loop (Speed: Weekly)
+**Goal:** Update the public website (`performancecoach.web.app`).
+*   **Action:**
+    ```bash
+    npm run deploy:firebase
+    ```
+*   **Result:** Real users see the changes.
+
 ### Firebase Emulators
 
 Use Firebase Emulators for fast local development without hitting real cloud resources.
