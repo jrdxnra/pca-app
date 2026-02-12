@@ -7,9 +7,10 @@ import { Check } from 'lucide-react';
 interface RepWheelPickerProps {
     value: number | null;
     onChange: (value: number) => void;
+    placeholder?: string;
 }
 
-export function RepWheelPicker({ value, onChange }: RepWheelPickerProps) {
+export function RepWheelPicker({ value, onChange, placeholder }: RepWheelPickerProps) {
     const [open, setOpen] = useState(false);
     const [inputValue, setInputValue] = useState(value?.toString() || '');
 
@@ -65,8 +66,8 @@ export function RepWheelPicker({ value, onChange }: RepWheelPickerProps) {
                         onChange={onInputChange}
                         onFocus={() => setOpen(true)}
                         onClick={() => setOpen(true)}
-                        placeholder="Reps"
-                        className="h-6 min-h-[24px] w-full text-sm bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm text-center"
+                        placeholder={placeholder || "Reps"}
+                        className="h-6 min-h-[24px] w-full text-base bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm text-center"
                     />
                 </div>
             </PopoverAnchor>

@@ -32,10 +32,25 @@ function isGoogleCalendarEvent(event: GoogleCalendarEvent): boolean {
   if (event.htmlLink && event.htmlLink.includes('google.com/calendar')) {
     return true;
   }
-  // Google Calendar IDs are typically 26 character base32 strings
-  // Firestore IDs are typically 20 character alphanumeric strings
-  // This is a heuristic - the htmlLink check above is more reliable
-  return false;
+
+  // Google Calendar IDs are typically 26+ character base32/alphanumeric strings (lowercase)
+  // Firestore IDs are typically 20 character mixed-case alphanumeric strings
+
+  // If it matches Google Calendar ID pattern (lowercase alphanumeric, usually > 20 chars)
+  if (/^[a-z0-9]{5,1024}$/.test(event.id)) {
+    return true;
+  }
+
+  // If we are unsure, defaulting to true is safer for the "assign" operation 
+  // because the API will just return 404 if it's not found, which we catch.
+  // But to be somewhat safe against Firestore IDs (mixed case):
+  if (/[A-Z]/.test(event.id)) {
+    // Contains uppercase - likely Firestore or other system
+    return false;
+  }
+
+  // Default to true for now as we are migrating away from Firestore events
+  return true;
 }
 
 /**
@@ -49,9 +64,9 @@ function findPeriodForDate(
   const clientProgram = clientPrograms.find(
     cp => cp.clientId === clientId && cp.status === 'active'
   );
-  
+
   if (!clientProgram) return null;
-  
+
   return clientProgram.periods.find(period => {
     const start = safeToDate(period.startDate);
     const end = safeToDate(period.endDate);
@@ -70,21 +85,21 @@ function buildUpdatedDescription(
   categoryName?: string
 ): string {
   const existingDescription = event.description || '';
-  
+
   // Check if description already has metadata
   const hasMetadata = existingDescription.includes('[Metadata:');
-  
+
   if (hasMetadata) {
     // Update existing metadata
     let updated = existingDescription;
-    
+
     // Update or add client
     if (updated.match(/client=[^,}\]]+/)) {
       updated = updated.replace(/client=[^,}\]]+/, `client=${clientId}`);
     } else {
       updated = updated.replace(/\[Metadata:/, `[Metadata: client=${clientId},`);
     }
-    
+
     // Update or add workoutId
     if (workoutId) {
       if (updated.match(/workoutId=[^,}\]]+/)) {
@@ -93,7 +108,7 @@ function buildUpdatedDescription(
         updated = updated.replace(/\]$/, `, workoutId=${workoutId}]`);
       }
     }
-    
+
     // Update or add periodId
     if (periodId) {
       if (updated.match(/periodId=[^,}\]]+/)) {
@@ -102,7 +117,7 @@ function buildUpdatedDescription(
         updated = updated.replace(/\]$/, `, periodId=${periodId}]`);
       }
     }
-    
+
     return updated;
   } else {
     // Add new metadata
@@ -111,16 +126,16 @@ function buildUpdatedDescription(
     if (categoryName) metadataParts.push(`category=${categoryName}`);
     if (workoutId) metadataParts.push(`workoutId=${workoutId}`);
     if (periodId) metadataParts.push(`periodId=${periodId}`);
-    
+
     const metadata = `[Metadata: ${metadataParts.join(', ')}]`;
-    
+
     // Add category line if not present
     let newDescription = existingDescription;
     if (!newDescription.includes('Workout Category:')) {
       newDescription = `Workout Category: ${category}\n${newDescription}`;
     }
     newDescription = newDescription.trim() + '\n' + metadata;
-    
+
     return newDescription;
   }
 }
@@ -144,20 +159,20 @@ export async function assignClientToEvent(
         error: 'Event already has a linked workout'
       };
     }
-    
+
     // Get event date and time
     const eventDate = new Date(event.start.dateTime);
     const hours = eventDate.getHours();
     const minutes = eventDate.getMinutes();
     const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-    
+
     // Find period for this date
     const period = findPeriodForDate(eventDate, clientId, clientPrograms);
     const periodId = period?.id || 'quick-workouts';
-    
+
     // Get category - use selected category first, then event category, then default
     const categoryName = selectedCategory || getEventCategory(event) || 'General';
-    
+
     // Create workout
     const workout = await createClientWorkout({
       clientId,
@@ -172,7 +187,7 @@ export async function assignClientToEvent(
       isModified: false,
       createdBy: 'system'
     });
-    
+
     // Build updated description with metadata
     const updatedDescription = buildUpdatedDescription(
       event,
@@ -181,10 +196,10 @@ export async function assignClientToEvent(
       periodId,
       categoryName
     );
-    
+
     // Update via Google Calendar API (single source of truth)
     const isGoogleConnected = await checkGoogleCalendarAuth();
-    
+
     if (!isGoogleConnected) {
       console.warn(`⚠️ Google Calendar is not connected. Cannot update event ${event.id}. Workout was created but event metadata won't be synced.`);
       // Don't fail the whole operation - workout was created successfully
@@ -195,10 +210,10 @@ export async function assignClientToEvent(
         success: true
       };
     }
-    
+
     // Check if this is a Google Calendar event
     const isGoogleEvent = isGoogleCalendarEvent(event);
-    
+
     if (!isGoogleEvent) {
       console.warn(`⚠️ Event ${event.id} is not a Google Calendar event. Cannot update. Workout was created but event metadata won't be synced.`);
       // Don't fail the whole operation - workout was created successfully
@@ -208,7 +223,7 @@ export async function assignClientToEvent(
         success: true
       };
     }
-    
+
     // Update via Google Calendar API
     try {
       await updateGoogleCalendarEvent({
@@ -226,7 +241,7 @@ export async function assignClientToEvent(
       // Don't fail the whole operation - workout was created successfully
       // The metadata will be in the workout, just not synced to Google Calendar
     }
-    
+
     return {
       eventId: event.id,
       workoutId: workout.id,
@@ -256,10 +271,10 @@ export async function assignClientToEvents(
   const results = await Promise.all(
     events.map(event => assignClientToEvent(event, clientId, clientPrograms, clientName, selectedCategory))
   );
-  
+
   const successful = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
-  
+
   // Increment session count for successful assignments
   if (successful > 0) {
     try {
@@ -270,7 +285,7 @@ export async function assignClientToEvents(
       // Don't fail the whole operation if count update fails
     }
   }
-  
+
   return {
     successful,
     failed,
@@ -284,16 +299,16 @@ export async function assignClientToEvents(
  */
 function removeAssignmentFromDescription(description: string): string {
   let cleaned = description;
-  
+
   // Remove the [Metadata: ...] block entirely
   cleaned = cleaned.replace(/\n?\[Metadata:[^\]]*\]/g, '');
-  
+
   // Remove "Workout Category: ..." line if it was added by us
   cleaned = cleaned.replace(/^Workout Category:[^\n]*\n?/gm, '');
-  
+
   // Clean up extra whitespace
   cleaned = cleaned.trim();
-  
+
   return cleaned;
 }
 
@@ -307,33 +322,33 @@ export async function unassignClientFromEvent(
   clientId?: string
 ): Promise<{ success: boolean; error?: string }> {
   console.log('🔄 [unassignClientFromEvent] Starting unassign for event:', event.id, event.summary);
-  
+
   // Try to get client ID from event if not provided
-  const eventClientId = clientId || 
+  const eventClientId = clientId ||
     event.preConfiguredClient ||
     (event as any).extendedProperties?.private?.pcaClientId ||
     event.description?.match(/client=([^,\s}\]]+)/)?.[1];
-  
+
   try {
     // Get the linked workout ID before we clear the metadata
     const linkedWorkoutId = getLinkedWorkoutId(event);
     console.log('🔄 [unassignClientFromEvent] Linked workout ID:', linkedWorkoutId);
-    
+
     // Build cleaned description without metadata
     const cleanedDescription = removeAssignmentFromDescription(event.description || '');
     console.log('🔄 [unassignClientFromEvent] Original description:', event.description?.substring(0, 200));
     console.log('🔄 [unassignClientFromEvent] Cleaned description:', cleanedDescription?.substring(0, 200));
-    
+
     // Check if this is a Google Calendar event
     const isGoogleEvent = isGoogleCalendarEvent(event);
     console.log('🔄 [unassignClientFromEvent] Is Google Calendar event:', isGoogleEvent);
-    
+
     if (isGoogleEvent) {
       // Check if Google Calendar is connected
       const isAuthenticated = await checkGoogleCalendarAuth();
-      
+
       console.log('🔄 [unassignClientFromEvent] Is authenticated:', isAuthenticated);
-      
+
       if (isAuthenticated) {
         // Update Google Calendar event - clear description and extended properties
         console.log('🔄 [unassignClientFromEvent] Calling Google Calendar API to update event...');
@@ -348,20 +363,20 @@ export async function unassignClientFromEvent(
           calendarId: 'primary',
         };
         console.log('🔄 [unassignClientFromEvent] Request body:', JSON.stringify(requestBody, null, 2));
-        
+
         const response = await fetch('/api/calendar/events/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
         });
-        
+
         const responseData = await response.json();
         console.log('🔄 [unassignClientFromEvent] API response:', response.status, responseData);
-        
+
         if (!response.ok) {
           throw new Error(responseData.error || 'Failed to update Google Calendar event');
         }
-        
+
         console.log('✅ [unassignClientFromEvent] Removed client assignment from Google Calendar event');
       } else {
         console.warn('⚠️ [unassignClientFromEvent] Google Calendar not connected. Cannot update event. Event metadata will remain.');
@@ -370,10 +385,10 @@ export async function unassignClientFromEvent(
     } else {
       console.warn('⚠️ [unassignClientFromEvent] Event is not a Google Calendar event. Cannot update.');
     }
-    
+
     // Note: Firebase calendarEvents collection is deprecated - all events are in Google Calendar
     // No need to update Firebase - Google Calendar is the single source of truth
-    
+
     // Delete the associated client workout if it exists
     if (shouldDeleteWorkout && linkedWorkoutId) {
       try {
@@ -387,7 +402,7 @@ export async function unassignClientFromEvent(
     } else {
       console.log('🔄 [unassignClientFromEvent] No workout to delete (shouldDeleteWorkout:', shouldDeleteWorkout, ', linkedWorkoutId:', linkedWorkoutId, ')');
     }
-    
+
     // Decrement session count if we have a client ID
     if (eventClientId) {
       try {
@@ -398,7 +413,7 @@ export async function unassignClientFromEvent(
         // Don't fail the whole operation if count update fails
       }
     }
-    
+
     console.log('✅ [unassignClientFromEvent] Unassign completed successfully');
     return { success: true };
   } catch (error) {

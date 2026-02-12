@@ -175,73 +175,73 @@ function SortableMovementItem({
                 <div className="flex flex-wrap py-2 gap-1">
                   <MovementConfigurationToggle
                     name="Reps"
-                    value={currentEditData.configuration.use_reps}
+                    value={currentEditData.configuration.useReps}
                     onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      use_reps: value
+                      useReps: value
                     })}
                   />
                   
                   <MovementConfigurationToggle
                     name="Weight"
-                    value={currentEditData.configuration.use_weight}
+                    value={currentEditData.configuration.useWeight}
                     onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      use_weight: value
+                      useWeight: value
                     })}
                     measureOptions={['lbs', 'kg']}
-                    measureValue={currentEditData.configuration.weight_measure}
+                    measureValue={currentEditData.configuration.weightMeasure}
                     onMeasureChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      weight_measure: value
+                      weightMeasure: value
                     })}
                   />
                   
                   <MovementConfigurationToggle
                     name="Distance"
-                    value={currentEditData.configuration.use_distance}
+                    value={currentEditData.configuration.useDistance}
                     onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      use_distance: value
+                      useDistance: value
                     })}
                     measureOptions={['mi', 'km', 'm', 'yd', 'ft']}
-                    measureValue={currentEditData.configuration.distance_measure}
+                    measureValue={currentEditData.configuration.distanceMeasure}
                     onMeasureChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      distance_measure: value
+                      distanceMeasure: value
                     })}
                   />
                   
                   <MovementConfigurationToggle
                     name="Pace"
-                    value={currentEditData.configuration.use_pace}
+                    value={currentEditData.configuration.usePace}
                     onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      use_pace: value
+                      usePace: value
                     })}
                     measureOptions={['mi', 'km']}
-                    measureValue={currentEditData.configuration.pace_measure}
+                    measureValue={currentEditData.configuration.paceMeasure}
                     onMeasureChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      pace_measure: value
+                      paceMeasure: value
                     })}
                   />
                   
                   <MovementConfigurationToggle
                     name="Tempo"
-                    value={currentEditData.configuration.use_tempo}
+                    value={currentEditData.configuration.useTempo}
                     onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      use_tempo: value
+                      useTempo: value
                     })}
                   />
                   
                   <MovementConfigurationToggle
                     name="Time"
-                    value={currentEditData.configuration.use_time}
+                    value={currentEditData.configuration.useTime}
                     onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      use_time: value
+                      useTime: value
                     })}
                   />
                   
@@ -256,19 +256,19 @@ function SortableMovementItem({
                   
                   <MovementConfigurationToggle
                     name="Percentage"
-                    value={currentEditData.configuration.use_percentage}
+                    value={currentEditData.configuration.usePercentage}
                     onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      use_percentage: value
+                      usePercentage: value
                     })}
                   />
                   
                   <MovementConfigurationToggle
                     name="RPE"
-                    value={currentEditData.configuration.use_rpe}
+                    value={currentEditData.configuration.useRPE}
                     onChange={(value) => onUpdateEditField(movement.id, 'configuration', {
                       ...currentEditData.configuration,
-                      use_rpe: value
+                      useRPE: value
                     })}
                   />
                 </div>
@@ -325,14 +325,14 @@ export const MovementList = React.memo(function MovementList({ movements, catego
 
   const getConfigurationBadges = (config: Movement['configuration']) => {
     const badges = [];
-    if (config.use_reps) badges.push('Reps');
-    if (config.use_weight) badges.push(`Weight (${config.weight_measure})`);
-    if (config.use_time) badges.push('Time');
-    if (config.use_distance) badges.push(`Distance (${config.distance_measure})`);
-    if (config.use_tempo) badges.push('Tempo');
-    if (config.use_pace) badges.push(`Pace (${config.pace_measure})`);
-    if (config.use_rpe) badges.push('RPE');
-    if (config.use_percentage) badges.push('%');
+    if (config.useReps) badges.push('Reps');
+    if (config.useWeight) badges.push(`Weight (${config.weightMeasure})`);
+    if (config.useTime) badges.push('Time');
+    if (config.useDistance) badges.push(`Distance (${config.distanceMeasure})`);
+    if (config.useTempo) badges.push('Tempo');
+    if (config.usePace) badges.push(`Pace (${config.paceMeasure})`);
+    if (config.useRPE) badges.push('RPE');
+    if (config.usePercentage) badges.push('%');
     if (config.unilateral) badges.push('Unilateral');
     return badges;
   };

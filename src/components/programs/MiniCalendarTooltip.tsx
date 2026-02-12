@@ -21,37 +21,40 @@ export function MiniCalendarTooltip({
   const [hoveredWeekIndex, setHoveredWeekIndex] = useState<number | null>(null);
   const [hoveredDayKey, setHoveredDayKey] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  
+
   // Track if mounted to avoid hydration mismatch with date comparisons
   useEffect(() => {
     setMounted(true);
   }, []);
-  
+
   // Track displayed month separately from currentDate so user can navigate
-  const [displayedMonth, setDisplayedMonth] = useState(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
-  
+  // Initialize from currentDate prop to avoid hydration mismatch
+  const [displayedMonth, setDisplayedMonth] = useState(() =>
+    new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+  );
+
   const year = displayedMonth.getFullYear();
   const month = displayedMonth.getMonth();
-  
+
   // Navigate to previous month
   const goToPreviousMonth = (e: React.MouseEvent) => {
     e.stopPropagation();
     setDisplayedMonth(new Date(year, month - 1, 1));
   };
-  
+
   // Navigate to next month
   const goToNextMonth = (e: React.MouseEvent) => {
     e.stopPropagation();
     setDisplayedMonth(new Date(year, month + 1, 1));
   };
-  
+
   // Reset to current date's month when tooltip opens
   React.useEffect(() => {
     if (isHovered) {
       setDisplayedMonth(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
     }
   }, [isHovered, currentDate]);
-  
+
   // Calculate the selected week range (Sunday to Saturday)
   const selectedWeekStart = new Date(selectedDate);
   selectedWeekStart.setDate(selectedDate.getDate() - selectedDate.getDay());
@@ -59,7 +62,7 @@ export function MiniCalendarTooltip({
   const selectedWeekEnd = new Date(selectedWeekStart);
   selectedWeekEnd.setDate(selectedWeekStart.getDate() + 6);
   selectedWeekEnd.setHours(23, 59, 59, 999);
-  
+
   // Get first day of month and calculate calendar grid
   const firstDay = new Date(year, month, 1);
   const startDate = new Date(firstDay);
@@ -71,29 +74,29 @@ export function MiniCalendarTooltip({
 
   for (let weekIndex = 0; weekIndex < 6; weekIndex++) {
     const weekDays: React.ReactElement[] = [];
-    
+
     for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
       const dayDate = new Date(currentDateObj);
       const dayKey = dayDate.toISOString();
       const isCurrentMonth = dayDate.getMonth() === month;
       // Only check isToday after mount to avoid hydration mismatch
       const isToday = mounted && dayDate.toDateString() === new Date().toDateString();
-      
+
       // Check if this day is in the selected week (only after mount to avoid hydration mismatch)
       const dayNormalized = new Date(dayDate);
       dayNormalized.setHours(12, 0, 0, 0);
       const isInSelectedWeek = mounted && dayNormalized >= selectedWeekStart && dayNormalized <= selectedWeekEnd;
-      
+
       // Check if this day is in the hovered week
       const isInHoveredWeek = hoveredWeekIndex === weekIndex && !isInSelectedWeek;
-      
+
       // Check if this specific day is hovered
       const isDayHovered = hoveredDayKey === dayKey;
-      
+
       // Determine position in week for rounded corners
       const isWeekStart = dayIndex === 0;
       const isWeekEnd = dayIndex === 6;
-      
+
       weekDays.push(
         <button
           key={dayKey}
@@ -136,10 +139,10 @@ export function MiniCalendarTooltip({
       );
       currentDateObj.setDate(currentDateObj.getDate() + 1);
     }
-    
+
     weeks.push(
-      <div 
-        key={weekIndex} 
+      <div
+        key={weekIndex}
         className="flex"
         onMouseEnter={() => setHoveredWeekIndex(weekIndex)}
         onMouseLeave={() => setHoveredWeekIndex(null)}
@@ -150,7 +153,7 @@ export function MiniCalendarTooltip({
   }
 
   return (
-    <div 
+    <div
       className="relative"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -161,8 +164,8 @@ export function MiniCalendarTooltip({
       >
         <CalendarIcon className="h-5 w-5 icon-schedule" />
       </button>
-      
-      <Card 
+
+      <Card
         className={cn(
           "absolute top-full right-0 z-50 w-64 shadow-lg transition-all duration-200",
           isHovered ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
@@ -173,9 +176,9 @@ export function MiniCalendarTooltip({
       >
         <CardContent className="p-4">
           <div className="mb-3 flex items-center justify-between">
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               className="h-6 w-6"
               onClick={goToPreviousMonth}
             >
@@ -184,16 +187,16 @@ export function MiniCalendarTooltip({
             <span className="font-semibold text-sm">
               {displayedMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </span>
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               className="h-6 w-6"
               onClick={goToNextMonth}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          
+
           {/* Day headers */}
           <div className="flex mb-2">
             {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
@@ -202,7 +205,7 @@ export function MiniCalendarTooltip({
               </div>
             ))}
           </div>
-          
+
           {/* Calendar grid - week rows */}
           <div className="flex flex-col">
             {weeks}

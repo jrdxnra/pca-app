@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createOAuth2Client, setCredentials } from '@/lib/google-calendar/auth';
-import { createRecurringEvent, getEvents } from '@/lib/google-calendar/calendar-service';
+import { createRecurringEvent, getEvents, deleteRecurringEvent } from '@/lib/google-calendar/calendar-service';
 import { weekTemplateToRRULE } from '@/lib/google-calendar/rrule-utils';
 import { getStoredTokens, getValidAccessToken } from '@/lib/google-calendar/token-storage';
 
@@ -9,7 +9,75 @@ import { getStoredTokens, getValidAccessToken } from '@/lib/google-calendar/toke
  * Fetch events from Google Calendar for a date range
  */
 export async function GET(request: NextRequest) {
-  return NextResponse.json({ error: 'API temporarily disabled' }, { status: 503 });
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const startDateParam = searchParams.get('start');
+    const endDateParam = searchParams.get('end');
+    const calendarId = searchParams.get('calendarId') || 'primary';
+
+    if (!startDateParam || !endDateParam) {
+      return NextResponse.json(
+        { error: 'Missing required parameters: start, end' },
+        { status: 400 }
+      );
+    }
+
+    const startDate = new Date(startDateParam);
+    const endDate = new Date(endDateParam);
+
+    // Validate dates
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid date format' },
+        { status: 400 }
+      );
+    }
+
+    // Get stored tokens
+    const tokens = await getStoredTokens();
+
+    if (!tokens || !tokens.accessToken) {
+      return NextResponse.json(
+        { error: 'Not authenticated with Google Calendar' },
+        { status: 401 }
+      );
+    }
+
+    const oauth2Client = createOAuth2Client();
+
+    // Try to refresh token if needed
+    const validToken = await getValidAccessToken();
+
+    if (!validToken) {
+      return NextResponse.json(
+        { error: 'Failed to get valid access token. Please reconnect Google Calendar.' },
+        { status: 401 }
+      );
+    }
+
+    setCredentials(oauth2Client, validToken, tokens.refreshToken);
+
+    const events = await getEvents(
+      oauth2Client,
+      calendarId,
+      startDate,
+      endDate
+    );
+
+    return NextResponse.json({ events });
+  } catch (error) {
+    console.error('Error fetching calendar events:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch calendar events';
+    const errorDetails = error instanceof Error ? error.stack : String(error);
+
+    return NextResponse.json(
+      {
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+      },
+      { status: 500 }
+    );
+  }
 }
 
 /**
@@ -42,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Get stored tokens
     const tokens = await getStoredTokens();
-    
+
     if (!tokens || !tokens.accessToken) {
       return NextResponse.json(
         { error: 'Not authenticated with Google Calendar' },
@@ -51,24 +119,24 @@ export async function POST(request: NextRequest) {
     }
 
     const oauth2Client = createOAuth2Client();
-    
+
     // Try to refresh token if needed
     const validToken = await getValidAccessToken();
-    
+
     if (!validToken) {
       return NextResponse.json(
         { error: 'Failed to get valid access token. Please reconnect Google Calendar.' },
         { status: 401 }
       );
     }
-    
+
     setCredentials(oauth2Client, validToken, tokens.refreshToken);
 
     // If weekTemplateId is provided, convert it to RRULE
     // Note: weekTemplate data should be passed in the request body
     // or fetched from Firebase here
     let recurrence: string[] = [];
-    
+
     console.log('Creating recurring event with params:', {
       weekTemplateId,
       hasWeekTemplate: !!body.weekTemplate,
@@ -77,7 +145,7 @@ export async function POST(request: NextRequest) {
       endDate,
       startTime
     });
-    
+
     if (weekTemplateId && body.weekTemplate) {
       try {
         const weekTemplate = body.weekTemplate;
@@ -128,7 +196,7 @@ export async function POST(request: NextRequest) {
     const errorDetails = error instanceof Error ? error.stack : String(error);
     console.error('Error details:', errorDetails);
     return NextResponse.json(
-      { 
+      {
         error: errorMessage,
         details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
       },
@@ -145,4 +213,61 @@ function formatDateForRRULE(date: Date): string {
   return `${year}${month}${day}`;
 }
 
+/**
+ * DELETE /api/calendar/events
+ * Delete a calendar event by its ID
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const eventId = searchParams.get('eventId');
+    const calendarId = searchParams.get('calendarId') || 'primary';
 
+    if (!eventId) {
+      return NextResponse.json(
+        { error: 'Missing required parameter: eventId' },
+        { status: 400 }
+      );
+    }
+
+    // Get stored tokens
+    const tokens = await getStoredTokens();
+
+    if (!tokens || !tokens.accessToken) {
+      return NextResponse.json(
+        { error: 'Not authenticated with Google Calendar' },
+        { status: 401 }
+      );
+    }
+
+    const oauth2Client = createOAuth2Client();
+
+    // Try to refresh token if needed
+    const validToken = await getValidAccessToken();
+
+    if (!validToken) {
+      return NextResponse.json(
+        { error: 'Failed to get valid access token. Please reconnect Google Calendar.' },
+        { status: 401 }
+      );
+    }
+
+    setCredentials(oauth2Client, validToken, tokens.refreshToken);
+
+    await deleteRecurringEvent(oauth2Client, calendarId, eventId);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting calendar event:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to delete calendar event';
+    const errorDetails = error instanceof Error ? error.stack : String(error);
+
+    return NextResponse.json(
+      {
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+      },
+      { status: 500 }
+    );
+  }
+}

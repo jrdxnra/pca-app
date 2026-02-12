@@ -98,12 +98,12 @@ export default function WorkoutViewPage() {
           try {
             const performance = await getRecentExercisePerformance(clientId, movementId);
             console.log(`[Suggestions] Movement ${movementId}:`, performance);
-            
+
             if (performance?.estimatedOneRepMax) {
               let suggestedWeight = 0;
-              
+
               // Priority order for calculating suggested weight:
-              
+
               // 1. TEMPO: If tempo is set, use 67.5% of 1RM (midpoint of 65-70%)
               if (usage.targetWorkload.useTempo && usage.targetWorkload.tempo) {
                 suggestedWeight = performance.estimatedOneRepMax * 0.675;
@@ -118,7 +118,7 @@ export default function WorkoutViewPage() {
                 const rpeValue = parseFloat(rpeStr);
                 const repStr = usage.targetWorkload.reps;
                 const repParts = repStr.split('-').map(r => parseInt(r.trim()));
-                const targetReps = repParts.length > 1 
+                const targetReps = repParts.length > 1
                   ? Math.round((repParts[0] + repParts[1]) / 2)
                   : repParts[0];
 
@@ -135,7 +135,7 @@ export default function WorkoutViewPage() {
               else if (usage.targetWorkload.useReps && usage.targetWorkload.reps) {
                 const repStr = usage.targetWorkload.reps;
                 const repParts = repStr.split('-').map(r => parseInt(r.trim()));
-                const targetReps = repParts.length > 1 
+                const targetReps = repParts.length > 1
                   ? Math.round((repParts[0] + repParts[1]) / 2)
                   : repParts[0];
 
@@ -147,7 +147,7 @@ export default function WorkoutViewPage() {
                 }
               }
               // 5. RPE ONLY: Can't calculate weight from RPE alone without reps, so skip
-              
+
               if (suggestedWeight > 0) {
                 // Determine the unit of the stored 1RM (assume it's the same as the current usage)
                 // If units don't match, convert
@@ -159,9 +159,9 @@ export default function WorkoutViewPage() {
                     usage.targetWorkload.weightMeasure as 'lbs' | 'kg'
                   );
                 }
-                
+
                 weights[movementId] = {
-                  value: Math.round(suggestedWeight * 10) / 10, // Round to 1 decimal
+                  value: (Math.round(suggestedWeight * 10) / 10).toString(), // Round to 1 decimal and convert to string
                   unit: usage.targetWorkload.weightMeasure || 'lbs'
                 };
               }
@@ -182,7 +182,7 @@ export default function WorkoutViewPage() {
 
   const loadWorkout = async () => {
     if (!workoutId) return;
-    
+
     try {
       setLoading(true);
       const loadedWorkout = await getClientWorkout(workoutId);
@@ -190,9 +190,9 @@ export default function WorkoutViewPage() {
         setLoading(false);
         return;
       }
-      
+
       setWorkout(loadedWorkout);
-      
+
       // Initialize actuals from existing data or create empty structure
       if (loadedWorkout.rounds) {
         const initialActuals: Record<string, ExerciseActuals> = {};
@@ -208,7 +208,7 @@ export default function WorkoutViewPage() {
         });
         setActuals(initialActuals);
       }
-      
+
       // Load existing WorkoutLog if it exists
       try {
         const existingLog = await getWorkoutLogByScheduledWorkout(workoutId);
@@ -216,11 +216,11 @@ export default function WorkoutViewPage() {
           // Populate form with existing log data
           setAthleteNotes(existingLog.athleteNotes || '');
           setSessionRPE(existingLog.sessionRPE?.toString() || '');
-          
+
           // Map WorkoutLog exercises back to actuals structure
           if (existingLog.exercises && loadedWorkout.rounds) {
             const logActuals: Record<string, ExerciseActuals> = {};
-            
+
             // Create a map of movementId to exercises (handle duplicates by using first match)
             // Note: If same movement appears in multiple rounds, they'll share log data
             const exerciseMap = new Map<string, typeof existingLog.exercises[0]>();
@@ -229,12 +229,12 @@ export default function WorkoutViewPage() {
                 exerciseMap.set(ex.movementId, ex);
               }
             });
-            
+
             loadedWorkout.rounds.forEach(round => {
               round.movementUsages?.forEach(usage => {
                 const key = `${round.ordinal}-${usage.ordinal}`;
                 const exercise = exerciseMap.get(usage.movementId);
-                
+
                 if (exercise && exercise.actualSets && exercise.actualSets.length > 0) {
                   logActuals[key] = {
                     movementId: usage.movementId,
@@ -255,7 +255,7 @@ export default function WorkoutViewPage() {
                 }
               });
             });
-            
+
             setActuals(logActuals);
           }
         }
@@ -303,7 +303,7 @@ export default function WorkoutViewPage() {
 
     try {
       setSaving(true);
-      
+
       // Transform actuals data to WorkoutLog format
       const exercises: Array<{
         movementId: string;
@@ -319,13 +319,13 @@ export default function WorkoutViewPage() {
         estimatedOneRepMax: number;
         notes?: string;
       }> = [];
-      
+
       if (workout.rounds) {
         workout.rounds.forEach(round => {
           round.movementUsages?.forEach(usage => {
             const key = `${round.ordinal}-${usage.ordinal}`;
             const exerciseActuals = actuals[key];
-            
+
             if (exerciseActuals && exerciseActuals.sets.length > 0) {
               // Convert actual sets from strings to numbers
               const actualSets = exerciseActuals.sets
@@ -335,23 +335,23 @@ export default function WorkoutViewPage() {
                   reps: parseInt(set.reps || '0') || 0,
                   actualRPE: parseFloat(set.rpe || '0') || 0,
                 }));
-              
+
               // Only add exercise if there's at least one actual set with data
               if (actualSets.length > 0 || exerciseActuals.sets.some(s => s.notes)) {
                 // Get prescribed values
-                const prescribedWeight = usage.targetWorkload.useWeight 
+                const prescribedWeight = usage.targetWorkload.useWeight
                   ? parseFloat(usage.targetWorkload.weight || '0') || undefined
                   : undefined;
                 const prescribedRPE = usage.targetWorkload.useRPE
                   ? parseFloat(usage.targetWorkload.rpe || '0') || undefined
                   : undefined;
-                
+
                 // Combine notes from all sets (if any)
                 const combinedNotes = exerciseActuals.sets
                   .map((set, idx) => set.notes ? `Set ${idx + 1}: ${set.notes}` : '')
                   .filter(n => n)
                   .join('; ') || undefined;
-                
+
                 exercises.push({
                   movementId: usage.movementId,
                   prescribedSets: round.sets || 1,
@@ -367,17 +367,17 @@ export default function WorkoutViewPage() {
           });
         });
       }
-      
+
       // Parse session RPE (handle ranges like "7-8" by taking average or first number)
-      const sessionRPENum = sessionRPE 
+      const sessionRPENum = sessionRPE
         ? parseFloat(sessionRPE.split('-')[0].trim()) || 0
         : 0;
-      
+
       // Get workout date
-      const workoutDate = workout.date instanceof Timestamp 
-        ? workout.date 
+      const workoutDate = workout.date instanceof Timestamp
+        ? workout.date
         : Timestamp.fromDate(new Date(dateParam || Date.now()));
-      
+
       // Create or update WorkoutLog
       await upsertWorkoutLog(workout.id, {
         clientId,
@@ -386,7 +386,7 @@ export default function WorkoutViewPage() {
         sessionRPE: sessionRPENum,
         athleteNotes: athleteNotes || undefined,
       });
-      
+
       // Update recent exercise performance for each exercise
       console.log('[Save] Updating recent performance for exercises:', exercises);
       for (const exercise of exercises) {
@@ -395,49 +395,49 @@ export default function WorkoutViewPage() {
           const weights = exercise.actualSets.map(s => s.weight).filter(w => w > 0);
           const reps = exercise.actualSets.map(s => s.reps).filter(r => r > 0);
           const rpeValues = exercise.actualSets.map(s => s.actualRPE).filter(r => r > 0);
-          
+
           console.log(`[Save] Exercise ${exercise.movementId}: weights=${weights}, reps=${reps}`);
-          
+
           if (weights.length > 0 && reps.length > 0) {
             // Use the first set's weight as the representative weight (most common pattern)
             const avgWeight = weights.reduce((sum, w) => sum + w, 0) / weights.length;
             const weightStr = Math.round(avgWeight).toString();
-            
+
             // Create rep range from min to max reps
             const minReps = Math.min(...reps);
             const maxReps = Math.max(...reps);
             const repRange = minReps === maxReps ? minReps.toString() : `${minReps}-${maxReps}`;
-            
+
             // Calculate 1RM using multiple formulas and average them
             // Use the average weight and a representative rep count
             const repForCalculation = Math.round((minReps + maxReps) / 2);
-            
+
             // Use RPE if available for more accurate 1RM calculation
             const representativeRPE = rpeValues.length > 0 ? rpeValues[0] : undefined;
-            
+
             const oneRepMaxResults = calculateOneRepMax(
-              Math.round(avgWeight), 
+              Math.round(avgWeight),
               repForCalculation,
               representativeRPE
             );
-            
+
             // Get the average 1RM (last result in the array is always the average)
             const averageResult = oneRepMaxResults.find(r => r.formula === 'average');
-            const estimatedOneRepMax = averageResult?.estimatedOneRepMax || 
-                                       oneRepMaxResults[0]?.estimatedOneRepMax || 
-                                       Math.round(avgWeight);
-            
+            const estimatedOneRepMax = averageResult?.estimatedOneRepMax ||
+              oneRepMaxResults[0]?.estimatedOneRepMax ||
+              Math.round(avgWeight);
+
             // Determine if Tuchscherer RPE formula was used in the calculation
             const usedRPE = representativeRPE !== undefined && oneRepMaxResults.some(r => r.formula === 'tuchscherer');
-            
+
             console.log(`[Save] Updating perf: movement=${exercise.movementId}, weight=${weightStr}, reps=${repRange}, 1RM=${estimatedOneRepMax}`);
-            
+
             // Update client's recent performance with calculated 1RM and RPE
             try {
               await updateRecentExercisePerformance(
-                clientId, 
-                exercise.movementId, 
-                weightStr, 
+                clientId,
+                exercise.movementId,
+                weightStr,
                 repRange,
                 estimatedOneRepMax,
                 representativeRPE,  // Pass RPE value
@@ -451,7 +451,7 @@ export default function WorkoutViewPage() {
           }
         }
       }
-      
+
       // Show success message
       alert('Workout logged successfully!');
     } catch (error) {
@@ -490,8 +490,8 @@ export default function WorkoutViewPage() {
     );
   }
 
-  const workoutDate = workout.date instanceof Timestamp 
-    ? workout.date.toDate() 
+  const workoutDate = workout.date instanceof Timestamp
+    ? workout.date.toDate()
     : new Date(dateParam || Date.now());
 
   return (
@@ -570,7 +570,7 @@ export default function WorkoutViewPage() {
                 const exerciseActuals = actuals[key] || { movementId: usage.movementId, sets: [] };
                 const movement = movements.find(m => m.id === usage.movementId);
                 const category = categories.find(c => c.id === usage.categoryId);
-                
+
                 return (
                   <div key={usageIndex} className="border rounded-lg p-4">
                     {/* Movement Name */}

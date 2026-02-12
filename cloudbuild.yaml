@@ -21,6 +21,8 @@ steps:
       - 'gcr.io/$PROJECT_ID/pca-app:$SHORT_SHA'
       - '-t'
       - 'gcr.io/$PROJECT_ID/pca-app:latest'
+      - '-f'
+      - 'Dockerfile.firebase'
       - '.'
   
   # Push the container image

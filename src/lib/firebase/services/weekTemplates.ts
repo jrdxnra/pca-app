@@ -1,19 +1,20 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
-  query, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  query,
   orderBy,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
 import { db, getDb } from '../config';
 
 export interface WeekTemplateDay {
   day: string;
   workoutCategory: string;
+  variations?: string[];
 }
 
 export interface WeekTemplate {
@@ -31,6 +32,11 @@ export const createWeekTemplate = async (template: Omit<WeekTemplate, 'id' | 'cr
   try {
     const docRef = await addDoc(collection(getDb(), 'weekTemplates'), {
       ...template,
+      // Ensure variations are saved if present
+      days: template.days.map(d => ({
+        ...d,
+        variations: d.variations || []
+      })),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
       createdBy: 'current-user' // TODO: Get from auth context
@@ -45,8 +51,17 @@ export const createWeekTemplate = async (template: Omit<WeekTemplate, 'id' | 'cr
 export const updateWeekTemplate = async (id: string, updates: Partial<Omit<WeekTemplate, 'id' | 'createdAt' | 'createdBy'>>): Promise<void> => {
   try {
     const templateRef = doc(getDb(), 'weekTemplates', id);
+
+    const cleanUpdates = { ...updates };
+    if (cleanUpdates.days) {
+      cleanUpdates.days = cleanUpdates.days.map(d => ({
+        ...d,
+        variations: d.variations || []
+      }));
+    }
+
     await updateDoc(templateRef, {
-      ...updates,
+      ...cleanUpdates,
       updatedAt: Timestamp.now()
     });
   } catch (error) {

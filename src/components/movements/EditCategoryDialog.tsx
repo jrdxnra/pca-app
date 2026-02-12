@@ -34,18 +34,19 @@ const categorySchema = z.object({
   name: z.string().min(1, 'Category name is required').max(64, 'Name must be less than 65 characters'),
   color: z.string().regex(/^#[0-9A-F]{6}$/i, 'Must be a valid hex color'),
   defaultConfiguration: z.object({
-    use_reps: z.boolean(),
-    use_tempo: z.boolean(),
-    use_time: z.boolean(),
-    use_weight: z.boolean(),
-    weight_measure: z.enum(['lbs', 'kg']),
-    use_distance: z.boolean(),
-    distance_measure: z.enum(['mi', 'km', 'm', 'yd', 'ft']),
-    use_pace: z.boolean(),
-    pace_measure: z.enum(['mi', 'km']),
+    useReps: z.boolean(),
+    useTempo: z.boolean(),
+    useTime: z.boolean(),
+    timeMeasure: z.enum(['s', 'm']),
+    useWeight: z.boolean(),
+    weightMeasure: z.enum(['lbs', 'kg', 'bw']),
+    useDistance: z.boolean(),
+    distanceMeasure: z.enum(['mi', 'km', 'm', 'yd', 'ft']),
+    usePace: z.boolean(),
+    paceMeasure: z.enum(['mi', 'km']),
     unilateral: z.boolean(),
-    use_percentage: z.boolean(),
-    use_rpe: z.boolean(),
+    usePercentage: z.boolean(),
+    useRPE: z.boolean(),
   }).optional(),
 });
 
@@ -64,18 +65,19 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
 
   // Define fallback defaults
   const fallbackConfig = {
-    use_reps: true,
-    use_tempo: false,
-    use_time: false,
-    use_weight: true,
-    weight_measure: 'lbs' as const,
-    use_distance: false,
-    distance_measure: 'mi' as const,
-    use_pace: false,
-    pace_measure: 'mi' as const,
+    useReps: true,
+    useTempo: false,
+    useTime: false,
+    timeMeasure: 's' as const,
+    useWeight: true,
+    weightMeasure: 'lbs' as const,
+    useDistance: false,
+    distanceMeasure: 'mi' as const,
+    usePace: false,
+    paceMeasure: 'mi' as const,
     unilateral: false,
-    use_percentage: false,
-    use_rpe: false,
+    usePercentage: false,
+    useRPE: false,
   };
 
   const form = useForm<CategoryFormData>({
@@ -83,7 +85,7 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
     defaultValues: {
       name: category.name,
       color: category.color,
-      defaultConfiguration: category.defaultConfiguration || fallbackConfig,
+      defaultConfiguration: { ...fallbackConfig, ...(category.defaultConfiguration || {}) },
     },
   });
 
@@ -92,14 +94,14 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
     form.reset({
       name: category.name,
       color: category.color,
-      defaultConfiguration: category.defaultConfiguration || fallbackConfig,
+      defaultConfiguration: { ...fallbackConfig, ...(category.defaultConfiguration || {}) },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category.id, category.name, category.color]);
 
   const onSubmit = async (data: CategoryFormData) => {
     try {
-      await editCategory(category.id, data);
+      await editCategory(category.id, data as any);
       setOpen(false);
     } catch (error) {
       console.error('Failed to update category:', error);
@@ -212,65 +214,68 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
                     <div className="flex flex-wrap py-2 gap-1">
                       <MovementConfigurationToggle
                         name="Reps"
-                        value={form.watch('defaultConfiguration.use_reps') ?? false}
-                        onChange={(value) => form.setValue('defaultConfiguration.use_reps', value)}
+                        value={form.watch('defaultConfiguration.useReps') ?? false}
+                        onChange={(value) => form.setValue('defaultConfiguration.useReps', value)}
                       />
-                      
+
                       <MovementConfigurationToggle
                         name="Weight"
-                        value={form.watch('defaultConfiguration.use_weight') ?? false}
-                        onChange={(value) => form.setValue('defaultConfiguration.use_weight', value)}
-                        measureOptions={['lbs', 'kg']}
-                        measureValue={form.watch('defaultConfiguration.weight_measure')}
-                        onMeasureChange={(value) => form.setValue('defaultConfiguration.weight_measure', value as 'lbs' | 'kg')}
+                        value={form.watch('defaultConfiguration.useWeight') ?? false}
+                        onChange={(value) => form.setValue('defaultConfiguration.useWeight', value)}
+                        measureOptions={['lbs', 'kg', 'bw']}
+                        measureValue={form.watch('defaultConfiguration.weightMeasure')}
+                        onMeasureChange={(value) => form.setValue('defaultConfiguration.weightMeasure', value as 'lbs' | 'kg' | 'bw')}
                       />
-                      
+
                       <MovementConfigurationToggle
                         name="Distance"
-                        value={form.watch('defaultConfiguration.use_distance') ?? false}
-                        onChange={(value) => form.setValue('defaultConfiguration.use_distance', value)}
+                        value={form.watch('defaultConfiguration.useDistance') ?? false}
+                        onChange={(value) => form.setValue('defaultConfiguration.useDistance', value)}
                         measureOptions={['mi', 'km', 'm', 'yd', 'ft']}
-                        measureValue={form.watch('defaultConfiguration.distance_measure')}
-                        onMeasureChange={(value) => form.setValue('defaultConfiguration.distance_measure', value as 'mi' | 'km' | 'm' | 'yd' | 'ft')}
+                        measureValue={form.watch('defaultConfiguration.distanceMeasure')}
+                        onMeasureChange={(value) => form.setValue('defaultConfiguration.distanceMeasure', value as 'mi' | 'km' | 'm' | 'yd' | 'ft')}
                       />
-                      
+
                       <MovementConfigurationToggle
                         name="Pace"
-                        value={form.watch('defaultConfiguration.use_pace') ?? false}
-                        onChange={(value) => form.setValue('defaultConfiguration.use_pace', value)}
+                        value={form.watch('defaultConfiguration.usePace') ?? false}
+                        onChange={(value) => form.setValue('defaultConfiguration.usePace', value)}
                         measureOptions={['mi', 'km']}
-                        measureValue={form.watch('defaultConfiguration.pace_measure')}
-                        onMeasureChange={(value) => form.setValue('defaultConfiguration.pace_measure', value as 'mi' | 'km')}
+                        measureValue={form.watch('defaultConfiguration.paceMeasure')}
+                        onMeasureChange={(value) => form.setValue('defaultConfiguration.paceMeasure', value as 'mi' | 'km')}
                       />
-                      
+
                       <MovementConfigurationToggle
                         name="Tempo"
-                        value={form.watch('defaultConfiguration.use_tempo') ?? false}
-                        onChange={(value) => form.setValue('defaultConfiguration.use_tempo', value)}
+                        value={form.watch('defaultConfiguration.useTempo') ?? false}
+                        onChange={(value) => form.setValue('defaultConfiguration.useTempo', value)}
                       />
-                      
+
                       <MovementConfigurationToggle
                         name="Time"
-                        value={form.watch('defaultConfiguration.use_time') ?? false}
-                        onChange={(value) => form.setValue('defaultConfiguration.use_time', value)}
+                        value={form.watch('defaultConfiguration.useTime') ?? false}
+                        onChange={(value) => form.setValue('defaultConfiguration.useTime', value)}
+                        measureOptions={['s', 'm']}
+                        measureValue={form.watch('defaultConfiguration.timeMeasure')}
+                        onMeasureChange={(value) => form.setValue('defaultConfiguration.timeMeasure', value as 's' | 'm')}
                       />
-                      
+
                       <MovementConfigurationToggle
                         name="Unilateral"
                         value={form.watch('defaultConfiguration.unilateral') ?? false}
                         onChange={(value) => form.setValue('defaultConfiguration.unilateral', value)}
                       />
-                      
+
                       <MovementConfigurationToggle
                         name="Percentage"
-                        value={form.watch('defaultConfiguration.use_percentage') ?? false}
-                        onChange={(value) => form.setValue('defaultConfiguration.use_percentage', value)}
+                        value={form.watch('defaultConfiguration.usePercentage') ?? false}
+                        onChange={(value) => form.setValue('defaultConfiguration.usePercentage', value)}
                       />
-                      
+
                       <MovementConfigurationToggle
                         name="RPE"
-                        value={form.watch('defaultConfiguration.use_rpe') ?? false}
-                        onChange={(value) => form.setValue('defaultConfiguration.use_rpe', value)}
+                        value={form.watch('defaultConfiguration.useRPE') ?? false}
+                        onChange={(value) => form.setValue('defaultConfiguration.useRPE', value)}
                       />
                     </div>
                   </div>
@@ -312,7 +317,7 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
                 Are you sure you want to delete &quot;{category.name}&quot;? This will also delete all movements in this category. This action cannot be undone.
               </p>
             </div>
-            
+
             <DialogFooter>
               <Button
                 type="button"

@@ -17,7 +17,7 @@ export interface Client {
   deletedAt?: Timestamp;
   personalRecords: Record<string, PersonalRecord>;
   recentExercisePerformance?: ClientRecentPerformance; // Recent weights and rep ranges by movement
-  
+
   // Session tracking
   targetSessionsPerWeek?: number; // How many sessions client should do per week (baseline for billing)
   sessionCounts?: SessionCounts; // Actual session counts
@@ -44,13 +44,13 @@ export interface SessionCounts {
   thisMonth: number;
   thisQuarter: number;
   thisYear: number;
-  
+
   // All-time total
   total: number;
-  
+
   // Last updated timestamp for recalculation
   lastUpdated?: Timestamp;
-  
+
   // Period boundaries for accurate counting
   weekStart?: Timestamp; // Start of current week (for reset detection)
   monthStart?: Timestamp; // Start of current month
@@ -92,24 +92,39 @@ export interface ClientRecentPerformance {
   [movementId: string]: RecentExercisePerformance;
 }
 
+export interface MovementConfiguration {
+  useReps: boolean;
+  useTempo: boolean;
+  useTime: boolean;
+  timeMeasure?: 's' | 'm';
+  useWeight: boolean;
+  weightMeasure: 'lbs' | 'kg' | 'bw';
+  useDistance: boolean;
+  distanceMeasure: 'mi' | 'km' | 'm' | 'yd' | 'ft';
+  usePace: boolean;
+  paceMeasure: 'mi' | 'km';
+  unilateral: boolean;
+  usePercentage: boolean;
+  useRPE: boolean;
+}
+
+export interface TargetWorkload extends MovementConfiguration {
+  reps?: string;
+  tempo?: string;
+  time?: string;
+  timeMeasure?: 's' | 'm';
+  weight?: string;
+  distance?: number;
+  pace?: number;
+  percentage?: number;
+  rpe?: string;
+}
+
 export interface MovementCategory {
   id: string;
   name: string;
   color: string; // Hex color code
-  defaultConfiguration?: {
-    use_reps: boolean;
-    use_tempo: boolean;
-    use_time: boolean;
-    use_weight: boolean;
-    weight_measure: 'lbs' | 'kg';
-    use_distance: boolean;
-    distance_measure: 'mi' | 'km' | 'm' | 'yd' | 'ft';
-    use_pace: boolean;
-    pace_measure: 'mi' | 'km';
-    unilateral: boolean;
-    use_percentage: boolean;
-    use_rpe: boolean;
-  };
+  defaultConfiguration?: MovementConfiguration;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -120,20 +135,7 @@ export interface Movement {
   categoryId: string;
   category?: MovementCategory; // Populated when needed
   ordinal: number; // For ordering within category
-  configuration: {
-    use_reps: boolean;
-    use_tempo: boolean;
-    use_time: boolean;
-    use_weight: boolean;
-    weight_measure: 'lbs' | 'kg';
-    use_distance: boolean;
-    distance_measure: 'mi' | 'km' | 'm' | 'yd' | 'ft';
-    use_pace: boolean;
-    pace_measure: 'mi' | 'km';
-    unilateral: boolean;
-    use_percentage: boolean;
-    use_rpe: boolean;
-  };
+  configuration: MovementConfiguration;
   instructions?: string;
   links: string[]; // Video URLs or other resources
   createdAt: Timestamp;
@@ -234,29 +236,9 @@ export interface ProgramMovementUsage {
   updatedAt: Timestamp;
 }
 
-export interface ProgramTargetWorkload {
+export interface ProgramTargetWorkload extends TargetWorkload {
   id: string;
   movementUsageId: string;
-  useWeight: boolean;
-  weight?: string;
-  weightMeasure: 'lbs' | 'kg';
-  useReps: boolean;
-  reps?: string; // e.g., "8-12", "5x5", "AMRAP"
-  useTempo: boolean;
-  tempo?: string; // e.g., "3-1-1-0"
-  useTime: boolean;
-  time?: string; // e.g., "30 seconds", "2 minutes"
-  useDistance: boolean;
-  distance?: number;
-  distanceMeasure: 'mi' | 'km' | 'm' | 'yd' | 'ft';
-  usePace: boolean;
-  pace?: number;
-  paceMeasure: 'mi' | 'km';
-  usePercentage: boolean;
-  percentage?: number; // Percentage of 1RM
-  useRPE: boolean;
-  rpe?: string; // e.g., "7", "8-9"
-  unilateral: boolean; // Single arm/leg
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -334,14 +316,14 @@ export interface ClientWorkout {
   date: Timestamp; // Specific date (e.g., Oct 14, 2025)
   dayOfWeek: number; // 0=Mon, 1=Tue... 6=Sun
   categoryName: string; // "STRENGTH", "CARDIO", etc. from ClientProgramDay
-  
+
   // NEW: Track which template structure is applied
   appliedTemplateId?: string; // Links to WorkoutStructureTemplate
-  
+
   // HYBRID APPROACH
   workoutTemplateId?: string; // Link to WorkoutTemplate (if using template)
   isModified: boolean; // false = use template data, true = use embedded data
-  
+
   // Embedded workout data (only populated if isModified = true OR no template)
   title?: string;
   sessionType?: string; // Optional display label (kept for backward compatibility)
@@ -350,7 +332,7 @@ export interface ClientWorkout {
   duration?: number; // Optional duration in minutes (for calendar layout)
   warmups?: ClientWorkoutWarmup[];
   rounds?: ClientWorkoutRound[];
-  
+
   // Column visibility settings for workout builder
   visibleColumns?: {
     tempo?: boolean;
@@ -358,7 +340,7 @@ export interface ClientWorkout {
     rpe?: boolean;
     percentage?: boolean;
   };
-  
+
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string;
@@ -372,12 +354,12 @@ export interface ClientWorkoutWarmup {
 export interface ClientWorkoutRound {
   ordinal: number;
   sets: number;
-  
+
   // NEW: From workout structure template section
   sectionName?: string; // e.g., "PP/MB/BALLISTICS", "STRENGTH1"
   sectionColor?: string; // From workout type color
   workoutTypeId?: string; // Reference to workout type
-  
+
   movementUsages: ClientWorkoutMovementUsage[];
 }
 
@@ -389,28 +371,7 @@ export interface ClientWorkoutMovementUsage {
   targetWorkload: ClientWorkoutTargetWorkload;
 }
 
-export interface ClientWorkoutTargetWorkload {
-  useWeight: boolean;
-  weight?: string;
-  weightMeasure: 'lbs' | 'kg';
-  useReps: boolean;
-  reps?: string; // e.g., "8-12", "5x5", "AMRAP"
-  useTempo: boolean;
-  tempo?: string; // e.g., "3010", "3-1-1-0"
-  useTime: boolean;
-  time?: string; // e.g., "30 seconds", "2 minutes"
-  useDistance: boolean;
-  distance?: number;
-  distanceMeasure: 'mi' | 'km' | 'm' | 'yd' | 'ft';
-  usePace: boolean;
-  pace?: number;
-  paceMeasure: 'mi' | 'km';
-  usePercentage: boolean;
-  percentage?: number; // Percentage of 1RM
-  useRPE: boolean;
-  rpe?: string; // e.g., "7", "8-9"
-  unilateral: boolean; // Single arm/leg
-}
+export interface ClientWorkoutTargetWorkload extends TargetWorkload { }
 
 export interface WorkoutLog {
   id: string;
@@ -445,12 +406,14 @@ export interface WeekTemplate {
     dayNumber: number; // 1-7
     workoutTemplateId: string;
     sessionType: string;
+    // NEW: List of workout structure templates to rotate through
+    variations?: string[]; // IDs of WorkoutStructureTemplates
   }>;
   createdAt: Timestamp;
 }
 
 // RPE Calculation Types
-export type RPEFormula = 'brzycki' | 'epley' | 'lander' | 'oconner' | 'tuchscherer' | 'average';
+export type RPEFormula = 'brzycki' | 'epley' | 'lander' | 'oconner' | 'tuchscherer' | 'average' | 'lombardi' | 'mayhew';
 
 export interface RPECalculationResult {
   formula: RPEFormula;

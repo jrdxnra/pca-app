@@ -303,7 +303,7 @@ export function QuickWorkoutBuilderDialog({
       const appliedTemplateId = template ? templateIdToUse : undefined;
 
       // Build rounds from template if available
-      let rounds = [];
+      let rounds: any[] = [];
       if (template && template.sections && template.sections.length > 0) {
         rounds = template.sections
           .sort((a, b) => a.order - b.order)
@@ -389,7 +389,7 @@ export function QuickWorkoutBuilderDialog({
       const appliedTemplateId = template ? templateIdToUse : undefined;
 
       // Build rounds from template if available
-      let rounds = [];
+      let rounds: any[] = [];
       if (template && template.sections && template.sections.length > 0) {
         rounds = template.sections
           .sort((a, b) => a.order - b.order)

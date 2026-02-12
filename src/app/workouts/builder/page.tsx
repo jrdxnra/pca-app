@@ -46,11 +46,16 @@ const WorkoutEditor = dynamic(
 
 import type { WorkoutEditorHandle } from '@/components/workouts/WorkoutEditor';
 import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
-import { CategoryFilter } from '@/components/workouts/CategoryFilter';
 import { BuilderHeader } from '@/components/workouts/builder/BuilderHeader';
-import { BuilderFilters } from '@/components/workouts/builder/BuilderFilters';
 import { Timestamp } from 'firebase/firestore';
-import { createClientWorkout, updateClientWorkout, deleteClientWorkout, getClientWorkout, fetchWorkoutsByDateRange } from '@/lib/firebase/services/clientWorkouts';
+import {
+  createClientWorkout, createClientWorkoutFromTemplate,
+  updateClientWorkout,
+  deleteClientWorkout,
+  fetchWorkoutsByDateRange,
+  fetchClientWorkouts,
+  getClientWorkout
+} from '@/lib/firebase/services/clientWorkouts';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useClientStore } from '@/lib/stores/useClientStore';
@@ -82,7 +87,19 @@ export default function BuilderPage() {
   }, [urlClientId, dateParam, workoutId, eventId]);
 
   // Calendar store for linking events to workouts
-  const { linkToWorkout, updateEvent, deleteEvent, events: calendarEvents } = useCalendarStore();
+  const { linkToWorkout, updateEvent, deleteEvent, fetchEvents, events: calendarEvents } = useCalendarStore();
+
+  // Helper to refresh calendar events for the current view range
+  const refreshCalendarEvents = useCallback(async () => {
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() - 14);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(today);
+    end.setDate(today.getDate() + 28);
+    end.setHours(23, 59, 59, 999);
+    await fetchEvents({ start, end }, true);
+  }, [fetchEvents]);
 
   // Configuration store - shared periods, templates, categories
   const {
@@ -120,8 +137,22 @@ export default function BuilderPage() {
     clientPrograms,
     isLoading: clientProgramsLoading,
     assignPeriod: hookAssignPeriod,
-    fetchClientPrograms
+    fetchClientPrograms,
+    updatePeriod
   } = useClientPrograms(clientId);
+
+  const handleAssignWeek = useCallback(async (periodId: string, weekTemplateId: string) => {
+    try {
+      setLoading(true);
+      await updatePeriod(periodId, { weekTemplateId });
+      toastSuccess('Week Template assigned successfully');
+    } catch (error) {
+      console.error('Error assigning week template:', error);
+      toastError('Failed to assign Week Template');
+    } finally {
+      setLoading(false);
+    }
+  }, [updatePeriod]);
 
   // Simple local state - only day view is supported now
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('day');
@@ -151,6 +182,9 @@ export default function BuilderPage() {
   // Refs to workout editors for triggering save from header buttons
   const editorRefs = useRef<Record<string, WorkoutEditorHandle | null>>({});
 
+  // Ref to editors section for auto-scroll
+  const editorsContainerRef = useRef<HTMLDivElement>(null);
+
   // Track which workoutIds we've already opened (to prevent re-opening after close)
   const processedWorkoutIds = useRef<Set<string>>(new Set());
 
@@ -160,11 +194,23 @@ export default function BuilderPage() {
   // Track if we should auto-open workout editor when navigating to day view
   const [autoOpenWorkout, setAutoOpenWorkout] = useState<{ date: Date, workout?: any, categoryInfo?: { category: string, color: string } } | null>(null);
 
+  // Auto-scroll to editors when they open
+  // Auto-scroll removed as per user request
+  // useEffect(() => {
+  //   if ((Object.keys(editingWorkouts).length > 0 || Object.keys(creatingWorkouts).length > 0) && editorsContainerRef.current) {
+  //     // Small delay to ensure DOM is updated
+  //     setTimeout(() => {
+  //       editorsContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  //     }, 100);
+  //   }
+  // }, [Object.keys(editingWorkouts).length, Object.keys(creatingWorkouts).length]);
+
   // Week settings
   const [weekSettings, setWeekSettings] = useState({
     showWeekNumbers: true,
     highlightToday: true,
     showWeekends: false,
+    showDayView: false,
     weekOrder: 'ascending' as 'ascending' | 'descending'
   });
   const [additionalWeeks, setAdditionalWeeks] = useState(0);
@@ -188,8 +234,8 @@ export default function BuilderPage() {
   const [deleteDialogNewCategory, setDeleteDialogNewCategory] = useState<string>('');
   const [showCategorySelector, setShowCategorySelector] = useState(false);
 
-  // Category filter for multi-day editing
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  // Category filter for multi-day editing - REMOVED
+  // const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const handleColumnVisibilityChange = (column: 'tempo' | 'distance' | 'rpe' | 'percentage', visible: boolean) => {
     setVisibleColumns(prev => ({
@@ -274,30 +320,30 @@ export default function BuilderPage() {
 
   // Load and open workout when workoutId is provided in URL
   useEffect(() => {
+    logger.debug('[Builder] ========================================');
+    logger.debug('[Builder] loadWorkoutById effect running');
+    logger.debug('[Builder] workoutId:', workoutId);
+    logger.debug('[Builder] loading:', loading);
+    logger.debug('[Builder] clientId:', clientId);
+    logger.debug('[Builder] ========================================');
+
+    if (!workoutId) {
+      logger.debug('[Builder] SKIP - no workoutId in URL');
+      return;
+    }
+
+    // Check if we've already processed this workoutId (prevents re-opening after close)
+    if (processedWorkoutIds.current.has(workoutId)) {
+      logger.debug('[Builder] SKIP - workoutId already processed (was closed by user)');
+      return;
+    }
+
+    if (loading) {
+      logger.debug('[Builder] SKIP - still loading initial data');
+      return;
+    }
+
     const loadWorkoutById = async () => {
-      logger.debug('[Builder] ========================================');
-      logger.debug('[Builder] loadWorkoutById effect running');
-      logger.debug('[Builder] workoutId:', workoutId);
-      logger.debug('[Builder] loading:', loading);
-      logger.debug('[Builder] clientId:', clientId);
-      logger.debug('[Builder] ========================================');
-
-      if (!workoutId) {
-        logger.debug('[Builder] SKIP - no workoutId in URL');
-        return;
-      }
-
-      // Check if we've already processed this workoutId (prevents re-opening after close)
-      if (processedWorkoutIds.current.has(workoutId)) {
-        logger.debug('[Builder] SKIP - workoutId already processed (was closed by user)');
-        return;
-      }
-
-      if (loading) {
-        logger.debug('[Builder] SKIP - still loading initial data');
-        return;
-      }
-
       try {
         logger.debug('[Builder] Fetching workout from Firebase:', workoutId);
         const workout = await getClientWorkout(workoutId);
@@ -1339,6 +1385,208 @@ export default function BuilderPage() {
     }
   };
 
+  // Create Next Workout (Smart Create)
+  const handleSmartCreate = async (type: 'progression' | 'generation', workout: ClientWorkout) => {
+    if (!workout || !clientId) return;
+
+    // 1. Calculate Next Date (One week later from workout's date)
+    const currentWorkoutDate = safeToDate(workout.date);
+    const nextDate = new Date(currentWorkoutDate);
+    nextDate.setDate(nextDate.getDate() + 7);
+
+    // 2. Progression: Clone current workout exactly
+    if (type === 'progression') {
+      try {
+        setLoading(true);
+        const { id, createdAt, updatedAt, ...workoutData } = workout;
+
+        await createClientWorkout({
+          ...workoutData,
+          date: Timestamp.fromDate(nextDate),
+          programId: workout.programId || '', // Ensure programId is passed if exists
+          isModified: true // Cloned workouts are considered modified/custom by default
+        });
+
+        toastSuccess(`Next workout created for ${nextDate.toLocaleDateString()}`);
+        // Refresh workouts and calendar events to show the new workout
+        await fetchAllScheduledWorkouts();
+        await refreshCalendarEvents();
+      } catch (error) {
+        console.error('Error creating progression workout:', error);
+        toastError('Failed to create next workout.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // 3. Generation: Create Next Scheduled Day in Current Week
+    if (type === 'generation') {
+      try {
+        setLoading(true);
+
+        const { workoutStructureTemplates, workoutTypes } = useConfigurationStore.getState();
+        const { scheduledWorkouts } = useProgramStore.getState();
+
+        // A. Find applicable Week Template for this CLIENT and DATE
+        console.log('DEBUG: handleSmartCreate - Start', { currentWorkoutDate, type });
+        console.log('DEBUG: handleSmartCreate - All Client Programs:', clientPrograms);
+
+        let activePeriod: ClientProgramPeriod | undefined;
+
+        // Iterate through all programs to find the specific period covering this date
+        for (const program of clientPrograms) {
+          const period = program.periods.find(p => {
+            const start = safeToDate(p.startDate);
+            const end = safeToDate(p.endDate);
+            // Ensure inclusive comparison and ignore time portion if needed (usually safeToDate handles it, but good to be sure)
+            start.setHours(0, 0, 0, 0);
+            end.setHours(23, 59, 59, 999);
+            const checkDate = new Date(currentWorkoutDate);
+            checkDate.setHours(12, 0, 0, 0); // Middle of day to avoid boundary issues
+            return checkDate >= start && checkDate <= end;
+          });
+
+          if (period) {
+            activePeriod = period;
+            break;
+          }
+        }
+
+        console.log('DEBUG: handleSmartCreate - Period found:', activePeriod);
+
+        if (!activePeriod || !activePeriod.weekTemplateId) {
+          console.error('DEBUG: No active period or weekTemplateId', {
+            foundPeriod: !!activePeriod,
+            weekTemplateId: activePeriod?.weekTemplateId
+          });
+          toastError('No Week Template assigned for this week. Cannot generate next workout.');
+          return;
+        }
+
+        const template = weekTemplates.find(t => t.id === activePeriod?.weekTemplateId);
+        console.log('DEBUG: handleSmartCreate - Template found:', template);
+
+        if (!template) {
+          console.error('DEBUG: Template not found in store');
+          toastError('Assigned Week Template not found.');
+          return;
+        }
+
+        // B. Determine Current Day Index and Workout Context
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const currentDayIndex = currentWorkoutDate.getDay(); // 0-6
+        console.log('DEBUG: Current Day Index:', currentDayIndex);
+
+        // Find current workout to determine context (Category & Template)
+        // scheduledWorkouts is already available from line 1417
+        const currentWorkout = scheduledWorkouts.find(w => {
+          const d = w.date instanceof Timestamp ? w.date.toDate() : new Date(w.date);
+          return d.getDate() === currentWorkoutDate.getDate() &&
+            d.getMonth() === currentWorkoutDate.getMonth() &&
+            d.getFullYear() === currentWorkoutDate.getFullYear();
+        });
+
+        const currentCategory = currentWorkout?.sessionType || '';
+        const isCurrentCardio = currentCategory.toLowerCase().includes('cardio') ||
+          currentCategory.toLowerCase().includes('condition') ||
+          currentCategory.toLowerCase().includes('esd');
+
+        console.log('DEBUG: Context', { currentCategory, isCurrentCardio, templateId: currentWorkout?.workoutTemplateId });
+
+        // C. Find Next Scheduled Day in Template (AFTER current day)
+        // Sort template days by their index to be safe
+        const dayMap: Record<string, number> = {
+          'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6
+        };
+
+        const sortedTemplateDays = [...template.days].sort((a, b) => dayMap[a.day] - dayMap[b.day]);
+        console.log('DEBUG: Sorted Template Days:', sortedTemplateDays.map(d => d.day));
+
+        // Find next appropriate day
+        // Logic: 
+        // 1. If current is Cardio, just find next scheduled day (could be Strength or Cardio).
+        // 2. If current is Strength (not Cardio), skip Cardio days and find next Strength day.
+
+        let nextDayConfig = sortedTemplateDays.find(d => {
+          const dayIdx = dayMap[d.day];
+          if (dayIdx <= currentDayIndex) return false; // Must be future day in week
+
+          // Check skipping logic
+          if (!isCurrentCardio) {
+            const nextCategory = d.workoutCategory || '';
+            const isNextCardio = nextCategory.toLowerCase().includes('cardio') ||
+              nextCategory.toLowerCase().includes('condition') ||
+              nextCategory.toLowerCase().includes('esd');
+
+            if (isNextCardio) {
+              console.log(`DEBUG: Skipping ${d.day} because it is Cardio and current is Strength`);
+              return false;
+            }
+          }
+
+          return true;
+        });
+
+        // Fallback: If no "Strength" day found in remaining week, just take the next immediate scheduled day 
+        // (even if it is Cardio, better than nothing). 
+        // Or if we wrapped around (not handling wrap around for now as per "in Current Week" scope).
+        if (!nextDayConfig && !isCurrentCardio) {
+          // Try again without skipping, just in case user really has only cardio left
+          nextDayConfig = sortedTemplateDays.find(d => dayMap[d.day] > currentDayIndex);
+        }
+
+        console.log('DEBUG: Next Day Config Found:', nextDayConfig);
+
+        if (!nextDayConfig) {
+          console.warn('DEBUG: No next day found in current week');
+          toastError('No more scheduled workouts for this week in the template.');
+          return;
+        }
+
+        // D. Calculate Date for Next Workout
+        const nextDayIndex = dayMap[nextDayConfig.day];
+        const dayDiff = nextDayIndex - currentDayIndex;
+        console.log('DEBUG: Day Diff calculation:', { nextDayIndex, currentDayIndex, dayDiff });
+
+        const nextDate = new Date(currentWorkoutDate);
+        nextDate.setDate(nextDate.getDate() + dayDiff);
+        console.log('DEBUG: Next Date Calculated:', nextDate);
+
+        // E. Clone Current Workout to Next Date (Match "Next Week" behavior)
+        // Instead of generating from the template for that day, we copy the current workout's
+        // content (Title, Time, Template, Rounds, etc.) to the new slot.
+        // This allows for "Next Workout" to behave like a progression within the week.
+
+        // Use 'workout' (argument) as the source, as it matches the trusted pattern in 'progression' logic.
+        const { id, createdAt, updatedAt, ...workoutData } = workout;
+
+        // Clone the workout
+        await createClientWorkout({
+          ...workoutData,
+          date: Timestamp.fromDate(nextDate),
+          dayOfWeek: nextDayIndex, // Ensure dayOfWeek matches the new date
+          // Start with same title, notes, time, etc. from the source workout
+          programId: workout.programId || '',
+          isModified: true
+        });
+
+        toastSuccess(`Created ${nextDayConfig.day}'s workout (${nextDate.toLocaleDateString()})`);
+
+        // Force refresh workouts and calendar events
+        await fetchAllScheduledWorkouts();
+        await refreshCalendarEvents();
+
+      } catch (error) {
+        console.error('Error generating next workout:', error);
+        toastError('Failed to generate next workout.');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+
   // Delete both workout and linked event
   const handleDeleteWorkoutAndEvent = async () => {
     if (!deleteDialogData) return;
@@ -1452,13 +1700,19 @@ export default function BuilderPage() {
               weekTemplates={weekTemplates}
               clientPrograms={clientPrograms}
               onAssignPeriod={handleAssignPeriod}
+              onAssignWeek={handleAssignWeek}
               onWorkoutCreated={() => {
-                // Force re-fetch by updating calendarDate (triggers useEffect)
+                // Force re-fetch workouts and calendar events
                 setCalendarDate(new Date(calendarDate));
+                refreshCalendarEvents();
               }}
               weekOrder={weekSettings.weekOrder}
               onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
+              showDayView={weekSettings.showDayView}
+              onShowDayViewChange={(show) => setWeekSettings(prev => ({ ...prev, showDayView: show }))}
               viewMode={viewMode}
+              visibleColumns={visibleColumns}
+              onColumnVisibilityChange={handleColumnVisibilityChange}
             />
 
             {/* Workout Building Actions */}
@@ -1468,17 +1722,8 @@ export default function BuilderPage() {
               </div>
             )}
 
-            {/* Second Row - Column Toggle, Category Filter, Week Order */}
-            <BuilderFilters
-              visibleColumns={visibleColumns}
-              onColumnVisibilityChange={handleColumnVisibilityChange}
-              viewMode={viewMode}
-              workoutCategories={workoutCategories}
-              selectedCategories={selectedCategories}
-              onCategorySelectionChange={setSelectedCategories}
-              weekOrder={weekSettings.weekOrder}
-              onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
-            />
+
+            {/* Second Row - Filters moved to BuilderHeader */}
           </CardContent>
         </Card>
 
@@ -1517,39 +1762,273 @@ export default function BuilderPage() {
                 return normalizedCalendarDate >= weekStart && normalizedCalendarDate <= weekEnd;
               });
 
-              // Show 1 week before, current week, and 2 weeks after (4 weeks total)
-              let weeksToDisplay: Date[][];
-              if (targetWeekIndex >= 0) {
-                // Get range: 1 week before to 2 weeks after
-                const startIdx = Math.max(0, targetWeekIndex - 1);
-                const endIdx = Math.min(calculatedWeeks.length, targetWeekIndex + 3);
-                weeksToDisplay = calculatedWeeks.slice(startIdx, endIdx);
-              } else {
-                // Generate weeks around calendarDate if not in calculated weeks
-                const weekStart = new Date(calendarDate);
-                const dayOfWeek = weekStart.getDay();
-                const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-                weekStart.setDate(weekStart.getDate() + diff);
-                weekStart.setHours(12, 0, 0, 0);
+              // Always generate 6 weeks: 1 week before, current week, and 4 weeks after
+              // This ensures consistent view size regardless of period boundaries
+              let weeksToDisplay: Date[][] = [];
+              const weekStart = new Date(calendarDate);
+              const dayOfWeek = weekStart.getDay();
+              // Adjust to start of the week (Monday or Sunday based on locale/settings, assuming Monday here or standard getDay)
+              // Actually, rely on consistent offset logic used in calculateWeeks or just standard calendar logic
+              // Using standard "start of week" logic:
+              const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Monday start
+              weekStart.setDate(weekStart.getDate() + diff);
+              weekStart.setHours(12, 0, 0, 0);
 
-                // Generate 4 weeks: 1 before, current, 2 after
-                const generatedWeeks: Date[][] = [];
-                for (let w = -1; w <= 2; w++) {
-                  const week: Date[] = [];
-                  for (let i = 0; i < 7; i++) {
-                    const day = new Date(weekStart);
-                    day.setDate(weekStart.getDate() + (w * 7) + i);
-                    week.push(day);
-                  }
-                  generatedWeeks.push(week);
+              const WEEKS_TO_SHOW = 5;
+              const START_OFFSET = -1; // 1 week before
+
+              for (let w = START_OFFSET; w < START_OFFSET + WEEKS_TO_SHOW; w++) {
+                const week: Date[] = [];
+                for (let i = 0; i < 7; i++) {
+                  const day = new Date(weekStart);
+                  day.setDate(weekStart.getDate() + (w * 7) + i);
+                  week.push(day);
                 }
-                weeksToDisplay = generatedWeeks;
+                weeksToDisplay.push(week);
               }
 
               const orderedWeeks = weekSettings.weekOrder === 'descending'
                 ? [...weeksToDisplay].reverse()
                 : weeksToDisplay;
 
+              // Coachella-style Day View: Show days as rows with weeks horizontally
+              if (weekSettings.showDayView) {
+                const dayNames = weekSettings.showWeekends
+                  ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                  : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+                return dayNames.map((dayName, dayIndex) => {
+                  // Week array is structured as [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+                  // So dayIndex directly corresponds to the week array index
+                  // dayIndex 0 = Monday (week[0]), dayIndex 1 = Tuesday (week[1]), etc.
+
+                  return (
+                    <div key={dayName} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                      {/* Day Header */}
+                      <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-4 py-2">
+                        <h3 className="text-sm font-semibold text-gray-800">{dayName}</h3>
+                      </div>
+
+                      {/* Weeks Horizontal Scroll */}
+                      <div className="overflow-x-auto">
+                        <div className="flex gap-2 p-2 min-w-max">
+                          {orderedWeeks.map((week, weekIndex) => {
+                            // Get the date for this day in this week
+                            // dayIndex directly maps to week array: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+                            const date = week[dayIndex];
+                            if (!date) return null;
+
+                            const workout = getWorkoutForDate(date);
+                            const inPeriod = isDateInPeriod(date);
+                            const categoryInfo = getCategoryForDate(date);
+                            const dateKey = getDateKey(date);
+                            const isEditingThisDate = openDates.has(dateKey);
+                            const isToday = date.toDateString() === new Date().toDateString();
+
+                            // Filter by selected categories - REMOVED
+                            const shouldShow = true;
+
+                            return (
+                              <div
+                                key={`${dayName}-week-${weekIndex}`}
+                                className={`flex-1 min-w-[180px] min-h-[120px] relative rounded-lg overflow-hidden border transition-all ${isEditingThisDate && !isToday
+                                  ? 'bg-amber-50 border-amber-400'
+                                  : isToday
+                                    ? 'bg-blue-50 border-blue-300'
+                                    : inPeriod
+                                      ? 'bg-white border-gray-200'
+                                      : 'bg-gray-50 border-gray-200 opacity-60'
+                                  } ${!shouldShow ? 'opacity-30' : ''}`}
+                              >
+                                {/* Week + Date Header - Matches Week View exactly */}
+                                <div className={`px-2 py-1 border-b border-gray-100 flex items-center justify-between ${isEditingThisDate && !isToday
+                                  ? 'bg-amber-100'
+                                  : isToday
+                                    ? 'bg-blue-100'
+                                    : 'bg-gray-50'
+                                  }`}>
+                                  <span className={`text-sm font-semibold ${isEditingThisDate && !isToday
+                                    ? 'text-amber-800 font-bold'
+                                    : isToday
+                                      ? 'text-blue-700 font-bold'
+                                      : 'text-gray-700'
+                                    }`}>
+                                    {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                  </span>
+                                  {isEditingThisDate && !isToday && (
+                                    <div className="flex items-center gap-1">
+                                      <div className="w-2 h-2 rounded-full animate-pulse bg-amber-500" />
+                                    </div>
+                                  )}
+                                  {isToday && (
+                                    <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                                      Today
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Workout Content */}
+                                {workout ? (
+                                  <div>
+                                    <button
+                                      className="w-full text-left p-0.5 hover:bg-gray-50 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditWorkout(workout);
+                                      }}
+                                    >
+                                      <div className="px-1 py-0.5">
+                                        <div
+                                          className="text-xs px-2 py-1 rounded text-white font-medium flex items-center justify-between gap-1"
+                                          style={{
+                                            backgroundColor: workoutCategories.find((wc: any) => wc.name === workout.categoryName)?.color || categoryInfo?.color || '#6b7280'
+                                          }}
+                                        >
+                                          <span className="truncate flex-1">
+                                            {workout.title || workout.categoryName || categoryInfo?.category || 'Untitled'}
+                                          </span>
+                                          {workout.appliedTemplateId && (
+                                            <span className="text-[10px] opacity-75 flex-shrink-0">★</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </button>
+                                  </div>
+                                ) : categoryInfo ? (
+                                  <div>
+                                    <button
+                                      className="w-full text-left p-0.5 hover:bg-gray-100 transition-colors border border-dashed border-gray-300"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCreateWorkout(date, categoryInfo.category, categoryInfo.color);
+                                      }}
+                                    >
+                                      <div
+                                        className="text-xs px-1 py-0.5 rounded text-white font-medium mb-0.5 flex items-center justify-between"
+                                        style={{ backgroundColor: categoryInfo.color }}
+                                      >
+                                        <span>{categoryInfo.category}</span>
+                                        {workoutCategories.find((wc: any) => wc.name === categoryInfo.category)?.linkedWorkoutStructureTemplateId && (
+                                          <span className="text-[8px] opacity-75">★</span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center justify-center text-gray-400 mt-0.5">
+                                        <Plus className="w-3 h-3 icon-add" />
+                                      </div>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="p-3 flex flex-col items-center justify-center text-center h-full cursor-pointer hover:bg-gray-100 transition-colors group rounded"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setQuickWorkoutInitialData({
+                                        date: dateKey,
+                                        category: undefined,
+                                        time: undefined
+                                      });
+                                      setQuickWorkoutDialogOpen(true);
+                                    }}
+                                  >
+                                    <div className="text-gray-400 text-xs group-hover:text-gray-600">
+                                      {loading || clientProgramsLoading ? (
+                                        <div className="flex flex-col items-center justify-center p-2">
+                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mb-1"></div>
+                                        </div>
+                                      ) : inPeriod ? (
+                                        <div className="flex flex-col items-center gap-1">
+                                          <Plus className="w-5 h-5 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                          <span className="opacity-0 group-hover:opacity-100 transition-opacity">Add Workout</span>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <div className="text-lg mb-1">🚫</div>
+                                          <div>Outside training period</div>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Editors Section for this Day - Only show if this day has active editors */}
+                      {(() => {
+                        // Check if any dates for this day across all weeks have active editors
+                        const dayEditingWorkouts = Object.entries(editingWorkouts).filter(([dateKey]) => {
+                          const [year, month, day] = dateKey.split('-').map(Number);
+                          const date = new Date(year, month - 1, day);
+                          const dateDayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+                          // Convert dayIndex to day of week: 0=Monday(1), 1=Tuesday(2), etc.
+                          const targetDayOfWeek = dayIndex === 6 ? 0 : dayIndex + 1;
+                          return dateDayOfWeek === targetDayOfWeek;
+                        });
+
+                        const dayCreatingWorkouts = Object.entries(creatingWorkouts).filter(([dateKey]) => {
+                          const [year, month, day] = dateKey.split('-').map(Number);
+                          const date = new Date(year, month - 1, day);
+                          const dateDayOfWeek = date.getDay();
+                          const targetDayOfWeek = dayIndex === 6 ? 0 : dayIndex + 1;
+                          return dateDayOfWeek === targetDayOfWeek;
+                        });
+
+                        const hasActiveEditors = dayEditingWorkouts.length > 0 || dayCreatingWorkouts.length > 0;
+
+                        if (!hasActiveEditors) return null;
+
+                        return (
+                          <div ref={editorsContainerRef} className="border-t border-gray-200 bg-gray-50">
+                            <div className="p-1">
+                              <div className="flex gap-1 border border-gray-200">
+                                {[...dayEditingWorkouts, ...dayCreatingWorkouts]
+                                  .sort(([dateKeyA], [dateKeyB]) => new Date(dateKeyA).getTime() - new Date(dateKeyB).getTime())
+                                  .slice(0, 3)
+                                  .map(([dateKey, workoutOrCreateData], index, array) => {
+                                    const isEditing = dayEditingWorkouts.some(([key]) => key === dateKey);
+                                    const workout = isEditing ? workoutOrCreateData : null;
+                                    const createData = !isEditing ? workoutOrCreateData : null;
+                                    const isLast = index === array.length - 1;
+
+                                    return (
+                                      <div
+                                        key={isEditing ? `editing-${dateKey}` : `creating-${dateKey}`}
+                                        className={`flex-1 min-w-0 bg-white shadow-lg overflow-visible ${!isLast ? 'border-r border-gray-200' : ''}`}
+                                      >
+                                        <div className="p-0 relative z-10">
+                                          <WorkoutEditor
+                                            ref={(el) => { editorRefs.current[dateKey] = el; }}
+                                            workout={workout}
+                                            isOpen={true}
+                                            onClose={() => handleCloseEditor(dateKey, workout?.id)}
+                                            onSave={(workoutData) => handleSaveWorkout(workoutData, dateKey)}
+                                            onDelete={() => handleDeleteWorkout(workout?.id, dateKey)}
+                                            isCreating={!isEditing}
+                                            expandedInline={true}
+                                            initialRounds={createData ? generateInitialRounds(createData?.appliedTemplateId) : undefined}
+                                            appliedTemplateId={createData?.appliedTemplateId}
+                                            eventId={getEventIdForWorkout(workout, dateKey)}
+                                            externalVisibleColumns={visibleColumns}
+                                            onExternalColumnVisibilityChange={handleColumnVisibilityChange}
+                                            draftKey={clientId ? `${dateKey}-${clientId}${workout?.id ? `-${workout.id}` : '-new'}` : undefined}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  );
+                });
+              }
+
+              // Traditional Week View: Show weeks as cards with days in a grid
               return orderedWeeks.map((week, weekIndex) => {
                 // Find the original index in calculatedWeeks to get the correct week number
                 const originalIndex = calculatedWeeks.findIndex(w =>
@@ -1577,7 +2056,7 @@ export default function BuilderPage() {
                 viewedDate.setHours(12, 0, 0, 0);
                 const isViewedWeek = viewedDate >= weekStart && viewedDate <= weekEnd;
                 // Only show viewed indicator if it's different from current week
-                const showViewedIndicator = isViewedWeek && !isCurrentWeek;
+                const showViewedIndicator = isViewedWeek;
 
                 // Calculate weeks offset from TODAY's week (not the viewed week)
                 // Get the start of the week containing TODAY
@@ -1633,68 +2112,35 @@ export default function BuilderPage() {
                 return (
                   <div
                     key={`week-${weekIndex}-${Object.keys(editingWorkouts).length}-${Object.keys(creatingWorkouts).length}-${openDates.size}`}
-                    className={`bg-white rounded-lg shadow-sm border overflow-hidden ${isCurrentWeek
-                      ? 'border-blue-400 ring-2 ring-blue-100'
-                      : showViewedIndicator
-                        ? 'border-purple-400 ring-2 ring-purple-100'
-                        : isPastWeek
-                          ? 'border-gray-200 bg-gray-50/30' // Visual indication without opacity
-                          : 'border-gray-200'
-                      }`}
+                    className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden relative transition-all"
                   >
                     {/* Week Header */}
-                    <div className={`border-b border-gray-200 px-3 py-1.5 ${isCurrentWeek
-                      ? 'bg-gradient-to-r from-blue-50 to-blue-100'
-                      : showViewedIndicator
-                        ? 'bg-gradient-to-r from-purple-50 to-purple-100'
-                        : isPastWeek
-                          ? 'bg-gradient-to-r from-gray-100 to-gray-150'
-                          : 'bg-gradient-to-r from-gray-50 to-gray-100'
-                      }`}>
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-4 py-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <h3 className={`text-sm ${isCurrentWeek
-                            ? 'font-bold text-blue-800'
-                            : showViewedIndicator
-                              ? 'font-bold text-purple-800'
-                              : 'font-semibold text-gray-800'
-                            }`}>
+                          <h3 className="text-sm font-semibold text-gray-800">
                             {week[0]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {week[week.length - 1]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </h3>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${isCurrentWeek
-                            ? 'bg-blue-500 text-white font-bold'
-                            : showViewedIndicator
-                              ? 'bg-purple-500 text-white font-bold'
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${hasActiveEditors
+                            ? 'bg-amber-600 text-white font-bold'
+                            : isCurrentWeek
+                              ? 'bg-blue-500 text-white font-bold'
                               : isPastWeek
                                 ? 'bg-gray-400 text-white font-medium'
-                                : 'bg-gray-200 text-gray-600 font-medium'
+                                : 'bg-gray-300 text-gray-700 font-medium'
                             }`}>
                             {getWeekLabel()}
-                            {showViewedIndicator && ' • Viewing'}
                           </span>
                         </div>
                         <div className="flex items-center gap-3">
-                          {hasActiveEditors && (
-                            <div className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-medium">
-                              {weekEditingWorkouts.length + weekCreatingWorkouts.length} editing
-                            </div>
-                          )}
+                          {/* Editing count removed as requested */}
                         </div>
                       </div>
                     </div>
 
                     {/* Days Grid */}
-                    <div className={`grid ${weekSettings.showWeekends ? 'grid-cols-7' : 'grid-cols-5'} divide-x divide-gray-200`}>
-                      {/* Day Headers */}
-                      {(weekSettings.showWeekends
-                        ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-                        : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-                      ).map((day, index) => (
-                        <div key={index} className="bg-gray-50 text-center text-xs font-semibold text-gray-700 py-2 border-b border-gray-200">
-                          <div className="hidden sm:block">{day}</div>
-                          <div className="sm:hidden">{day.slice(0, 3)}</div>
-                        </div>
-                      ))}
+                    <div className={`grid ${weekSettings.showWeekends ? 'grid-cols-7' : 'grid-cols-5'} gap-2 p-2`}>
+                      {/* Day Headers removed to merge with date cells */}
 
                       {/* Day Cells */}
                       {week
@@ -1713,8 +2159,8 @@ export default function BuilderPage() {
                           const createWorkoutData = creatingWorkouts[dateKey];
                           const isToday = date.toDateString() === new Date().toDateString();
 
-                          // Filter by selected categories
-                          const shouldShow = !categoryInfo || selectedCategories.length === 0 || selectedCategories.includes(categoryInfo.category);
+                          // Filter by selected categories - REMOVED
+                          const shouldShow = true;
 
                           if (!shouldShow) {
                             return (
@@ -1727,13 +2173,13 @@ export default function BuilderPage() {
                           }
 
                           return (
-                            <div key={dayIndex} className={`min-h-[120px] relative ${isEditingThisDate && !isToday
-                              ? 'bg-amber-50 border-2 border-amber-400'
+                            <div key={dayIndex} className={`min-h-[120px] relative rounded-lg overflow-hidden border transition-all ${isEditingThisDate && !isToday
+                              ? 'bg-amber-50 border-amber-400'
                               : isToday
-                                ? 'bg-blue-50 border-2 border-blue-300'
+                                ? 'bg-blue-50 border-blue-300'
                                 : inPeriod
-                                  ? 'bg-white'
-                                  : 'bg-gray-50'
+                                  ? 'bg-white border-gray-200'
+                                  : 'bg-gray-50 border-gray-200'
                               } ${!inPeriod && !isToday && !isEditingThisDate ? 'opacity-60' : ''}`}>
 
                               {/* Date Header */}
@@ -1749,7 +2195,7 @@ export default function BuilderPage() {
                                     ? 'text-blue-700 font-bold'
                                     : 'text-gray-700'
                                   }`}>
-                                  {date.getDate()}
+                                  {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                                 </div>
                                 {isEditingThisDate && (
                                   <div className="flex items-center gap-1">
@@ -1812,13 +2258,29 @@ export default function BuilderPage() {
                                   </button>
                                 </div>
                               ) : (
-                                <div className="p-3 flex flex-col items-center justify-center text-center h-full">
-                                  <div className="text-gray-400 text-xs">
-                                    {inPeriod ? (
-                                      <>
-                                        <div className="text-lg mb-1">📅</div>
-                                        <div>No category assigned</div>
-                                      </>
+                                <div
+                                  className="p-3 flex flex-col items-center justify-center text-center h-full cursor-pointer hover:bg-gray-100 transition-colors group rounded"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setQuickWorkoutInitialData({
+                                      date: dateKey,
+                                      category: undefined,
+                                      time: undefined
+                                    });
+                                    setQuickWorkoutDialogOpen(true);
+                                  }}
+                                >
+                                  <div className="text-gray-400 text-xs group-hover:text-gray-600">
+                                    {/* Loading state check */}
+                                    {loading || clientProgramsLoading ? (
+                                      <div className="flex flex-col items-center justify-center p-2">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mb-1"></div>
+                                      </div>
+                                    ) : inPeriod ? (
+                                      <div className="flex flex-col items-center gap-1">
+                                        <Plus className="w-5 h-5 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                        <span className="opacity-0 group-hover:opacity-100 transition-opacity">Add Workout</span>
+                                      </div>
                                     ) : (
                                       <>
                                         <div className="text-lg mb-1">🚫</div>
@@ -1834,126 +2296,55 @@ export default function BuilderPage() {
                     </div>
 
                     {/* Expandable Editors Section - Only show if this week has active editors */}
-                    {hasActiveEditors && (
-                      <div className="border-t border-gray-200 bg-gray-50">
-                        {/* Editors Horizontal Scroll - Optimized for 2 workouts side-by-side */}
-                        <div className="p-2 overflow-x-auto">
-                          <div className="flex gap-4 min-w-max border border-gray-200" style={{ maxWidth: 'calc(2 * 560px + 1rem)' }}>
-                            {/* All Editors in Chronological Order - Show max 2 at a time */}
-                            {[...weekEditingWorkouts, ...weekCreatingWorkouts]
-                              .sort(([dateKeyA], [dateKeyB]) => new Date(dateKeyA).getTime() - new Date(dateKeyB).getTime())
-                              .slice(0, 2) // Limit to 2 workouts for optimal viewing
-                              .map(([dateKey, workoutOrCreateData], index, array) => {
-                                const isEditing = weekEditingWorkouts.some(([key]) => key === dateKey);
-                                const workout = isEditing ? workoutOrCreateData : null;
-                                const createData = !isEditing ? workoutOrCreateData : null;
-                                const isLast = index === array.length - 1;
+                    {
+                      hasActiveEditors && (
+                        <div ref={editorsContainerRef} className="border-t border-gray-200 bg-gray-50">
+                          {/* Editors Horizontal Scroll - Optimized for 2 workouts side-by-side */}
+                          <div className="p-1">
+                            <div className="flex gap-1 border border-gray-200">
+                              {/* All Editors in Chronological Order - Show max 3 at a time */}
+                              {[...weekEditingWorkouts, ...weekCreatingWorkouts]
+                                .sort(([dateKeyA], [dateKeyB]) => new Date(dateKeyA).getTime() - new Date(dateKeyB).getTime())
+                                .slice(0, 3) // Limit to 3 workouts for optimal viewing
+                                .map(([dateKey, workoutOrCreateData], index, array) => {
+                                  const isEditing = weekEditingWorkouts.some(([key]) => key === dateKey);
+                                  const workout = isEditing ? workoutOrCreateData : null;
+                                  const createData = !isEditing ? workoutOrCreateData : null;
+                                  const isLast = index === array.length - 1;
 
-                                return (
-                                  <div
-                                    key={isEditing ? `editing-${dateKey}` : `creating-${dateKey}`}
-                                    className={`flex-shrink-0 w-[560px] bg-white shadow-lg overflow-visible ${!isLast ? 'border-r border-gray-200' : ''
-                                      }`}
-                                  >
-                                    <div className="border-b px-3 py-1.5 flex items-center justify-between bg-gray-50 border-gray-200 sticky top-0 z-20">
-                                      <h3 className="text-sm font-semibold text-gray-900">
-                                        {isEditing ? '📝 Edit' : '➕ Create'} - {(() => {
-                                          // Parse dateKey (YYYY-MM-DD) as local date to avoid timezone issues
-                                          const [year, month, day] = dateKey.split('-').map(Number);
-                                          const date = new Date(year, month - 1, day);
-                                          return date.toLocaleDateString('en-US', {
-                                            weekday: 'short',
-                                            month: 'short',
-                                            day: 'numeric'
-                                          });
-                                        })()}
-                                      </h3>
-                                      <div className="flex items-center gap-1 relative z-30">
-                                        {/* Cancel button */}
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            handleCloseEditor(dateKey, workout?.id);
-                                          }}
-                                          className="h-6 text-xs px-2 relative z-30"
-                                        >
-                                          Cancel
-                                        </Button>
-                                        {/* Save button */}
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          onClick={async (e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            const editor = editorRefs.current[dateKey];
-                                            if (editor) {
-                                              setSavingEditors(prev => new Set(prev).add(dateKey));
-                                              try {
-                                                await editor.save();
-                                              } finally {
-                                                setSavingEditors(prev => {
-                                                  const next = new Set(prev);
-                                                  next.delete(dateKey);
-                                                  return next;
-                                                });
-                                              }
-                                            }
-                                          }}
-                                          disabled={savingEditors.has(dateKey)}
-                                          className="h-6 text-xs px-2 relative z-30"
-                                        >
-                                          {savingEditors.has(dateKey) ? 'Saving...' : 'Save'}
-                                        </Button>
-                                        {/* Delete/Discard button */}
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            if (isEditing && workout?.id) {
-                                              showDeleteConfirmation(workout.id, dateKey);
-                                            } else {
-                                              handleCloseEditor(dateKey, workout?.id);
-                                            }
-                                          }}
-                                          className={`p-1 rounded cursor-pointer relative z-30 ${isEditing ? 'text-red-500 hover:text-red-700 hover:bg-red-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'}`}
-                                          title={isEditing ? 'Delete workout' : 'Discard'}
-                                        >
-                                          ✕
-                                        </button>
+                                  return (
+                                    <div
+                                      key={isEditing ? `editing-${dateKey}` : `creating-${dateKey}`}
+                                      className={`flex-1 min-w-0 bg-white shadow-lg overflow-visible ${!isLast ? 'border-r border-gray-200' : ''
+                                        }`}
+                                    >
+                                      <div className="p-0 relative z-10">
+                                        <WorkoutEditor
+                                          ref={(el) => { editorRefs.current[dateKey] = el; }}
+                                          workout={workout}
+                                          isOpen={true}
+                                          onClose={() => handleCloseEditor(dateKey, workout?.id)}
+                                          onSave={(workoutData) => handleSaveWorkout(workoutData, dateKey)}
+                                          onDelete={() => handleDeleteWorkout(workout?.id, dateKey)}
+                                          isCreating={!isEditing}
+                                          expandedInline={true}
+                                          initialRounds={createData ? generateInitialRounds(createData?.appliedTemplateId) : undefined}
+                                          appliedTemplateId={createData?.appliedTemplateId}
+                                          eventId={getEventIdForWorkout(workout, dateKey)}
+                                          externalVisibleColumns={visibleColumns}
+                                          onExternalColumnVisibilityChange={handleColumnVisibilityChange}
+                                          onCreateNext={(type) => handleSmartCreate(type, workout)}
+                                          draftKey={clientId ? `${dateKey}-${clientId}${workout?.id ? `-${workout.id}` : '-new'}` : undefined}
+                                        />
                                       </div>
                                     </div>
-                                    <div className="p-0 relative z-10">
-                                      <WorkoutEditor
-                                        ref={(el) => { editorRefs.current[dateKey] = el; }}
-                                        workout={workout}
-                                        isOpen={true}
-                                        onClose={() => handleCloseEditor(dateKey, workout?.id)}
-                                        onSave={(workoutData) => handleSaveWorkout(workoutData, dateKey)}
-                                        onDelete={() => handleDeleteWorkout(workout?.id, dateKey)}
-                                        isCreating={!isEditing}
-                                        expandedInline={true}
-                                        hideTopActionBar={true}
-                                        initialRounds={createData ? generateInitialRounds(createData?.appliedTemplateId) : undefined}
-                                        appliedTemplateId={createData?.appliedTemplateId}
-                                        eventId={getEventIdForWorkout(workout, dateKey)}
-                                        externalVisibleColumns={visibleColumns}
-                                        onExternalColumnVisibilityChange={handleColumnVisibilityChange}
-                                        draftKey={clientId ? `${dateKey}-${clientId}${workout?.id ? `-${workout.id}` : '-new'}` : undefined}
-                                      />
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )
+                    }
                   </div>
                 );
               });
@@ -2106,27 +2497,30 @@ export default function BuilderPage() {
       </Dialog>
 
       {/* Quick Workout Dialog - opens when coming from calendar event */}
-      {clientId && quickWorkoutDialogOpen && (
-        <QuickWorkoutBuilderDialog
-          clientId={clientId}
-          clientName={clients.find(c => c.id === clientId)?.name || 'Unknown Client'}
-          initialOpen={quickWorkoutDialogOpen}
-          initialDate={quickWorkoutInitialData.date}
-          initialCategory={quickWorkoutInitialData.category}
-          initialTime={quickWorkoutInitialData.time}
-          eventId={quickWorkoutInitialData.eventId}
-          onWorkoutCreated={() => {
-            setQuickWorkoutDialogOpen(false);
-            setQuickWorkoutInitialData({});
-            // Force re-fetch by updating calendarDate (triggers useEffect)
-            setCalendarDate(new Date(calendarDate));
-          }}
-          onClose={() => {
-            setQuickWorkoutDialogOpen(false);
-            setQuickWorkoutInitialData({});
-          }}
-        />
-      )}
-    </div>
+      {
+        clientId && quickWorkoutDialogOpen && (
+          <QuickWorkoutBuilderDialog
+            clientId={clientId}
+            clientName={clients.find(c => c.id === clientId)?.name || 'Unknown Client'}
+            initialOpen={quickWorkoutDialogOpen}
+            initialDate={quickWorkoutInitialData.date}
+            initialCategory={quickWorkoutInitialData.category}
+            initialTime={quickWorkoutInitialData.time}
+            eventId={quickWorkoutInitialData.eventId}
+            onWorkoutCreated={() => {
+              setQuickWorkoutDialogOpen(false);
+              setQuickWorkoutInitialData({});
+              // Force re-fetch workouts and calendar events
+              setCalendarDate(new Date(calendarDate));
+              refreshCalendarEvents();
+            }}
+            onClose={() => {
+              setQuickWorkoutDialogOpen(false);
+              setQuickWorkoutInitialData({});
+            }}
+          />
+        )
+      }
+    </div >
   );
 }

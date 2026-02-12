@@ -80,18 +80,18 @@ export function ExerciseRow({ exercise, roundIndex, exerciseIndex, isFirst, isLa
         name: newMovementName.trim(),
         categoryId: selectedCategoryId,
         configuration: {
-          use_reps: true,
-          use_tempo: false,
-          use_time: false,
-          use_weight: true,
-          weight_measure: 'lbs',
-          use_distance: false,
-          distance_measure: 'mi',
-          use_pace: false,
-          pace_measure: 'mi',
+          useReps: true,
+          useTempo: false,
+          useTime: false,
+          useWeight: true,
+          weightMeasure: 'lbs',
+          useDistance: false,
+          distanceMeasure: 'mi',
+          usePace: false,
+          paceMeasure: 'mi',
           unilateral: false,
-          use_percentage: false,
-          use_rpe: true,
+          usePercentage: false,
+          useRPE: true,
         },
         links: [],
       });
@@ -242,7 +242,7 @@ export function ExerciseRow({ exercise, roundIndex, exerciseIndex, isFirst, isLa
         {selectedMovement && selectedMovement.configuration && (
           <>
             {/* Reps */}
-            {selectedMovement.configuration.use_reps && (
+            {selectedMovement.configuration.useReps && (
               <div className="flex flex-col ml-2">
                 <label className="text-xs font-light">Reps</label>
                 <Input
@@ -255,7 +255,7 @@ export function ExerciseRow({ exercise, roundIndex, exerciseIndex, isFirst, isLa
             )}
 
             {/* Weight */}
-            {selectedMovement.configuration.use_weight && (
+            {selectedMovement.configuration.useWeight && (
               <div className="flex flex-col ml-2">
                 <label className="text-xs font-light">Weight</label>
                 <Input
@@ -268,7 +268,7 @@ export function ExerciseRow({ exercise, roundIndex, exerciseIndex, isFirst, isLa
             )}
 
             {/* Tempo */}
-            {selectedMovement.configuration.use_tempo && (
+            {selectedMovement.configuration.useTempo && (
               <div className="flex flex-col ml-2">
                 <label className="text-xs font-light">Tempo</label>
                 <Input
@@ -281,7 +281,7 @@ export function ExerciseRow({ exercise, roundIndex, exerciseIndex, isFirst, isLa
             )}
 
             {/* RPE */}
-            {selectedMovement.configuration.use_rpe && (
+            {selectedMovement.configuration.useRPE && (
               <div className="flex flex-col ml-2">
                 <label className="text-xs font-light">RPE</label>
                 <Input

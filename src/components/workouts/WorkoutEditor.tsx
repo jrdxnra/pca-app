@@ -6,9 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, GripVertical, X, Save, ClipboardList, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, GripVertical, X, Save, ClipboardList, TrendingUp, Copy, Sparkles, FastForward } from 'lucide-react';
 import {
   ClientWorkout,
   ClientWorkoutWarmup,
@@ -17,6 +24,7 @@ import {
   ClientWorkoutTargetWorkload,
   WorkoutStructureTemplate
 } from '@/lib/types';
+import { toastSuccess, toastError } from '@/components/ui/toaster';
 
 // Helper function to abbreviate workout type names
 function abbreviateWorkoutType(name: string): string {
@@ -170,6 +178,8 @@ interface WorkoutEditorProps {
   onExternalColumnVisibilityChange?: (column: 'tempo' | 'distance' | 'rpe' | 'percentage', visible: boolean) => void;
   onDelete?: () => Promise<void>;
   hideTopActionBar?: boolean; // Hide top action bar (buttons rendered elsewhere)
+  // NEW: Smart Create Handler
+  onCreateNext?: (type: 'progression' | 'generation') => void;
   draftKey?: string; // Unique key for draft storage (e.g., "workout-2025-12-15-clientId")
 }
 
@@ -239,10 +249,17 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   externalVisibleColumns,
   onExternalColumnVisibilityChange,
   onDelete,
-  draftKey
+  draftKey,
+  onCreateNext
 }, ref) {
   const { categories, fetchCategories } = useMovementCategoryStore();
-  const { workoutStructureTemplates, workoutTypes, fetchWorkoutTypes } = useConfigurationStore();
+  const {
+    workoutStructureTemplates,
+    workoutTemplates, // Add this
+    fetchFullWorkoutTemplates, // Add this
+    workoutTypes,
+    fetchWorkoutTypes
+  } = useConfigurationStore();
   const { events, updateEvent } = useCalendarStore();
 
   // Form state
@@ -344,10 +361,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
       round.movementUsages?.forEach(usage => {
         const movement = movements.find(m => m.id === usage.movementId);
         if (movement?.configuration) {
-          if (movement.configuration.use_tempo) columns.tempo = true;
-          if (movement.configuration.use_distance) columns.distance = true;
-          if (movement.configuration.use_rpe) columns.rpe = true;
-          if (movement.configuration.use_percentage) columns.percentage = true;
+          if (movement.configuration.useTempo) columns.tempo = true;
+          if (movement.configuration.useDistance) columns.distance = true;
+          if (movement.configuration.useRPE) columns.rpe = true;
+          if (movement.configuration.usePercentage) columns.percentage = true;
         }
       });
     });
@@ -360,6 +377,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   useEffect(() => {
     if (categories.length === 0) fetchCategories();
     if (workoutTypes.length === 0) fetchWorkoutTypes();
+    if (workoutTemplates.length === 0) fetchFullWorkoutTemplates(); // Fetch if empty
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps intentional - only fetch on mount
 
@@ -587,10 +605,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
               }
               // 4. REPS ONLY: If only reps are prescribed, use rep-based formula
               else if (usage.targetWorkload.useReps && usage.targetWorkload.reps) {
-                const repsValue = typeof usage.targetWorkload.reps === 'number'
-                  ? usage.targetWorkload.reps.toString()
+                const repsValue = typeof (usage.targetWorkload.reps as any) === 'number'
+                  ? (usage.targetWorkload.reps as any).toString()
                   : usage.targetWorkload.reps;
-                const repParts = repsValue.split('-').map(r => parseInt(r.trim()));
+                const repParts = repsValue.split('-').map((r: string) => parseInt(r.trim()));
                 const targetReps = repParts.length > 1
                   ? Math.round((repParts[0] + repParts[1]) / 2)
                   : repParts[0];
@@ -605,7 +623,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
               if (suggestedWeight > 0) {
                 weights[movementId] = {
-                  value: Math.round(suggestedWeight * 10) / 10, // Round to 1 decimal
+                  value: (Math.round(suggestedWeight * 10) / 10).toString(), // Round to 1 decimal
                   unit: usage.targetWorkload.weightMeasure || 'lbs'
                 };
               }
@@ -887,11 +905,12 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     return Object.keys(newErrors).length === 0;
   };
 
-  // Template change handler
+  // Template change handler - handles both Structure and Full Workout templates
   const handleChangeTemplate = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newTemplateId = e.target.value === 'none' ? undefined : e.target.value;
+    const value = e.target.value;
 
-    if (!newTemplateId) {
+    // Check for "none" or empty
+    if (!value || value === 'none') {
       // Remove structure, keep single default round
       setRounds([{
         ordinal: 1,
@@ -908,29 +927,95 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
       return;
     }
 
-    const template = workoutStructureTemplates.find(t => t.id === newTemplateId);
-    if (!template) return;
+    // Determine type based on prefix (or fallback check if no prefix for legacy compatibility)
+    let type = 'structure';
+    let id = value;
 
-    // Apply new template structure
-    const newRounds = template.sections
-      .sort((a, b) => a.order - b.order)
-      .map((section, index) => ({
-        ordinal: index + 1,
-        sets: 1,
-        sectionName: section.workoutTypeName,
-        sectionColor: workoutTypes.find(wt => wt.id === section.workoutTypeId)?.color,
-        workoutTypeId: section.workoutTypeId,
-        movementUsages: [{
-          ordinal: 1,
-          movementId: '',
-          categoryId: '',
-          note: '',
-          targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
-        }]
+    if (value.startsWith('structure:')) {
+      type = 'structure';
+      id = value.replace('structure:', '');
+    } else if (value.startsWith('workout:')) {
+      type = 'workout';
+      id = value.replace('workout:', '');
+    } else {
+      // Legacy fallback: check strictly in structure templates first (though unlikely to overlap)
+      if (!workoutStructureTemplates.find(t => t.id === value)) {
+        // If not found in structure, assume it might be a workout ID (though unlikely with current UI)
+      }
+    }
+
+    if (type === 'workout') {
+      const template = workoutTemplates.find(t => t.id === id);
+      if (!template) return;
+
+      // Map Full Workout Template to ClientWorkoutRounds
+      const newRounds = template.rounds.map((round, roundIndex) => ({
+        ordinal: roundIndex + 1,
+        sets: 1, // Default, implies 1 set of exercises as structured in template? Or does template define sets?
+        // Wait, template rounds usually contain exercises. 
+        // We need to map 'exercises' -> 'movementUsages'
+        sectionName: round.name,
+        // Helper to find workoutTypeId? Usually templates don't strictly enforce types unless named so.
+        // We leave it empty or try to match name.
+        sectionColor: '#6b7280', // Default grey
+        workoutTypeId: undefined,
+
+        movementUsages: round.exercises.map((exercise, exerciseIndex) => ({
+          ordinal: exerciseIndex + 1,
+          movementId: exercise.movementId,
+          categoryId: '', // Ideally fetch this but not critical for display
+          note: exercise.notes || '',
+          targetWorkload: {
+            useWeight: !!exercise.weight,
+            weight: exercise.weight,
+            weightMeasure: 'lbs' as const,
+            useReps: !!exercise.reps,
+            reps: exercise.reps,
+            useTempo: !!exercise.tempo,
+            tempo: exercise.tempo,
+            useTime: false,
+            useDistance: false,
+            distanceMeasure: 'mi' as const,
+            usePace: false,
+            paceMeasure: 'mi' as const,
+            usePercentage: !!exercise.percentageIncrease,
+            percentage: exercise.percentageIncrease ? parseFloat(exercise.percentageIncrease) : undefined,
+            useRPE: !!exercise.targetRPE,
+            rpe: exercise.targetRPE?.toString(),
+            unilateral: false,
+          }
+        }))
       }));
 
-    setRounds(newRounds);
-    setCurrentTemplateId(newTemplateId);
+      setRounds(newRounds);
+      setCurrentTemplateId(undefined); // Clear structure ID as we loaded a full workout
+
+    } else {
+      // Is Structure Template
+      const template = workoutStructureTemplates.find(t => t.id === id);
+      if (!template) return;
+
+      // Apply new template structure
+      const newRounds = template.sections
+        .sort((a, b) => a.order - b.order)
+        .map((section, index) => ({
+          ordinal: index + 1,
+          sets: 1,
+          sectionName: section.workoutTypeName,
+          sectionColor: workoutTypes.find(wt => wt.id === section.workoutTypeId)?.color,
+          workoutTypeId: section.workoutTypeId,
+          movementUsages: [{
+            ordinal: 1,
+            movementId: '',
+            categoryId: '',
+            note: '',
+            targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
+          }]
+        }));
+
+      setRounds(newRounds);
+      setCurrentTemplateId(id);
+    }
   };
 
   // Helper: Check if a specific movement's logged values differ from prescribed baseline
@@ -1180,7 +1265,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         console.log('[WorkoutEditor] Draft cleared for', draftKey);
       }
 
-      onClose();
+      // onClose();
     } catch (error) {
       console.error('Error saving workout:', error);
       setErrors({ general: 'Failed to save workout. Please try again.' });
@@ -1201,67 +1286,111 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
   if (!isOpen) return null;
 
+  // Handle Copy to Clipboard (Coachella Style)
+  const handleCopyWorkout = async () => {
+    let plain = "";
+    let rich = "";
+
+    // 1. Title & Notes
+    if (title) {
+      plain += title + "\n";
+      rich += "<b>" + title + "</b><br>";
+    }
+    if (notes) {
+      plain += "Workout Notes\n" + notes + "\n";
+      rich += "<b>Workout Notes</b><br>" + notes + "<br>";
+    }
+
+    // 2. Warmups
+    if (warmups.length > 0) {
+      plain += "Warmups\n";
+      rich += "<b>Warmups</b><br>";
+      warmups.forEach(w => {
+        plain += w.text + "\n";
+        rich += w.text + "<br>";
+      });
+    }
+
+    // Helper for description
+    const createDescription = (usage: any) => {
+      const m = movements.find(mov => mov.id === usage.movementId);
+      const name = m?.name || 'Unknown Exercise';
+      const workload = usage.targetWorkload || {};
+      let st = "";
+
+      const isUnilateral = m?.configuration?.unilateral;
+      if (workload.reps) st += " " + workload.reps + (isUnilateral ? "ea" : ""); // e.g. "10", "8-12", or "8ea"
+      if (workload.weight || workload.weightMeasure === 'bw') {
+        if (workload.weightMeasure === 'bw') {
+          st += " BW";
+          if (workload.weight && workload.weight !== '0') st += ` (+${workload.weight})`;
+        } else {
+          st += " " + workload.weight + (workload.weightMeasure || '');
+        }
+      }
+      if (workload.tempo) st += " " + workload.tempo;
+      if (workload.time) st += " " + workload.time + (workload.timeMeasure || 's');
+      if (workload.percentage) st += " " + workload.percentage + "%";
+      if (workload.rpe) st += " RPE: " + workload.rpe;
+
+      return { name, details: st.trim() };
+    };
+
+    // 3. Rounds
+    rounds.forEach((round, i) => {
+      const setText = round.sets > 1 ? "sets" : "set";
+      const headerPlain = `Round ${i + 1} (${round.sets} ${setText})`;
+      const headerRich = `<b>Round ${i + 1}</b> (${round.sets} ${setText})`;
+
+      plain += headerPlain + "\n";
+      rich += headerRich + "<br>";
+
+      round.movementUsages.forEach((mu: any) => {
+        const { name, details } = createDescription(mu);
+        plain += `${name} ${details}\n`;
+        rich += `${name} ${details}<br>`;
+        if (mu.note) {
+          plain += `  - ${mu.note}\n`;
+          rich += `  - ${mu.note}<br>`;
+        }
+      });
+      plain += "\n";
+    });
+
+    // 4. Clipboard Execution
+    try {
+      if (typeof ClipboardItem !== "undefined") {
+        const textBlob = new Blob([plain], { type: "text/plain" });
+        const htmlBlob = new Blob([rich], { type: "text/html" });
+        const data = new ClipboardItem({ "text/html": htmlBlob, "text/plain": textBlob });
+        await navigator.clipboard.write([data]);
+        toastSuccess("Workout copied to clipboard!");
+      } else {
+        // Fallback
+        const cb = (e: any) => {
+          e.clipboardData.setData("text/plain", plain);
+          e.clipboardData.setData("text/html", rich);
+          e.preventDefault();
+        };
+        document.addEventListener("copy", cb);
+        document.execCommand("copy");
+        document.removeEventListener("copy", cb);
+        toastSuccess("Workout copied to clipboard!");
+      }
+    } catch (err) {
+      console.error("Failed to copy", err);
+      toastError("Failed to copy to clipboard");
+    }
+  };
+
   // Expanded inline mode - full editor without modal
   if (expandedInline) {
     return (
       <>
-        {/* Top Action Bar - Hidden when hideTopActionBar is true (buttons rendered in parent) */}
-        {!hideTopActionBar && (
-          <div className="flex items-center justify-between px-2 py-1.5 bg-gray-100 border-b border-gray-200">
-            <div className="flex items-center gap-2">
-              {/* Mode Indicator Badge */}
-              {clientId && (
-                <Badge variant={isLoggingMode ? "default" : "secondary"} className="text-xs">
-                  {isLoggingMode ? '📊 Logging Mode' : '📋 Prescribed Mode'}
-                </Badge>
-              )}
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onClose}
-                className="h-7 text-xs flex-1"
-              >
-                Cancel
-              </Button>
-
-              {/* Mode Toggle - Show Prescribed vs Logging view */}
-              {clientId && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={isLoggingMode ? "default" : "outline"}
-                  onClick={() => setIsLoggingMode(!isLoggingMode)}
-                  className="h-7 text-xs flex-1"
-                >
-                  {isLoggingMode ? '📊 Logging' : '📋 Prescribed'}
-                </Button>
-              )}
-
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleSave}
-                disabled={isLoading}
-                className="h-7 text-xs flex-1"
-              >
-                {isLoading ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
-            {/* Column Toggle (only show if not using external control) */}
-            {!externalVisibleColumns && (
-              <ColumnVisibilityToggle
-                visibleColumns={visibleColumns}
-                availableColumns={availableColumns}
-                onToggle={handleColumnVisibilityChange}
-              />
-            )}
-          </div>
-        )}
 
         {/* Content - with integrated edge toggle on right side */}
-        <div className="space-y-0 relative">
+        <div className="space-y-0 relative flex flex-col h-full overflow-hidden">
           {/* Mode Glow Indicator - Subtle elegant fade */}
           {clientId && (
             <div className="absolute right-0 top-0 bottom-0 w-12 z-10 pointer-events-none">
@@ -1370,9 +1499,9 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           {/* Basic Info */}
           <Card className="py-0 rounded-none gap-1">
             <CardContent className="space-y-1 pt-1 pb-1 px-2">
-              <div className="flex items-center gap-2">
-                {/* Title - Flex Grow */}
-                <div className="flex-1">
+              <div className="flex items-center gap-1 w-full">
+                {/* Title - 37% */}
+                <div className="w-[37%] min-w-0">
                   <Input
                     id="title"
                     value={title}
@@ -1382,8 +1511,8 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                   />
                 </div>
 
-                {/* Time - Fixed Width */}
-                <div className="w-28">
+                {/* Time - 25% */}
+                <div className="w-[25%] min-w-0">
                   <Input
                     id="time"
                     type="time"
@@ -1394,40 +1523,48 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                   />
                 </div>
 
-                {/* Template Selector - Fixed Width (Widened for tags) */}
-                <div className="w-64">
+                {/* Structure - 38% */}
+                <div className="w-[38%] min-w-0">
                   <Select
-                    value={currentTemplateId || "none"}
+                    value={currentTemplateId ? `structure:${currentTemplateId}` : ""}
                     onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
                   >
-                    <SelectTrigger className="h-9 text-xs w-full px-2 text-gray-900 flex items-center">
-                      <SelectValue placeholder="Structure" />
+                    <SelectTrigger className={`h-9 text-xs w-full px-2 text-gray-900 flex items-center ${isCreating && !currentTemplateId ? '!border-green-500 !bg-green-50' : ''}`}>
+                      <SelectValue placeholder="Load Template..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Custom Structure</SelectItem>
-                      {workoutStructureTemplates.map((template) => {
-                        const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
-                        return (
-                          <SelectItem key={template.id} value={template.id}>
-                            <div className="flex items-center gap-2 w-full">
-                              <span className="truncate">{template.name}</span>
-                              {abbrevList.length > 0 && (
-                                <div className="flex items-center gap-1 ml-auto shrink-0">
-                                  {abbrevList.map((item, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="inline-flex items-center justify-center rounded-md px-1 py-0.5 text-[10px] h-4 font-medium text-white border-0"
-                                      style={{ backgroundColor: item.color }}
-                                    >
-                                      {item.abbrev}
-                                    </span>
-                                  ))}
+
+
+
+                      {/* Structure Templates Group */}
+                      {workoutStructureTemplates.length > 0 && (
+                        <>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 mt-1 pt-1 border-t">Structure Templates</div>
+                          {workoutStructureTemplates.map((template) => {
+                            const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
+                            return (
+                              <SelectItem key={template.id} value={`structure:${template.id}`}>
+                                <div className="flex items-center gap-2 w-full">
+                                  <span className="truncate">{template.name}</span>
+                                  {abbrevList.length > 0 && (
+                                    <div className="flex items-center gap-1 ml-auto shrink-0">
+                                      {abbrevList.map((item, idx) => (
+                                        <span
+                                          key={idx}
+                                          className="inline-flex items-center justify-center rounded-md px-1 py-0.5 text-[10px] h-4 font-medium text-white border-0"
+                                          style={{ backgroundColor: item.color }}
+                                        >
+                                          {item.abbrev}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          </SelectItem>
-                        );
-                      })}
+                              </SelectItem>
+                            );
+                          })}
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1436,7 +1573,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           </Card>
 
           {/* Rounds - Same UI for both Prescribed and Logging modes */}
-          <div className="space-y-0">
+          <div className="space-y-0 flex-1 overflow-y-auto min-h-0 pb-2">
             {rounds.map((round, roundIndex) => (
               <RoundEditor
                 key={roundIndex}
@@ -1480,7 +1617,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           </div>
 
           {/* Notes - Compact & Integrated */}
-          <div className="px-1 pt-1">
+          <div className="px-1 pt-1 mt-auto bg-white border-t border-gray-100 z-10 shrink-0">
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -1488,29 +1625,105 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
               className="min-h-[32px] text-xs resize-y bg-gray-50/50 focus:bg-white transition-colors"
             />
           </div>
+          {/* Bottom Toolbar - Exact Coachella styling - Evenly Spaced */}
+          <div className="mt-4 flex justify-between items-center w-full px-2 py-2 border-t border-gray-100 group-hover:border-gray-200 transition-colors">
+            {/* Column Toggle (Left) */}
+            {!externalVisibleColumns && (
+              <ColumnVisibilityToggle
+                visibleColumns={visibleColumns}
+                availableColumns={availableColumns}
+                onToggle={handleColumnVisibilityChange}
+              />
+            )}
 
-          {/* Actions */}
-          <div className="flex gap-2 pt-2 px-1 pb-1">
-            <Button
+            {/* Mode Toggle (Left-Center) */}
+            {clientId && (
+              <button
+                type="button"
+                onClick={() => setIsLoggingMode(!isLoggingMode)}
+                className={`p-1 transition-all hover:scale-110 bg-transparent border-0 ${isLoggingMode ? 'text-indigo-600' : 'text-gray-400 hover:text-indigo-600'}`}
+                title={isLoggingMode ? "Current: Logging Mode (Click to switch)" : "Current: Prescribed Mode (Click to switch)"}
+              >
+                {isLoggingMode ? <TrendingUp className="h-6 w-6" /> : <ClipboardList className="h-6 w-6" />}
+              </button>
+            )}
+
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="p-1 text-red-500 hover:text-red-600 transition-all hover:scale-110 bg-transparent border-0"
+                title="Delete workout"
+              >
+                <Trash2 className="h-6 w-6" />
+              </button>
+            )}
+
+            {/* Cancel Button */}
+            <button
               type="button"
-              variant="outline"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 onClose();
               }}
-              className="h-7 text-xs flex-1"
+              className="p-1 text-orange-500 hover:text-orange-600 transition-all hover:scale-110 bg-transparent border-0"
+              title="Cancel"
             >
-              Cancel
-            </Button>
-            <Button
+              <X className="h-6 w-6" />
+            </button>
+
+            {/* Print Button -> Copy Button */}
+            <button
+              type="button"
+              onClick={handleCopyWorkout}
+              className="p-1 text-green-500 hover:text-green-600 transition-all hover:scale-110 bg-transparent border-0"
+              title="Copy to Clipboard"
+            >
+              <Copy className="h-6 w-6" />
+            </button>
+
+            {/* Smart Create Dropdown - Only show if onCreateNext provided */}
+            {onCreateNext && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="p-1 transition-all hover:scale-110 bg-transparent border-0 group"
+                    title="Create Next Workout"
+                  >
+                    <Sparkles className="h-6 w-6 text-purple-600 group-hover:text-purple-700 fill-purple-100" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem
+                    onClick={() => onCreateNext('progression')}
+                    className="group text-sm cursor-pointer"
+                  >
+                    <TrendingUp className="mr-2 h-4 w-4 text-gray-400 group-hover:text-indigo-600" />
+                    <span>Progress to Next Week</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => onCreateNext('generation')}
+                    className="group text-sm cursor-pointer"
+                  >
+                    <FastForward className="mr-2 h-4 w-4 text-gray-400 group-hover:text-indigo-600" />
+                    <span>Generate Next Workout</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Save Button */}
+            <button
               type="button"
               onClick={handleSave}
               disabled={isLoading}
-              className="h-7 text-xs flex-1"
+              className="p-1 text-blue-600 hover:text-blue-700 transition-all hover:scale-110 bg-transparent border-0"
+              title="Save workout"
             >
-              {isLoading ? 'Saving...' : 'Save Workout'}
-            </Button>
+              <Save className="h-6 w-6" />
+            </button>
           </div>
         </div>
       </>
@@ -1535,9 +1748,9 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     };
 
     return (
-      <div className="bg-white w-full">
-        {/* Ultra Compact Content - No Header */}
-        <div className="px-1 space-y-1 max-h-80 overflow-y-auto">
+      <div className="flex flex-col justify-between min-h-[180px] h-full bg-white w-full rounded-xl group hover:bg-gray-50 transition-colors relative">
+        {/* Ultra Compact Content - Flex-1 to push toolbar down */}
+        <div className="px-1 space-y-1 flex-1 overflow-y-auto pb-1">
           {/* General Error */}
           {errors.general && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-1 py-0.5 rounded text-xs">
@@ -1549,14 +1762,13 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           <div className="flex items-center gap-1">
             <label className="text-xs font-medium">Structure:</label>
             <Select
-              value={currentTemplateId || 'none'}
+              value={currentTemplateId || ''}
               onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
             >
-              <SelectTrigger className="text-xs flex-1 h-7">
+              <SelectTrigger className={`text-xs flex-1 h-7 border-0 bg-transparent shadow-none p-0 hover:bg-gray-100 rounded px-1 ${isCreating && !currentTemplateId ? '!border !border-green-500 !bg-green-50' : ''}`}>
                 <SelectValue placeholder="Select structure" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">None (Custom)</SelectItem>
                 {workoutStructureTemplates.map(template => {
                   const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
                   return (
@@ -1589,21 +1801,21 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title"
-              className="h-6 text-xs flex-1"
+              placeholder="Workout Title"
+              className="h-7 text-sm font-semibold border-0 bg-transparent shadow-none p-0 focus-visible:ring-0 placeholder:text-gray-400 flex-1"
             />
             <Input
               type="time"
               value={time}
               onChange={(e) => handleTimeChange(e.target.value)}
               placeholder="HH:MM"
-              className="h-6 text-xs w-16"
+              className="h-7 text-xs w-16 border-0 bg-transparent shadow-none p-0 focus-visible:ring-0 text-right"
             />
           </div>
 
 
           {/* Rounds - Ultra Compact with Drag and Drop */}
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {rounds.map((round, roundIndex) => {
               const isExpanded = expandedRounds[roundIndex] ?? false; // Default collapsed
               const toggleExpanded = () => {
@@ -1630,7 +1842,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                 >
                   {/* Ultra Compact Header with color coding */}
                   <div
-                    className="text-white px-1 py-0.5 flex items-center gap-1 cursor-pointer hover:opacity-90 text-xs"
+                    className="text-white px-1 py-0.5 flex items-center gap-1 cursor-pointer hover:opacity-90 text-xs rounded-sm"
                     style={{
                       backgroundColor: round.sectionColor || '#6b7280'
                     }}
@@ -1642,7 +1854,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                     />
 
                     {/* Expand/collapse button */}
-                    <button onClick={toggleExpanded} className="flex-1 text-left">
+                    <button onClick={toggleExpanded} className="flex-1 text-left font-medium">
                       {isExpanded ? '−' : '+'}
                       {round.sectionName || `R${roundIndex + 1}`} ({round.sets})
                     </button>
@@ -1655,35 +1867,33 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                           e.stopPropagation();
                           updateRoundSets(roundIndex, parseInt(e.target.value) || 1);
                         }}
-                        className="h-3 w-6 text-xs bg-gray-700 border-none text-white text-center p-0"
+                        className="h-4 w-8 text-xs bg-black/20 border-none text-white text-center p-0 rounded-sm"
                         min="1"
                         onClick={(e) => e.stopPropagation()}
                       />
                       {rounds.length > 1 && (
-                        <Button
+                        <button
                           type="button"
-                          variant="ghost"
-                          size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
                             removeRound(roundIndex);
                           }}
-                          className="h-3 w-3 p-0 text-white hover:bg-gray-500"
+                          className="text-white/70 hover:text-white transition-colors"
                         >
-                          <Trash2 className="w-2 h-2" />
-                        </Button>
+                          <Trash2 className="w-3 h-3" />
+                        </button>
                       )}
                     </div>
                   </div>
 
                   {/* Collapsible Content */}
                   {isExpanded && (
-                    <div className="mt-0.5 bg-white px-1 pb-1">
+                    <div className="mt-0.5 bg-gray-50/50 px-1 pb-1 rounded-b-sm">
                       {/* Workout Type selector */}
                       <select
                         value={round.workoutTypeId || ''}
                         onChange={(e) => updateRoundSection(roundIndex, e.target.value)}
-                        className="text-xs border rounded p-1 w-full mb-0.5 bg-white"
+                        className="text-xs border rounded p-1 w-full mb-0.5 bg-white h-6 mt-1"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <option value="">Custom</option>
@@ -1710,7 +1920,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                         <button
                           type="button"
                           onClick={() => addMovementUsage(roundIndex)}
-                          className="text-xs text-gray-500 hover:text-gray-700 py-0.5 w-full text-left"
+                          className="text-xs text-gray-500 hover:text-gray-700 py-1 w-full text-left pl-1"
                         >
                           + Add Exercise
                         </button>
@@ -1726,41 +1936,118 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
               type="button"
               onClick={addRound}
               variant="ghost"
-              className="h-5 text-xs w-full text-gray-500 hover:text-gray-700"
+              className="h-6 text-xs w-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 justify-start pl-1"
             >
-              <Plus className="w-2 h-2 mr-1 icon-add" />
+              <Plus className="w-3 h-3 mr-1 icon-add" />
               Add Round
             </Button>
           </div>
 
-          {/* Notes - Compact (moved after rounds) */}
-          <Textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notes"
-            className="h-12 text-xs resize-none"
-          />
-
-          {/* Action Buttons - Ultra Compact */}
-          <div className="flex gap-1 pt-0.5">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              className="h-5 text-xs flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleSave}
-              disabled={isLoading}
-              className="h-5 text-xs flex-1"
-            >
-              {isLoading ? 'Saving...' : 'Save'}
-            </Button>
+          {/* Notes - Compact (flex-1 push) */}
+          <div className="pt-2">
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add notes..."
+              className="min-h-[40px] text-xs resize-none bg-transparent border-0 ring-0 focus-visible:ring-0 px-0 placeholder:text-gray-300"
+            />
           </div>
         </div>
+
+        {/* Bottom Toolbar - Exact Coachella styling with w-6 h-6 icons - Evenly Spaced */}
+        {/* Column Toggle (Left) */}
+        {!externalVisibleColumns && (
+          <ColumnVisibilityToggle
+            visibleColumns={visibleColumns}
+            availableColumns={availableColumns}
+            onToggle={handleColumnVisibilityChange}
+          />
+        )}
+
+        {/* Mode Toggle (Left-Center) */}
+        {clientId && (
+          <button
+            type="button"
+            onClick={() => setIsLoggingMode(!isLoggingMode)}
+            className={`p-1 transition-all hover:scale-110 bg-transparent border-0 ${isLoggingMode ? 'text-indigo-600' : 'text-gray-400 hover:text-indigo-600'}`}
+            title={isLoggingMode ? "Current: Logging Mode (Click to switch)" : "Current: Prescribed Mode (Click to switch)"}
+          >
+            {isLoggingMode ? <TrendingUp className="h-6 w-6" /> : <ClipboardList className="h-6 w-6" />}
+          </button>
+        )}
+
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="p-1 text-red-500 hover:text-red-600 transition-all hover:scale-110 bg-transparent border-0"
+            title="Delete"
+          >
+            <Trash2 className="h-6 w-6" />
+          </button>
+        )}
+
+        {/* Smart Create Dropdown - Only show if onCreateNext provided */}
+        {onCreateNext && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="p-1 transition-all hover:scale-110 bg-transparent border-0 group"
+                title="Create Next Workout"
+              >
+                <Sparkles className="h-6 w-6 text-purple-600 group-hover:text-purple-700 fill-purple-100" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onClick={() => onCreateNext('progression')}
+                className="group text-sm cursor-pointer"
+              >
+                <TrendingUp className="mr-2 h-4 w-4 text-gray-400 group-hover:text-indigo-600" />
+                <span>Progress to Next Week</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onCreateNext('generation')}
+                className="group text-sm cursor-pointer"
+              >
+                <FastForward className="mr-2 h-4 w-4 text-gray-400 group-hover:text-indigo-600" />
+                <span>Generate Next Workout</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+        {/* Copy Button */}
+        <button
+          type="button"
+          onClick={handleCopyWorkout}
+          className="p-1 text-green-500 hover:text-green-600 transition-all hover:scale-110 bg-transparent border-0"
+          title="Copy to Clipboard"
+        >
+          <Copy className="h-6 w-6" />
+        </button>
+
+        {/* Cancel Button */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="p-1 text-orange-500 hover:text-orange-600 transition-all hover:scale-110 bg-transparent border-0"
+          title="Cancel"
+        >
+          <X className="h-6 w-6" />
+        </button>
+
+        {/* Save Button */}
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isLoading}
+          className="p-1 text-blue-600 hover:text-blue-700 transition-all hover:scale-110 bg-transparent border-0"
+          title="Save"
+        >
+          <Save className="h-6 w-6" />
+        </button>
       </div>
     );
   }

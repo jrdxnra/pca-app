@@ -35,20 +35,21 @@ import { MovementConfigurationToggle } from './MovementConfigurationToggle';
 const movementSchema = z.object({
   name: z.string().min(1, 'Movement name is required').max(100, 'Name must be less than 100 characters'),
   links: z.string().optional(), // Will be split into array
-      configuration: z.object({
-        use_reps: z.boolean(),
-        use_tempo: z.boolean(),
-        use_time: z.boolean(),
-        use_weight: z.boolean(),
-        weight_measure: z.enum(['lbs', 'kg']),
-        use_distance: z.boolean(),
-        distance_measure: z.enum(['mi', 'km', 'm', 'yd', 'ft']),
-        use_pace: z.boolean(),
-        pace_measure: z.enum(['mi', 'km']),
-        unilateral: z.boolean(),
-        use_percentage: z.boolean(),
-        use_rpe: z.boolean(),
-      }),
+  configuration: z.object({
+    useReps: z.boolean(),
+    useTempo: z.boolean(),
+    useTime: z.boolean(),
+    timeMeasure: z.enum(['s', 'm']),
+    useWeight: z.boolean(),
+    weightMeasure: z.enum(['lbs', 'kg', 'bw']),
+    useDistance: z.boolean(),
+    distanceMeasure: z.enum(['mi', 'km', 'm', 'yd', 'ft']),
+    usePace: z.boolean(),
+    paceMeasure: z.enum(['mi', 'km']),
+    unilateral: z.boolean(),
+    usePercentage: z.boolean(),
+    useRPE: z.boolean(),
+  }),
 });
 
 type MovementFormData = z.infer<typeof movementSchema>;
@@ -68,18 +69,19 @@ export function AddMovementDialog({ categoryId, trigger }: AddMovementDialogProp
 
   // Define fallback defaults
   const fallbackConfig = {
-    use_reps: true,
-    use_tempo: false,
-    use_time: false,
-    use_weight: true,
-    weight_measure: 'lbs' as const,
-    use_distance: false,
-    distance_measure: 'mi' as const,
-    use_pace: false,
-    pace_measure: 'mi' as const,
+    useReps: true,
+    useTempo: false,
+    useTime: false,
+    timeMeasure: 's' as const,
+    useWeight: true,
+    weightMeasure: 'lbs' as const,
+    useDistance: false,
+    distanceMeasure: 'mi' as const,
+    usePace: false,
+    paceMeasure: 'mi' as const,
     unilateral: false,
-    use_percentage: false,
-    use_rpe: false,
+    usePercentage: false,
+    useRPE: false,
   };
 
   const form = useForm<MovementFormData>({
@@ -96,11 +98,11 @@ export function AddMovementDialog({ categoryId, trigger }: AddMovementDialogProp
     if (category?.defaultConfiguration) {
       const currentConfig = form.getValues('configuration');
       const categoryConfig = category.defaultConfiguration;
-      
+
       // Only reset if config actually changed
       const configChanged = JSON.stringify(currentConfig) !== JSON.stringify(categoryConfig);
       if (configChanged) {
-        form.setValue('configuration', categoryConfig);
+        form.setValue('configuration', categoryConfig as any);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,7 +111,7 @@ export function AddMovementDialog({ categoryId, trigger }: AddMovementDialogProp
   const onSubmit = async (data: MovementFormData) => {
     try {
       // Process links string into array
-      const links = data.links 
+      const links = data.links
         ? data.links.split('\n').map(link => link.trim()).filter(link => link.length > 0)
         : [];
 
@@ -119,7 +121,7 @@ export function AddMovementDialog({ categoryId, trigger }: AddMovementDialogProp
         links,
         configuration: data.configuration,
       };
-      
+
       await addMovement(movementData);
 
       form.reset();
@@ -181,10 +183,10 @@ export function AddMovementDialog({ categoryId, trigger }: AddMovementDialogProp
                 <FormItem>
                   <FormLabel>Video Links</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder="https://youtube.com/watch?v=example1&#10;https://youtube.com/watch?v=example2"
                       className="min-h-[80px]"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormDescription>
@@ -201,69 +203,72 @@ export function AddMovementDialog({ categoryId, trigger }: AddMovementDialogProp
               <FormDescription>
                 Choose the default variables used for this movement.
               </FormDescription>
-              
+
               <div className="flex flex-wrap py-2 gap-1">
                 <MovementConfigurationToggle
                   name="Reps"
-                  value={form.watch('configuration.use_reps')}
-                  onChange={(value) => form.setValue('configuration.use_reps', value)}
+                  value={form.watch('configuration.useReps')}
+                  onChange={(value) => form.setValue('configuration.useReps', value)}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Weight"
-                  value={form.watch('configuration.use_weight')}
-                  onChange={(value) => form.setValue('configuration.use_weight', value)}
-                  measureOptions={['lbs', 'kg']}
-                  measureValue={form.watch('configuration.weight_measure')}
-                  onMeasureChange={(value) => form.setValue('configuration.weight_measure', value as 'lbs' | 'kg')}
+                  value={form.watch('configuration.useWeight')}
+                  onChange={(value) => form.setValue('configuration.useWeight', value)}
+                  measureOptions={['lbs', 'kg', 'bw']}
+                  measureValue={form.watch('configuration.weightMeasure')}
+                  onMeasureChange={(value) => form.setValue('configuration.weightMeasure', value as 'lbs' | 'kg' | 'bw')}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Distance"
-                  value={form.watch('configuration.use_distance')}
-                  onChange={(value) => form.setValue('configuration.use_distance', value)}
+                  value={form.watch('configuration.useDistance')}
+                  onChange={(value) => form.setValue('configuration.useDistance', value)}
                   measureOptions={['mi', 'km', 'm', 'yd', 'ft']}
-                  measureValue={form.watch('configuration.distance_measure')}
-                  onMeasureChange={(value) => form.setValue('configuration.distance_measure', value as 'mi' | 'km' | 'm' | 'yd' | 'ft')}
+                  measureValue={form.watch('configuration.distanceMeasure')}
+                  onMeasureChange={(value) => form.setValue('configuration.distanceMeasure', value as 'mi' | 'km' | 'm' | 'yd' | 'ft')}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Pace"
-                  value={form.watch('configuration.use_pace')}
-                  onChange={(value) => form.setValue('configuration.use_pace', value)}
+                  value={form.watch('configuration.usePace')}
+                  onChange={(value) => form.setValue('configuration.usePace', value)}
                   measureOptions={['mi', 'km']}
-                  measureValue={form.watch('configuration.pace_measure')}
-                  onMeasureChange={(value) => form.setValue('configuration.pace_measure', value as 'mi' | 'km')}
+                  measureValue={form.watch('configuration.paceMeasure')}
+                  onMeasureChange={(value) => form.setValue('configuration.paceMeasure', value as 'mi' | 'km')}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Tempo"
-                  value={form.watch('configuration.use_tempo')}
-                  onChange={(value) => form.setValue('configuration.use_tempo', value)}
+                  value={form.watch('configuration.useTempo')}
+                  onChange={(value) => form.setValue('configuration.useTempo', value)}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Time"
-                  value={form.watch('configuration.use_time')}
-                  onChange={(value) => form.setValue('configuration.use_time', value)}
+                  value={form.watch('configuration.useTime')}
+                  onChange={(value) => form.setValue('configuration.useTime', value)}
+                  measureOptions={['s', 'm']}
+                  measureValue={form.watch('configuration.timeMeasure')}
+                  onMeasureChange={(value) => form.setValue('configuration.timeMeasure', value as 's' | 'm')}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Unilateral"
                   value={form.watch('configuration.unilateral')}
                   onChange={(value) => form.setValue('configuration.unilateral', value)}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Percentage"
-                  value={form.watch('configuration.use_percentage')}
-                  onChange={(value) => form.setValue('configuration.use_percentage', value)}
+                  value={form.watch('configuration.usePercentage')}
+                  onChange={(value) => form.setValue('configuration.usePercentage', value)}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="RPE"
-                  value={form.watch('configuration.use_rpe')}
-                  onChange={(value) => form.setValue('configuration.use_rpe', value)}
+                  value={form.watch('configuration.useRPE')}
+                  onChange={(value) => form.setValue('configuration.useRPE', value)}
                 />
               </div>
             </div>

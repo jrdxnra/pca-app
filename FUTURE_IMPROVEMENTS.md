@@ -248,6 +248,36 @@ Transform the current duplicate-workout approach for multi-client sessions into 
 
 ---
 
+---
+
+## Builder Page: View Toggle (Week View ↔ Day View)
+**Date Added:** February 6, 2026  
+**Priority:** Medium  
+**Status:** Planned
+
+### Feature Request
+Add a toggle button next to the sort controls to switch between:
+- **Week View** (current): Shows workouts organized by weeks in vertical cards
+- **Day View** (new): Shows all days in a horizontal row for multi-day programming
+
+### Use Case
+When programming workouts, being able to see multiple days side-by-side in a row makes it easier to:
+- Track progression across consecutive days
+- Plan workout sequences and periodization
+- See patterns and balance across the week
+- Program multiple days at once with better context
+
+### Implementation Notes
+- Button placement: Next to the week order sort button in Builder filters
+- Day view would display days horizontally (scrollable if needed)
+- Each day would show its workout(s) in a column
+- Maintains same editing capabilities as week view
+- Could use similar layout to Schedule tab's day view
+
+**Location:** Builder page - Filter controls section
+
+---
+
 ## Notes
 
 Add additional notes and improvements below this line.

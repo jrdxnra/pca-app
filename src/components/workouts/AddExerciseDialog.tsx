@@ -109,15 +109,15 @@ export function AddExerciseDialog({ roundIndex, trigger }: AddExerciseDialogProp
       const config = selectedMovement.configuration;
       
       // Set default values based on movement configuration
-      if (config.use_reps) {
+      if (config.useReps) {
         form.setValue('reps', '10'); // Default reps
       }
       
-      if (config.use_tempo) {
+      if (config.useTempo) {
         form.setValue('tempo', ''); // Can be populated with a default tempo if needed
       }
       
-      if (config.use_rpe) {
+      if (config.useRPE) {
         form.setValue('targetRPE', 7); // Default RPE
       }
     }
@@ -138,18 +138,18 @@ export function AddExerciseDialog({ roundIndex, trigger }: AddExerciseDialogProp
         name: newMovementName.trim(),
         categoryId: selectedCategoryId,
         configuration: {
-          use_reps: true,
-          use_tempo: false,
-          use_time: false,
-          use_weight: true,
-          weight_measure: 'lbs',
-          use_distance: false,
-          distance_measure: 'mi',
-          use_pace: false,
-          pace_measure: 'mi',
+          useReps: true,
+          useTempo: false,
+          useTime: false,
+          useWeight: true,
+          weightMeasure: 'lbs',
+          useDistance: false,
+          distanceMeasure: 'mi',
+          usePace: false,
+          paceMeasure: 'mi',
           unilateral: false,
-          use_percentage: false,
-          use_rpe: true,
+          usePercentage: false,
+          useRPE: true,
         },
         links: [],
       });

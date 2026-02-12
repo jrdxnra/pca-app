@@ -10,17 +10,18 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import { ClientProgram } from '@/lib/types';
-import { ExternalLink, Dumbbell, Plus, Calendar, UserPlus, Users, ArrowRight, Tag, UserMinus, Trash2, Repeat, Search, Check } from 'lucide-react';
+import { ExternalLink, Dumbbell, Plus, Calendar, UserPlus, Users, ArrowRight, Tag, UserMinus, Trash2, Repeat, Search, Check, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { getAppTimezone } from '@/lib/utils/timezone';
-import { 
-  getEventClientId, 
+import {
+  getEventClientId,
   getEventCategory,
   getLinkedWorkoutId
 } from '@/lib/utils/event-patterns';
 import { assignClientToEvents, BulkAssignmentResult, unassignClientFromEvent } from '@/lib/firebase/services/eventAssignment';
 import { deleteCalendarEvent } from '@/lib/google-calendar/api-client';
+import { getCalendarEventsByDateRange } from '@/lib/firebase/services/calendarEvents';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 
@@ -60,37 +61,37 @@ export function EventActionDialog({
   fetchEvents
 }: EventActionDialogProps) {
   const router = useRouter();
-  
+
   // Get workout categories from store
   const { workoutCategories, fetchWorkoutCategories } = useConfigurationStore();
-  
+
   // Get fetchEvents from calendar store if not provided as prop
   const storeFetchEvents = useCalendarStore(state => state.fetchEvents);
   const storeEvents = useCalendarStore(state => state.events);
   const effectiveFetchEvents = fetchEvents || storeFetchEvents;
-  
+
   // Use storeEvents if available (has extended range), otherwise fall back to allEvents prop
   const eventsForDetection = storeEvents.length > allEvents.length ? storeEvents : allEvents;
-  
+
   // Fetch categories on mount
   useEffect(() => {
     if (workoutCategories.length === 0) {
       fetchWorkoutCategories();
     }
   }, [workoutCategories.length, fetchWorkoutCategories]);
-  
+
   // Fetch extended events when dialog opens (up to 2 months in future)
   useEffect(() => {
     if (open && effectiveFetchEvents && event.start?.dateTime) {
       const eventDate = new Date(event.start.dateTime);
       const startDate = new Date(eventDate);
       startDate.setHours(0, 0, 0, 0);
-      
+
       // Calculate 2 months in the future
       const endDate = new Date(eventDate);
       endDate.setMonth(endDate.getMonth() + 2);
       endDate.setHours(23, 59, 59, 999);
-      
+
       setIsFetchingExtendedEvents(true);
       effectiveFetchEvents({ start: startDate, end: endDate })
         .then(() => {
@@ -103,11 +104,11 @@ export function EventActionDialog({
         });
     }
   }, [open, effectiveFetchEvents, event.start?.dateTime]);
-  
+
   // Check if event already has a client
   const existingClientId = clientId || getEventClientId(event);
   const hasClient = !!existingClientId;
-  
+
   // Extract attendee names for display
   const getAttendeeNames = (): string => {
     // First try extendedProperties.shared.guest_names from work calendar sync
@@ -115,19 +116,72 @@ export function EventActionDialog({
     if (guestNames) {
       return guestNames;
     }
-    
+
     // Fallback to attendees array
     if (event.attendees && event.attendees.length > 0) {
       return event.attendees
         .map(a => a.displayName || a.email.split('@')[0])
         .join(', ');
     }
-    
+
     return '';
   };
-  
+
   const attendeeNames = getAttendeeNames();
-  
+
+  // Find suggested client by fuzzy-matching attendee names against client list
+  const findSuggestedClient = (): Client | null => {
+    if (!attendeeNames || clients.length === 0) return null;
+
+    // Split attendee names by comma and clean up
+    const nameSegments = attendeeNames.split(',').map(n => n.trim().toLowerCase()).filter(Boolean);
+    if (nameSegments.length === 0) return null;
+
+    // Try to match each client against the attendee names
+    let bestMatch: Client | null = null;
+    let bestScore = 0;
+
+    for (const client of clients) {
+      const clientName = client.name.toLowerCase();
+      const clientParts = clientName.split(/\s+/);
+
+      for (const segment of nameSegments) {
+        const segmentParts = segment.split(/\s+/);
+
+        // Exact full name match
+        if (segment === clientName) {
+          return client; // Perfect match, return immediately
+        }
+
+        // Check if first name matches
+        let score = 0;
+        for (const cp of clientParts) {
+          for (const sp of segmentParts) {
+            if (cp === sp && cp.length > 1) {
+              score += 3; // Exact word match
+            } else if (cp.startsWith(sp) && sp.length > 2) {
+              score += 2; // Prefix match
+            } else if (sp.startsWith(cp) && cp.length > 2) {
+              score += 2; // Reverse prefix match
+            } else if (cp.includes(sp) && sp.length > 3) {
+              score += 1; // Substring match
+            }
+          }
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = client;
+        }
+      }
+    }
+
+    // Only return if we have a reasonable match (at least one word match)
+    return bestScore >= 2 ? bestMatch : null;
+  };
+
+  const suggestedClient = findSuggestedClient();
+
   // State for client assignment
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -136,7 +190,7 @@ export function EventActionDialog({
   const [isUnassigning, setIsUnassigning] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
-  
+
   // State for repeat/pattern detection
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set());
@@ -152,20 +206,20 @@ export function EventActionDialog({
       setSelectedClientId(existingClientId);
     }
   }, [open, existingClientId, selectedClientId]);
-  
+
   // Check if event already has a category
   const existingCategory = getEventCategory(event);
-  
+
   // Get linked workout ID (checks both direct property and description metadata)
   const linkedWorkoutId = getLinkedWorkoutId(event);
   const hasWorkout = !!linkedWorkoutId;
-  
+
   // Get client name for display
   const getClientName = (id: string) => {
     return clients.find(c => c.id === id)?.name || 'Client';
   };
 
-  const eventDate = event.start?.dateTime 
+  const eventDate = event.start?.dateTime
     ? new Date(event.start.dateTime)
     : new Date();
 
@@ -175,7 +229,7 @@ export function EventActionDialog({
   const navigateToWorkoutBuilder = (targetClientId: string, workoutId?: string) => {
     const eventIdParam = `&eventId=${event.id}`;
     const categoryParam = selectedCategory ? `&category=${encodeURIComponent(selectedCategory)}` : '';
-    
+
     if (workoutId) {
       const workoutUrl = `/workouts/builder?client=${targetClientId}&date=${dateParam}&workoutId=${workoutId}`;
       router.push(workoutUrl);
@@ -188,7 +242,7 @@ export function EventActionDialog({
 
   const handleViewWorkout = () => {
     if (!linkedWorkoutId || !existingClientId) return;
-    
+
     // Navigate to builder (not view) so it's within the client's workout scheme
     navigateToWorkoutBuilder(existingClientId, linkedWorkoutId);
   };
@@ -199,6 +253,7 @@ export function EventActionDialog({
   };
 
   const handleOpenInCalendar = () => {
+    // Always use the Google-provided htmlLink which is correctly formatted
     if (event.htmlLink) {
       window.open(event.htmlLink, '_blank');
     }
@@ -216,26 +271,26 @@ export function EventActionDialog({
     console.log('🔴 [handleUnassign] Event:', event.id, event.summary);
     console.log('🔴 [handleUnassign] existingClientId:', existingClientId);
     console.log('🔴 [handleUnassign] linkedWorkoutId:', getLinkedWorkoutId(event));
-    
+
     const hasWorkout = !!getLinkedWorkoutId(event);
-    const message = hasWorkout 
+    const message = hasWorkout
       ? 'Remove client assignment from this event? This will also delete the associated workout.'
       : 'Remove client assignment from this event?';
-    
+
     if (!confirm(message)) {
       console.log('🔴 [handleUnassign] User cancelled');
       return;
     }
-    
+
     console.log('🔴 [handleUnassign] User confirmed, starting unassign...');
     setIsUnassigning(true);
     setAssignmentError(null);
-    
+
     try {
       console.log('🔴 [handleUnassign] Calling unassignClientFromEvent...');
       const result = await unassignClientFromEvent(event);
       console.log('🔴 [handleUnassign] Result:', result);
-      
+
       if (result.success) {
         console.log('✅ [handleUnassign] Successfully unassigned client from event');
         console.log('🔴 [handleUnassign] Calling onClientAssigned to refresh...');
@@ -259,27 +314,32 @@ export function EventActionDialog({
     const message = hasWorkoutLinked
       ? 'Delete this event from your calendar? This will also remove the associated workout assignment.'
       : 'Delete this event from your calendar?';
-    
+
     if (!confirm(message)) {
       return;
     }
-    
+
     setIsDeleting(true);
     setAssignmentError(null);
-    
+
     try {
       // If there's a linked workout, unassign first
       if (hasWorkoutLinked) {
         await unassignClientFromEvent(event);
       }
-      
+
       // Delete from Google Calendar
       await deleteCalendarEvent(
         event.id,
         event.start.dateTime || event.start.date,
         'primary'
       );
-      
+
+      // Remove from local store immediately so UI updates without refetch
+      const calendarStore = useCalendarStore.getState();
+      const updatedEvents = calendarStore.events.filter(e => e.id !== event.id);
+      useCalendarStore.setState({ events: updatedEvents });
+
       console.log('✅ Successfully deleted event from calendar');
       onClientAssigned?.(); // Refresh the calendar
       onOpenChange(false);
@@ -294,13 +354,13 @@ export function EventActionDialog({
   // Handle "Assign & Go to Calendar" button click
   const handleAssignAndGo = async () => {
     if (!selectedClientId) return;
-    
+
     setAssignmentError(null);
     setIsAssigningAndGo(true); // Set specific loading state for this button
-    
+
     try {
       const clientName = getClientName(selectedClientId);
-      
+
       // Assign the single clicked event directly
       const result = await assignClientToEvents(
         [event],
@@ -309,10 +369,10 @@ export function EventActionDialog({
         clientName,
         selectedCategory || undefined
       );
-      
+
       // Notify parent to refresh
       onClientAssigned?.();
-      
+
       // Navigate to workout builder for the clicked event
       const clickedEventResult = result.results.find(r => r.eventId === event.id);
       if (clickedEventResult?.workoutId) {
@@ -332,13 +392,13 @@ export function EventActionDialog({
   // Handle "Assign & Go to Calendar" button click (assigns but stays on calendar)
   const handleAssign = async () => {
     if (!selectedClientId) return;
-    
+
     setAssignmentError(null);
     setIsAssigning(true); // Set specific loading state for this button
-    
+
     try {
       const clientName = getClientName(selectedClientId);
-      
+
       // Assign the single clicked event directly
       await assignClientToEvents(
         [event],
@@ -347,10 +407,10 @@ export function EventActionDialog({
         clientName,
         selectedCategory || undefined
       );
-      
+
       // Notify parent to refresh
       onClientAssigned?.();
-      
+
       // Close dialog and stay on calendar
       onOpenChange(false);
     } catch (error) {
@@ -400,69 +460,68 @@ export function EventActionDialog({
   // Detect matching events based on selected days and time (within 30 minutes)
   const handleDetectEvents = async () => {
     if (!event.start?.dateTime || selectedDays.size === 0) return;
-    
+
     const eventTime = new Date(event.start.dateTime);
     const eventHours = eventTime.getHours();
     const eventMinutes = eventTime.getMinutes();
     const eventTimeInMinutes = eventHours * 60 + eventMinutes; // Convert to minutes for easier comparison
-    
-    // Calculate date range: from event date to 2 months in the future
+
+    // Calculate date range: from event date to 60 days in the future
     const startDate = new Date(eventTime);
     startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(eventTime);
-    endDate.setMonth(endDate.getMonth() + 2);
+    endDate.setDate(endDate.getDate() + 60);
     endDate.setHours(23, 59, 59, 999);
-    
-    // Fetch events for extended range if fetchEvents is available
-    let eventsToSearch = eventsForDetection;
-    if (effectiveFetchEvents) {
-      setIsFetchingExtendedEvents(true);
-      try {
-        await effectiveFetchEvents({ start: startDate, end: endDate });
-        // Get the latest events from the store after fetching
-        const latestStoreEvents = useCalendarStore.getState().events;
-        eventsToSearch = latestStoreEvents.length > 0 ? latestStoreEvents : eventsForDetection;
-      } catch (error) {
-        console.error('Error fetching extended events:', error);
-        // Fall back to eventsForDetection if fetch fails
-        eventsToSearch = eventsForDetection;
-      } finally {
-        setIsFetchingExtendedEvents(false);
-      }
+
+    // Fetch events directly from Google Calendar API for the full 60-day range
+    // This bypasses the parent's fetchEvents prop which only invalidates cache
+    // and the store which only has the current week's events
+    setIsFetchingExtendedEvents(true);
+    let eventsToSearch: GoogleCalendarEvent[] = eventsForDetection;
+    try {
+      const fetchedEvents = await getCalendarEventsByDateRange(startDate, endDate);
+      console.log('[handleDetectEvents] Fetched', fetchedEvents.length, 'events for 60-day range');
+      eventsToSearch = fetchedEvents.length > 0 ? fetchedEvents : eventsForDetection;
+    } catch (error) {
+      console.error('Error fetching extended events:', error);
+      // Fall back to eventsForDetection if fetch fails
+      eventsToSearch = eventsForDetection;
+    } finally {
+      setIsFetchingExtendedEvents(false);
     }
-    
-    // Filter events matching the selected days and time within 30 minutes, within 2 months
+
+    // Filter events matching the selected days and time within 30 minutes, within the range
     const matching = eventsToSearch.filter(e => {
       // Skip if already has a client assigned
       if (getEventClientId(e)) return false;
-      
+
       if (!e.start?.dateTime) return false;
-      
+
       const eDate = new Date(e.start.dateTime);
-      
-      // Only include events from event date up to 2 months in the future
+
+      // Only include events from event date up to 60 days in the future
       if (eDate < startDate || eDate > endDate) return false;
-      
+
       const eDayOfWeek = eDate.getDay();
       const eHours = eDate.getHours();
       const eMinutes = eDate.getMinutes();
       const eTimeInMinutes = eHours * 60 + eMinutes; // Convert to minutes for easier comparison
-      
+
       // Check if day matches
       if (!selectedDays.has(eDayOfWeek)) return false;
-      
+
       // Check if time is within 30 minutes (before or after)
       const timeDifference = Math.abs(eTimeInMinutes - eventTimeInMinutes);
       return timeDifference <= 30;
     });
-    
+
     // Sort by date
     matching.sort((a, b) => {
       const dateA = new Date(a.start.dateTime);
       const dateB = new Date(b.start.dateTime);
       return dateA.getTime() - dateB.getTime();
     });
-    
+
     setDetectedEvents(matching);
     // Select all by default
     setSelectedEventIds(new Set(matching.map(e => e.id)));
@@ -494,18 +553,18 @@ export function EventActionDialog({
   // Handle bulk assign from detected events (without navigation)
   const handleBulkAssignDetectedNoNavigate = async () => {
     if (!selectedClientId || selectedEventIds.size === 0) return;
-    
+
     setIsAssigning(true);
     setAssignmentError(null);
-    
+
     try {
       // Get only the selected events
       const eventsToAssign = detectedEvents.filter(e => selectedEventIds.has(e.id));
-      
+
       const clientName = getClientName(selectedClientId);
-      
+
       console.log('[handleBulkAssignDetectedNoNavigate] Assigning', eventsToAssign.length, 'events to', clientName);
-      
+
       // Perform bulk assignment
       await assignClientToEvents(
         eventsToAssign,
@@ -514,10 +573,10 @@ export function EventActionDialog({
         clientName,
         selectedCategory || undefined
       );
-      
+
       // Notify parent to refresh
       onClientAssigned?.();
-      
+
       // Close dialog and stay on calendar
       onOpenChange(false);
     } catch (error) {
@@ -531,18 +590,18 @@ export function EventActionDialog({
   // Handle bulk assign from detected events (with navigation to workout builder)
   const handleBulkAssignDetected = async () => {
     if (!selectedClientId || selectedEventIds.size === 0) return;
-    
+
     setIsAssigningAndGo(true); // Use specific loading state for "Assign & Go" button
     setAssignmentError(null);
-    
+
     try {
       // Get only the selected events
       const eventsToAssign = detectedEvents.filter(e => selectedEventIds.has(e.id));
-      
+
       const clientName = getClientName(selectedClientId);
-      
+
       console.log('[handleBulkAssignDetected] Assigning', eventsToAssign.length, 'events to', clientName);
-      
+
       // Perform bulk assignment
       const result = await assignClientToEvents(
         eventsToAssign,
@@ -551,12 +610,12 @@ export function EventActionDialog({
         clientName,
         selectedCategory || undefined
       );
-      
+
       console.log('[handleBulkAssignDetected] Assignment result:', result);
-      
+
       // Notify parent to refresh
       onClientAssigned?.();
-      
+
       // Navigate to workout builder for the original clicked event
       const clickedEventResult = result.results.find(r => r.eventId === event.id);
       if (clickedEventResult?.workoutId) {
@@ -592,10 +651,10 @@ export function EventActionDialog({
                   {event.start.dateTime && event.end?.dateTime && (
                     <span className="text-muted-foreground">
                       {' • '}
-                      {new Date(event.start.dateTime).toLocaleTimeString('en-US', { 
+                      {new Date(event.start.dateTime).toLocaleTimeString('en-US', {
                         hour: 'numeric', minute: '2-digit', hour12: true,
                         timeZone: getAppTimezone()
-                      })} - {new Date(event.end.dateTime).toLocaleTimeString('en-US', { 
+                      })} - {new Date(event.end.dateTime).toLocaleTimeString('en-US', {
                         hour: 'numeric', minute: '2-digit', hour12: true,
                         timeZone: getAppTimezone()
                       })}
@@ -615,7 +674,7 @@ export function EventActionDialog({
                     <UserPlus className="h-4 w-4" />
                     Assign Session
                   </div>
-                  
+
                   {/* Event Attendee Names */}
                   {attendeeNames && (
                     <div className="px-3 py-2 bg-background rounded-md border">
@@ -623,12 +682,25 @@ export function EventActionDialog({
                       <p className="text-sm font-medium">{attendeeNames}</p>
                     </div>
                   )}
-                  
+
                   {/* Client Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="client-select" className="text-sm text-muted-foreground">
-                      Client
-                    </Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="client-select" className="text-sm text-muted-foreground">
+                        Client
+                      </Label>
+                      {suggestedClient && !selectedClientId && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedClientId(suggestedClient.id)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors cursor-pointer border border-amber-200"
+                          title={`Suggested from attendee: ${attendeeNames}`}
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          {suggestedClient.name}
+                        </button>
+                      )}
+                    </div>
                     <Select value={selectedClientId} onValueChange={setSelectedClientId}>
                       <SelectTrigger id="client-select">
                         <SelectValue placeholder="Select client..." />
@@ -642,7 +714,7 @@ export function EventActionDialog({
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   {/* Repeat Toggle - right after client selection */}
                   {selectedClientId && (
                     <div className="space-y-3 pt-2 border-t">
@@ -669,7 +741,7 @@ export function EventActionDialog({
                           }}
                         />
                       </div>
-                      
+
                       {/* Day Selector */}
                       {repeatEnabled && (
                         <div className="space-y-3">
@@ -679,17 +751,16 @@ export function EventActionDialog({
                                 key={day}
                                 type="button"
                                 onClick={() => toggleDay(index)}
-                                className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
-                                  selectedDays.has(index)
-                                    ? 'bg-primary text-primary-foreground border-primary'
-                                    : 'bg-background hover:bg-muted border-input'
-                                }`}
+                                className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${selectedDays.has(index)
+                                  ? 'bg-primary text-primary-foreground border-primary'
+                                  : 'bg-background hover:bg-muted border-input'
+                                  }`}
                               >
                                 {day}
                               </button>
                             ))}
                           </div>
-                          
+
                           {/* Detect Button */}
                           <Button
                             type="button"
@@ -702,7 +773,7 @@ export function EventActionDialog({
                             <Search className="mr-2 h-4 w-4" />
                             {isFetchingExtendedEvents ? 'Searching...' : 'Detect Matching Sessions'}
                           </Button>
-                          
+
                           {/* Detected Events List */}
                           {hasDetected && (
                             <div className="space-y-2">
@@ -720,7 +791,7 @@ export function EventActionDialog({
                                   </button>
                                 )}
                               </div>
-                              
+
                               {detectedEvents.length === 0 ? (
                                 <p className="text-sm text-muted-foreground text-center py-2">
                                   No matching unassigned sessions found
@@ -745,9 +816,8 @@ export function EventActionDialog({
                                     return (
                                       <label
                                         key={e.id}
-                                        className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
-                                          selectedEventIds.has(e.id) ? 'bg-primary/10' : 'hover:bg-muted'
-                                        }`}
+                                        className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${selectedEventIds.has(e.id) ? 'bg-primary/10' : 'hover:bg-muted'
+                                          }`}
                                       >
                                         <Checkbox
                                           checked={selectedEventIds.has(e.id)}
@@ -775,7 +845,7 @@ export function EventActionDialog({
                       )}
                     </div>
                   )}
-                  
+
                   {/* Category Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="category-select" className="text-sm text-muted-foreground">
@@ -789,8 +859,8 @@ export function EventActionDialog({
                         {workoutCategories.map(category => (
                           <SelectItem key={category.id} value={category.name}>
                             <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
+                              <div
+                                className="w-3 h-3 rounded-full"
                                 style={{ backgroundColor: category.color }}
                               />
                               {category.name}
@@ -800,11 +870,11 @@ export function EventActionDialog({
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   {/* Assign Button(s) */}
                   {repeatEnabled && hasDetected && selectedEventIds.size > 0 ? (
                     <div className="space-y-2">
-                      <Button 
+                      <Button
                         onClick={handleBulkAssignDetectedNoNavigate}
                         disabled={!selectedClientId || isAssigning || isAssigningAndGo || selectedEventIds.size === 0}
                         className="w-full"
@@ -821,7 +891,7 @@ export function EventActionDialog({
                           </>
                         )}
                       </Button>
-                      <Button 
+                      <Button
                         onClick={handleBulkAssignDetected}
                         disabled={!selectedClientId || isAssigning || isAssigningAndGo || selectedEventIds.size === 0}
                         className="w-full"
@@ -841,7 +911,7 @@ export function EventActionDialog({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <Button 
+                      <Button
                         onClick={handleAssign}
                         disabled={!selectedClientId || isAssigning || isAssigningAndGo}
                         className="w-full"
@@ -858,7 +928,7 @@ export function EventActionDialog({
                           </>
                         )}
                       </Button>
-                      <Button 
+                      <Button
                         onClick={handleAssignAndGo}
                         disabled={!selectedClientId || isAssigning || isAssigningAndGo}
                         className="w-full"
@@ -877,7 +947,7 @@ export function EventActionDialog({
                       </Button>
                     </div>
                   )}
-                  
+
                   {assignmentError && (
                     <p className="text-sm text-destructive">{assignmentError}</p>
                   )}
@@ -894,7 +964,7 @@ export function EventActionDialog({
                     <Tag className="h-4 w-4" />
                     Create Workout for {getClientName(existingClientId!)}
                   </div>
-                  
+
                   {/* Category Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="category-select-existing" className="text-sm text-muted-foreground">
@@ -908,8 +978,8 @@ export function EventActionDialog({
                         {workoutCategories.map(category => (
                           <SelectItem key={category.id} value={category.name}>
                             <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
+                              <div
+                                className="w-3 h-3 rounded-full"
                                 style={{ backgroundColor: category.color }}
                               />
                               {category.name}
@@ -919,8 +989,8 @@ export function EventActionDialog({
                       </SelectContent>
                     </Select>
                   </div>
-                  
-                  <Button 
+
+                  <Button
                     onClick={handleCreateWorkout}
                     className="w-full"
                     variant="outline"
@@ -990,7 +1060,7 @@ export function EventActionDialog({
                 <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
             )}
-            
+
             {/* Delete Event */}
             <Separator />
             <Button
@@ -1003,7 +1073,7 @@ export function EventActionDialog({
               <Trash2 className="mr-2 h-4 w-4" />
               {isDeleting ? 'Deleting...' : 'Delete Event'}
             </Button>
-            
+
             {/* Error Display */}
             {assignmentError && (
               <p className="text-sm text-destructive text-center">{assignmentError}</p>

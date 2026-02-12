@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { Navigation, HamburgerMenu } from './Navigation';
@@ -17,9 +17,15 @@ export function Header() {
 
   const { fetchEvents, isGoogleCalendarConnected, checkGoogleCalendarConnection } = useCalendarStore();
 
+  // Check connection status on mount so the button reflects real status
+  useEffect(() => {
+    checkGoogleCalendarConnection();
+  }, [checkGoogleCalendarConnection]);
+
   const handleCalendarSync = async () => {
-    // If not connected, navigate to configure page
+    // If not connected, show feedback and navigate to configure page
     if (!isGoogleCalendarConnected) {
+      toastError('Google Calendar is not connected. Redirecting to settings...');
       router.push('/configure?tab=app');
       return;
     }
@@ -69,7 +75,7 @@ export function Header() {
   return (
     <>
       <header className={`${isSchedulePage ? 'relative' : 'fixed top-0 left-0 right-0'} z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60`}>
-        <div className="container mx-auto px-4">
+        <div className="w-full px-4">
           <div className="flex h-12 items-center justify-between">
             {/* Left side - Logo and Navigation */}
             <div className="flex items-center gap-6">
@@ -78,7 +84,7 @@ export function Header() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
                   PC+
                 </div>
-                <span className="text-xl font-bold hidden sm:inline">Performance Coach + App</span>
+                <span className="text-xl font-bold hidden md:inline">Performance Coach +</span>
               </Link>
 
               {/* Main Navigation - Left aligned */}

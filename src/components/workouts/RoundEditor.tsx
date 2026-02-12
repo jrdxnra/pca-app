@@ -191,24 +191,24 @@ export function RoundEditor({
       const movement = movements.find(m => m.id === usage.movementId);
       if (movement?.configuration) {
         // Common columns (always show if movement supports them)
-        if (movement.configuration.use_reps) enabledFields.add('reps');
-        if (movement.configuration.use_weight) enabledFields.add('weight');
-        if (movement.configuration.use_time) enabledFields.add('time');
+        if (movement.configuration.useReps) enabledFields.add('reps');
+        if (movement.configuration.useWeight) enabledFields.add('weight');
+        if (movement.configuration.useTime) enabledFields.add('time');
 
         // Less common columns (show only if visibility is enabled)
-        if (movement.configuration.use_tempo) {
+        if (movement.configuration.useTempo) {
           availableFields.add('tempo');
           if (visibleColumns?.tempo) enabledFields.add('tempo');
         }
-        if (movement.configuration.use_distance) {
+        if (movement.configuration.useDistance) {
           availableFields.add('distance');
           if (visibleColumns?.distance) enabledFields.add('distance');
         }
-        if (movement.configuration.use_rpe) {
+        if (movement.configuration.useRPE) {
           availableFields.add('rpe');
           if (visibleColumns?.rpe) enabledFields.add('rpe');
         }
-        if (movement.configuration.use_percentage) {
+        if (movement.configuration.usePercentage) {
           availableFields.add('percentage');
           if (visibleColumns?.percentage) enabledFields.add('percentage');
         }
@@ -219,14 +219,14 @@ export function RoundEditor({
     // Column order: Tempo (leftmost variable) → Reps, Weight, Time (common) → Distance, Percentage → RPE (rightmost variable)
     // Widths optimized for actual data: Tempo(4 chars), Reps(2), Weight(3+unit), Time(4), Distance(3+unit), %(2), RPE(dropdown)
     const gridColumns = [
-      'minmax(200px, 1fr)', // Exercise name (category dot + movement) - flexible width
+      'minmax(180px, 1fr)', // Exercise name (category dot + movement) - flexible width
       enabledFields.has('tempo') ? '70px' : '', // 4 digits (e.g., "3010")
-      enabledFields.has('reps') ? '48px' : '', // 2 digits (e.g., "12")
-      enabledFields.has('weight') ? '80px' : '', // 3 digits + unit button (e.g., "185 lbs")
-      enabledFields.has('time') ? '70px' : '', // 4 chars (e.g., "2:30")
-      enabledFields.has('distance') ? '110px' : '', // 3 digits + unit (e.g., "5.5 mi")
-      enabledFields.has('percentage') ? '58px' : '', // 2 digits + % (e.g., "85%")
-      enabledFields.has('rpe') ? '60px' : '', // RPE dropdown (e.g., "7.5")
+      enabledFields.has('reps') ? '50px' : '', // 2 digits (e.g., "12")
+      enabledFields.has('weight') ? '60px' : '', // 3 digits + unit button (e.g., "185 lbs")
+      enabledFields.has('time') ? '50px' : '', // 4 chars (e.g., "2:30")
+      enabledFields.has('distance') ? '60px' : '', // 3 digits + unit (e.g., "5.5 mi")
+      enabledFields.has('percentage') ? '50px' : '', // 2 digits + % (e.g., "85%")
+      enabledFields.has('rpe') ? '50px' : '', // RPE dropdown (e.g., "7.5")
       '40px', // Three dots menu
     ].filter(col => col !== '').join(' ');
 
@@ -305,7 +305,7 @@ export function RoundEditor({
               min="1"
               value={round.sets}
               onChange={(e) => updateSets(parseInt(e.target.value) || 1)}
-              className={`w-12 h-6 text-xs px-1 text-center text-gray-900 ${errors[`round-${index}-sets`] ? 'border-red-500' : ''}`}
+              className={`w-[50px] h-6 text-xs px-1 text-center text-gray-900 ${errors[`round-${index}-sets`] ? 'border-red-500' : ''}`}
             />
           </div>
         </div>

@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Calendar, 
-  Users, 
-  Dumbbell, 
-  TrendingUp, 
+import {
+  Calendar,
+  Users,
+  Dumbbell,
+  TrendingUp,
   Activity,
   Clock,
   CheckCircle,
@@ -78,9 +78,9 @@ export default function HomePage() {
   today.setHours(0, 0, 0, 0);
   const todayEnd = new Date(today);
   todayEnd.setHours(23, 59, 59, 999);
-  
+
   const currentDate = calendarDate || today;
-  
+
   // Get week range for the calendar sidebar
   const weekStart = new Date(currentDate);
   weekStart.setDate(currentDate.getDate() - currentDate.getDay());
@@ -92,7 +92,7 @@ export default function HomePage() {
   // Get current month range for analytics and event fetching
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-  
+
   // Fetch the broader range (month) to cover both analytics and sidebar
   const fetchStart = monthStart < weekStart ? monthStart : weekStart;
   const fetchEnd = monthEnd > weekEnd ? monthEnd : weekEnd;
@@ -114,7 +114,7 @@ export default function HomePage() {
     // Navigate to builder for clicked event
     const eventDate = new Date(event.start.dateTime);
     const dateParam = format(eventDate, 'yyyy-MM-dd');
-    const clientId = event.preConfiguredClient || 
+    const clientId = event.preConfiguredClient ||
       event.description?.match(/client=([^,\s\]]+)/)?.[1];
     const clientParam = clientId ? `client=${clientId}&` : '';
     window.location.href = `/workouts/builder?${clientParam}date=${dateParam}`;
@@ -189,7 +189,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="container mx-auto px-4 pt-1 pb-8 space-y-8">
+    <div className="w-full px-4 pt-1 pb-8 space-y-8">
       {/* Error Display */}
       {error && (
         <Card className="border-destructive">
@@ -278,23 +278,23 @@ export default function HomePage() {
                 ) : (
                   <div className="space-y-3">
                     {recentActivity.slice(0, 7).map((activity) => (
-                  <div key={activity.id} className="flex items-start gap-3 p-2">
-                    <div className="mt-1">
-                      {getActivityIcon(activity.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm">{activity.title}</div>
-                      <div className="text-sm text-muted-foreground">{activity.description}</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true })}
+                      <div key={activity.id} className="flex items-start gap-3 p-2">
+                        <div className="mt-1">
+                          {getActivityIcon(activity.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{activity.title}</div>
+                          <div className="text-sm text-muted-foreground">{activity.description}</div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true })}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Birthday Tracker */}
             <Card>
@@ -311,7 +311,7 @@ export default function HomePage() {
                   const now = new Date();
                   const currentMonth = now.getMonth();
                   const currentYear = now.getFullYear();
-                  
+
                   // Get clients with birthdays this month
                   const upcomingBirthdays = clients
                     .filter(client => !client.isDeleted && client.birthday)
@@ -320,7 +320,7 @@ export default function HomePage() {
                       const [year, month, day] = birthdayStr.split('-').map(Number);
                       const birthdayThisYear = new Date(currentYear, month - 1, day);
                       const birthdayNextYear = new Date(currentYear + 1, month - 1, day);
-                      
+
                       // Check if birthday is this month (current or next year)
                       let birthdayDate: Date;
                       if (month - 1 === currentMonth) {
@@ -332,7 +332,7 @@ export default function HomePage() {
                         // Birthday is in future month, skip
                         return null;
                       }
-                      
+
                       return {
                         client,
                         birthdayDate,
@@ -364,7 +364,7 @@ export default function HomePage() {
                       {upcomingBirthdays.map(({ client, birthdayDate, day }) => {
                         const isToday = birthdayDate.toDateString() === now.toDateString();
                         const daysUntil = Math.ceil((birthdayDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                        
+
                         return (
                           <div key={client.id} className="flex items-center justify-between p-3 border rounded-lg">
                             <div className="flex items-center gap-3">

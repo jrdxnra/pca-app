@@ -120,9 +120,14 @@ export async function fetchCalendarEvents(
   timeMax: Date,
   calendarId: string = 'primary'
 ): Promise<any[]> {
+  /* 
+   * Note: The API route expects 'start' and 'end' parameters, 
+   * even though Google API uses timeMin/timeMax.
+   * We map them here to match the server-side route.d.ts.
+   */
   const params = new URLSearchParams({
-    timeMin: timeMin.toISOString(),
-    timeMax: timeMax.toISOString(),
+    start: timeMin.toISOString(),
+    end: timeMax.toISOString(),
     calendarId,
   });
 
@@ -212,10 +217,16 @@ export async function deleteCalendarEvent(
  */
 export async function checkGoogleCalendarAuth(): Promise<boolean> {
   try {
-    const response = await fetch('/api/calendar/auth/status');
+    const response = await fetch('/api/calendar/auth/status', {
+      cache: 'no-store',
+      headers: {
+        'Pragma': 'no-cache',
+        'Cache-Control': 'no-cache'
+      }
+    });
     if (!response.ok) return false;
     const data = await response.json();
-    return data.authenticated === true;
+    return data.isAuthenticated === true;
   } catch {
     return false;
   }
@@ -258,10 +269,10 @@ export async function addWorkoutLinksToEvent(
     calendarId,
     existingDescriptionLength: existingDescription?.length
   });
-  
+
   // Import the utility function
   const { addWorkoutLinksToDescription } = await import('./workout-links');
-  
+
   // Generate updated description with workout links
   const updatedDescription = addWorkoutLinksToDescription(
     existingDescription || '',
@@ -269,7 +280,7 @@ export async function addWorkoutLinksToEvent(
     clientId,
     eventDate
   );
-  
+
   console.log('[addWorkoutLinksToEvent] Updated description:', updatedDescription);
 
   // Update the event via API
@@ -282,7 +293,7 @@ export async function addWorkoutLinksToEvent(
     },
     calendarId,
   });
-  
+
   console.log('[addWorkoutLinksToEvent] API result:', result);
   return result;
 }

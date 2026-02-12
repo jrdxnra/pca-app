@@ -11,9 +11,10 @@ interface CategoryWheelPickerProps {
     value: string;
     onChange: (value: string) => void;
     categories: MovementCategory[];
+    tabIndex?: number;
 }
 
-export function CategoryWheelPicker({ value, onChange, categories }: CategoryWheelPickerProps) {
+export function CategoryWheelPicker({ value, onChange, categories, tabIndex }: CategoryWheelPickerProps) {
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -39,6 +40,7 @@ export function CategoryWheelPicker({ value, onChange, categories }: CategoryWhe
                         variant="ghost"
                         role="combobox"
                         aria-expanded={open}
+                        tabIndex={tabIndex}
                         className="w-[30px] h-6 p-0 hover:bg-transparent focus:ring-0 shadow-none border-none"
                     >
                         {/* Color Circle Trigger */}

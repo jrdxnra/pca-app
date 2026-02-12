@@ -1,16 +1,16 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
   getDoc,
   query,
   where,
   orderBy,
   onSnapshot,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
 import { db, getDb } from '../config';
 import { Movement, MovementCategory } from '@/lib/types';
@@ -35,18 +35,18 @@ export async function addMovement(
       } else {
         // Fallback to sensible defaults if no category default exists
         configuration = {
-          use_reps: true,
-          use_tempo: false,
-          use_time: false,
-          use_weight: true,
-          weight_measure: 'lbs',
-          use_distance: false,
-          distance_measure: 'm',
-          use_pace: false,
-          pace_measure: 'km',
+          useReps: true,
+          useTempo: false,
+          useTime: false,
+          useWeight: true,
+          weightMeasure: 'lbs',
+          useDistance: false,
+          distanceMeasure: 'm',
+          usePace: false,
+          paceMeasure: 'km',
           unilateral: false,
-          use_percentage: false,
-          use_rpe: false,
+          usePercentage: false,
+          useRPE: false,
         };
       }
     }
@@ -78,14 +78,14 @@ export async function getMovement(id: string, includeCategory = false): Promise<
   try {
     const docRef = doc(getDb(), COLLECTION_NAME, id);
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       const movement = { id: docSnap.id, ...docSnap.data() } as Movement;
-      
+
       if (includeCategory && movement.categoryId) {
         movement.category = (await getMovementCategory(movement.categoryId)) || undefined;
       }
-      
+
       return movement;
     }
     return null;
@@ -102,7 +102,7 @@ export async function getAllMovements(includeCategory = false): Promise<Movement
   try {
     const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
     const querySnapshot = await getDocs(q);
-    
+
     const movements = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -132,16 +132,16 @@ export async function getAllMovements(includeCategory = false): Promise<Movement
  * Get movements by category
  */
 export async function getMovementsByCategory(
-  categoryId: string, 
+  categoryId: string,
   includeCategory = false
 ): Promise<Movement[]> {
   try {
     const q = query(
-      collection(getDb(), COLLECTION_NAME), 
+      collection(getDb(), COLLECTION_NAME),
       where('categoryId', '==', categoryId)
     );
     const querySnapshot = await getDocs(q);
-    
+
     const movements = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -173,24 +173,24 @@ export async function getMovementsByCategory(
  * Update a movement
  */
 export async function updateMovement(
-  id: string, 
+  id: string,
   updates: Partial<Omit<Movement, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
     const docRef = doc(getDb(), COLLECTION_NAME, id);
-    
+
     // Filter out undefined values for Firestore
     const cleanUpdates: any = {
       updatedAt: Timestamp.now(),
     };
-    
+
     if (updates.name !== undefined) cleanUpdates.name = updates.name;
     if (updates.categoryId !== undefined) cleanUpdates.categoryId = updates.categoryId;
     if (updates.ordinal !== undefined) cleanUpdates.ordinal = updates.ordinal;
     if (updates.configuration !== undefined) cleanUpdates.configuration = updates.configuration;
     if (updates.links !== undefined) cleanUpdates.links = updates.links;
     if (updates.instructions !== undefined) cleanUpdates.instructions = updates.instructions;
-    
+
     await updateDoc(docRef, cleanUpdates);
   } catch (error) {
     console.error('Error updating movement:', error);
@@ -215,19 +215,19 @@ export async function deleteMovement(id: string): Promise<void> {
  * Search movements across all categories
  */
 export async function searchMovements(
-  searchTerm: string, 
+  searchTerm: string,
   includeCategory = false
 ): Promise<Movement[]> {
   try {
     // Get all movements first (Firestore doesn't support full-text search)
     const allMovements = await getAllMovements(includeCategory);
-    
+
     if (!searchTerm.trim()) {
       return allMovements;
     }
 
     const lowercaseSearch = searchTerm.toLowerCase();
-    
+
     return allMovements.filter(movement =>
       movement.name.toLowerCase().includes(lowercaseSearch) ||
       movement.instructions?.toLowerCase().includes(lowercaseSearch) ||
@@ -250,7 +250,7 @@ export async function reorderMovements(
     const promises = movementIds.map((movementId, index) =>
       updateMovement(movementId, { ordinal: index })
     );
-    
+
     await Promise.all(promises);
   } catch (error) {
     console.error('Error reordering movements:', error);
@@ -269,13 +269,13 @@ export function subscribeToMovementsByCategory(
     collection(getDb(), COLLECTION_NAME),
     where('categoryId', '==', categoryId)
   );
-  
+
   return onSnapshot(q, (querySnapshot) => {
     const movements = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as Movement[];
-    
+
     // Sort by ordinal first, then by name for movements with same ordinal
     movements.sort((a, b) => {
       if (a.ordinal !== b.ordinal) {
@@ -283,7 +283,7 @@ export function subscribeToMovementsByCategory(
       }
       return a.name.localeCompare(b.name);
     });
-    
+
     callback(movements);
   }, (error) => {
     console.error('Error in movements subscription:', error);
@@ -295,13 +295,13 @@ export function subscribeToMovementsByCategory(
  */
 export function subscribeToMovements(callback: (movements: Movement[]) => void): () => void {
   const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
-  
+
   return onSnapshot(q, (querySnapshot) => {
     const movements = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as Movement[];
-    
+
     callback(movements);
   }, (error) => {
     console.error('Error in movements subscription:', error);
@@ -318,11 +318,11 @@ export async function getNextOrdinal(categoryId: string): Promise<number> {
       where('categoryId', '==', categoryId)
     );
     const querySnapshot = await getDocs(q);
-    
+
     if (querySnapshot.empty) {
       return 0;
     }
-    
+
     const movements = querySnapshot.docs.map(doc => doc.data() as Movement);
     const maxOrdinal = Math.max(...movements.map(m => m.ordinal || 0));
     return maxOrdinal + 1;
@@ -336,29 +336,29 @@ export async function getNextOrdinal(categoryId: string): Promise<number> {
  * Reorder movements within a category
  */
 export async function reorderMovementsInCategory(
-  categoryId: string, 
-  draggedIndex: number, 
+  categoryId: string,
+  draggedIndex: number,
   dropIndex: number
 ): Promise<void> {
   try {
     // Get all movements for the category
     const movements = await getMovementsByCategory(categoryId);
-    
-    if (draggedIndex === dropIndex || draggedIndex < 0 || dropIndex < 0 || 
-        draggedIndex >= movements.length || dropIndex >= movements.length) {
+
+    if (draggedIndex === dropIndex || draggedIndex < 0 || dropIndex < 0 ||
+      draggedIndex >= movements.length || dropIndex >= movements.length) {
       return; // No change needed
     }
-    
+
     // Create new order array
     const reorderedMovements = [...movements];
     const [draggedMovement] = reorderedMovements.splice(draggedIndex, 1);
     reorderedMovements.splice(dropIndex, 0, draggedMovement);
-    
+
     // Update ordinals for all movements in the new order
     const updatePromises = reorderedMovements.map((movement, index) => {
       return updateMovement(movement.id, { ordinal: index });
     });
-    
+
     await Promise.all(updatePromises);
   } catch (error) {
     console.error('Error reordering movements:', error);

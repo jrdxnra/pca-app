@@ -35,7 +35,8 @@ import {
 } from '@/components/ui/select';
 import { Plus, Pencil } from 'lucide-react';
 import { useClientStore } from '@/lib/stores/useClientStore';
-import { Client, Period, ClientProgram } from '@/lib/types';
+import { Client, ClientProgram } from '@/lib/types';
+import { Period } from '@/lib/firebase/services/periods';
 import { PeriodizationTimeline, MemoizedPeriodizationTimeline } from './PeriodizationTimeline';
 import { useClientPrograms } from '@/hooks/useClientPrograms';
 
@@ -69,7 +70,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
   const { addClient, editClient, loading } = useClientStore();
   const { assignPeriod } = useClientPrograms(client?.id);
   const periodizationRef = useRef<any>(null);
-  
+
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
@@ -87,13 +88,13 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
       return () => clearTimeout(timer);
     }
   }, [open, scrollPosition]);
-  
+
   const isEditMode = !!client;
-  
+
   // Get current client's periods
   const clientProgram = isEditMode ? clientPrograms.find(cp => cp.clientId === client?.id) : undefined;
   const clientPeriods = clientProgram?.periods || [];
-  
+
   // Memoize the conversion of trainingPhases to clientPeriods format
   const convertedTrainingPhases = useMemo(() => {
     if (!client?.trainingPhases) return [];
@@ -147,8 +148,8 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
     }
   }, [open, client, form]);
 
-  const onSubmit = async (data: ClientFormData, shouldClose: boolean = true) => {
-    console.log('[AddClientDialog] onSubmit called, isEditMode:', isEditMode, 'shouldClose:', shouldClose);
+  const onSubmit = async (data: ClientFormData) => {
+    console.log('[AddClientDialog] onSubmit called, isEditMode:', isEditMode);
     try {
       if (isEditMode && client) {
         await editClient(client.id, {
@@ -189,11 +190,9 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
         }
       }
 
-      // Reset form and optionally close dialog
+      // Reset form and close dialog
       form.reset();
-      if (shouldClose) {
-        setOpen(false);
-      }
+      setOpen(false);
     } catch (error) {
       console.error(`Failed to ${isEditMode ? 'update' : 'add'} client:`, error);
       // Error is handled by the store
@@ -204,7 +203,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
 
   const handleSavePeriods = async (newPeriods: any[], goals: any[]) => {
     if (!isEditMode || !client) return;
-    
+
     setPeriodSaving(true);
     try {
       // Convert periods to TrainingPhase format for simple storage on client document
@@ -213,10 +212,10 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
         periodConfigId: period.periodConfigId,
         periodName: period.periodName,
         periodColor: period.periodColor,
-        startDate: period.startDate instanceof Date 
+        startDate: period.startDate instanceof Date
           ? period.startDate.toISOString().split('T')[0]
           : period.startDate,
-        endDate: period.endDate instanceof Date 
+        endDate: period.endDate instanceof Date
           ? period.endDate.toISOString().split('T')[0]
           : period.endDate
       }));
@@ -226,17 +225,17 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
         trainingPhases,
         eventGoals: goals
       });
-      
+
       // Refresh client data to get updated trainingPhases and eventGoals
       if (onClientRefresh) {
         await onClientRefresh();
       }
-      
+
       // Refresh client programs to ensure UI updates
       if (onClientProgramsRefresh) {
         await onClientProgramsRefresh();
       }
-      
+
       console.log('Training phases and event goals saved to client profile:', trainingPhases.length, 'phases,', goals.length, 'goals');
     } catch (error) {
       console.error('Failed to save training phases:', error);
@@ -263,7 +262,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
         <DialogHeader className="sticky top-0 bg-background z-10">
           <DialogTitle>{isEditMode ? 'Edit Client' : 'Add New Client'}</DialogTitle>
           <DialogDescription>
-            {isEditMode 
+            {isEditMode
               ? 'Update client information below.'
               : 'Add a new client to your roster. Fill in their details below.'
             }
@@ -299,9 +298,9 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                     <FormItem>
                       <FormLabel className="text-xs">Email</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="email" 
-                          placeholder="john@example.com" 
+                        <Input
+                          type="email"
+                          placeholder="john@example.com"
                           {...field}
                           className="text-sm h-8"
                         />
@@ -388,10 +387,10 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                   <FormItem>
                     <FormLabel className="text-xs">Fitness Goals</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <Textarea
                         placeholder="e.g., lose weight, build muscle, improve performance"
                         className="min-h-[60px] text-sm"
-                        {...field} 
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -407,10 +406,10 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                   <FormItem>
                     <FormLabel className="text-xs">Notes</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <Textarea
                         placeholder="Injuries, preferences, schedule, etc."
                         className="min-h-[60px] text-sm"
-                        {...field} 
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -445,31 +444,31 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                 Cancel
               </Button>
               {isEditMode && clientPeriods.length > 0 && (
-                <Button 
+                <Button
                   type="button"
-                  variant="outline" 
+                  variant="outline"
                   disabled={loading || periodSaving}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    form.handleSubmit((data) => onSubmit(data, false))();
+                    form.handleSubmit(async (data) => { await onSubmit(data); })();
                   }}
                 >
                   {loading || periodSaving ? 'Saving...' : 'Save'}
                 </Button>
               )}
-              <Button 
+              <Button
                 type="button"
-                variant="outline" 
+                variant="outline"
                 disabled={loading || periodSaving}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  form.handleSubmit((data) => onSubmit(data, true))();
+                   form.handleSubmit(onSubmit)();
                 }}
               >
                 {loading || periodSaving
-                  ? (isEditMode ? 'Saving...' : 'Adding...') 
+                  ? (isEditMode ? 'Saving...' : 'Adding...')
                   : (isEditMode ? 'Save & Close' : 'Add Client')
                 }
               </Button>

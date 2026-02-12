@@ -4,16 +4,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { 
-  Users, 
-  Dumbbell, 
-  Calendar, 
+import {
+  Users,
+  Dumbbell,
+  Calendar,
   Home,
   Menu,
   X,
   Zap,
   Wrench,
-  Settings
+  Settings,
+  Activity
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -28,6 +29,7 @@ const menuNavigation = [
   { name: 'Workouts', href: '/workouts', icon: Zap },
   { name: 'Movements', href: '/movements', icon: Dumbbell },
   { name: 'Configuration', href: '/configure', icon: Settings },
+  { name: 'App Status', href: '/health', icon: Activity },
 ];
 
 // Main Navigation - Left aligned with logo
@@ -39,7 +41,7 @@ export function Navigation() {
       {mainNavigation.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href;
-        
+
         return (
           <Link
             key={item.name}
@@ -68,7 +70,7 @@ export function HamburgerMenu() {
 
   return (
     <>
-      <div 
+      <div
         className="relative"
         onMouseEnter={() => {
           if (typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -100,7 +102,7 @@ export function HamburgerMenu() {
         </Button>
 
         {/* Desktop Dropdown Menu */}
-        <div 
+        <div
           className={cn(
             "hidden md:block absolute top-full right-0 w-56 bg-background border rounded-lg shadow-lg z-50 transition-all duration-200",
             desktopMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
@@ -111,7 +113,7 @@ export function HamburgerMenu() {
             {menuNavigation.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
-              
+
               return (
                 <Link
                   key={item.name}
@@ -135,17 +137,17 @@ export function HamburgerMenu() {
       {/* Mobile Navigation Menu */}
       {mobileMenuOpen && (
         <>
-          <div 
-            className="md:hidden fixed inset-0 bg-black/20 z-40" 
+          <div
+            className="md:hidden fixed inset-0 bg-black/20 z-40"
             onClick={() => setMobileMenuOpen(false)}
           />
-          
+
           <div className="md:hidden fixed top-16 left-0 right-0 bg-background border-b shadow-lg z-50 max-h-[calc(100vh-4rem)] overflow-y-auto">
             <div className="px-4 py-4 space-y-2">
               {mainNavigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
-                
+
                 return (
                   <Link
                     key={item.name}
@@ -166,7 +168,7 @@ export function HamburgerMenu() {
               {menuNavigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
-                
+
                 return (
                   <Link
                     key={item.name}

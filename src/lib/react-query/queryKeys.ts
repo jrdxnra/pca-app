@@ -60,7 +60,7 @@ export const queryKeys = {
     details: () => [...queryKeys.clientWorkouts.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.clientWorkouts.details(), id] as const,
     byClient: (clientId: string) => [...queryKeys.clientWorkouts.all, 'client', clientId] as const,
-    byDateRange: (clientId: string, startDate: string, endDate: string) => 
+    byDateRange: (clientId: string, startDate: string, endDate: string) =>
       [...queryKeys.clientWorkouts.all, 'client', clientId, 'dateRange', startDate, endDate] as const,
   },
 
@@ -108,7 +108,7 @@ export const queryKeys = {
   calendarEvents: {
     all: ['calendarEvents'] as const,
     lists: () => [...queryKeys.calendarEvents.all, 'list'] as const,
-    list: (filters?: { start?: Date; end?: Date }) => [...queryKeys.calendarEvents.lists(), filters] as const,
+    list: (filters?: { start?: string; end?: string }) => [...queryKeys.calendarEvents.lists(), filters] as const,
     details: () => [...queryKeys.calendarEvents.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.calendarEvents.details(), id] as const,
   },

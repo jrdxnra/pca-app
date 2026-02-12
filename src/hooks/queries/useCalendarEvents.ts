@@ -14,9 +14,9 @@ export function useCalendarEvents(
   // Convert dates to ISO strings for stable query key (Date objects have different references each render)
   const startDateString = startDate?.toISOString();
   const endDateString = endDate?.toISOString();
-  
+
   return useQuery({
-    queryKey: queryKeys.calendarEvents.list({ start: startDateString, end: endDateString }),
+    queryKey: queryKeys.calendarEvents.list({ start: startDateString || '', end: endDateString || '' }),
     queryFn: () => {
       if (!startDate || !endDate) return Promise.resolve([]);
       return getCalendarEventsByDateRange(startDate, endDate);

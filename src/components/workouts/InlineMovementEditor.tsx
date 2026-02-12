@@ -77,6 +77,8 @@ export function InlineMovementEditor({
   // Get movement and category info
   const selectedMovement = movements.find(m => m.id === usage.movementId);
   const selectedCategory = categories.find(c => c.id === usage.categoryId);
+  const configuration = selectedMovement?.configuration;
+
   const filteredMovements = movements.filter(m => m.categoryId === usage.categoryId);
 
   // Auto-populate weight/reps from recent performance when movement is selected
@@ -91,7 +93,7 @@ export function InlineMovementEditor({
 
     // Proceed even if movement metadata isn't loaded yet; fall back to defaults
     if (!clientId || !usage.movementId) return;
-    const supportsWeight = selectedMovement?.configuration?.use_weight ?? true;
+    const supportsWeight = selectedMovement?.configuration?.useWeight ?? true;
     if (!supportsWeight) return;
 
     // Only process if reps are set
@@ -230,13 +232,13 @@ export function InlineMovementEditor({
               let needsUpdate = false;
 
               // Only update if not already set
-              if (!hasWeight && performance.weight && selectedMovement.configuration.use_weight) {
+              if (!hasWeight && performance.weight && selectedMovement.configuration.useWeight) {
                 updates.targetWorkload!.weight = performance.weight;
                 updates.targetWorkload!.useWeight = true;
                 needsUpdate = true;
               }
 
-              if (!hasReps && performance.repRange && selectedMovement.configuration.use_reps) {
+              if (!hasReps && performance.repRange && selectedMovement.configuration.useReps) {
                 updates.targetWorkload!.reps = performance.repRange;
                 updates.targetWorkload!.useReps = true;
                 needsUpdate = true;
@@ -301,8 +303,9 @@ export function InlineMovementEditor({
   };
 
   // Ensure default values are set for dropdowns
-  const weightMeasure = usage.targetWorkload.weightMeasure || selectedMovement?.configuration?.weight_measure || 'lbs';
-  const distanceMeasure = usage.targetWorkload.distanceMeasure || selectedMovement?.configuration?.distance_measure || 'mi';
+  const weightMeasure = usage.targetWorkload.weightMeasure || selectedMovement?.configuration?.weightMeasure || 'lbs';
+  const timeMeasure = usage.targetWorkload.timeMeasure || selectedMovement?.configuration?.timeMeasure || 's';
+  const distanceMeasure = usage.targetWorkload.distanceMeasure || selectedMovement?.configuration?.distanceMeasure || 'mi';
 
   // Use the unified grid template passed from parent (for table-style alignment)
   // If not provided, fall back to calculating based on this movement's config
@@ -310,14 +313,14 @@ export function InlineMovementEditor({
   // Widths optimized for actual data
   const gridColumns = gridTemplateColumns || (() => {
     const fallbackGrid = [
-      'minmax(200px, 1fr)', // Exercise name (category dot + movement)
-      selectedMovement?.configuration?.use_tempo ? '70px' : '', // 4 digits
-      selectedMovement?.configuration?.use_reps ? '48px' : '', // 2 digits
-      selectedMovement?.configuration?.use_weight ? '58px' : '', // Input(40) + Unit(18) = 58
-      selectedMovement?.configuration?.use_time ? '70px' : '', // 4 chars (2:30)
-      selectedMovement?.configuration?.use_distance ? '48px' : '', // Input(28) + Unit(20) = 48
-      selectedMovement?.configuration?.use_percentage ? '58px' : '', // 2 digits + %
-      selectedMovement?.configuration?.use_rpe ? '25px' : '', // RPE dropdown
+      'minmax(180px, 1fr)', // Exercise name (category dot + movement)
+      selectedMovement?.configuration?.useTempo ? '70px' : '', // 4 digits
+      selectedMovement?.configuration?.useReps ? '50px' : '', // 2 digits
+      selectedMovement?.configuration?.useWeight ? '60px' : '', // Input(40) + Unit(18) = 58
+      selectedMovement?.configuration?.useTime ? '50px' : '', // 4 chars (2:30)
+      selectedMovement?.configuration?.useDistance ? '60px' : '', // Input(28) + Unit(20) = 48
+      selectedMovement?.configuration?.usePercentage ? '50px' : '', // 2 digits + %
+      selectedMovement?.configuration?.useRPE ? '50px' : '', // RPE dropdown
       '40px', // Three dots menu
     ].filter(col => col !== '').join(' ');
     return fallbackGrid;
@@ -325,22 +328,22 @@ export function InlineMovementEditor({
 
   // Determine which columns exist in the unified grid (for table alignment)
   // If unifiedEnabledFields is provided, use it; otherwise fall back to this movement's config
-  const gridHasReps = unifiedEnabledFields?.reps ?? (selectedMovement?.configuration?.use_reps ?? false);
-  const gridHasWeight = unifiedEnabledFields?.weight ?? (selectedMovement?.configuration?.use_weight ?? false);
-  const gridHasTempo = unifiedEnabledFields?.tempo ?? (selectedMovement?.configuration?.use_tempo ?? false);
-  const gridHasTime = unifiedEnabledFields?.time ?? (selectedMovement?.configuration?.use_time ?? false);
-  const gridHasDistance = unifiedEnabledFields?.distance ?? (selectedMovement?.configuration?.use_distance ?? false);
-  const gridHasRPE = unifiedEnabledFields?.rpe ?? (selectedMovement?.configuration?.use_rpe ?? false);
-  const gridHasPercentage = unifiedEnabledFields?.percentage ?? (selectedMovement?.configuration?.use_percentage ?? false);
+  const gridHasReps = unifiedEnabledFields?.reps ?? (selectedMovement?.configuration?.useReps ?? false);
+  const gridHasWeight = unifiedEnabledFields?.weight ?? (selectedMovement?.configuration?.useWeight ?? false);
+  const gridHasTempo = unifiedEnabledFields?.tempo ?? (selectedMovement?.configuration?.useTempo ?? false);
+  const gridHasTime = unifiedEnabledFields?.time ?? (selectedMovement?.configuration?.useTime ?? false);
+  const gridHasDistance = unifiedEnabledFields?.distance ?? (selectedMovement?.configuration?.useDistance ?? false);
+  const gridHasRPE = unifiedEnabledFields?.rpe ?? (selectedMovement?.configuration?.useRPE ?? false);
+  const gridHasPercentage = unifiedEnabledFields?.percentage ?? (selectedMovement?.configuration?.usePercentage ?? false);
 
   // Check if this specific movement supports each field
-  const movementSupportsReps = selectedMovement?.configuration?.use_reps ?? false;
-  const movementSupportsWeight = selectedMovement?.configuration?.use_weight ?? false;
-  const movementSupportsTempo = selectedMovement?.configuration?.use_tempo ?? false;
-  const movementSupportsTime = selectedMovement?.configuration?.use_time ?? false;
-  const movementSupportsDistance = selectedMovement?.configuration?.use_distance ?? false;
-  const movementSupportsRPE = selectedMovement?.configuration?.use_rpe ?? false;
-  const movementSupportsPercentage = selectedMovement?.configuration?.use_percentage ?? false;
+  const movementSupportsReps = selectedMovement?.configuration?.useReps ?? false;
+  const movementSupportsWeight = selectedMovement?.configuration?.useWeight ?? false;
+  const movementSupportsTempo = selectedMovement?.configuration?.useTempo ?? false;
+  const movementSupportsTime = selectedMovement?.configuration?.useTime ?? false;
+  const movementSupportsDistance = selectedMovement?.configuration?.useDistance ?? false;
+  const movementSupportsRPE = selectedMovement?.configuration?.useRPE ?? false;
+  const movementSupportsPercentage = selectedMovement?.configuration?.usePercentage ?? false;
 
   const rowBackgroundColor = sectionColor ? `${sectionColor}15` : 'transparent'; // 15 = ~8% opacity
 
@@ -381,6 +384,7 @@ export function InlineMovementEditor({
                 useReps: false,
                 useTempo: false,
                 useTime: false,
+                timeMeasure: 's',
                 useDistance: false,
                 distanceMeasure: 'mi',
                 usePace: false,
@@ -398,11 +402,13 @@ export function InlineMovementEditor({
               });
             }}
             categories={categories}
+            tabIndex={-1}
           />
           <MovementWheelPicker
             value={usage.movementId || ''}
             onChange={(value) => updateField('movementId', value)}
             movements={filteredMovements}
+            tabIndex={-1}
           />
         </div>
 
@@ -414,7 +420,7 @@ export function InlineMovementEditor({
                 placeholder="Tempo"
                 value={usage.targetWorkload.tempo || ''}
                 onChange={(e) => updateField('targetWorkload.tempo', e.target.value)}
-                className="h-6 min-h-[24px] max-h-[24px] w-full text-sm bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300 text-gray-900"
+                className="h-6 min-h-[24px] max-h-[24px] w-full text-base bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300 text-gray-900"
               />
             ) : null}
           </div>
@@ -427,6 +433,7 @@ export function InlineMovementEditor({
               <RepWheelPicker
                 value={usage.targetWorkload.reps ? parseInt(usage.targetWorkload.reps) || null : null}
                 onChange={(value) => updateField('targetWorkload.reps', value.toString())}
+                placeholder={selectedMovement?.configuration.unilateral ? "ea" : "Reps"}
               />
             ) : null}
           </div>
@@ -442,15 +449,16 @@ export function InlineMovementEditor({
                   placeholder="Wt"
                   value={usage.targetWorkload.weight?.toString() || ''}
                   onChange={(e) => updateField('targetWorkload.weight', e.target.value || null)}
-                  className="h-6 min-h-[24px] max-h-[24px] w-10 text-sm text-right border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
+                  className="h-6 min-h-[24px] max-h-[24px] flex-1 min-w-0 w-auto text-base text-right border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
                 />
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={() => {
-                    const newMeasure = weightMeasure === 'lbs' ? 'kg' : 'lbs';
+                    const newMeasure = weightMeasure === 'lbs' ? 'kg' : weightMeasure === 'kg' ? 'bw' : 'lbs';
                     updateField('targetWorkload.weightMeasure', newMeasure);
                   }}
-                  className="h-6 min-h-[24px] max-h-[24px] w-[18px] text-[10px] font-medium border-0 rounded-none bg-white px-0 py-0 cursor-pointer hover:bg-gray-50 text-center tracking-tighter"
+                  className="h-6 min-h-[24px] max-h-[24px] w-[20px] text-xs font-medium border-0 rounded-none bg-white px-0 py-0 cursor-pointer hover:bg-gray-50 text-center tracking-tighter"
                 >
                   {weightMeasure}
                 </button>
@@ -463,13 +471,26 @@ export function InlineMovementEditor({
         {gridHasTime && (
           <div className="px-1 py-0.5">
             {movementSupportsTime ? (
-              <Input
-                type="text"
-                placeholder="Time"
-                value={usage.targetWorkload.time?.toString() || ''}
-                onChange={(e) => updateField('targetWorkload.time', e.target.value || null)}
-                className="h-6 min-h-[24px] max-h-[24px] w-full text-sm bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300 text-gray-900"
-              />
+              <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
+                <Input
+                  type="text"
+                  placeholder="Time"
+                  value={usage.targetWorkload.time?.toString() || ''}
+                  onChange={(e) => updateField('targetWorkload.time', e.target.value || null)}
+                  className="h-6 min-h-[24px] max-h-[24px] flex-1 min-w-0 text-base bg-white px-1 py-0 border-0 rounded-none shadow-none placeholder:text-gray-300 text-gray-900"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => {
+                    const newMeasure = timeMeasure === 's' ? 'm' : 's';
+                    updateField('targetWorkload.timeMeasure', newMeasure);
+                  }}
+                  className="h-6 min-h-[24px] max-h-[24px] w-[20px] text-xs font-medium border-0 rounded-none bg-white px-0 py-0 cursor-pointer hover:bg-gray-50 text-center tracking-tighter"
+                >
+                  {timeMeasure}
+                </button>
+              </div>
             ) : null}
           </div>
         )}
@@ -484,7 +505,7 @@ export function InlineMovementEditor({
                   placeholder="Dist"
                   value={usage.targetWorkload.distance?.toString() || ''}
                   onChange={(e) => updateField('targetWorkload.distance', parseFloat(e.target.value) || null)}
-                  className="h-6 min-h-[24px] max-h-[24px] w-7 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="h-6 min-h-[24px] max-h-[24px] flex-1 min-w-0 w-auto text-base text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <DistanceUnitPicker
                   value={distanceMeasure}
@@ -505,9 +526,9 @@ export function InlineMovementEditor({
                   placeholder="%"
                   value={usage.targetWorkload.percentage?.toString() || ''}
                   onChange={(e) => updateField('targetWorkload.percentage', parseInt(e.target.value) || null)}
-                  className="h-6 min-h-[24px] max-h-[24px] w-10 text-sm text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="h-6 min-h-[24px] max-h-[24px] flex-1 min-w-0 w-auto text-base text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
-                <span className="h-6 min-h-[24px] max-h-[24px] w-6 text-sm flex items-center justify-center bg-white">%</span>
+                <span className="h-6 min-h-[24px] max-h-[24px] w-[20px] text-sm flex items-center justify-center bg-white">%</span>
               </div>
             ) : null}
           </div>
@@ -531,6 +552,7 @@ export function InlineMovementEditor({
             ref={contextMenuRef}
             variant="ghost"
             size="sm"
+            tabIndex={-1}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();

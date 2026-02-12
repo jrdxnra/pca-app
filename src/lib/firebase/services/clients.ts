@@ -1,16 +1,16 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
+import {
+  collection,
+  doc,
+  addDoc,
   updateDoc,
   deleteDoc,
-  getDocs, 
+  getDocs,
   getDoc,
   query,
   where,
   orderBy,
   onSnapshot,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
 import { db, getDb } from '../config';
 import { Client, PersonalRecord, SessionCounts, RecentExercisePerformance, ClientRecentPerformance } from '@/lib/types';
@@ -49,7 +49,7 @@ export async function getClient(id: string): Promise<Client | null> {
   try {
     const docRef = doc(getDb(), COLLECTION_NAME, id);
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       return { id: docSnap.id, ...docSnap.data() } as Client;
     }
@@ -63,13 +63,13 @@ export async function getClient(id: string): Promise<Client | null> {
 export async function getAllClients(includeDeleted = false): Promise<Client[]> {
   try {
     let q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
-    
+
     if (!includeDeleted) {
       q = query(collection(getDb(), COLLECTION_NAME), where('isDeleted', '==', false), orderBy('name'));
     }
-    
+
     const querySnapshot = await getDocs(q);
-    
+
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -144,9 +144,9 @@ export async function restoreClient(id: string): Promise<void> {
  */
 
 export async function updatePersonalRecord(
-  clientId: string, 
-  movementId: string, 
-  oneRepMax: number, 
+  clientId: string,
+  movementId: string,
+  oneRepMax: number,
   method: 'tested' | 'estimated' = 'estimated'
 ): Promise<void> {
   try {
@@ -226,7 +226,7 @@ export async function updateRecentExercisePerformance(
 
     // Get existing performance data for this movement
     const existingPerformance = client.recentExercisePerformance?.[movementId];
-    
+
     // Parse rep range to get numeric rep count
     let repCount = 0;
     if (typeof repRange === 'string') {
@@ -237,7 +237,7 @@ export async function updateRecentExercisePerformance(
         repCount = parseInt(repRange);
       }
     }
-    
+
     // Check if this is a new PR (highest 1RM for this movement)
     const isPR = !existingPerformance || estimatedOneRepMax > (existingPerformance.estimatedOneRepMax || 0);
 
@@ -304,15 +304,12 @@ export async function updateRecentExercisePerformance(
       lastUsedDate: Timestamp.now(),
       history: [
         cleanHistoryEntry,
-        ...(existingPerformance?.history || []).map(entry => sanitizePerformance({
-          ...(entry as any),
-          movementId,
-          weight,
-          repRange,
-          estimatedOneRepMax,
-          lastUsedDate: Timestamp.now(),
-          history: []
-        } as unknown as RecentExercisePerformance)).slice(0, 49)
+        ...(existingPerformance?.history || []).map(entry =>
+          Object.entries(entry).reduce((acc, [key, value]) => {
+            if (value !== undefined) (acc as any)[key] = value;
+            return acc;
+          }, {} as typeof entry)
+        ).slice(0, 49)
       ]
     };
 
@@ -360,17 +357,17 @@ export async function getAllRecentExercisePerformance(
  */
 export function subscribeToClients(callback: (clients: Client[]) => void, includeDeleted = false): () => void {
   let q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
-  
+
   if (!includeDeleted) {
     q = query(collection(getDb(), COLLECTION_NAME), where('isDeleted', '==', false), orderBy('name'));
   }
-  
+
   return onSnapshot(q, (querySnapshot) => {
     const clients = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as Client[];
-    
+
     callback(clients);
   }, (error) => {
     console.error('Error in clients subscription:', error);
@@ -384,8 +381,8 @@ export async function searchClients(searchTerm: string, includeDeleted = false):
   try {
     const clients = await getAllClients(includeDeleted);
     const lowercaseSearch = searchTerm.toLowerCase();
-    
-    return clients.filter(client => 
+
+    return clients.filter(client =>
       client.name.toLowerCase().includes(lowercaseSearch) ||
       (client.email && client.email.toLowerCase().includes(lowercaseSearch))
     );
@@ -402,25 +399,25 @@ export async function searchClients(searchTerm: string, includeDeleted = false):
 // Helper to get period boundaries
 function getPeriodBoundaries() {
   const now = new Date();
-  
+
   // Week start (Sunday)
   const weekStart = new Date(now);
   weekStart.setDate(now.getDate() - now.getDay());
   weekStart.setHours(0, 0, 0, 0);
-  
+
   // Month start
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   monthStart.setHours(0, 0, 0, 0);
-  
+
   // Quarter start
   const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
   const quarterStart = new Date(now.getFullYear(), quarterMonth, 1);
   quarterStart.setHours(0, 0, 0, 0);
-  
+
   // Year start
   const yearStart = new Date(now.getFullYear(), 0, 1);
   yearStart.setHours(0, 0, 0, 0);
-  
+
   return {
     weekStart: Timestamp.fromDate(weekStart),
     monthStart: Timestamp.fromDate(monthStart),
@@ -433,7 +430,7 @@ function getPeriodBoundaries() {
 function checkAndResetCounts(existingCounts: SessionCounts | undefined): SessionCounts {
   const boundaries = getPeriodBoundaries();
   const now = Timestamp.now();
-  
+
   // Default counts
   const defaultCounts: SessionCounts = {
     thisWeek: 0,
@@ -447,40 +444,40 @@ function checkAndResetCounts(existingCounts: SessionCounts | undefined): Session
     quarterStart: boundaries.quarterStart,
     yearStart: boundaries.yearStart,
   };
-  
+
   if (!existingCounts) {
     return defaultCounts;
   }
-  
+
   // Check if we need to reset any periods
   const counts = { ...existingCounts };
-  
+
   // Reset week if new week started
   if (!existingCounts.weekStart || existingCounts.weekStart.toMillis() < boundaries.weekStart.toMillis()) {
     counts.thisWeek = 0;
     counts.weekStart = boundaries.weekStart;
   }
-  
+
   // Reset month if new month started
   if (!existingCounts.monthStart || existingCounts.monthStart.toMillis() < boundaries.monthStart.toMillis()) {
     counts.thisMonth = 0;
     counts.monthStart = boundaries.monthStart;
   }
-  
+
   // Reset quarter if new quarter started
   if (!existingCounts.quarterStart || existingCounts.quarterStart.toMillis() < boundaries.quarterStart.toMillis()) {
     counts.thisQuarter = 0;
     counts.quarterStart = boundaries.quarterStart;
   }
-  
+
   // Reset year if new year started
   if (!existingCounts.yearStart || existingCounts.yearStart.toMillis() < boundaries.yearStart.toMillis()) {
     counts.thisYear = 0;
     counts.yearStart = boundaries.yearStart;
   }
-  
+
   counts.lastUpdated = now;
-  
+
   return counts;
 }
 
@@ -492,10 +489,10 @@ export async function incrementSessionCount(clientId: string, count: number = 1)
   try {
     const client = await getClient(clientId);
     if (!client) throw new Error('Client not found');
-    
+
     // Check and reset periods if needed
     const counts = checkAndResetCounts(client.sessionCounts);
-    
+
     // Increment all counts
     counts.thisWeek += count;
     counts.thisMonth += count;
@@ -503,10 +500,10 @@ export async function incrementSessionCount(clientId: string, count: number = 1)
     counts.thisYear += count;
     counts.total += count;
     counts.lastUpdated = Timestamp.now();
-    
+
     // Update client
     await updateClient(clientId, { sessionCounts: counts });
-    
+
     return counts;
   } catch (error) {
     console.error('Error incrementing session count:', error);
@@ -522,10 +519,10 @@ export async function decrementSessionCount(clientId: string, count: number = 1)
   try {
     const client = await getClient(clientId);
     if (!client) throw new Error('Client not found');
-    
+
     // Check and reset periods if needed
     const counts = checkAndResetCounts(client.sessionCounts);
-    
+
     // Decrement counts (don't go below 0)
     counts.thisWeek = Math.max(0, counts.thisWeek - count);
     counts.thisMonth = Math.max(0, counts.thisMonth - count);
@@ -533,10 +530,10 @@ export async function decrementSessionCount(clientId: string, count: number = 1)
     counts.thisYear = Math.max(0, counts.thisYear - count);
     counts.total = Math.max(0, counts.total - count);
     counts.lastUpdated = Timestamp.now();
-    
+
     // Update client
     await updateClient(clientId, { sessionCounts: counts });
-    
+
     return counts;
   } catch (error) {
     console.error('Error decrementing session count:', error);
@@ -551,18 +548,18 @@ export async function getSessionCounts(clientId: string): Promise<SessionCounts>
   try {
     const client = await getClient(clientId);
     if (!client) throw new Error('Client not found');
-    
+
     // Check and reset periods if needed
     const counts = checkAndResetCounts(client.sessionCounts);
-    
+
     // If counts were reset, update the client
     if (client.sessionCounts?.weekStart?.toMillis() !== counts.weekStart?.toMillis() ||
-        client.sessionCounts?.monthStart?.toMillis() !== counts.monthStart?.toMillis() ||
-        client.sessionCounts?.quarterStart?.toMillis() !== counts.quarterStart?.toMillis() ||
-        client.sessionCounts?.yearStart?.toMillis() !== counts.yearStart?.toMillis()) {
+      client.sessionCounts?.monthStart?.toMillis() !== counts.monthStart?.toMillis() ||
+      client.sessionCounts?.quarterStart?.toMillis() !== counts.quarterStart?.toMillis() ||
+      client.sessionCounts?.yearStart?.toMillis() !== counts.yearStart?.toMillis()) {
       await updateClient(clientId, { sessionCounts: counts });
     }
-    
+
     return counts;
   } catch (error) {
     console.error('Error getting session counts:', error);

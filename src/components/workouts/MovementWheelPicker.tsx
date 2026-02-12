@@ -9,9 +9,10 @@ interface MovementWheelPickerProps {
     value: string;
     onChange: (value: string) => void;
     movements: Movement[];
+    tabIndex?: number;
 }
 
-export function MovementWheelPicker({ value, onChange, movements }: MovementWheelPickerProps) {
+export function MovementWheelPicker({ value, onChange, movements, tabIndex }: MovementWheelPickerProps) {
     const [open, setOpen] = useState(false);
     // Find the selected movement to get the initial name
     const selectedMovement = movements.find(m => m.id === value);
@@ -62,7 +63,8 @@ export function MovementWheelPicker({ value, onChange, movements }: MovementWhee
                         }}
                         onClick={() => setOpen(true)}
                         placeholder="Select Movement"
-                        className="h-6 w-[100px] text-sm bg-white px-2 py-0 border border-gray-300 shadow-sm truncate"
+                        tabIndex={tabIndex}
+                        className="h-6 w-[140px] text-base bg-white px-2 py-0 border border-gray-300 shadow-sm truncate"
                     />
                 </div>
             </PopoverAnchor>

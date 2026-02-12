@@ -35,18 +35,19 @@ const movementSchema = z.object({
     url: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   })).optional(),
   configuration: z.object({
-    use_reps: z.boolean(),
-    use_tempo: z.boolean(),
-    use_time: z.boolean(),
-    use_weight: z.boolean(),
-    weight_measure: z.enum(['lbs', 'kg']),
-    use_distance: z.boolean(),
-    distance_measure: z.enum(['mi', 'km', 'm', 'yd', 'ft']),
-    use_pace: z.boolean(),
-    pace_measure: z.enum(['mi', 'km']),
+    useReps: z.boolean(),
+    useTempo: z.boolean(),
+    useTime: z.boolean(),
+    timeMeasure: z.enum(['s', 'm']),
+    useWeight: z.boolean(),
+    weightMeasure: z.enum(['lbs', 'kg', 'bw']),
+    useDistance: z.boolean(),
+    distanceMeasure: z.enum(['mi', 'km', 'm', 'yd', 'ft']),
+    usePace: z.boolean(),
+    paceMeasure: z.enum(['mi', 'km']),
     unilateral: z.boolean(),
-    use_percentage: z.boolean(),
-    use_rpe: z.boolean(),
+    usePercentage: z.boolean(),
+    useRPE: z.boolean(),
   }),
 });
 
@@ -68,18 +69,19 @@ export function EditMovementDialog({ movement, open, onOpenChange }: EditMovemen
       instructions: '',
       links: [{ url: '' }],
       configuration: {
-        use_reps: true,
-        use_tempo: false,
-        use_time: false,
-        use_weight: true,
-        weight_measure: 'lbs' as const,
-        use_distance: false,
-        distance_measure: 'mi' as const,
-        use_pace: false,
-        pace_measure: 'mi' as const,
+        useReps: true,
+        useTempo: false,
+        useTime: false,
+        timeMeasure: 's' as const,
+        useWeight: true,
+        weightMeasure: 'lbs' as const,
+        useDistance: false,
+        distanceMeasure: 'mi' as const,
+        usePace: false,
+        paceMeasure: 'mi' as const,
         unilateral: false,
-        use_percentage: false,
-        use_rpe: false,
+        usePercentage: false,
+        useRPE: false,
       },
     },
   });
@@ -90,22 +92,23 @@ export function EditMovementDialog({ movement, open, onOpenChange }: EditMovemen
       form.reset({
         name: movement.name || '',
         instructions: movement.instructions || '',
-        links: movement.links && movement.links.length > 0 
+        links: movement.links && movement.links.length > 0
           ? movement.links.map((url: string) => ({ url }))
           : [{ url: '' }],
         configuration: {
-          use_reps: movement.configuration?.use_reps ?? true,
-          use_tempo: movement.configuration?.use_tempo ?? false,
-          use_time: movement.configuration?.use_time ?? false,
-          use_weight: movement.configuration?.use_weight ?? true,
-          weight_measure: movement.configuration?.weight_measure || 'lbs',
-          use_distance: movement.configuration?.use_distance ?? false,
-          distance_measure: movement.configuration?.distance_measure || 'mi',
-          use_pace: movement.configuration?.use_pace ?? false,
-          pace_measure: movement.configuration?.pace_measure || 'mi',
+          useReps: movement.configuration?.useReps ?? true,
+          useTempo: movement.configuration?.useTempo ?? false,
+          useTime: movement.configuration?.useTime ?? false,
+          timeMeasure: movement.configuration?.timeMeasure || 's',
+          useWeight: movement.configuration?.useWeight ?? true,
+          weightMeasure: movement.configuration?.weightMeasure || 'lbs',
+          useDistance: movement.configuration?.useDistance ?? false,
+          distanceMeasure: movement.configuration?.distanceMeasure || 'mi',
+          usePace: movement.configuration?.usePace ?? false,
+          paceMeasure: movement.configuration?.paceMeasure || 'mi',
           unilateral: movement.configuration?.unilateral ?? false,
-          use_percentage: movement.configuration?.use_percentage ?? false,
-          use_rpe: movement.configuration?.use_rpe ?? false,
+          usePercentage: movement.configuration?.usePercentage ?? false,
+          useRPE: movement.configuration?.useRPE ?? false,
         },
       });
     }
@@ -118,18 +121,19 @@ export function EditMovementDialog({ movement, open, onOpenChange }: EditMovemen
       const movementData: any = {
         name: data.name,
         configuration: {
-          use_reps: data.configuration.use_reps,
-          use_tempo: data.configuration.use_tempo,
-          use_time: data.configuration.use_time,
-          use_weight: data.configuration.use_weight,
-          weight_measure: data.configuration.weight_measure,
-          use_distance: data.configuration.use_distance,
-          distance_measure: data.configuration.distance_measure,
-          use_pace: data.configuration.use_pace,
-          pace_measure: data.configuration.pace_measure,
+          useReps: data.configuration.useReps,
+          useTempo: data.configuration.useTempo,
+          useTime: data.configuration.useTime,
+          timeMeasure: data.configuration.timeMeasure,
+          useWeight: data.configuration.useWeight,
+          weightMeasure: data.configuration.weightMeasure,
+          useDistance: data.configuration.useDistance,
+          distanceMeasure: data.configuration.distanceMeasure,
+          usePace: data.configuration.usePace,
+          paceMeasure: data.configuration.paceMeasure,
           unilateral: data.configuration.unilateral,
-          use_percentage: data.configuration.use_percentage,
-          use_rpe: data.configuration.use_rpe,
+          usePercentage: data.configuration.usePercentage,
+          useRPE: data.configuration.useRPE,
         },
         links: (data.links || []).filter(link => link.url?.trim() !== '').map(link => link.url!),
       };
@@ -209,69 +213,72 @@ export function EditMovementDialog({ movement, open, onOpenChange }: EditMovemen
               <FormDescription>
                 Choose the default variables used for this movement.
               </FormDescription>
-              
+
               <div className="flex flex-wrap py-2 gap-1">
                 <MovementConfigurationToggle
                   name="Reps"
-                  value={form.watch('configuration.use_reps')}
-                  onChange={(value) => form.setValue('configuration.use_reps', value)}
+                  value={form.watch('configuration.useReps')}
+                  onChange={(value) => form.setValue('configuration.useReps', value)}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Weight"
-                  value={form.watch('configuration.use_weight')}
-                  onChange={(value) => form.setValue('configuration.use_weight', value)}
-                  measureOptions={['lbs', 'kg']}
-                  measureValue={form.watch('configuration.weight_measure')}
-                  onMeasureChange={(value) => form.setValue('configuration.weight_measure', value as 'lbs' | 'kg')}
+                  value={form.watch('configuration.useWeight')}
+                  onChange={(value) => form.setValue('configuration.useWeight', value)}
+                  measureOptions={['lbs', 'kg', 'bw']}
+                  measureValue={form.watch('configuration.weightMeasure')}
+                  onMeasureChange={(value) => form.setValue('configuration.weightMeasure', value as 'lbs' | 'kg' | 'bw')}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Distance"
-                  value={form.watch('configuration.use_distance')}
-                  onChange={(value) => form.setValue('configuration.use_distance', value)}
+                  value={form.watch('configuration.useDistance')}
+                  onChange={(value) => form.setValue('configuration.useDistance', value)}
                   measureOptions={['mi', 'km', 'm', 'yd', 'ft']}
-                  measureValue={form.watch('configuration.distance_measure')}
-                  onMeasureChange={(value) => form.setValue('configuration.distance_measure', value as 'mi' | 'km' | 'm' | 'yd' | 'ft')}
+                  measureValue={form.watch('configuration.distanceMeasure')}
+                  onMeasureChange={(value) => form.setValue('configuration.distanceMeasure', value as 'mi' | 'km' | 'm' | 'yd' | 'ft')}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Pace"
-                  value={form.watch('configuration.use_pace')}
-                  onChange={(value) => form.setValue('configuration.use_pace', value)}
+                  value={form.watch('configuration.usePace')}
+                  onChange={(value) => form.setValue('configuration.usePace', value)}
                   measureOptions={['mi', 'km']}
-                  measureValue={form.watch('configuration.pace_measure')}
-                  onMeasureChange={(value) => form.setValue('configuration.pace_measure', value as 'mi' | 'km')}
+                  measureValue={form.watch('configuration.paceMeasure')}
+                  onMeasureChange={(value) => form.setValue('configuration.paceMeasure', value as 'mi' | 'km')}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Tempo"
-                  value={form.watch('configuration.use_tempo')}
-                  onChange={(value) => form.setValue('configuration.use_tempo', value)}
+                  value={form.watch('configuration.useTempo')}
+                  onChange={(value) => form.setValue('configuration.useTempo', value)}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Time"
-                  value={form.watch('configuration.use_time')}
-                  onChange={(value) => form.setValue('configuration.use_time', value)}
+                  value={form.watch('configuration.useTime')}
+                  onChange={(value) => form.setValue('configuration.useTime', value)}
+                  measureOptions={['s', 'm']}
+                  measureValue={form.watch('configuration.timeMeasure')}
+                  onMeasureChange={(value) => form.setValue('configuration.timeMeasure', value as 's' | 'm')}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Unilateral"
                   value={form.watch('configuration.unilateral')}
                   onChange={(value) => form.setValue('configuration.unilateral', value)}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="Percentage"
-                  value={form.watch('configuration.use_percentage')}
-                  onChange={(value) => form.setValue('configuration.use_percentage', value)}
+                  value={form.watch('configuration.usePercentage')}
+                  onChange={(value) => form.setValue('configuration.usePercentage', value)}
                 />
-                
+
                 <MovementConfigurationToggle
                   name="RPE"
-                  value={form.watch('configuration.use_rpe')}
-                  onChange={(value) => form.setValue('configuration.use_rpe', value)}
+                  value={form.watch('configuration.useRPE')}
+                  onChange={(value) => form.setValue('configuration.useRPE', value)}
                 />
               </div>
             </div>

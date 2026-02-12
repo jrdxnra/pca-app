@@ -20,9 +20,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { 
-  Plus, 
-  Edit2, 
+import {
+  Plus,
+  Edit2,
   Save,
   X,
   MoreVertical,
@@ -42,6 +42,7 @@ import {
 import { Program, ProgramWeek, ProgramWorkout, ProgramRound, ProgramMovementUsage, Movement } from '@/lib/types';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
+import { DayComparisonRow } from './DayComparisonRow';
 
 interface EnhancedProgramBuilderProps {
   program: Program;
@@ -51,12 +52,12 @@ interface EnhancedProgramBuilderProps {
   isSaving?: boolean;
 }
 
-export function EnhancedProgramBuilder({ 
-  program, 
-  onProgramUpdate, 
-  onSave, 
-  onCancel, 
-  isSaving = false 
+export function EnhancedProgramBuilder({
+  program,
+  onProgramUpdate,
+  onSave,
+  onCancel,
+  isSaving = false
 }: EnhancedProgramBuilderProps) {
   const { movements, fetchMovements } = useMovementStore();
   const { categories, fetchCategories } = useMovementCategoryStore();
@@ -66,7 +67,7 @@ export function EnhancedProgramBuilder({
   const [showWeekends, setShowWeekends] = useState(false);
   const [showDayView, setShowDayView] = useState(false);
   const [editingWeek, setEditingWeek] = useState<string | null>(null);
-  const [editingWorkout, setEditingWorkout] = useState<{weekId: string, workoutId: string} | null>(null);
+  const [editingWorkout, setEditingWorkout] = useState<{ weekId: string, workoutId: string } | null>(null);
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -106,7 +107,7 @@ export function EnhancedProgramBuilder({
       createdAt: new Date() as any,
       updatedAt: new Date() as any
     };
-    
+
     onProgramUpdate({
       ...program,
       weeks: [...(program.weeks || []), newWeek]
@@ -167,23 +168,23 @@ export function EnhancedProgramBuilder({
 
   const handleMoveWeek = (week: ProgramWeek, direction: 'up' | 'down') => {
     if (!program.weeks) return;
-    
+
     const updatedProgram = { ...program };
     // `updatedProgram.weeks` isn't narrowed by the guard above because it's a copy,
     // so use the already-narrowed `program.weeks`.
     const weeks = [...program.weeks];
     const weekIndex = weeks.findIndex(w => w.id === week.id);
     if (weekIndex === -1) return;
-    
+
     const targetIndex = direction === 'up' ? weekIndex - 1 : weekIndex + 1;
-    
+
     if (targetIndex < 0 || targetIndex >= weeks.length) return;
-    
+
     [weeks[weekIndex], weeks[targetIndex]] = [weeks[targetIndex], weeks[weekIndex]];
     weeks.forEach((w, index) => {
       w.ordinal = index + 1;
     });
-    
+
     onProgramUpdate({
       ...updatedProgram,
       weeks
@@ -214,7 +215,7 @@ export function EnhancedProgramBuilder({
       createdAt: new Date() as any,
       updatedAt: new Date() as any
     };
-    
+
     onProgramUpdate({
       ...program,
       weeks: [...(program.weeks || []), newWeek]
@@ -235,12 +236,12 @@ export function EnhancedProgramBuilder({
     const workouts = week.workouts || [];
     const days = showWeekends ? 7 : 5;
     const result = [];
-    
+
     for (let i = 0; i < days; i++) {
       const workout = workouts.find(w => w.ordinal === i);
       result.push(workout || null);
     }
-    
+
     return result;
   };
 
@@ -260,7 +261,7 @@ export function EnhancedProgramBuilder({
             <X className="h-4 w-4 mr-2" />
             Back
           </Button>
-          
+
           <div className="flex flex-col flex-1 max-w-md">
             <label className="text-xs font-light mb-1">Program Title</label>
             <Input
@@ -271,7 +272,7 @@ export function EnhancedProgramBuilder({
             />
           </div>
         </div>
-        
+
         <div className="flex gap-2">
           <Button variant="outline" onClick={onCancel}>
             Cancel
@@ -345,7 +346,7 @@ export function EnhancedProgramBuilder({
                 />
               </div>
             </div>
-            
+
             <div className="w-48">
               <label className="text-xs font-light mb-1 block">Filter by Category</label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
@@ -357,8 +358,8 @@ export function EnhancedProgramBuilder({
                   {categories.map((category) => (
                     <SelectItem key={category.id} value={category.id}>
                       <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
+                        <div
+                          className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: category.color }}
                         />
                         {category.name}
@@ -380,8 +381,8 @@ export function EnhancedProgramBuilder({
                   title={`Add ${movement.name} to workout`}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <div 
-                      className="w-2 h-2 rounded-full" 
+                    <div
+                      className="w-2 h-2 rounded-full"
                       style={{ backgroundColor: getCategoryColor(movement.categoryId) }}
                     />
                     <span className="text-sm font-medium truncate">{movement.name}</span>
@@ -396,181 +397,207 @@ export function EnhancedProgramBuilder({
         </CardContent>
       </Card>
 
-      {/* Weeks */}
+      {/* Weeks or Days View */}
       <div className="space-y-4">
-        {program.weeks?.map((week, weekIndex) => {
-          const workouts = getWorkoutsForWeek(week);
-          const isExpanded = expandedWeeks.has(week.id);
-          const isFirst = weekIndex === 0;
-          const isLast = weekIndex === (program.weeks?.length || 0) - 1;
-          
-          return (
-            <Card key={week.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleWeekExpansion(week.id)}
-                      className="p-1"
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <div className="flex items-center gap-2">
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-lg font-semibold">Week {week.ordinal}</span>
-                      <Badge variant="secondary">{workouts.filter(w => w).length} workouts</Badge>
-                    </div>
-                  </div>
+        {showDayView ? (
+          // Day View - Coachella Style: Each day shows all weeks horizontally
+          days.map((dayName, dayIndex) => (
+            <DayComparisonRow
+              key={dayName}
+              dayName={dayName}
+              dayIndex={dayIndex}
+              weeks={program.weeks || []}
+              programId={program.id}
+              onAddWorkout={handleAddWorkout}
+              onEditWorkout={(weekId, workoutId) => setEditingWorkout({ weekId, workoutId })}
+              onDeleteWorkout={handleDeleteWorkout}
+              onUpdateWorkout={handleUpdateWorkout}
+              getMovementName={getMovementName}
+              getCategoryColor={getCategoryColor}
+            />
+          ))
+        ) : (
+          // Week View - Traditional: Each week shows all days vertically
+          program.weeks?.map((week, weekIndex) => {
+            const workouts = getWorkoutsForWeek(week);
+            const isExpanded = expandedWeeks.has(week.id);
+            const isFirst = weekIndex === 0;
+            const isLast = weekIndex === (program.weeks?.length || 0) - 1;
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="h-4 w-4" />
+            return (
+              <Card key={week.id} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleWeekExpansion(week.id)}
+                        className="p-1"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem onClick={() => handleDuplicateWeek(week)}>
-                        <Copy className="h-4 w-4 mr-2" />
-                        Duplicate Week
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      {!isFirst && (
-                        <DropdownMenuItem onClick={() => handleMoveWeek(week, 'up')}>
-                          <ArrowUp className="h-4 w-4 mr-2" />
-                          Move Up
-                        </DropdownMenuItem>
-                      )}
-                      {!isLast && (
-                        <DropdownMenuItem onClick={() => handleMoveWeek(week, 'down')}>
-                          <ArrowDown className="h-4 w-4 mr-2" />
-                          Move Down
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem 
-                        onClick={() => {
-                          if (confirm(`Delete Week ${week.ordinal}?`)) {
-                            handleDeleteWeek(week.id);
-                          }
-                        }}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2 icon-delete" />
-                        Delete Week
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-              
-              {isExpanded && (
-                <CardContent>
-                  {/* Day Headers */}
-                  <div className={`grid gap-0 border-b bg-muted/50 mb-4`} style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}>
-                    {days.map((day) => (
-                      <div key={day} className="p-3 text-center text-sm font-medium text-muted-foreground border-r">
-                        {day}
+                      <div className="flex items-center gap-2">
+                        <GripVertical className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-lg font-semibold">Week {week.ordinal}</span>
+                        <Badge variant="secondary">{workouts.filter(w => w).length} workouts</Badge>
                       </div>
-                    ))}
-                  </div>
+                    </div>
 
-                  {/* Workout Grid */}
-                  <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}>
-                    {workouts.map((workout, dayIndex) => (
-                      <div 
-                        key={dayIndex} 
-                        className="min-h-[120px] border rounded-lg p-3 hover:bg-muted/10 transition-colors"
-                      >
-                        {workout ? (
-                          <div className="flex flex-col h-full">
-                            <div className="flex-1 mb-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Input
-                                  value={workout.title || ''}
-                                  onChange={(e) => handleUpdateWorkout(week.id, workout.id, { title: e.target.value })}
-                                  placeholder="Workout title"
-                                  className="h-8 text-sm font-medium"
-                                />
-                              </div>
-                              
-                              {workout.rounds?.map((round, roundIndex) => (
-                                <div key={round.id} className="mb-2">
-                                  <div className="text-xs font-medium text-muted-foreground mb-1">
-                                    Round {round.ordinal} • {round.sets} sets
-                                  </div>
-                                  <div className="space-y-1">
-                                    {round.movementUsages?.slice(0, 2).map((usage, usageIndex) => (
-                                      <div key={usage.id} className="flex items-center gap-1">
-                                        <div 
-                                          className="w-2 h-2 rounded-full" 
-                                          style={{ backgroundColor: getCategoryColor(usage.movement?.categoryId || '') }}
-                                        />
-                                        <span className="text-xs truncate">
-                                          {getMovementName(usage.movementId)}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => handleDuplicateWeek(week)}>
+                          <Copy className="h-4 w-4 mr-2" />
+                          Duplicate Week
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {!isFirst && (
+                          <DropdownMenuItem onClick={() => handleMoveWeek(week, 'up')}>
+                            <ArrowUp className="h-4 w-4 mr-2" />
+                            Move Up
+                          </DropdownMenuItem>
+                        )}
+                        {!isLast && (
+                          <DropdownMenuItem onClick={() => handleMoveWeek(week, 'down')}>
+                            <ArrowDown className="h-4 w-4 mr-2" />
+                            Move Down
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (confirm(`Delete Week ${week.ordinal}?`)) {
+                              handleDeleteWeek(week.id);
+                            }
+                          }}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2 icon-delete" />
+                          Delete Week
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardHeader>
+
+                {isExpanded && (
+                  <CardContent>
+                    {/* Day Headers */}
+                    <div className={`grid gap-0 border-b bg-muted/50 mb-4`} style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}>
+                      {days.map((day) => (
+                        <div key={day} className="p-3 text-center text-sm font-medium text-muted-foreground border-r">
+                          {day}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Workout Grid */}
+                    <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}>
+                      {workouts.map((workout, dayIndex) => (
+                        <div
+                          key={dayIndex}
+                          className={`group min-h-[160px] rounded-xl p-3 transition-all duration-200 border-2 ${workout
+                            ? 'bg-secondary/30 border-transparent shadow-sm hover:shadow-md hover:bg-secondary/50'
+                            : 'border-dashed border-muted-foreground/20 hover:border-muted-foreground/40 hover:bg-muted/5'
+                            }`}
+                        >
+                          {workout ? (
+                            <div className="flex flex-col h-full">
+                              <div className="flex-1 space-y-3">
+                                {/* Workout Header */}
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    value={workout.title || ''}
+                                    onChange={(e) => handleUpdateWorkout(week.id, workout.id, { title: e.target.value })}
+                                    placeholder="Untitled"
+                                    className="h-7 text-sm font-bold bg-transparent border-none focus-visible:ring-1 focus-visible:ring-ring p-0 px-1 shadow-none"
+                                  />
+                                </div>
+
+                                <div className="space-y-3">
+                                  {workout.rounds?.map((round, roundIndex) => (
+                                    <div key={round.id} className="space-y-1.5">
+                                      <div className="flex items-center justify-between px-1">
+                                        <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/70">
+                                          R{round.ordinal} • {round.sets} sets
                                         </span>
                                       </div>
-                                    ))}
-                                    {round.movementUsages && round.movementUsages.length > 2 && (
-                                      <div className="text-xs text-muted-foreground">
-                                        +{round.movementUsages.length - 2} more
+                                      <div className="flex flex-wrap gap-1">
+                                        {round.movementUsages?.map((usage, usageIndex) => (
+                                          <div
+                                            key={usage.id}
+                                            className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-background border border-border/50 shadow-sm max-w-full"
+                                            title={getMovementName(usage.movementId)}
+                                          >
+                                            <div
+                                              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                              style={{ backgroundColor: getCategoryColor(usage.movement?.categoryId || '') }}
+                                            />
+                                            <span className="text-[11px] font-medium truncate leading-tight">
+                                              {getMovementName(usage.movementId)}
+                                            </span>
+                                          </div>
+                                        ))}
                                       </div>
-                                    )}
-                                  </div>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
+                              </div>
+
+                              <div className="flex items-center justify-end gap-1 mt-4 pt-2 border-t border-muted-foreground/10 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setEditingWorkout({ weekId: week.id, workoutId: workout.id })}
+                                  className="h-7 w-7 p-0 hover:bg-background"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteWorkout(week.id, workout.id)}
+                                  className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </div>
-                            
-                            <div className="flex gap-1 mt-auto">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setEditingWorkout({ weekId: week.id, workoutId: workout.id })}
-                                className="text-xs p-1"
-                              >
-                                <Edit2 className="h-3 w-3 icon-edit" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteWorkout(week.id, workout.id)}
-                                className="text-red-600 hover:text-red-700 text-xs p-1"
-                              >
-                                <Trash2 className="h-3 w-3 icon-delete" />
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="h-full flex items-center justify-center">
-                            <Button
-                              size="sm"
-                              variant="ghost"
+                          ) : (
+                            <button
                               onClick={() => handleAddWorkout(week.id, dayIndex)}
-                              className="w-full border-dashed border-2 border-gray-300 hover:border-gray-400 text-xs py-4"
+                              className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground transition-colors"
                             >
-                              <Plus className="h-4 w-4 mr-1.5 icon-add" />
-                              Add Workout
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-          );
-        })}
+                              <div className="p-2 rounded-full bg-muted/50 group-hover:bg-muted group-hover:scale-110 transition-all">
+                                <Plus className="h-4 w-4" />
+                              </div>
+                              <span className="text-xs font-medium">Add Workout</span>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+            );
+          })
+        )}
+
 
         {/* Add Week Button */}
         <div className="flex justify-center">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={handleAddWeek}
             className="border-dashed"
           >

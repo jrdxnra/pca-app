@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ClientWorkoutMovementUsage } from '@/lib/types';
+import { ClientWorkoutMovementUsage, MovementConfiguration } from '@/lib/types';
 import { useMovements, useMovementsByCategory } from '@/hooks/queries/useMovements';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ export function MovementUsageRow({
   // Lazy load movements - use category-specific query when category is selected
   // This is more efficient than fetching all movements and filtering
   const { categories } = useMovementCategoryStore();
-  
+
   // If category is selected, fetch only movements for that category
   // If movementId is set but no category, fetch all movements to find the movement
   const needsAllMovements = !usage.categoryId && !!usage.movementId;
@@ -38,7 +38,7 @@ export function MovementUsageRow({
     true, // includeCategory
     needsAllMovements // Only fetch all if we need to find a movement without category
   );
-  
+
   const { data: categoryMovements = [], isLoading: movementsLoading } = useMovementsByCategory(
     usage.categoryId || '', // Category ID
     true, // includeCategory
@@ -46,15 +46,19 @@ export function MovementUsageRow({
       enabled: !!usage.categoryId, // Only fetch when category is selected
     }
   );
-  
+
   // Use category-specific movements if available, otherwise use all movements
   const movements = usage.categoryId ? categoryMovements : allMovements;
-  
+
   // Filtered movements (already filtered by category query, but keep for compatibility)
   const filteredMovements = movements;
-  
+
   // Clear movement when category changes
   useEffect(() => {
+    // BUG FIX: Don't clear movement if movements list is empty/loading
+    // This prevents clearing valid selections during initial load or category switch
+    if (movements.length === 0) return;
+
     if (usage.categoryId && usage.movementId) {
       const movementExists = movements.find(
         m => m.id === usage.movementId && m.categoryId === usage.categoryId
@@ -64,21 +68,21 @@ export function MovementUsageRow({
       }
     }
   }, [usage.categoryId, usage.movementId, movements, roundIndex, usageIndex, onUpdate]);
-  
+
   // Get selected movement configuration
   const selectedMovement = movements.find(m => m.id === usage.movementId);
   const configuration = selectedMovement?.configuration;
-  
+
   // Get selected category for color
   const selectedCategory = categories.find(c => c.id === usage.categoryId);
   const categoryColor = selectedCategory?.color || '#ffffff';
-  
+
   if (isInline) {
     // Compact inline view for week view - category only
     return (
       <div className="flex items-center gap-1 text-xs">
         <GripVertical className="w-3 h-3 text-gray-400 flex-shrink-0" />
-        
+
         {/* Category Select with colored background */}
         <select
           value={usage.categoryId}
@@ -93,8 +97,8 @@ export function MovementUsageRow({
             Category
           </option>
           {categories.map(cat => (
-            <option 
-              key={cat.id} 
+            <option
+              key={cat.id}
               value={cat.id}
               style={{ backgroundColor: cat.color, color: '#ffffff' }}
             >
@@ -102,7 +106,7 @@ export function MovementUsageRow({
             </option>
           ))}
         </select>
-        
+
         {canDelete && (
           <Button
             type="button"
@@ -117,13 +121,13 @@ export function MovementUsageRow({
       </div>
     );
   }
-  
+
   // Full view for day view - category, movement, and workload fields
   return (
     <div className="flex flex-col gap-2 p-2 border border-gray-200 rounded">
       <div className="flex items-start gap-2">
         <GripVertical className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
-        
+
         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
           {/* Category Select with colored background */}
           <div className="flex flex-col">
@@ -141,8 +145,8 @@ export function MovementUsageRow({
                 Select Category
               </option>
               {categories.map(cat => (
-                <option 
-                  key={cat.id} 
+                <option
+                  key={cat.id}
                   value={cat.id}
                   style={{ backgroundColor: cat.color, color: '#ffffff' }}
                 >
@@ -151,7 +155,7 @@ export function MovementUsageRow({
               ))}
             </select>
           </div>
-          
+
           {/* Movement Select */}
           <div className="flex flex-col">
             <label className="text-xs font-medium text-gray-700 mb-1">Movement</label>
@@ -172,7 +176,7 @@ export function MovementUsageRow({
             </select>
           </div>
         </div>
-        
+
         {canDelete && (
           <Button
             type="button"
@@ -185,11 +189,11 @@ export function MovementUsageRow({
           </Button>
         )}
       </div>
-      
+
       {/* Workload fields - show based on movement configuration */}
       {selectedMovement && configuration && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 ml-6">
-          {configuration.use_reps && (
+          {configuration.useReps && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">Reps</label>
               <Input
@@ -201,8 +205,8 @@ export function MovementUsageRow({
               />
             </div>
           )}
-          
-          {configuration.use_weight && (
+
+          {configuration.useWeight && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">Weight</label>
               <div className="flex gap-1">
@@ -224,8 +228,8 @@ export function MovementUsageRow({
               </div>
             </div>
           )}
-          
-          {configuration.use_tempo && (
+
+          {configuration.useTempo && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">Tempo</label>
               <Input
@@ -237,8 +241,8 @@ export function MovementUsageRow({
               />
             </div>
           )}
-          
-          {configuration.use_time && (
+
+          {configuration.useTime && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">Time</label>
               <Input
@@ -250,8 +254,8 @@ export function MovementUsageRow({
               />
             </div>
           )}
-          
-          {configuration.use_rpe && (
+
+          {configuration.useRPE && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">RPE</label>
               <select
@@ -267,8 +271,8 @@ export function MovementUsageRow({
               </select>
             </div>
           )}
-          
-          {configuration.use_percentage && (
+
+          {configuration.usePercentage && (
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-700 mb-1">Percentage</label>
               <Input
@@ -284,7 +288,7 @@ export function MovementUsageRow({
           )}
         </div>
       )}
-      
+
       {/* Note field */}
       <div className="ml-6">
         <Input

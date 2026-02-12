@@ -14,11 +14,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  CheckCircle2, 
-  XCircle, 
-  Users, 
-  Calendar, 
+import {
+  CheckCircle2,
+  XCircle,
+  Users,
+  Calendar,
   Mail,
   AlertTriangle,
   TrendingUp,
@@ -36,7 +36,7 @@ export function ClientMatchingDiagnostic() {
   const [selectedTab, setSelectedTab] = useState<'overview' | 'matched' | 'unmatched' | 'excluded'>('overview');
   const [events, setEvents] = useState<GoogleCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Fetch events for a focused 14-day window (last 7 days + next 7 days)
   // This ensures we get recent synced events with extendedProperties
   useEffect(() => {
@@ -45,8 +45,8 @@ export function ClientMatchingDiagnostic() {
         setLoading(true);
         const now = new Date();
         const start = subDays(now, 7);
-        const end = addDays(now, 7);
-        
+        const end = addDays(now, 60); // Check 2 months ahead for future sessions
+
         const fetchedEvents = await fetchCalendarEvents(start, end, 'primary');
         console.log('[ClientMatchingDiagnostic] Fetched events for matching:', fetchedEvents.length);
         setEvents(fetchedEvents);
@@ -57,10 +57,10 @@ export function ClientMatchingDiagnostic() {
         setLoading(false);
       }
     };
-    
+
     fetchRecentEvents();
   }, []);
-  
+
   // Debug: Log events received
   console.log('[ClientMatchingDiagnostic] Received events count:', events.length);
   if (events.length > 0) {
@@ -73,17 +73,17 @@ export function ClientMatchingDiagnostic() {
     console.log('[ClientMatchingDiagnostic] originalEventId value:', events[0].originalEventId);
     console.log('[ClientMatchingDiagnostic] First event keys:', Object.keys(events[0]));
   }
-  
+
   // Calculate matching statistics (use multi-client matching)
   const stats = getStats(events);
   console.log('[ClientMatchingDiagnostic] Stats:', stats);
   const multiMatches = matchEventsToAll(events);
   const unmatched = getUnmatched(events);
   const excluded = getExcluded(events);
-  
+
   // Get matched events
   const matchedEvents = events.filter(e => multiMatches.has(e.id));
-  
+
   const formatEventTime = (event: GoogleCalendarEvent | Record<string, unknown>) => {
     try {
       if (!('start' in event)) return 'Invalid date';
@@ -94,7 +94,7 @@ export function ClientMatchingDiagnostic() {
       return 'Invalid date';
     }
   };
-  
+
   return (
     <Card>
       <CardHeader>
@@ -118,8 +118,8 @@ export function ClientMatchingDiagnostic() {
                     setLoading(true);
                     const now = new Date();
                     const start = subDays(now, 7);
-                    const end = addDays(now, 7);
-                    
+                    const end = addDays(now, 60); // Check 2 months ahead
+
                     const fetchedEvents = await fetchCalendarEvents(start, end, 'primary');
                     setEvents(fetchedEvents);
                   } catch (error) {
@@ -213,11 +213,11 @@ export function ClientMatchingDiagnostic() {
               <AlertTitle>How It Works</AlertTitle>
               <AlertDescription className="space-y-2">
                 <p>
-                  Your work calendar events are synced to your personal calendar (jrdxn.ra@gmail.com) 
+                  Your work calendar events are synced to your personal calendar (jrdxn.ra@gmail.com)
                   with hidden metadata containing guest email addresses.
                 </p>
                 <p>
-                  This diagnostic tool matches those guest emails against your client database 
+                  This diagnostic tool matches those guest emails against your client database
                   to automatically identify which client each event is for.
                 </p>
               </AlertDescription>
@@ -236,8 +236,8 @@ export function ClientMatchingDiagnostic() {
                           <p className="text-sm text-muted-foreground">{formatEventTime(event)}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <SessionTypeBadge 
-                            sessionType={multiMatch.sessionType} 
+                          <SessionTypeBadge
+                            sessionType={multiMatch.sessionType}
                             clientCount={multiMatch.matches.length}
                           />
                           {multiMatch.matches.map(m => (
@@ -268,7 +268,7 @@ export function ClientMatchingDiagnostic() {
                   const allAttendeeNames = extractEmails(event);
                   const matchedNames = new Set(multiMatch.matches.map(m => m.matchedName));
                   const otherAttendees = allAttendeeNames.filter(name => !matchedNames.has(name));
-                  
+
                   return (
                     <div key={event.id} className="p-4 border rounded-lg space-y-3">
                       <div className="flex items-start justify-between">
@@ -278,10 +278,10 @@ export function ClientMatchingDiagnostic() {
                         </div>
                         <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
                       </div>
-                      
+
                       {/* Session type badge */}
                       <div className="flex items-center gap-2">
-                        <SessionTypeBadge 
+                        <SessionTypeBadge
                           sessionType={multiMatch.sessionType}
                           clientCount={multiMatch.matches.length}
                         />
@@ -289,7 +289,7 @@ export function ClientMatchingDiagnostic() {
                           {multiMatch.totalAttendees} total attendee{multiMatch.totalAttendees > 1 ? 's' : ''}
                         </span>
                       </div>
-                      
+
                       {/* Matched clients */}
                       <div className="space-y-2">
                         <p className="text-xs font-medium text-muted-foreground">Matched Clients:</p>
@@ -306,7 +306,7 @@ export function ClientMatchingDiagnostic() {
                           </div>
                         ))}
                       </div>
-                      
+
                       {/* Other attendees not matched */}
                       {otherAttendees.length > 0 && (
                         <p className="text-xs text-muted-foreground">
@@ -339,52 +339,52 @@ export function ClientMatchingDiagnostic() {
                   </AlertDescription>
                 </Alert>
                 <div className="space-y-2">
-                {unmatched.map(({ event, attendeeNames }) => {
+                  {unmatched.map(({ event, attendeeNames }) => {
                     const eventId = 'id' in event ? String(event.id) : `unknown-${Math.random()}`;
                     const eventSummary = 'summary' in event ? String(event.summary) : 'Untitled Event';
-                    
+
                     return (
-                    <div key={eventId} className="p-4 border border-red-200 rounded-lg space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <p className="font-medium">{eventSummary}</p>
-                          <p className="text-sm text-muted-foreground">{formatEventTime(event)}</p>
-                        </div>
-                        <XCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground">Attendees:</p>
-                        {attendeeNames.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {attendeeNames.map((name, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs">
-                                {name}
-                              </Badge>
-                            ))}
+                      <div key={eventId} className="p-4 border border-red-200 rounded-lg space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className="font-medium">{eventSummary}</p>
+                            <p className="text-sm text-muted-foreground">{formatEventTime(event)}</p>
                           </div>
-                        ) : (
-                          <p className="text-xs text-muted-foreground italic">
-                            No clients listed (group class)
-                          </p>
+                          <XCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">Attendees:</p>
+                          {attendeeNames.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {attendeeNames.map((name, idx) => (
+                                <Badge key={idx} variant="outline" className="text-xs">
+                                  {name}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground italic">
+                              No clients listed (group class)
+                            </p>
+                          )}
+                        </div>
+                        {attendeeNames.length > 0 && (
+                          <div className="pt-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                // Copy first attendee name to clipboard
+                                if (attendeeNames.length > 0) {
+                                  navigator.clipboard.writeText(attendeeNames[0]);
+                                }
+                              }}
+                            >
+                              Copy Name to Add Client
+                            </Button>
+                          </div>
                         )}
                       </div>
-                      {attendeeNames.length > 0 && (
-                        <div className="pt-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => {
-                              // Copy first attendee name to clipboard
-                              if (attendeeNames.length > 0) {
-                                navigator.clipboard.writeText(attendeeNames[0]);
-                              }
-                            }}
-                          >
-                            Copy Name to Add Client
-                          </Button>
-                        </div>
-                      )}
-                    </div>
                     );
                   })}
                 </div>

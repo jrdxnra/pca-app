@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthenticated } from '@/lib/google-calendar/token-storage';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/calendar/auth/status
  * Check if user is authenticated with Google Calendar
  */
 export async function GET(request: NextRequest) {
-  return NextResponse.json({ error: 'API temporarily disabled' }, { status: 503 });
+  try {
+    const authenticated = await isAuthenticated();
+    return NextResponse.json({ isAuthenticated: authenticated });
+  } catch (error) {
+    console.error('Error checking auth status:', error);
+    return NextResponse.json(
+      { error: 'Failed to check authentication status' },
+      { status: 500 }
+    );
+  }
 }
 
 

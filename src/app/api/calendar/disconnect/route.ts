@@ -6,6 +6,15 @@ import { clearStoredTokens } from '@/lib/google-calendar/token-storage';
  * Disconnect Google Calendar by clearing stored tokens
  */
 export async function POST(request: NextRequest) {
-  return NextResponse.json({ error: 'API temporarily disabled' }, { status: 503 });
+  try {
+    await clearStoredTokens();
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error disconnecting Google Calendar:', error);
+    return NextResponse.json(
+      { error: 'Failed to disconnect Google Calendar' },
+      { status: 500 }
+    );
+  }
 }
 

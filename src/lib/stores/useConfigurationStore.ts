@@ -1,44 +1,50 @@
 import { create } from 'zustand';
-import { 
-  fetchPeriods, 
-  createPeriod, 
-  updatePeriod, 
+import {
+  fetchPeriods,
+  createPeriod,
+  updatePeriod,
   deletePeriod,
-  Period 
+  Period
 } from '@/lib/firebase/services/periods';
-import { 
-  fetchWeekTemplates, 
-  createWeekTemplate, 
-  updateWeekTemplate, 
+import {
+  fetchWeekTemplates,
+  createWeekTemplate,
+  updateWeekTemplate,
   deleteWeekTemplate,
-  WeekTemplate 
+  WeekTemplate
 } from '@/lib/firebase/services/weekTemplates';
-import { 
-  fetchWorkoutCategories, 
-  createWorkoutCategory, 
-  updateWorkoutCategory, 
+import {
+  fetchWorkoutCategories,
+  createWorkoutCategory,
+  updateWorkoutCategory,
   deleteWorkoutCategory,
-  WorkoutCategory 
+  WorkoutCategory
 } from '@/lib/firebase/services/workoutCategories';
-import { 
-  fetchWorkoutTypes, 
-  createWorkoutType, 
-  updateWorkoutType, 
+import {
+  fetchWorkoutTypes,
+  createWorkoutType,
+  updateWorkoutType,
   deleteWorkoutType,
-  WorkoutType 
+  WorkoutType
 } from '@/lib/firebase/services/workoutTypes';
-import { 
-  fetchWorkoutStructureTemplates, 
-  createWorkoutStructureTemplate, 
-  updateWorkoutStructureTemplate, 
+import {
+  fetchWorkoutStructureTemplates,
+  createWorkoutStructureTemplate,
+  updateWorkoutStructureTemplate,
   deleteWorkoutStructureTemplate
 } from '@/lib/firebase/services/workoutStructureTemplates';
-import { 
-  getBusinessHours, 
+import {
+  getBusinessHours,
   updateBusinessHoursInFirebase,
   BusinessHours
 } from '@/lib/firebase/services/businessHours';
-import { WorkoutStructureTemplate } from '@/lib/types';
+import {
+  getAllWorkoutTemplates,
+  createWorkoutTemplate,
+  updateWorkoutTemplate,
+  deleteWorkoutTemplate
+} from '@/lib/firebase/services/workouts';
+import { WorkoutStructureTemplate, WorkoutTemplate } from '@/lib/types';
 
 interface ConfigurationState {
   // Data
@@ -47,45 +53,52 @@ interface ConfigurationState {
   workoutCategories: WorkoutCategory[];
   workoutTypes: WorkoutType[];
   workoutStructureTemplates: WorkoutStructureTemplate[];
+  workoutTemplates: WorkoutTemplate[]; // Full workout templates
   businessHours: BusinessHours | null;
-  
+
   // Loading states
   loading: boolean;
-  
+
   // Period actions
   fetchPeriods: () => Promise<void>;
   addPeriod: (period: Omit<Period, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => Promise<void>;
   updatePeriod: (id: string, updates: Partial<Omit<Period, 'id' | 'createdAt' | 'createdBy'>>) => Promise<void>;
   deletePeriod: (id: string) => Promise<void>;
-  
+
   // Week template actions
   fetchWeekTemplates: () => Promise<void>;
   addWeekTemplate: (template: Omit<WeekTemplate, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => Promise<void>;
   updateWeekTemplate: (id: string, updates: Partial<Omit<WeekTemplate, 'id' | 'createdAt' | 'createdBy'>>) => Promise<void>;
   deleteWeekTemplate: (id: string) => Promise<void>;
-  
+
   // Workout category actions
   fetchWorkoutCategories: () => Promise<void>;
   addWorkoutCategory: (category: Omit<WorkoutCategory, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => Promise<void>;
   updateWorkoutCategory: (id: string, updates: Partial<Omit<WorkoutCategory, 'id' | 'createdAt' | 'createdBy'>>) => Promise<void>;
   deleteWorkoutCategory: (id: string) => Promise<void>;
-  
+
   // Workout type actions
   fetchWorkoutTypes: () => Promise<void>;
   addWorkoutType: (workoutType: Omit<WorkoutType, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => Promise<void>;
   updateWorkoutType: (id: string, updates: Partial<Omit<WorkoutType, 'id' | 'createdAt' | 'createdBy'>>) => Promise<void>;
   deleteWorkoutType: (id: string) => Promise<void>;
-  
+
   // Workout structure template actions
   fetchWorkoutStructureTemplates: () => Promise<void>;
   addWorkoutStructureTemplate: (template: Omit<WorkoutStructureTemplate, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => Promise<void>;
   updateWorkoutStructureTemplate: (id: string, updates: Partial<Omit<WorkoutStructureTemplate, 'id' | 'createdAt' | 'createdBy'>>) => Promise<void>;
   deleteWorkoutStructureTemplate: (id: string) => Promise<void>;
-  
+
+  // Workout template actions (Full Workouts)
+  fetchFullWorkoutTemplates: () => Promise<void>;
+  addFullWorkoutTemplate: (template: Omit<WorkoutTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateFullWorkoutTemplate: (id: string, updates: Partial<Omit<WorkoutTemplate, 'id' | 'createdAt'>>) => Promise<void>;
+  deleteFullWorkoutTemplate: (id: string) => Promise<void>;
+
   // Business hours actions
   fetchBusinessHours: () => Promise<void>;
   updateBusinessHours: (hours: BusinessHours) => Promise<void>;
-  
+
   // Bulk fetch
   fetchAll: () => Promise<void>;
 }
@@ -97,6 +110,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
   workoutCategories: [],
   workoutTypes: [],
   workoutStructureTemplates: [],
+  workoutTemplates: [],
   businessHours: null,
   loading: false,
 
@@ -123,9 +137,9 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
         updatedAt: new Date() as any,
         createdBy: 'current-user'
       };
-      set(state => ({ 
-        periods: [...state.periods, newPeriod], 
-        loading: false 
+      set(state => ({
+        periods: [...state.periods, newPeriod],
+        loading: false
       }));
     } catch (error) {
       console.error('Error adding period:', error);
@@ -138,7 +152,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
       set({ loading: true });
       await updatePeriod(id, updates);
       set(state => ({
-        periods: state.periods.map(p => 
+        periods: state.periods.map(p =>
           p.id === id ? { ...p, ...updates, updatedAt: new Date() as any } : p
         ),
         loading: false
@@ -186,9 +200,9 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
         updatedAt: new Date() as any,
         createdBy: 'current-user'
       };
-      set(state => ({ 
-        weekTemplates: [...state.weekTemplates, newTemplate], 
-        loading: false 
+      set(state => ({
+        weekTemplates: [...state.weekTemplates, newTemplate],
+        loading: false
       }));
     } catch (error) {
       console.error('Error adding week template:', error);
@@ -201,7 +215,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
       set({ loading: true });
       await updateWeekTemplate(id, updates);
       set(state => ({
-        weekTemplates: state.weekTemplates.map(t => 
+        weekTemplates: state.weekTemplates.map(t =>
           t.id === id ? { ...t, ...updates, updatedAt: new Date() as any } : t
         ),
         loading: false
@@ -249,9 +263,9 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
         updatedAt: new Date() as any,
         createdBy: 'current-user'
       };
-      set(state => ({ 
-        workoutCategories: [...state.workoutCategories, newCategory], 
-        loading: false 
+      set(state => ({
+        workoutCategories: [...state.workoutCategories, newCategory],
+        loading: false
       }));
     } catch (error) {
       console.error('Error adding workout category:', error);
@@ -264,7 +278,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
       set({ loading: true });
       await updateWorkoutCategory(id, updates);
       set(state => ({
-        workoutCategories: state.workoutCategories.map(c => 
+        workoutCategories: state.workoutCategories.map(c =>
           c.id === id ? { ...c, ...updates, updatedAt: new Date() as any } : c
         ),
         loading: false
@@ -312,9 +326,9 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
         updatedAt: new Date() as any,
         createdBy: 'current-user'
       };
-      set(state => ({ 
-        workoutTypes: [...state.workoutTypes, newWorkoutType], 
-        loading: false 
+      set(state => ({
+        workoutTypes: [...state.workoutTypes, newWorkoutType],
+        loading: false
       }));
     } catch (error) {
       console.error('Error adding workout type:', error);
@@ -327,7 +341,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
       set({ loading: true });
       await updateWorkoutType(id, updates);
       set(state => ({
-        workoutTypes: state.workoutTypes.map(w => 
+        workoutTypes: state.workoutTypes.map(w =>
           w.id === id ? { ...w, ...updates, updatedAt: new Date() as any } : w
         ),
         loading: false
@@ -375,9 +389,9 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
         updatedAt: new Date() as any,
         createdBy: 'current-user'
       };
-      set(state => ({ 
-        workoutStructureTemplates: [...state.workoutStructureTemplates, newTemplate], 
-        loading: false 
+      set(state => ({
+        workoutStructureTemplates: [...state.workoutStructureTemplates, newTemplate],
+        loading: false
       }));
     } catch (error) {
       console.error('Error adding workout structure template:', error);
@@ -390,7 +404,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
       set({ loading: true });
       await updateWorkoutStructureTemplate(id, updates);
       set(state => ({
-        workoutStructureTemplates: state.workoutStructureTemplates.map(t => 
+        workoutStructureTemplates: state.workoutStructureTemplates.map(t =>
           t.id === id ? { ...t, ...updates, updatedAt: new Date() as any } : t
         ),
         loading: false
@@ -415,6 +429,71 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
     }
   },
 
+  // Full Workout Template Actions
+  fetchFullWorkoutTemplates: async () => {
+    try {
+      set({ loading: true });
+      const templates = await getAllWorkoutTemplates();
+      set({ workoutTemplates: templates, loading: false });
+    } catch (error) {
+      console.error('Error fetching workout templates:', error);
+      set({ loading: false });
+    }
+  },
+
+  addFullWorkoutTemplate: async (templateData) => {
+    try {
+      set({ loading: true });
+      const id = await createWorkoutTemplate(templateData);
+      // We need to fetch again or construct the object. 
+      // Since createWorkoutTemplate only returns ID and we don't have the full object with timestamps from DB easily without fetching or mocking:
+      // We'll mock the timestamp for local update
+      const newTemplate: WorkoutTemplate = {
+        ...templateData,
+        id,
+        createdAt: new Date() as any,
+        updatedAt: new Date() as any,
+      };
+      set(state => ({
+        workoutTemplates: [...state.workoutTemplates, newTemplate],
+        loading: false
+      }));
+    } catch (error) {
+      console.error('Error adding workout template:', error);
+      set({ loading: false });
+    }
+  },
+
+  updateFullWorkoutTemplate: async (id, updates) => {
+    try {
+      set({ loading: true });
+      await updateWorkoutTemplate(id, updates);
+      set(state => ({
+        workoutTemplates: state.workoutTemplates.map(t =>
+          t.id === id ? { ...t, ...updates, updatedAt: new Date() as any } : t
+        ),
+        loading: false
+      }));
+    } catch (error) {
+      console.error('Error updating workout template:', error);
+      set({ loading: false });
+    }
+  },
+
+  deleteFullWorkoutTemplate: async (id) => {
+    try {
+      set({ loading: true });
+      await deleteWorkoutTemplate(id);
+      set(state => ({
+        workoutTemplates: state.workoutTemplates.filter(t => t.id !== id),
+        loading: false
+      }));
+    } catch (error) {
+      console.error('Error deleting workout template:', error);
+      set({ loading: false });
+    }
+  },
+
   // Business hours actions
   fetchBusinessHours: async () => {
     try {
@@ -423,8 +502,8 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
     } catch (error) {
       console.error('Error fetching business hours:', error);
       // Use defaults if fetch fails
-      set({ 
-        businessHours: { 
+      set({
+        businessHours: {
           daysOfWeek: [1, 2, 3, 4, 5],
           dayHours: {
             1: { startHour: 7, endHour: 20 },
@@ -433,7 +512,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
             4: { startHour: 7, endHour: 20 },
             5: { startHour: 7, endHour: 20 }
           }
-        } 
+        }
       });
     }
   },
@@ -457,6 +536,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
       fetchWorkoutCategories(),
       fetchWorkoutTypes(),
       fetchWorkoutStructureTemplates(),
+      get().fetchFullWorkoutTemplates(), // Add this
       fetchBusinessHours()
     ]);
   }

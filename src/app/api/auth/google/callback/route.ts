@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTokensFromCode } from '@/lib/google-calendar/auth';
-import { storeTokens } from '@/lib/google-calendar/token-storage';
+import { storeTokens, getStoredTokens } from '@/lib/google-calendar/token-storage';
 
 /**
  * GET /api/auth/google/callback
@@ -19,9 +19,15 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('OAuth error:', error);
-    return NextResponse.redirect(
-      new URL(`/configure?error=${encodeURIComponent(error)}`, request.url)
-    );
+    // Determine base URL for redirect
+    let baseUrl = request.nextUrl.origin;
+    if (process.env.GOOGLE_REDIRECT_URI) {
+      baseUrl = process.env.GOOGLE_REDIRECT_URI.replace('/api/auth/google/callback', '');
+    } else if (process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT) {
+      baseUrl = 'https://performancecoach.web.app';
+    }
+
+    return NextResponse.redirect(`${baseUrl}/configure?error=${encodeURIComponent(error)}`);
   }
 
   if (!code) {
@@ -79,9 +85,19 @@ export async function GET(request: NextRequest) {
     const tokens = await getTokensFromCode(code, callbackUrl);
 
     // Store tokens in Firestore
+    // Get existing tokens to preserve refresh token if not provided
+    const existingTokens = await getStoredTokens();
+    const refreshToken = tokens.refresh_token || existingTokens?.refreshToken || null;
+
+    console.log('Storing tokens:', {
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!refreshToken,
+      expiryDate: tokens.expiry_date,
+    });
+
     await storeTokens({
       accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
+      refreshToken,
       expiryDate: tokens.expiry_date,
       // TODO: Add userId when authentication is implemented
     });

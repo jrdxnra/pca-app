@@ -55,8 +55,7 @@ export function ColumnVisibilityToggle({
     .filter(([_, isAvailable]) => isAvailable)
     .map(([column]) => column as keyof typeof visibleColumns);
 
-  // Count hidden columns for badge
-  const hiddenCount = toggleableColumns.filter(column => !visibleColumns[column]).length;
+
 
   // Don't render if no columns are available to toggle
   if (toggleableColumns.length === 0) {
@@ -67,18 +66,12 @@ export function ColumnVisibilityToggle({
     <div className="relative" ref={dropdownRef}>
       <Button
         variant="ghost"
-        size="sm"
+        size="icon"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="text-xs h-8 px-2 gap-1"
+        className="h-6 w-6 text-gray-400 hover:text-indigo-600 transition-all hover:scale-110 bg-transparent border-0"
+        title="Toggle Column Visibility"
       >
-        {/* Icon removed */}
-        Columns
-        {hiddenCount > 0 && (
-          <span className="bg-gray-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center ml-1">
-            {hiddenCount}
-          </span>
-        )}
-        <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+        <Columns className="h-6 w-6" />
       </Button>
 
       {isExpanded && (

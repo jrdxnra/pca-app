@@ -20,7 +20,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Layers, Plus, Trash2 } from 'lucide-react';
+import { Layers, Plus, Trash2, X } from 'lucide-react';
 import { ClientProgramPeriod } from '@/lib/types';
 import { createWeekTemplate } from '@/lib/firebase/services/weekTemplates';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
@@ -46,6 +46,7 @@ interface WeekTemplate {
   days: {
     day: string;
     workoutCategory: string;
+    variations?: string[];
   }[];
 }
 
@@ -56,6 +57,8 @@ interface TemplateEditorState {
     day: string;
     workoutCategory: string;
     time: string;
+    // NEW: List of workout structure templates
+    variations: string[];
     deleted: boolean;
   }[];
 }
@@ -92,7 +95,7 @@ export function PeriodAssignmentDialog({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange
 }: PeriodAssignmentDialogProps) {
-  const { fetchWeekTemplates } = useConfigurationStore();
+  const { fetchWeekTemplates, fetchWorkoutStructureTemplates, workoutStructureTemplates } = useConfigurationStore();
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setIsOpen = controlledOnOpenChange || setInternalOpen;
@@ -125,13 +128,13 @@ export function PeriodAssignmentDialog({
     name: '',
     color: '#10b981',
     days: [
-      { day: 'Monday', workoutCategory: workoutCategories[0]?.name || 'Workout', time: '', deleted: false },
-      { day: 'Tuesday', workoutCategory: workoutCategories[1]?.name || 'Workout', time: '', deleted: false },
-      { day: 'Wednesday', workoutCategory: restDayName, time: '', deleted: false },
-      { day: 'Thursday', workoutCategory: workoutCategories[0]?.name || 'Workout', time: '', deleted: false },
-      { day: 'Friday', workoutCategory: workoutCategories[1]?.name || 'Workout', time: '', deleted: false },
-      { day: 'Saturday', workoutCategory: restDayName, time: '', deleted: false },
-      { day: 'Sunday', workoutCategory: restDayName, time: '', deleted: false }
+      { day: 'Monday', workoutCategory: workoutCategories[0]?.name || 'Workout', time: '', variations: [], deleted: false },
+      { day: 'Tuesday', workoutCategory: workoutCategories[1]?.name || 'Workout', time: '', variations: [], deleted: false },
+      { day: 'Wednesday', workoutCategory: restDayName, time: '', variations: [], deleted: false },
+      { day: 'Thursday', workoutCategory: workoutCategories[0]?.name || 'Workout', time: '', variations: [], deleted: false },
+      { day: 'Friday', workoutCategory: workoutCategories[1]?.name || 'Workout', time: '', variations: [], deleted: false },
+      { day: 'Saturday', workoutCategory: restDayName, time: '', variations: [], deleted: false },
+      { day: 'Sunday', workoutCategory: restDayName, time: '', variations: [], deleted: false }
     ]
   });
 
@@ -143,6 +146,7 @@ export function PeriodAssignmentDialog({
       day: d.day,
       workoutCategory: d.workoutCategory,
       time: '',
+      variations: d.variations || [],
       deleted: false
     }))
   });
@@ -213,7 +217,7 @@ export function PeriodAssignmentDialog({
         ...prev,
         days: [
           ...prev.days,
-          { day: 'New Day', workoutCategory: workoutCategories[0]?.name || '', time: '', deleted: false }
+          { day: 'New Day', workoutCategory: workoutCategories[0]?.name || '', time: '', variations: [], deleted: false }
         ]
       };
     });
@@ -237,7 +241,7 @@ export function PeriodAssignmentDialog({
       const id = await createWeekTemplate({
         name: editorState.name.trim(),
         color: editorState.color,
-        days: activeDays.map(d => ({ day: d.day, workoutCategory: d.workoutCategory })),
+        days: activeDays.map(d => ({ day: d.day, workoutCategory: d.workoutCategory, variations: d.variations })),
         order: (weekTemplates?.length || 0)
       });
 
@@ -676,7 +680,6 @@ export function PeriodAssignmentDialog({
                             value={day.time}
                             onChange={(e) => updateEditorDay(index, { time: e.target.value })}
                             className="text-sm p-2 border rounded text-center w-full md:w-32"
-                            placeholder="--:--"
                           />
                           {!day.time && (
                             <span className="text-xs text-red-500 shrink-0">Required</span>
@@ -693,6 +696,54 @@ export function PeriodAssignmentDialog({
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
+                      {/* Variations Selector */}
+                      {
+                        !day.deleted && !isRestDay(day.workoutCategory) && (
+                          <div className="md:ml-2 w-full md:w-auto flex-1">
+                            <Select
+                              value="variations"
+                              onValueChange={(value) => {
+                                if (!day.variations.includes(value)) {
+                                  updateEditorDay(index, { variations: [...day.variations, value] });
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="w-full h-9 bg-white">
+                                <SelectValue placeholder={day.variations.length > 0 ? `${day.variations.length} variations` : "Add variations..."} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {workoutStructureTemplates.map(t => (
+                                  <SelectItem key={t.id} value={t.id} disabled={day.variations.includes(t.id)}>
+                                    {t.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {day.variations.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {day.variations.map((vId, vIndex) => {
+                                  const vName = workoutStructureTemplates.find(t => t.id === vId)?.name || 'Unknown';
+                                  return (
+                                    <Badge key={vIndex} variant="secondary" className="text-[10px] h-5 px-1 gap-1">
+                                      {vName}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const newVars = day.variations.filter((_, i) => i !== vIndex);
+                                          updateEditorDay(index, { variations: newVars });
+                                        }}
+                                        className="hover:text-red-500"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
                     </div>
                   );
                 })}
@@ -701,34 +752,38 @@ export function PeriodAssignmentDialog({
           )}
 
           {/* Validation Messages */}
-          {startDate && endDate && !isDateRangeValid() && (
-            <div className="text-sm text-red-600">
-              End date must be after start date.
-            </div>
-          )}
+          {
+            startDate && endDate && !isDateRangeValid() && (
+              <div className="text-sm text-red-600">
+                End date must be after start date.
+              </div>
+            )
+          }
 
-          {hasOverlap() && (() => {
-            const overlappingPeriod = getOverlappingAssignment();
+          {
+            hasOverlap() && (() => {
+              const overlappingPeriod = getOverlappingAssignment();
 
-            if (overlappingPeriod) {
-              const overlapStart = safeToDate(overlappingPeriod.startDate);
-              const overlapEnd = safeToDate(overlappingPeriod.endDate);
-              return (
-                <div className="text-sm text-red-600 bg-red-50 p-3 rounded border border-red-200">
-                  <div className="font-medium mb-1">🚫 Cannot Assign - Date Range Conflict</div>
-                  <div className="text-xs">
-                    The selected dates overlap with an existing &quot;{overlappingPeriod.periodName}&quot; period
-                    ({overlapStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {' '}
-                    {overlapEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}).
+              if (overlappingPeriod) {
+                const overlapStart = safeToDate(overlappingPeriod.startDate);
+                const overlapEnd = safeToDate(overlappingPeriod.endDate);
+                return (
+                  <div className="text-sm text-red-600 bg-red-50 p-3 rounded border border-red-200">
+                    <div className="font-medium mb-1">🚫 Cannot Assign - Date Range Conflict</div>
+                    <div className="text-xs">
+                      The selected dates overlap with an existing &quot;{overlappingPeriod.periodName}&quot; period
+                      ({overlapStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {' '}
+                      {overlapEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}).
+                    </div>
+                    <div className="text-xs mt-1 text-red-700">
+                      Please choose different dates or delete the existing period first.
+                    </div>
                   </div>
-                  <div className="text-xs mt-1 text-red-700">
-                    Please choose different dates or delete the existing period first.
-                  </div>
-                </div>
-              );
-            }
-            return null;
-          })()}
+                );
+              }
+              return null;
+            })()
+          }
 
           {/* Submit Button */}
           <div className="flex justify-end gap-2">
@@ -742,8 +797,8 @@ export function PeriodAssignmentDialog({
               Assign Period
             </Button>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </div >
+      </DialogContent >
+    </Dialog >
   );
 }

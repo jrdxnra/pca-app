@@ -307,18 +307,18 @@ export default function AddWorkoutAccordion({ isExpanded, onAddWorkout, onCancel
       movement: selectedMovement,
       targetWorkload: {
         ...updatedRounds[roundIndex].movementUsages[movementIndex].targetWorkload,
-        useWeight: selectedMovement.configuration?.use_weight || false,
-        useReps: selectedMovement.configuration?.use_reps || false,
-        useTempo: selectedMovement.configuration?.use_tempo || false,
-        useTime: selectedMovement.configuration?.use_time || false,
-        useDistance: selectedMovement.configuration?.use_distance || false,
-        usePace: selectedMovement.configuration?.use_pace || false,
-        usePercentage: selectedMovement.configuration?.use_percentage || false,
-        useRPE: selectedMovement.configuration?.use_rpe || false,
+        useWeight: selectedMovement.configuration?.useWeight || false,
+        useReps: selectedMovement.configuration?.useReps || false,
+        useTempo: selectedMovement.configuration?.useTempo || false,
+        useTime: selectedMovement.configuration?.useTime || false,
+        useDistance: selectedMovement.configuration?.useDistance || false,
+        usePace: selectedMovement.configuration?.usePace || false,
+        usePercentage: selectedMovement.configuration?.usePercentage || false,
+        useRPE: selectedMovement.configuration?.useRPE || false,
         unilateral: selectedMovement.configuration?.unilateral || false,
-        weightMeasure: selectedMovement.configuration?.weight_measure || 'lbs',
-        distanceMeasure: selectedMovement.configuration?.distance_measure || 'mi',
-        paceMeasure: selectedMovement.configuration?.pace_measure || 'mi'
+        weightMeasure: selectedMovement.configuration?.weightMeasure || 'lbs',
+        distanceMeasure: selectedMovement.configuration?.distanceMeasure || 'mi',
+        paceMeasure: selectedMovement.configuration?.paceMeasure || 'mi'
       }
     };
 
