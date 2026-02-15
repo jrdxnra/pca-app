@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTokensFromCode } from '@/lib/google-calendar/auth';
-import { storeTokens, getStoredTokens } from '@/lib/google-calendar/token-storage';
+import { storeTokens, getStoredTokens } from '@/lib/google-calendar/adapters/token-adapter';
 
 /**
  * GET /api/auth/google/callback
@@ -12,10 +12,6 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get('error');
 
   console.log('[OAuth Callback] Starting callback handler');
-  console.log('[OAuth Callback] Code present:', !!code);
-  console.log('[OAuth Callback] Error:', error);
-  console.log('[OAuth Callback] Request URL:', request.url);
-  console.log('[OAuth Callback] Request origin:', request.nextUrl.origin);
 
   if (error) {
     console.error('OAuth error:', error);
@@ -43,103 +39,87 @@ export async function GET(request: NextRequest) {
     let callbackUrl: string;
     const envRedirectUri = process.env.GOOGLE_REDIRECT_URI?.trim();
 
-    console.log('[OAuth Callback] Environment check:', {
-      hasGOOGLE_REDIRECT_URI: !!process.env.GOOGLE_REDIRECT_URI,
-      GOOGLE_REDIRECT_URI_length: process.env.GOOGLE_REDIRECT_URI?.length || 0,
-      GOOGLE_REDIRECT_URI_value: envRedirectUri,
-      VERCEL_ENV: process.env.VERCEL_ENV,
-      NODE_ENV: process.env.NODE_ENV
-    });
-
     if (envRedirectUri && envRedirectUri.length > 0) {
       callbackUrl = envRedirectUri;
-      console.log('[OAuth Callback] Using GOOGLE_REDIRECT_URI from environment:', callbackUrl);
+      console.log('[OAuth Callback] Using GOOGLE_REDIRECT_URI:', callbackUrl);
     } else {
       // Fallback to dynamic origin (local development only)
       const origin = request.nextUrl.origin;
-
-      // Check if we're on Cloud Run (Firebase) - origin will be 0.0.0.0 or internal
-      const isCloudRun = origin.includes('0.0.0.0') ||
-        origin.includes('127.0.0.1') ||
-        process.env.K_SERVICE || // Cloud Run sets this
-        process.env.GOOGLE_CLOUD_PROJECT; // GCP sets this
+      const isCloudRun = origin.includes('0.0.0.0') || origin.includes('127.0.0.1') || process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT;
 
       if (isCloudRun) {
-        // On Cloud Run, we MUST use the Firebase hosting URL from env var
         console.error('[OAuth Callback] ERROR: Running on Cloud Run but GOOGLE_REDIRECT_URI not set!');
-        console.error('[OAuth Callback] Request origin:', origin, '(this is internal Cloud Run URL, not public)');
         return NextResponse.redirect(
           new URL('/configure?error=GOOGLE_REDIRECT_URI_not_configured', request.url)
         );
       }
 
-      // Local development fallback
       callbackUrl = `${origin}/api/auth/google/callback`;
-      console.warn('[OAuth Callback] WARNING: GOOGLE_REDIRECT_URI not set! Building callback URL from request origin:', callbackUrl);
+      console.warn('[OAuth Callback] WARNING: GOOGLE_REDIRECT_URI not set! Using:', callbackUrl);
     }
 
-    console.log('[OAuth Callback] Request origin:', request.nextUrl.origin);
-    console.log('[OAuth Callback] Final callback URL:', callbackUrl);
-
-    // Exchange code for tokens (use same redirect URI that was used in auth)
+    // Exchange code for tokens
     const tokens = await getTokensFromCode(code, callbackUrl);
 
-    // Store tokens in Firestore
-    // Get existing tokens to preserve refresh token if not provided
-    const existingTokens = await getStoredTokens();
+    // Get userId from state parameter
+    const userId = searchParams.get('state') || undefined;
+    console.log(`[OAuth Callback] State (userId): ${userId || 'MISSING'}`);
+
+    if (!userId) {
+      console.warn('[OAuth Callback] WARNING: No userId in state! Tokens will be stored in global bucket.');
+    }
+
+    // Store tokens using ADAPTER (Local file in dev, Firestore in prod)
+    const existingTokens = await getStoredTokens(userId);
     const refreshToken = tokens.refresh_token || existingTokens?.refreshToken || null;
 
-    console.log('Storing tokens:', {
-      hasAccessToken: !!tokens.access_token,
-      hasRefreshToken: !!refreshToken,
-      expiryDate: tokens.expiry_date,
-    });
+    console.log(`[OAuth Callback] Storing tokens for ${userId || 'global'}. Has refreshToken: ${!!refreshToken}`);
 
     await storeTokens({
       accessToken: tokens.access_token,
       refreshToken,
       expiryDate: tokens.expiry_date,
-      // TODO: Add userId when authentication is implemented
-    });
+    }, userId);
+
+    console.log('[OAuth Callback] Tokens stored successfully via adapter');
 
     // Redirect to configure page with success
-    // Use the Firebase hosting URL if we're on Cloud Run, otherwise use request origin
     let redirectUrl: string;
     if (process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT) {
-      // On Cloud Run, derive Firebase hosting URL from GOOGLE_REDIRECT_URI
-      // GOOGLE_REDIRECT_URI is like: https://performancecoach.web.app/api/auth/google/callback
-      // We need: https://performancecoach.web.app/configure?connected=true
+      // Cloud Run
       if (envRedirectUri && envRedirectUri.length > 0) {
         const baseUrl = envRedirectUri.replace('/api/auth/google/callback', '');
         redirectUrl = `${baseUrl}/configure?connected=true`;
       } else {
-        // Fallback to known Firebase hosting URL
         redirectUrl = 'https://performancecoach.web.app/configure?connected=true';
       }
-      console.log('[OAuth Callback] Redirecting to Firebase URL:', redirectUrl);
       return NextResponse.redirect(redirectUrl);
     } else {
-      // Local development - derive from GOOGLE_REDIRECT_URI or use request URL without port
-      // GOOGLE_REDIRECT_URI is like: https://jubilant-goldfish-5gg6gww654r27vgr-3000.app.github.dev/api/auth/google/callback
+      // Local dev
       if (envRedirectUri && envRedirectUri.length > 0) {
         const baseUrl = envRedirectUri.replace('/api/auth/google/callback', '');
         redirectUrl = `${baseUrl}/configure?connected=true`;
-        console.log('[OAuth Callback] Local dev: Using GOOGLE_REDIRECT_URI base:', redirectUrl);
       } else {
-        // Fallback: reconstruct from request hostname without port
         const hostname = request.headers.get('host')?.split(':')[0] || 'localhost';
         redirectUrl = `https://${hostname}/configure?connected=true`;
-        console.log('[OAuth Callback] Local dev: Using hostname:', redirectUrl);
       }
       return NextResponse.redirect(redirectUrl);
     }
   } catch (error) {
     console.error('Error exchanging code for tokens:', error);
     const errorMessage = error instanceof Error ? error.message : 'token_exchange_failed';
-    return NextResponse.redirect(
-      new URL(`/configure?error=${encodeURIComponent(errorMessage)}`, request.url)
-    );
+
+    // Determine safe base URL for error redirect
+    let baseUrl = request.nextUrl.origin;
+
+    if (process.env.GOOGLE_REDIRECT_URI && process.env.GOOGLE_REDIRECT_URI.length > 0) {
+      // Use configured production URI base
+      baseUrl = process.env.GOOGLE_REDIRECT_URI.replace('/api/auth/google/callback', '');
+    } else if (process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT) {
+      // Fallback for Cloud Run if env var missing
+      baseUrl = 'https://performancecoach.web.app';
+    }
+
+    return NextResponse.redirect(`${baseUrl}/configure?error=${encodeURIComponent(errorMessage)}`);
   }
 }
-
-

@@ -1,21 +1,30 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
   getDoc,
   query,
   where,
   orderBy,
   onSnapshot,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
-import { db, getDb } from '../config';
+import { db, getDb, auth } from '../config';
 import { WorkoutTemplate, WorkoutRound } from '@/lib/types';
 
 const COLLECTION_NAME = 'workout-templates';
+
+// Helper to get current user ID
+function getOwnerId(): string {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Unauthorized');
+  }
+  return currentUser.uid;
+}
 
 /**
  * Workout Template CRUD Operations
@@ -27,6 +36,7 @@ export async function createWorkoutTemplate(
   try {
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...templateData,
+      ownerId: getOwnerId(),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
@@ -41,7 +51,7 @@ export async function getWorkoutTemplate(id: string): Promise<WorkoutTemplate | 
   try {
     const docRef = doc(getDb(), COLLECTION_NAME, id);
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       return { id: docSnap.id, ...docSnap.data() } as WorkoutTemplate;
     }
@@ -54,13 +64,18 @@ export async function getWorkoutTemplate(id: string): Promise<WorkoutTemplate | 
 
 export async function getAllWorkoutTemplates(): Promise<WorkoutTemplate[]> {
   try {
-    const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
+    const q = query(
+      collection(getDb(), COLLECTION_NAME),
+      where('ownerId', '==', getOwnerId())
+    );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as WorkoutTemplate[];
+
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)) as WorkoutTemplate[];
   } catch (error) {
     console.error('Error getting workout templates:', error);
     throw error;
@@ -70,16 +85,17 @@ export async function getAllWorkoutTemplates(): Promise<WorkoutTemplate[]> {
 export async function getWorkoutTemplatesByCreator(createdBy: string): Promise<WorkoutTemplate[]> {
   try {
     const q = query(
-      collection(getDb(), COLLECTION_NAME), 
-      where('createdBy', '==', createdBy),
-      orderBy('name')
+      collection(getDb(), COLLECTION_NAME),
+      where('createdBy', '==', createdBy)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as WorkoutTemplate[];
+
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)) as WorkoutTemplate[];
   } catch (error) {
     console.error('Error getting workout templates by creator:', error);
     throw error;
@@ -89,16 +105,17 @@ export async function getWorkoutTemplatesByCreator(createdBy: string): Promise<W
 export async function getPublicWorkoutTemplates(): Promise<WorkoutTemplate[]> {
   try {
     const q = query(
-      collection(getDb(), COLLECTION_NAME), 
-      where('isPublic', '==', true),
-      orderBy('name')
+      collection(getDb(), COLLECTION_NAME),
+      where('isPublic', '==', true)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as WorkoutTemplate[];
+
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)) as WorkoutTemplate[];
   } catch (error) {
     console.error('Error getting public workout templates:', error);
     throw error;
@@ -106,7 +123,7 @@ export async function getPublicWorkoutTemplates(): Promise<WorkoutTemplate[]> {
 }
 
 export async function updateWorkoutTemplate(
-  id: string, 
+  id: string,
   updates: Partial<Omit<WorkoutTemplate, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
@@ -138,22 +155,27 @@ export function subscribeToWorkoutTemplates(
   callback: (templates: WorkoutTemplate[]) => void,
   createdBy?: string
 ): () => void {
-  let q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
-  
+  // By default, only show templates owned by the user
+  let q = query(
+    collection(getDb(), COLLECTION_NAME),
+    where('ownerId', '==', getOwnerId())
+  );
+
   if (createdBy) {
     q = query(
-      collection(getDb(), COLLECTION_NAME), 
-      where('createdBy', '==', createdBy),
-      orderBy('name')
+      collection(getDb(), COLLECTION_NAME),
+      where('createdBy', '==', createdBy)
     );
   }
-  
+
   return onSnapshot(q, (querySnapshot) => {
-    const templates = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as WorkoutTemplate[];
-    
+    const templates = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)) as WorkoutTemplate[];
+
     callback(templates);
   }, (error) => {
     console.error('Error in workout templates subscription:', error);
@@ -167,13 +189,13 @@ export async function searchWorkoutTemplates(searchTerm: string): Promise<Workou
   try {
     // Get all templates and filter client-side (for now)
     const templates = await getAllWorkoutTemplates();
-    
+
     const lowercaseSearch = searchTerm.toLowerCase();
-    return templates.filter(template => 
+    return templates.filter(template =>
       template.name.toLowerCase().includes(lowercaseSearch) ||
-      template.rounds.some(round => 
+      template.rounds.some(round =>
         round.name.toLowerCase().includes(lowercaseSearch) ||
-        round.exercises.some(exercise => 
+        round.exercises.some(exercise =>
           // We'd need to resolve movementId to movement name for proper search
           // For now, just search by round names
           false
@@ -190,7 +212,7 @@ export async function searchWorkoutTemplates(searchTerm: string): Promise<Workou
  * Duplicate a workout template
  */
 export async function duplicateWorkoutTemplate(
-  templateId: string, 
+  templateId: string,
   newName: string,
   createdBy: string
 ): Promise<string> {

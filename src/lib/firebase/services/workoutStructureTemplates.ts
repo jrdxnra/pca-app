@@ -1,19 +1,29 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
   query,
+  where,
   orderBy,
   onSnapshot,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
-import { db, getDb } from '../config';
+import { db, getDb, auth } from '../config';
 import { WorkoutStructureTemplate, WorkoutStructureTemplateSection } from '@/lib/types';
 
 const COLLECTION_NAME = 'workoutStructureTemplates';
+
+// Helper to get current user ID
+function getOwnerId(): string {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Unauthorized');
+  }
+  return currentUser.uid;
+}
 
 /**
  * Create a new workout structure template
@@ -24,9 +34,10 @@ export const createWorkoutStructureTemplate = async (
   try {
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...template,
+      ownerId: getOwnerId(),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-      createdBy: 'current-user' // TODO: Get from auth context
+      createdBy: getOwnerId()
     });
     return docRef.id;
   } catch (error) {
@@ -39,7 +50,7 @@ export const createWorkoutStructureTemplate = async (
  * Update an existing workout structure template
  */
 export const updateWorkoutStructureTemplate = async (
-  id: string, 
+  id: string,
   updates: Partial<Omit<WorkoutStructureTemplate, 'id' | 'createdAt' | 'createdBy'>>
 ): Promise<void> => {
   try {
@@ -70,7 +81,11 @@ export const deleteWorkoutStructureTemplate = async (id: string): Promise<void> 
  */
 export const fetchWorkoutStructureTemplates = async (): Promise<WorkoutStructureTemplate[]> => {
   try {
-    const q = query(collection(getDb(), COLLECTION_NAME), orderBy('createdAt', 'asc'));
+    const q = query(
+      collection(getDb(), COLLECTION_NAME),
+      where('ownerId', '==', getOwnerId()),
+      orderBy('createdAt', 'asc')
+    );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
@@ -88,8 +103,12 @@ export const fetchWorkoutStructureTemplates = async (): Promise<WorkoutStructure
 export const subscribeToWorkoutStructureTemplates = (
   callback: (templates: WorkoutStructureTemplate[]) => void
 ): () => void => {
-  const q = query(collection(getDb(), COLLECTION_NAME), orderBy('createdAt', 'asc'));
-  
+  const q = query(
+    collection(getDb(), COLLECTION_NAME),
+    where('ownerId', '==', getOwnerId()),
+    orderBy('createdAt', 'asc')
+  );
+
   return onSnapshot(q, (querySnapshot) => {
     const templates = querySnapshot.docs.map(doc => ({
       id: doc.id,

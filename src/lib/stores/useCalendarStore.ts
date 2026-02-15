@@ -1,11 +1,6 @@
 import { create } from 'zustand';
 import { GoogleCalendar, GoogleCalendarEvent, CalendarSyncConfig, DateRange, TestEventInput } from '@/lib/google-calendar/types';
 import {
-  getCalendarEventsByDateRange
-} from '@/lib/firebase/services/calendarEvents';
-import { createClientWorkout } from '@/lib/firebase/services/clientWorkouts';
-import { Timestamp } from 'firebase/firestore';
-import {
   fetchCalendarEvents,
   checkGoogleCalendarAuth,
   addWorkoutLinksToEvent,
@@ -13,7 +8,6 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent
 } from '@/lib/google-calendar/api-client';
-import { getCalendarSyncConfig, updateCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
 import { queryKeys } from '@/lib/react-query/queryKeys';
 import { getGlobalQueryClient } from '@/lib/react-query/queryClientInstance';
 
@@ -66,6 +60,41 @@ const defaultConfig: CalendarSyncConfig = {
   coachingKeywords: ['Personal Training', 'PT', 'Training Session', 'Workout'],
   classKeywords: ['Class', 'Group Class', 'Group Training', 'Group Session'],
 };
+
+// Helper to get ID token with auth state wait
+async function getFirebaseIdToken(): Promise<string | undefined> {
+  // Import dynamically to avoid side effects
+  const { auth } = await import('@/lib/firebase/config');
+
+  // If user is already available, return token
+  if (auth.currentUser) {
+    try {
+      return await auth.currentUser.getIdToken();
+    } catch (e) {
+      console.warn('Failed to get ID token:', e);
+      return undefined;
+    }
+  }
+
+  // If no user, wait for initial auth state resolution
+  // This prevents race conditions where the store checks for connection before auth is ready
+  return new Promise((resolve) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      unsubscribe();
+      if (user) {
+        try {
+          const token = await user.getIdToken();
+          resolve(token);
+        } catch (e) {
+          console.warn('Failed to get ID token after auth state change:', e);
+          resolve(undefined);
+        }
+      } else {
+        resolve(undefined);
+      }
+    });
+  });
+}
 
 export const useCalendarStore = create<CalendarStore>((set, get) => ({
   // Initial state
@@ -123,10 +152,17 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
       // Try Google Calendar API first if connected
       if (isGoogleCalendarConnected) {
         try {
+          // Dynamic import to avoid static dependency issues if needed, otherwise rely on imported api-client
+          // api-client is safe (no firebase imports)
+          // Dynamic import to avoid static dependency issues if needed, otherwise rely on imported api-client
+          // api-client is safe (no firebase imports)
+          const idToken = await getFirebaseIdToken();
+
           const googleEvents = await fetchCalendarEvents(
             dateRange.start,
             dateRange.end,
-            config.selectedCalendarId || 'primary'
+            config.selectedCalendarId || 'primary',
+            idToken
           );
 
           // Convert Google Calendar API format to our format
@@ -200,7 +236,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
       // Auto-detect coaching sessions and class sessions based on keywords
       const eventsWithDetection = newEvents.map(event => ({
         ...event,
-        isCoachingSession: event.isCoachingSession ?? isCoachingEvent(event, config.coachingKeywords),
+        isCoachingSession: event.isCoachingSession ?? isCoachingEvent(event, config.coachingKeywords || []),
         isClassSession: event.isClassSession ?? isClassEvent(event, config.classKeywords || []),
       }));
 
@@ -254,6 +290,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   createTestEvent: async (eventInput: TestEventInput) => {
     set({ loading: true, error: null });
     try {
+      const idToken = await getFirebaseIdToken();
+
       const { config, isGoogleCalendarConnected } = get();
       // Create start and end datetime strings
       const startDateTime = `${eventInput.date}T${eventInput.startTime}:00`;
@@ -296,7 +334,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
             location: eventInput.location || undefined,
             timeZone: 'America/Los_Angeles',
             calendarId: config.selectedCalendarId,
-          });
+          }, idToken);
           googleCalendarEvent = eventResponse.event;
           console.log('✅ Created calendar event in Google Calendar:', googleCalendarEvent.id);
         } catch (googleError) {
@@ -375,6 +413,10 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
               }
             }
 
+            // DYNAMIC IMPORT to avoid static Firebase dependency
+            const { createClientWorkout } = await import('@/lib/firebase/services/clientWorkouts');
+            const { Timestamp } = await import('firebase/firestore');
+
             // Create workout in Firebase
             const workout = await createClientWorkout({
               clientId,
@@ -402,7 +444,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
                   eventInput.description || '',
                   'single',
                   undefined,
-                  config.selectedCalendarId
+                  config.selectedCalendarId,
+                  idToken
                 );
                 console.log('✅ Updated Google Calendar event with workout link:', workout.id);
               } catch (updateError) {
@@ -424,7 +467,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
       const { events } = get();
       const updatedEvent = {
         ...newEvent,
-        isCoachingSession: newEvent.isCoachingSession ?? isCoachingEvent(newEvent, config.coachingKeywords),
+        isCoachingSession: newEvent.isCoachingSession ?? isCoachingEvent(newEvent, config.coachingKeywords || []),
         isClassSession: newEvent.isClassSession ?? isClassEvent(newEvent, config.classKeywords || []),
       };
 
@@ -446,6 +489,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   markAsCoachingSession: async (eventId: string, isCoaching: boolean) => {
     set({ loading: true, error: null });
     try {
+      const idToken = await getFirebaseIdToken();
+
       const { events, isGoogleCalendarConnected, config } = get();
       const existingEvent = events.find(e => e.id === eventId);
 
@@ -466,7 +511,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
               // We store it in extendedProperties or description metadata
             },
             calendarId: config.selectedCalendarId || 'primary',
-          });
+          }, idToken);
         } catch (googleError) {
           console.error('Failed to update Google Calendar event:', googleError);
           // Continue with local update
@@ -490,6 +535,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   markAsClassSession: async (eventId: string, isClass: boolean) => {
     set({ loading: true, error: null });
     try {
+      const idToken = await getFirebaseIdToken();
+
       const { events, isGoogleCalendarConnected, config } = get();
       const existingEvent = events.find(e => e.id === eventId);
 
@@ -510,7 +557,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
               // We store it in extendedProperties or description metadata
             },
             calendarId: config.selectedCalendarId || 'primary',
-          });
+          }, idToken);
         } catch (googleError) {
           console.error('Failed to update Google Calendar event:', googleError);
           // Continue with local update
@@ -535,6 +582,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
     console.log('[linkToWorkout] Called with eventId:', eventId, 'workoutId:', workoutId);
     set({ loading: true, error: null });
     try {
+      const idToken = await getFirebaseIdToken();
+
       const { events, isGoogleCalendarConnected, config } = get();
       console.log('[linkToWorkout] isGoogleCalendarConnected:', isGoogleCalendarConnected);
       console.log('[linkToWorkout] events count:', events.length);
@@ -570,7 +619,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
               event.description,
               'single', // Update only this instance
               event.start.dateTime,
-              config.selectedCalendarId || 'primary'
+              config.selectedCalendarId || 'primary',
+              idToken
             );
             console.log('✅ [linkToWorkout] Added workout links to Google Calendar event description');
           } catch (googleError) {
@@ -602,6 +652,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   updateEvent: async (eventId: string, updates: Partial<GoogleCalendarEvent>) => {
     set({ loading: true, error: null });
     try {
+      const idToken = await getFirebaseIdToken();
+
       const { events, isGoogleCalendarConnected, config } = get();
       const existingEvent = events.find(e => e.id === eventId);
 
@@ -634,7 +686,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
             updateType: 'single',
             updates: googleUpdates,
             calendarId: config.selectedCalendarId || 'primary',
-          });
+          }, idToken);
         } catch (googleError) {
           console.error('Failed to update Google Calendar event:', googleError);
           throw googleError; // Fail if Google Calendar update fails
@@ -663,6 +715,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   deleteEvent: async (eventId: string) => {
     set({ loading: true, error: null });
     try {
+      const idToken = await getFirebaseIdToken();
+
       const { events, isGoogleCalendarConnected, config } = get();
       const existingEvent = events.find(e => e.id === eventId);
 
@@ -673,7 +727,8 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
           await deleteCalendarEvent(
             eventId,
             instanceDate,
-            config.selectedCalendarId || 'primary'
+            config.selectedCalendarId || 'primary',
+            idToken
           );
         } catch (googleError) {
           console.error('Failed to delete from Google Calendar:', googleError);
@@ -696,7 +751,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
     }
   },
 
-  updateConfig: (updates: Partial<CalendarSyncConfig>) => {
+  updateConfig: async (updates: Partial<CalendarSyncConfig>) => {
     const { config } = get();
     // Normalize location abbreviations to make matching robust across whitespace differences
     const nextLocationAbbreviations = updates.locationAbbreviations
@@ -739,12 +794,13 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
     // Fire-and-forget persistence; if it fails, surface an error but keep local changes.
     try {
-      void updateCalendarSyncConfig({
+      // Dynamic import to avoid static dependency
+      // @ts-ignore
+      const { updateCalendarSyncConfig } = await import('@/lib/firebase/services/calendarConfig');
+
+      await updateCalendarSyncConfig({
         ...updates,
         ...(nextLocationAbbreviations ? { locationAbbreviations: nextLocationAbbreviations } : {}),
-      }).catch(err => {
-        console.error('Failed to persist calendar config to Firestore:', err);
-        set({ error: err instanceof Error ? err.message : 'Failed to save calendar settings' });
       });
 
       // Invalidate React Query caches so components using React Query see the new config
@@ -754,8 +810,9 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
         queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
       }
     } catch (err) {
-      console.error('Failed to start Firestore calendar config save:', err);
-      set({ error: err instanceof Error ? err.message : 'Failed to save calendar settings' });
+      console.error('Failed to save calendar setting to Firestore:', err);
+      // set({ error: err instanceof Error ? err.message : 'Failed to save calendar settings' });
+      // Don't set error state for background save failure to avoid disrupting UI
     }
   },
 
@@ -790,38 +847,46 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
   checkGoogleCalendarConnection: async () => {
     try {
+      console.log('[CalendarStore] Starting checkGoogleCalendarConnection...');
+
+      // Use helper to get token with auth wait
+      const idToken = await getFirebaseIdToken();
+      console.log('[CalendarStore] ID Token retrieved:', !!idToken, idToken ? '(length: ' + idToken.length + ')' : '(undefined)');
+
       // First check if tokens exist
-      const hasTokens = await checkGoogleCalendarAuth();
+      console.log('[CalendarStore] Calling checkGoogleCalendarAuth...');
+      const hasTokens = await checkGoogleCalendarAuth(idToken);
+      console.log('[CalendarStore] checkGoogleCalendarAuth result:', hasTokens);
+
       if (!hasTokens) {
+        console.warn('[CalendarStore] Connection check failed: No tokens found.');
         set({ isGoogleCalendarConnected: false });
         return;
       }
 
       // Then actually test the connection by trying to fetch events
-      // This catches expired tokens that checkGoogleCalendarAuth doesn't detect
-      const now = new Date();
-      const start = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000); // 1 day ago
-      const end = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000); // 1 day ahead
+      // (This verifies the tokens are valid and not revoked)
+      try {
+        const now = new Date();
+        const start = new Date(now);
+        const end = new Date(now);
+        end.setDate(end.getDate() + 1); // 1 day range for quick check
 
-      const response = await fetch(
-        `/api/calendar/events?start=${start.toISOString()}&end=${end.toISOString()}&calendarId=primary`
-      );
-
-      // Any non-ok response means connection is not working
-      if (!response.ok) {
+        console.log('[CalendarStore] Tokens exist, attempting to fetch events to verify scopes...');
+        await fetchCalendarEvents(start, end, 'primary', idToken);
+        console.log('[CalendarStore] Event fetch successful. Connection verified.');
+        set({ isGoogleCalendarConnected: true });
+      } catch (error) {
+        console.warn('[CalendarStore] Google Calendar token check failed (Event Fetch Error):', error);
         set({ isGoogleCalendarConnected: false });
-        return;
       }
-
-      // Connection is working
-      set({ isGoogleCalendarConnected: true });
     } catch (error) {
-      console.error('Error checking Google Calendar connection:', error);
+      console.error('[CalendarStore] Error checking Google Calendar connection:', error);
       set({ isGoogleCalendarConnected: false });
     }
   },
 
-  // Utility functions
+  // Getters
   getCoachingEvents: () => {
     const { events } = get();
     return events.filter(event => event.isCoachingSession);
@@ -866,7 +931,7 @@ function isClassEvent(event: GoogleCalendarEvent, keywords: string[]): boolean {
   return keywords.some(keyword => title.includes(keyword.toLowerCase()));
 }
 
-// Load config from localStorage on initialization and check Google Calendar connection
+// Load config from localStorage on initialization
 if (typeof window !== 'undefined') {
   const savedConfig = localStorage.getItem('calendar-config');
   if (savedConfig) {
@@ -886,27 +951,28 @@ if (typeof window !== 'undefined') {
 
   // Load config from Firestore (source of truth) and migrate any legacy shapes (e.g., "N/A" markers).
   try {
-    void getCalendarSyncConfig(defaultConfig).then(remoteConfig => {
-      // Keep any local-only keys, but prefer Firestore values.
-      const current = useCalendarStore.getState().config;
-      const merged = { ...defaultConfig, ...current, ...remoteConfig };
-      useCalendarStore.setState({ config: merged });
-      try {
-        localStorage.setItem('calendar-config', JSON.stringify(merged));
-      } catch (e) {
-        console.warn('Failed to cache calendar config to localStorage:', e);
-      }
-    }).catch(error => {
-      console.error('Failed to load calendar config from Firestore:', error);
+    // Dynamic import to avoid static dependency
+    import('@/lib/firebase/services/calendarConfig').then(({ getCalendarSyncConfig }) => {
+      void getCalendarSyncConfig(defaultConfig).then(remoteConfig => {
+        // Keep any local-only keys, but prefer Firestore values.
+        const current = useCalendarStore.getState().config;
+        const merged = { ...defaultConfig, ...current, ...remoteConfig };
+        useCalendarStore.setState({ config: merged });
+        try {
+          localStorage.setItem('calendar-config', JSON.stringify(merged));
+        } catch (e) {
+          console.warn('Failed to cache calendar config to localStorage:', e);
+        }
+      }).catch(error => {
+        console.error('Failed to load calendar config from Firestore:', error);
+      });
+    }).catch(err => {
+      console.warn('Could not load calendar config service (likely SSR safe error):', err);
     });
   } catch (error) {
     console.error('Failed to start Firestore calendar config load:', error);
   }
 
-  // Check Google Calendar connection status on initialization
-  checkGoogleCalendarAuth().then(connected => {
-    useCalendarStore.setState({ isGoogleCalendarConnected: connected });
-  }).catch(() => {
-    useCalendarStore.setState({ isGoogleCalendarConnected: false });
-  });
+  // Removed automatic checkGoogleCalendarAuth() call here.
+  // It is better to let components (like Dashboard or Configure) call it when they are ready and auth is loaded.
 }

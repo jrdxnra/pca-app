@@ -8,7 +8,7 @@ import { OAuth2Client } from 'google-auth-library';
 export function createOAuth2Client(redirectUri?: string): OAuth2Client {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  
+
   // If redirectUri is provided, use it. Otherwise use env var, or throw error in production
   let finalRedirectUri: string;
   if (redirectUri) {
@@ -30,23 +30,24 @@ export function createOAuth2Client(redirectUri?: string): OAuth2Client {
   console.log('[OAuth] Using redirect URI:', finalRedirectUri);
   console.log('[OAuth] Client ID:', clientId?.substring(0, 20) + '...');
   console.log('[OAuth] Has client secret:', !!clientSecret);
-  
+
   const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, finalRedirectUri);
-  
+
   // Verify the redirect URI is set correctly
   const clientRedirectUri = (oauth2Client as any).redirectUri_;
   console.log('[OAuth] OAuth2Client redirectUri:', clientRedirectUri);
-  
+
   return oauth2Client;
 }
 
 /**
  * Get authorization URL for OAuth flow
  * @param redirectUri - Optional redirect URI. If not provided, uses default from env or localhost
+ * @param state - Optional state parameter to preserve application state (e.g., userId)
  */
-export function getAuthUrl(redirectUri?: string): string {
+export function getAuthUrl(redirectUri?: string, state?: string): string {
   const oauth2Client = createOAuth2Client(redirectUri);
-  
+
   const scopes = [
     'https://www.googleapis.com/auth/calendar', // Full calendar access (read/write)
   ];
@@ -55,10 +56,11 @@ export function getAuthUrl(redirectUri?: string): string {
     access_type: 'offline', // Required to get refresh token
     scope: scopes,
     prompt: 'consent', // Force consent screen to get refresh token
+    state: state, // Pass optional state parameter
     // Note: refresh tokens don't expire unless revoked by user
     // This ensures the connection lasts indefinitely as long as user doesn't revoke
   });
-  
+
   // Extract and decode the redirect_uri from the generated URL for debugging
   const redirectUriMatch = authUrl.match(/redirect_uri=([^&]+)/);
   if (redirectUriMatch) {
@@ -67,7 +69,7 @@ export function getAuthUrl(redirectUri?: string): string {
     console.log('[OAuth] Encoded redirect_uri in auth URL:', encodedRedirectUri);
     console.log('[OAuth] Decoded redirect_uri in auth URL:', decodedRedirectUri);
     console.log('[OAuth] Expected redirect_uri:', redirectUri || 'using default');
-    
+
     // Check for common mismatches
     if (decodedRedirectUri !== (redirectUri || process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback')) {
       console.error('[OAuth] MISMATCH DETECTED!');
@@ -75,7 +77,7 @@ export function getAuthUrl(redirectUri?: string): string {
       console.error('[OAuth] Actual in URL:', decodedRedirectUri);
     }
   }
-  
+
   return authUrl;
 }
 
@@ -92,11 +94,11 @@ export async function getTokensFromCode(code: string, redirectUri?: string): Pro
   console.log('[getTokensFromCode] Starting token exchange');
   console.log('[getTokensFromCode] Code:', code?.substring(0, 20) + '...');
   console.log('[getTokensFromCode] Redirect URI:', redirectUri);
-  
+
   try {
     const oauth2Client = createOAuth2Client(redirectUri);
     console.log('[getTokensFromCode] OAuth2 client created');
-    
+
     const { tokens } = await oauth2Client.getToken(code);
     console.log('[getTokensFromCode] Tokens received:', {
       hasAccessToken: !!tokens.access_token,
@@ -104,13 +106,13 @@ export async function getTokensFromCode(code: string, redirectUri?: string): Pro
       hasExpiryDate: !!tokens.expiry_date,
       expiryDate: tokens.expiry_date,
     });
-    
+
     const result = {
       access_token: tokens.access_token!,
       refresh_token: tokens.refresh_token || null,
       expiry_date: tokens.expiry_date || null,
     };
-    
+
     console.log('[getTokensFromCode] Token exchange successful');
     return result;
   } catch (error) {
@@ -146,28 +148,28 @@ export async function refreshAccessToken(
 
   try {
     const { credentials } = await oauth2Client.refreshAccessToken();
-    
+
     if (!credentials.access_token) {
       throw new Error('Failed to refresh access token - no access token in response');
     }
 
     // Get actual expiry date from Google (if provided)
-    const expiryDate = credentials.expiry_date 
-      ? credentials.expiry_date 
+    const expiryDate = credentials.expiry_date
+      ? credentials.expiry_date
       : Date.now() + (60 * 60 * 1000); // Default to 1 hour if not provided
 
     return credentials.access_token;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[OAuth] Refresh token error:', errorMessage);
-    
+
     // Check for specific error types
-    if (errorMessage.includes('invalid_grant') || 
-        errorMessage.includes('Token has been expired') ||
-        errorMessage.includes('invalid_token')) {
+    if (errorMessage.includes('invalid_grant') ||
+      errorMessage.includes('Token has been expired') ||
+      errorMessage.includes('invalid_token')) {
       throw new Error('Refresh token is invalid or expired. Please reconnect Google Calendar.');
     }
-    
+
     throw new Error(`Failed to refresh access token: ${errorMessage}`);
   }
 }

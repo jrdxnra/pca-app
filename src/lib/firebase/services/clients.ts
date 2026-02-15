@@ -12,7 +12,7 @@ import {
   onSnapshot,
   Timestamp
 } from 'firebase/firestore';
-import { db, getDb } from '../config';
+import { db, getDb, auth } from '../config';
 import { Client, PersonalRecord, SessionCounts, RecentExercisePerformance, ClientRecentPerformance } from '@/lib/types';
 
 const COLLECTION_NAME = 'clients';
@@ -31,8 +31,14 @@ export async function createClient(clientData: Omit<Client, 'id' | 'createdAt' |
       return acc;
     }, {} as Record<string, any>);
 
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Unauthorized');
+    }
+
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...cleanData,
+      ownerId: currentUser.uid,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
       isDeleted: false,
@@ -62,18 +68,37 @@ export async function getClient(id: string): Promise<Client | null> {
 
 export async function getAllClients(includeDeleted = false): Promise<Client[]> {
   try {
-    let q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.warn('Unauthorized access attempt to getAllClients');
+      return [];
+    }
+
+    // Base query with ownerId filter
+    // Note: This requires a composite index if combining with other filters/orders
+    // For now, we'll do client-side filtering for complex sorts if needed, 
+    // but Firestore can handle single field equality + sort
+    let q = query(
+      collection(getDb(), COLLECTION_NAME),
+      where('ownerId', '==', currentUser.uid)
+    );
 
     if (!includeDeleted) {
-      q = query(collection(getDb(), COLLECTION_NAME), where('isDeleted', '==', false), orderBy('name'));
+      q = query(
+        collection(getDb(), COLLECTION_NAME),
+        where('ownerId', '==', currentUser.uid),
+        where('isDeleted', '==', false)
+      );
     }
 
     const querySnapshot = await getDocs(q);
 
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Client[];
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)) as Client[];
   } catch (error) {
     console.error('Error getting clients:', error);
     throw error;
@@ -356,17 +381,32 @@ export async function getAllRecentExercisePerformance(
  * Real-time subscription to clients
  */
 export function subscribeToClients(callback: (clients: Client[]) => void, includeDeleted = false): () => void {
-  let q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.warn('Unauthorized access attempt to subscribeToClients');
+    return () => { };
+  }
+
+  let q = query(
+    collection(getDb(), COLLECTION_NAME),
+    where('ownerId', '==', currentUser.uid)
+  );
 
   if (!includeDeleted) {
-    q = query(collection(getDb(), COLLECTION_NAME), where('isDeleted', '==', false), orderBy('name'));
+    q = query(
+      collection(getDb(), COLLECTION_NAME),
+      where('ownerId', '==', currentUser.uid),
+      where('isDeleted', '==', false)
+    );
   }
 
   return onSnapshot(q, (querySnapshot) => {
-    const clients = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Client[];
+    const clients = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)) as Client[];
 
     callback(clients);
   }, (error) => {

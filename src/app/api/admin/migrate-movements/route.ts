@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,11 +10,12 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const movementsRef = adminDb.collection('movements');
+        const db = getAdminDb();
+        const movementsRef = db.collection('movements');
         const snapshot = await movementsRef.get();
 
         let updatedCount = 0;
-        const batch = adminDb.batch();
+        const batch = db.batch();
         let batchCount = 0;
 
         snapshot.docs.forEach(doc => {

@@ -1,19 +1,28 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
   getDoc,
   getDocs,
-  query, 
+  query,
   where,
   orderBy,
   Timestamp
 } from 'firebase/firestore';
-import { db, getDb } from '../config';
+import { db, getDb, auth } from '../config';
 import type { WorkoutLog } from '@/lib/types';
 
 const COLLECTION_NAME = 'workoutLogs';
+
+// Helper to get current user ID
+function getOwnerId(): string {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Unauthorized');
+  }
+  return currentUser.uid;
+}
 
 /**
  * Create a new workout log
@@ -22,14 +31,15 @@ export async function createWorkoutLog(
   workoutLog: Omit<WorkoutLog, 'id' | 'createdAt'>
 ): Promise<WorkoutLog> {
   const now = Timestamp.now();
-  
+
   const logData = {
     ...workoutLog,
+    ownerId: getOwnerId(),
     createdAt: now,
   };
 
   const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), logData);
-  
+
   return {
     id: docRef.id,
     ...logData,
@@ -65,7 +75,7 @@ export async function getWorkoutLogByScheduledWorkout(
   );
 
   const querySnapshot = await getDocs(q);
-  
+
   if (querySnapshot.empty) {
     return null;
   }
@@ -84,6 +94,7 @@ export async function getWorkoutLogByScheduledWorkout(
 export async function fetchClientWorkoutLogs(clientId: string): Promise<WorkoutLog[]> {
   const q = query(
     collection(getDb(), COLLECTION_NAME),
+    where('ownerId', '==', getOwnerId()),
     where('clientId', '==', clientId),
     orderBy('completedDate', 'desc')
   );
@@ -116,7 +127,7 @@ export async function upsertWorkoutLog(
 ): Promise<WorkoutLog> {
   // Check if log already exists
   const existingLog = await getWorkoutLogByScheduledWorkout(scheduledWorkoutId);
-  
+
   if (existingLog) {
     // Update existing log
     await updateWorkoutLog(existingLog.id, workoutLogData);

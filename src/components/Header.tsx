@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Navigation, HamburgerMenu } from './Navigation';
+import { Navigation, ProfileMenu } from './Navigation';
 import { CalendarClock, Loader2 } from 'lucide-react';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
@@ -12,6 +12,10 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Hide global header on landing/marketing and login pages
+  if (pathname === '/' || pathname === '/login') return null;
+
   // Disable sticky header on programs/schedule pages
   const isSchedulePage = pathname?.startsWith('/programs');
 
@@ -91,7 +95,7 @@ export function Header() {
               <Navigation />
             </div>
 
-            {/* Right side - Sync Button and Hamburger Menu */}
+            {/* Right side - Sync Button and Profile Menu */}
             <div className="flex items-center gap-2">
               {/* Calendar Sync Button - Green when connected, Red when not */}
               <button
@@ -110,8 +114,8 @@ export function Header() {
                 )}
               </button>
 
-              {/* Hamburger Menu */}
-              <HamburgerMenu />
+              {/* Profile Menu */}
+              <ProfileMenu />
             </div>
           </div>
         </div>

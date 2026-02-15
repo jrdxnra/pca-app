@@ -29,13 +29,27 @@ export async function getCalendarEventsByDateRange(
 ): Promise<GoogleCalendarEvent[]> {
   // ONLY use Google Calendar API - no Firebase fallback
   // This ensures all calendar events come from Google Calendar as the single source of truth
-  
+
   try {
     console.log('[getCalendarEventsByDateRange] Fetching events for:', { start: startDate.toISOString(), end: endDate.toISOString() });
-    
-    const isGoogleCalendarConnected = await checkGoogleCalendarAuth();
+
+    // Get current user token for auth check
+    // We need to pass the ID token because checkGoogleCalendarAuth needs it to verify the user
+    // on the server side (via /api/calendar/auth/status)
+    const { auth } = await import('@/lib/firebase/config');
+    let idToken: string | undefined;
+
+    if (auth.currentUser) {
+      try {
+        idToken = await auth.currentUser.getIdToken();
+      } catch (e) {
+        console.warn('Failed to get ID token for calendar auth check:', e);
+      }
+    }
+
+    const isGoogleCalendarConnected = await checkGoogleCalendarAuth(idToken);
     console.log('[getCalendarEventsByDateRange] Google Calendar connected:', isGoogleCalendarConnected);
-    
+
     if (!isGoogleCalendarConnected) {
       console.warn('⚠️ Google Calendar is not connected. Calendar events will not be available.');
       console.warn('💡 To fix: Go to Configure → App Config → Connect Google Calendar');
@@ -48,29 +62,31 @@ export async function getCalendarEventsByDateRange(
       coachingKeywords: [],
       classKeywords: [],
     });
-    
+
     const calendarId = config.selectedCalendarId || 'primary';
     console.log('[getCalendarEventsByDateRange] Using calendar ID:', calendarId);
-    
+
+    // Fetch from Google Calendar API (ONLY source)
     // Fetch from Google Calendar API (ONLY source)
     const googleEvents = await fetchGoogleCalendarEvents(
       startDate,
       endDate,
-      calendarId
+      calendarId,
+      idToken
     );
     console.log('[getCalendarEventsByDateRange] Fetched events from Google:', googleEvents.length);
-    
+
     // Helper functions to detect event types based on keywords
     const isCoachingEvent = (event: any, keywords: string[]): boolean => {
       const title = event.summary?.toLowerCase() || '';
       return keywords.some(keyword => title.includes(keyword.toLowerCase()));
     };
-    
+
     const isClassEvent = (event: any, keywords: string[]): boolean => {
       const title = event.summary?.toLowerCase() || '';
       return keywords.some(keyword => title.includes(keyword.toLowerCase()));
     };
-    
+
     // Convert Google Calendar API format to our format
     const events: GoogleCalendarEvent[] = googleEvents.map((event: any) => {
       // Check shared first (from work calendar sync), then private (from PCA app)
@@ -79,7 +95,7 @@ export async function getCalendarEventsByDateRange(
       const workoutId = event.extendedProperties?.private?.pcaWorkoutId;
       const guestEmails = event.extendedProperties?.shared?.guest_emails || event.extendedProperties?.private?.guest_emails;
       const originalEventId = event.extendedProperties?.shared?.originalId || event.extendedProperties?.private?.originalId;
-      
+
       return {
         id: event.id,
         summary: event.summary || '',
@@ -109,7 +125,7 @@ export async function getCalendarEventsByDateRange(
         isClassSession: isClassEvent(event, config.classKeywords || []),
       };
     });
-    
+
     console.log('[getCalendarEventsByDateRange] Returning events:', events.length);
     return events;
   } catch (error) {
@@ -119,14 +135,14 @@ export async function getCalendarEventsByDateRange(
       message: errorMessage,
       error: error
     });
-    
+
     // Check if it's an authentication error
     if (errorMessage.includes('Authentication') || errorMessage.includes('401') || errorMessage.includes('Not authenticated')) {
       console.warn('💡 Google Calendar authentication failed. Please reconnect: Configure → App Config → Connect Google Calendar');
     } else if (errorMessage.includes('Permission') || errorMessage.includes('403')) {
       console.warn('💡 Google Calendar permission denied. Please reconnect with proper permissions: Configure → App Config → Connect Google Calendar');
     }
-    
+
     // Return empty array instead of throwing to prevent React Query retry loops
     // The error is already logged, and returning empty array allows the UI to render
     // Users will see no events, which is better than an infinite loading state

@@ -6,26 +6,22 @@ import {
   deleteDoc,
   getDocs,
   query,
+  where,
   orderBy,
   Timestamp
 } from 'firebase/firestore';
-import { db, getDb } from '../config';
+import { db, getDb, auth } from '../config';
+import { WeekTemplate, WeekTemplateDay } from '../../types';
 
-export interface WeekTemplateDay {
-  day: string;
-  workoutCategory: string;
-  variations?: string[];
-}
+export type { WeekTemplate, WeekTemplateDay };
 
-export interface WeekTemplate {
-  id: string;
-  name: string;
-  color: string;
-  days: WeekTemplateDay[];
-  order: number;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  createdBy: string;
+// Helper to get current user ID
+function getOwnerId(): string {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Unauthorized');
+  }
+  return currentUser.uid;
 }
 
 export const createWeekTemplate = async (template: Omit<WeekTemplate, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<string> => {
@@ -39,7 +35,8 @@ export const createWeekTemplate = async (template: Omit<WeekTemplate, 'id' | 'cr
       })),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-      createdBy: 'current-user' // TODO: Get from auth context
+      createdBy: getOwnerId(),
+      ownerId: getOwnerId()
     });
     return docRef.id;
   } catch (error) {
@@ -82,7 +79,11 @@ export const deleteWeekTemplate = async (id: string): Promise<void> => {
 
 export const fetchWeekTemplates = async (): Promise<WeekTemplate[]> => {
   try {
-    const q = query(collection(getDb(), 'weekTemplates'), orderBy('order', 'asc'));
+    const q = query(
+      collection(getDb(), 'weekTemplates'),
+      where('ownerId', '==', getOwnerId()),
+      orderBy('order', 'asc')
+    );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,

@@ -1,26 +1,18 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
-  query, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  query,
   orderBy,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
 import { db, getDb } from '../config';
+import { WorkoutCategory } from '../../types';
 
-export interface WorkoutCategory {
-  id: string;
-  name: string;
-  color: string;
-  order: number;
-  linkedWorkoutStructureTemplateId?: string; // NEW: Link to template
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  createdBy: string;
-}
+export type { WorkoutCategory };
 
 export const createWorkoutCategory = async (category: Omit<WorkoutCategory, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<string> => {
   try {

@@ -1,26 +1,18 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
-  query, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  query,
   orderBy,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
 import { db, getDb } from '../config';
+import { WorkoutType } from '../../types';
 
-export interface WorkoutType {
-  id: string;
-  name: string;
-  color: string;
-  description: string;
-  order: number;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  createdBy: string;
-}
+export type { WorkoutType };
 
 export const createWorkoutType = async (workoutType: Omit<WorkoutType, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<string> => {
   try {

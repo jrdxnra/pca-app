@@ -12,11 +12,20 @@ import {
   onSnapshot,
   Timestamp
 } from 'firebase/firestore';
-import { db, getDb } from '../config';
+import { db, getDb, auth } from '../config';
 import { Movement, MovementCategory } from '@/lib/types';
 import { getMovementCategory } from './movementCategories';
 
 const COLLECTION_NAME = 'movements';
+
+// Helper to get current user ID
+function getOwnerId(): string {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Unauthorized');
+  }
+  return currentUser.uid;
+}
 
 /**
  * Add a new movement
@@ -61,6 +70,7 @@ export async function addMovement(
       ...(movementData.instructions && { instructions: movementData.instructions }),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
+      ownerId: getOwnerId(),
     };
 
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), cleanData);
@@ -100,13 +110,18 @@ export async function getMovement(id: string, includeCategory = false): Promise<
  */
 export async function getAllMovements(includeCategory = false): Promise<Movement[]> {
   try {
-    const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
+    const q = query(
+      collection(getDb(), COLLECTION_NAME),
+      where('ownerId', '==', getOwnerId())
+    );
     const querySnapshot = await getDocs(q);
 
-    const movements = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Movement[];
+    const movements = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)) as Movement[];
 
     if (includeCategory) {
       // Populate category data for each movement
@@ -294,13 +309,18 @@ export function subscribeToMovementsByCategory(
  * Subscribe to all movements changes
  */
 export function subscribeToMovements(callback: (movements: Movement[]) => void): () => void {
-  const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
+  const q = query(
+    collection(getDb(), COLLECTION_NAME),
+    where('ownerId', '==', getOwnerId())
+  );
 
   return onSnapshot(q, (querySnapshot) => {
-    const movements = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Movement[];
+    const movements = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)) as Movement[];
 
     callback(movements);
   }, (error) => {

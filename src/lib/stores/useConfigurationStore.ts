@@ -3,29 +3,25 @@ import {
   fetchPeriods,
   createPeriod,
   updatePeriod,
-  deletePeriod,
-  Period
+  deletePeriod
 } from '@/lib/firebase/services/periods';
 import {
   fetchWeekTemplates,
   createWeekTemplate,
   updateWeekTemplate,
-  deleteWeekTemplate,
-  WeekTemplate
+  deleteWeekTemplate
 } from '@/lib/firebase/services/weekTemplates';
 import {
   fetchWorkoutCategories,
   createWorkoutCategory,
   updateWorkoutCategory,
-  deleteWorkoutCategory,
-  WorkoutCategory
+  deleteWorkoutCategory
 } from '@/lib/firebase/services/workoutCategories';
 import {
   fetchWorkoutTypes,
   createWorkoutType,
   updateWorkoutType,
-  deleteWorkoutType,
-  WorkoutType
+  deleteWorkoutType
 } from '@/lib/firebase/services/workoutTypes';
 import {
   fetchWorkoutStructureTemplates,
@@ -35,8 +31,7 @@ import {
 } from '@/lib/firebase/services/workoutStructureTemplates';
 import {
   getBusinessHours,
-  updateBusinessHoursInFirebase,
-  BusinessHours
+  updateBusinessHoursInFirebase
 } from '@/lib/firebase/services/businessHours';
 import {
   getAllWorkoutTemplates,
@@ -44,7 +39,15 @@ import {
   updateWorkoutTemplate,
   deleteWorkoutTemplate
 } from '@/lib/firebase/services/workouts';
-import { WorkoutStructureTemplate, WorkoutTemplate } from '@/lib/types';
+import {
+  WorkoutStructureTemplate,
+  WorkoutTemplate,
+  Period,
+  WeekTemplate,
+  MovementCategory as WorkoutCategory,
+  WorkoutType,
+  BusinessHours
+} from '@/lib/types';
 
 interface ConfigurationState {
   // Data

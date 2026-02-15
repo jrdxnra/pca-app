@@ -1,26 +1,18 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
-  query, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  query,
   orderBy,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
 import { db, getDb } from '../config';
+import { Period } from '../../types';
 
-export interface Period {
-  id: string;
-  name: string;
-  color: string;
-  focus: string;
-  order: number;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  createdBy: string;
-}
+export type { Period };
 
 export const createPeriod = async (period: Omit<Period, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<string> => {
   try {

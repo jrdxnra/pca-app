@@ -1,20 +1,30 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
   getDoc,
   query,
   orderBy,
+  where,
   onSnapshot,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
-import { db, getDb } from '../config';
+import { db, getDb, auth } from '../config';
 import { MovementCategory } from '@/lib/types';
 
 const COLLECTION_NAME = 'movement-categories';
+
+// Helper to get current user ID
+function getOwnerId(): string {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Unauthorized');
+  }
+  return currentUser.uid;
+}
 
 /**
  * Add a new movement category
@@ -25,6 +35,7 @@ export async function addMovementCategory(
   try {
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...categoryData,
+      ownerId: getOwnerId(),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
@@ -42,7 +53,7 @@ export async function getMovementCategory(id: string): Promise<MovementCategory 
   try {
     const docRef = doc(getDb(), COLLECTION_NAME, id);
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       return { id: docSnap.id, ...docSnap.data() } as MovementCategory;
     }
@@ -58,13 +69,18 @@ export async function getMovementCategory(id: string): Promise<MovementCategory 
  */
 export async function getAllMovementCategories(): Promise<MovementCategory[]> {
   try {
-    const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
+    const q = query(
+      collection(getDb(), COLLECTION_NAME),
+      where('ownerId', '==', getOwnerId())
+    );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as MovementCategory[];
+
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)) as MovementCategory[];
   } catch (error) {
     console.error('Error getting movement categories:', error);
     throw error;
@@ -75,7 +91,7 @@ export async function getAllMovementCategories(): Promise<MovementCategory[]> {
  * Update a movement category
  */
 export async function updateMovementCategory(
-  id: string, 
+  id: string,
   updates: Partial<Omit<MovementCategory, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
@@ -107,14 +123,19 @@ export async function deleteMovementCategory(id: string): Promise<void> {
  * Subscribe to movement categories changes
  */
 export function subscribeToMovementCategories(callback: (categories: MovementCategory[]) => void): () => void {
-  const q = query(collection(getDb(), COLLECTION_NAME), orderBy('name'));
-  
+  const q = query(
+    collection(getDb(), COLLECTION_NAME),
+    where('ownerId', '==', getOwnerId())
+  );
+
   return onSnapshot(q, (querySnapshot) => {
-    const categories = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as MovementCategory[];
-    
+    const categories = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name)) as MovementCategory[];
+
     callback(categories);
   }, (error) => {
     console.error('Error in movement categories subscription:', error);
@@ -168,7 +189,7 @@ export async function initializeDefaultCategories(): Promise<void> {
     ];
 
     // Add all categories
-    const promises = defaultCategories.map(category => 
+    const promises = defaultCategories.map(category =>
       addMovementCategory(category)
     );
 

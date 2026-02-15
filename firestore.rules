@@ -5,77 +5,43 @@ service cloud.firestore {
     // OPTION 1: Temporary open access (extends expiration date)
     // Use this if you haven't implemented Firebase Authentication yet
     // Update the date below to extend access (format: year, month, day)
-    match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2026, 12, 31);
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(data) {
+      return data.ownerId == request.auth.uid;
+    }
+
+
+    // Generic rule for collections that support multi-tenancy
+    match /{collectionName}/{docId} {
+      // Allow read/write ONLY if the user is the owner
+      allow read, update, delete: if isAuthenticated() && isOwner(resource.data);
+      allow create: if isAuthenticated() && isOwner(request.resource.data);
+    }
+
+    // Allow users to manage their own tokens (e.g. Google Calendar)
+    match /users/{userId}/tokens/{tokenId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Allow legacy token storage (temporary fix for OAuth callback)
+    match /googleCalendarTokens/{tokenId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Special collections - enforcing strict ownership as well
+    match /movements/{movementId} {
+      allow read, write: if isAuthenticated() && isOwner(resource.data);
+      allow create: if isAuthenticated() && isOwner(request.resource.data);
     }
     
-    // OPTION 2: Authentication-based rules (uncomment when auth is implemented)
-    // Uncomment the section below and comment out Option 1 when ready
-    
-    // Helper function to check if user is authenticated
-    // function isAuthenticated() {
-    //   return request.auth != null;
-    // }
-    
-    // Clients collection - authenticated users can read/write all clients
-    // match /clients/{clientId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Movements collection - shared catalog
-    // match /movements/{movementId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Movement Categories - shared catalog
-    // match /movementCategories/{categoryId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Programs collection
-    // match /programs/{programId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Scheduled Workouts
-    // match /scheduled-workouts/{workoutId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Workout Templates
-    // match /workout-templates/{templateId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Workout Categories
-    // match /workoutCategories/{categoryId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Workout Types
-    // match /workoutTypes/{typeId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Week Templates
-    // match /weekTemplates/{templateId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Periods
-    // match /periods/{periodId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Workout Structure Templates
-    // match /workoutStructureTemplates/{templateId} {
-    //   allow read, write: if isAuthenticated();
-    // }
-    
-    // Client Workouts
-    // match /clientWorkouts/{workoutId} {
-    //   allow read, write: if isAuthenticated();
-    // }
+    match /movement-categories/{categoryId} {
+      allow read, write: if isAuthenticated() && isOwner(resource.data);
+      allow create: if isAuthenticated() && isOwner(request.resource.data);
+    }
   }
 }
 

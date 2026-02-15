@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createOAuth2Client, setCredentials } from '@/lib/google-calendar/auth';
 import { createRecurringEvent, getEvents, deleteRecurringEvent } from '@/lib/google-calendar/calendar-service';
 import { weekTemplateToRRULE } from '@/lib/google-calendar/rrule-utils';
-import { getStoredTokens, getValidAccessToken } from '@/lib/google-calendar/token-storage';
+import { getStoredTokens } from '@/lib/google-calendar/adapters/token-adapter';
+import { getValidAccessToken } from '@/lib/google-calendar/auth-service';
+import { getAuthenticatedUser } from '@/lib/auth/get-authenticated-user';
 
 /**
  * GET /api/calendar/events
@@ -33,8 +35,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get stored tokens
-    const tokens = await getStoredTokens();
+    // Authenticate user
+    const userId = await getAuthenticatedUser(request);
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get stored tokens via ADAPTER
+    const tokens = await getStoredTokens(userId);
 
     if (!tokens || !tokens.accessToken) {
       return NextResponse.json(
@@ -45,8 +56,8 @@ export async function GET(request: NextRequest) {
 
     const oauth2Client = createOAuth2Client();
 
-    // Try to refresh token if needed
-    const validToken = await getValidAccessToken();
+    // Try to refresh token if needed via SERVICE
+    const validToken = await getValidAccessToken(userId);
 
     if (!validToken) {
       return NextResponse.json(
@@ -108,8 +119,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get stored tokens
-    const tokens = await getStoredTokens();
+    // Authenticate user
+    const userId = await getAuthenticatedUser(request);
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get stored tokens via ADAPTER
+    const tokens = await getStoredTokens(userId);
 
     if (!tokens || !tokens.accessToken) {
       return NextResponse.json(
@@ -120,8 +140,8 @@ export async function POST(request: NextRequest) {
 
     const oauth2Client = createOAuth2Client();
 
-    // Try to refresh token if needed
-    const validToken = await getValidAccessToken();
+    // Try to refresh token if needed via SERVICE
+    const validToken = await getValidAccessToken(userId);
 
     if (!validToken) {
       return NextResponse.json(
@@ -133,8 +153,6 @@ export async function POST(request: NextRequest) {
     setCredentials(oauth2Client, validToken, tokens.refreshToken);
 
     // If weekTemplateId is provided, convert it to RRULE
-    // Note: weekTemplate data should be passed in the request body
-    // or fetched from Firebase here
     let recurrence: string[] = [];
 
     console.log('Creating recurring event with params:', {
@@ -150,27 +168,22 @@ export async function POST(request: NextRequest) {
       try {
         const weekTemplate = body.weekTemplate;
         const rruleMap = weekTemplateToRRULE(weekTemplate, new Date(endDate));
-        console.log('RRULE map generated:', Array.from(rruleMap.entries()));
         // Get RRULE for this specific category
         const categoryRRULE = rruleMap.get(categoryName);
         if (categoryRRULE) {
           recurrence = categoryRRULE;
-          console.log('Using RRULE for category:', categoryName, recurrence);
         } else {
-          console.warn(`No RRULE found for category: ${categoryName}. Available categories:`, Array.from(rruleMap.keys()));
+          console.warn(`No RRULE found for category: ${categoryName}`);
         }
       } catch (rruleError) {
         console.error('Error generating RRULE:', rruleError);
       }
     }
 
-    // If no RRULE from template, create one for a single day
+    // If no RRULE from template, create one for a single day (fallback)
     if (recurrence.length === 0) {
-      // This is a fallback - ideally you'd know which day of week this is
-      // For now, we'll create a weekly recurrence until end date
       const untilDate = formatDateForRRULE(new Date(endDate));
       recurrence = [`RRULE:FREQ=WEEKLY;UNTIL=${untilDate}`];
-      console.log('Using fallback RRULE:', recurrence);
     }
 
     const event = await createRecurringEvent(
@@ -194,7 +207,6 @@ export async function POST(request: NextRequest) {
     console.error('Error creating calendar event:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to create calendar event';
     const errorDetails = error instanceof Error ? error.stack : String(error);
-    console.error('Error details:', errorDetails);
     return NextResponse.json(
       {
         error: errorMessage,
@@ -230,8 +242,17 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Get stored tokens
-    const tokens = await getStoredTokens();
+    // Authenticate user
+    const userId = await getAuthenticatedUser(request);
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get stored tokens via ADAPTER
+    const tokens = await getStoredTokens(userId);
 
     if (!tokens || !tokens.accessToken) {
       return NextResponse.json(
@@ -242,8 +263,8 @@ export async function DELETE(request: NextRequest) {
 
     const oauth2Client = createOAuth2Client();
 
-    // Try to refresh token if needed
-    const validToken = await getValidAccessToken();
+    // Try to refresh token if needed via SERVICE
+    const validToken = await getValidAccessToken(userId);
 
     if (!validToken) {
       return NextResponse.json(

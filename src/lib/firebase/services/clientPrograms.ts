@@ -1,17 +1,17 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
   getDoc,
   query,
   where,
   orderBy,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
-import { db, getDb } from '../config';
+import { db, getDb, auth } from '../config';
 import { ClientProgram, ClientProgramPeriod } from '@/lib/types';
 
 const COLLECTION_NAME = 'client-programs';
@@ -19,11 +19,11 @@ const COLLECTION_NAME = 'client-programs';
 // Helper function to remove undefined values for Firebase
 function cleanForFirebase(obj: any): any {
   if (obj === null || obj === undefined) return obj;
-  
+
   if (Array.isArray(obj)) {
     return obj.map(cleanForFirebase);
   }
-  
+
   if (typeof obj === 'object') {
     const cleaned: any = {};
     Object.keys(obj).forEach(key => {
@@ -33,8 +33,17 @@ function cleanForFirebase(obj: any): any {
     });
     return cleaned;
   }
-  
+
   return obj;
+}
+
+// Helper to get current user ID
+function getOwnerId(): string {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Unauthorized');
+  }
+  return currentUser.uid;
 }
 
 /**
@@ -48,10 +57,11 @@ export async function createClientProgram(
     const now = Timestamp.now();
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...clientProgramData,
+      ownerId: getOwnerId(),
       createdAt: now,
       updatedAt: now,
     });
-    
+
     // Return the full program object
     return {
       id: docRef.id,
@@ -69,7 +79,7 @@ export async function getClientProgram(id: string): Promise<ClientProgram | null
   try {
     const docRef = doc(getDb(), COLLECTION_NAME, id);
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       return {
         id: docSnap.id,
@@ -86,12 +96,13 @@ export async function getClientProgram(id: string): Promise<ClientProgram | null
 export async function getClientProgramsByClient(clientId: string): Promise<ClientProgram[]> {
   try {
     const q = query(
-      collection(getDb(), COLLECTION_NAME), 
+      collection(getDb(), COLLECTION_NAME),
+      where('ownerId', '==', getOwnerId()),
       where('clientId', '==', clientId),
       orderBy('startDate', 'desc')
     );
     const querySnapshot = await getDocs(q);
-    
+
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -105,11 +116,12 @@ export async function getClientProgramsByClient(clientId: string): Promise<Clien
 export async function getAllClientPrograms(): Promise<ClientProgram[]> {
   try {
     const q = query(
-      collection(getDb(), COLLECTION_NAME), 
+      collection(getDb(), COLLECTION_NAME),
+      where('ownerId', '==', getOwnerId()),
       orderBy('startDate', 'desc')
     );
     const querySnapshot = await getDocs(q);
-    
+
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -121,7 +133,7 @@ export async function getAllClientPrograms(): Promise<ClientProgram[]> {
 }
 
 export async function updateClientProgram(
-  id: string, 
+  id: string,
   updates: Partial<Omit<ClientProgram, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
@@ -152,7 +164,7 @@ export async function deleteClientProgram(id: string): Promise<void> {
  */
 
 export async function addPeriodToClientProgram(
-  clientProgramId: string, 
+  clientProgramId: string,
   period: Omit<ClientProgramPeriod, 'id'>
 ): Promise<void> {
   try {
@@ -167,7 +179,7 @@ export async function addPeriodToClientProgram(
     };
 
     const updatedPeriods = [...clientProgram.periods, newPeriod];
-    
+
     // Log with raw date values (no conversion)
     console.log('Saving period to Firebase:', {
       clientProgramId,
@@ -180,18 +192,18 @@ export async function addPeriodToClientProgram(
       collection: 'client-programs',
       documentId: clientProgramId
     });
-    
+
     console.log('Updating client program document with periods:', {
       documentId: clientProgramId,
       collection: COLLECTION_NAME,
       periodsCount: updatedPeriods.length,
       periodIds: updatedPeriods.map(p => p.id)
     });
-    
+
     await updateClientProgram(clientProgramId, {
       periods: updatedPeriods
     });
-    
+
     // Verify the save by reading it back
     const verifyProgram = await getClientProgram(clientProgramId);
     console.log('Verification - Period saved successfully to Firebase:', {
@@ -207,8 +219,8 @@ export async function addPeriodToClientProgram(
 }
 
 export async function updatePeriodInClientProgram(
-  clientProgramId: string, 
-  periodId: string, 
+  clientProgramId: string,
+  periodId: string,
   updates: Partial<Omit<ClientProgramPeriod, 'id'>>
 ): Promise<void> {
   try {
@@ -217,10 +229,10 @@ export async function updatePeriodInClientProgram(
       throw new Error('Client program not found');
     }
 
-    const updatedPeriods = clientProgram.periods.map(period => 
+    const updatedPeriods = clientProgram.periods.map(period =>
       period.id === periodId ? { ...period, ...updates } : period
     );
-    
+
     await updateClientProgram(clientProgramId, {
       periods: updatedPeriods
     });
@@ -231,7 +243,7 @@ export async function updatePeriodInClientProgram(
 }
 
 export async function deletePeriodFromClientProgram(
-  clientProgramId: string, 
+  clientProgramId: string,
   periodId: string
 ): Promise<void> {
   try {
@@ -241,7 +253,7 @@ export async function deletePeriodFromClientProgram(
     }
 
     const updatedPeriods = clientProgram.periods.filter(period => period.id !== periodId);
-    
+
     await updateClientProgram(clientProgramId, {
       periods: updatedPeriods
     });
@@ -264,7 +276,7 @@ export async function deleteAllPeriodsFromClientProgram(
     await updateClientProgram(clientProgramId, {
       periods: []
     });
-    
+
     console.log('Successfully deleted all periods from client program:', clientProgramId);
   } catch (error) {
     console.error('Error deleting all periods from client program:', error);
@@ -295,7 +307,8 @@ export async function assignProgramTemplateToClient(
       status: 'active' as const,
       periods: [],
       notes: assignment.notes || '',
-      createdBy: 'current-user' // TODO: Get from auth context
+      createdBy: getOwnerId(),
+      ownerId: getOwnerId(),
     };
 
     return await createClientProgram(clientProgramData);

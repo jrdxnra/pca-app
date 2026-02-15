@@ -58,20 +58,31 @@ interface AddClientDialogProps {
   onOpenChange?: (open: boolean) => void;
   periods?: Period[];
   clientPrograms?: ClientProgram[];
+  onClientRefresh?: () => Promise<void>;
+  onClientProgramsRefresh?: () => Promise<void>;
 }
 
-export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenChange: controlledOnOpenChange, periods = [], clientPrograms = [] }: AddClientDialogProps) {
+export function AddClientDialog({
+  trigger,
+  client,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  periods = [],
+  clientPrograms = [],
+  onClientRefresh,
+  onClientProgramsRefresh
+}: AddClientDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const { addClient, editClient, loading } = useClientStore();
   const { assignPeriod } = useClientPrograms(client?.id);
   const periodizationRef = useRef<any>(null);
-  
+
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = controlledOnOpenChange || setInternalOpen;
-  
+
   const isEditMode = !!client;
-  
+
   // Get current client's periods
   const clientProgram = isEditMode ? clientPrograms.find(cp => cp.clientId === client?.id) : undefined;
   const clientPeriods = clientProgram?.periods || [];
@@ -156,6 +167,13 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
 
       // Reset form and optionally close dialog
       form.reset();
+
+      // Trigger refresh callbacks
+      if (onClientRefresh) await onClientRefresh();
+      if (onClientProgramsRefresh && isEditMode && client) {
+        await onClientProgramsRefresh();
+      }
+
       if (shouldClose) {
         setOpen(false);
       }
@@ -169,13 +187,13 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
 
   const handleSavePeriods = async (newPeriods: any[]) => {
     if (!isEditMode || !client) return;
-    
+
     setPeriodSaving(true);
     try {
       // Store period selections as visual planning data
       // We'll save these to the client program for display purposes
       const clientProgram = clientPrograms.find(cp => cp.clientId === client.id);
-      
+
       if (!clientProgram) {
         console.log('No client program found, period selections will be shown only in this session');
         return;
@@ -191,7 +209,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
           skipCalendarSync: true,
         });
       }
-      
+
       console.log('Period selections saved to database:', newPeriods.length, 'periods');
     } catch (error) {
       console.error('Failed to save period selections:', error);
@@ -218,7 +236,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
         <DialogHeader className="sticky top-0 bg-background z-10">
           <DialogTitle>{isEditMode ? 'Edit Client' : 'Add New Client'}</DialogTitle>
           <DialogDescription>
-            {isEditMode 
+            {isEditMode
               ? 'Update client information below.'
               : 'Add a new client to your roster. Fill in their details below.'
             }
@@ -226,7 +244,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+          <form onSubmit={form.handleSubmit((data) => onSubmit(data, true))} className="space-y-2">
             <div className="grid grid-cols-12 gap-2">
               {/* Client Name */}
               <div className="col-span-3">
@@ -254,9 +272,9 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                     <FormItem>
                       <FormLabel className="text-xs">Email</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="email" 
-                          placeholder="john@example.com" 
+                        <Input
+                          type="email"
+                          placeholder="john@example.com"
                           {...field}
                           className="text-sm h-8"
                         />
@@ -343,10 +361,10 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                   <FormItem>
                     <FormLabel className="text-xs">Fitness Goals</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <Textarea
                         placeholder="e.g., lose weight, build muscle, improve performance"
                         className="min-h-[60px] text-sm"
-                        {...field} 
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -362,10 +380,10 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                   <FormItem>
                     <FormLabel className="text-xs">Notes</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <Textarea
                         placeholder="Injuries, preferences, schedule, etc."
                         className="min-h-[60px] text-sm"
-                        {...field} 
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -398,9 +416,9 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                 Cancel
               </Button>
               {isEditMode && clientPeriods.length > 0 && (
-                <Button 
+                <Button
                   type="button"
-                  variant="outline" 
+                  variant="outline"
                   disabled={loading || periodSaving}
                   onClick={(e) => {
                     e.preventDefault();
@@ -411,9 +429,9 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                   {loading || periodSaving ? 'Saving...' : 'Save'}
                 </Button>
               )}
-              <Button 
+              <Button
                 type="button"
-                variant="outline" 
+                variant="outline"
                 disabled={loading || periodSaving}
                 onClick={(e) => {
                   e.preventDefault();
@@ -422,7 +440,7 @@ export function AddClientDialog({ trigger, client, open: controlledOpen, onOpenC
                 }}
               >
                 {loading || periodSaving
-                  ? (isEditMode ? 'Saving...' : 'Adding...') 
+                  ? (isEditMode ? 'Saving...' : 'Adding...')
                   : (isEditMode ? 'Save & Close' : 'Add Client')
                 }
               </Button>

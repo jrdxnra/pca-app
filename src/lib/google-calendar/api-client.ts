@@ -50,21 +50,52 @@ export interface UpdateEventParams {
 /**
  * Initiate Google OAuth flow
  */
-export async function initiateGoogleAuth(): Promise<void> {
-  window.location.href = '/api/auth/google';
+export async function initiateGoogleAuth(idToken?: string): Promise<void> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (idToken) {
+    headers['Authorization'] = `Bearer ${idToken}`;
+  }
+
+  // We use POST now to securely pass the idToken in headers
+  const response = await fetch('/api/auth/google', {
+    method: 'POST',
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to initiate Google Calendar connection');
+  }
+
+  const { authUrl } = await response.json();
+  if (authUrl) {
+    window.location.href = authUrl;
+  } else {
+    throw new Error('No authorization URL returned from server');
+  }
 }
 
 /**
  * Create a single (non-recurring) calendar event
  */
 export async function createSingleCalendarEvent(
-  params: CreateSingleEventParams
+  params: CreateSingleEventParams,
+  idToken?: string
 ): Promise<any> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (idToken) {
+    headers['Authorization'] = `Bearer ${idToken}`;
+  }
+
   const response = await fetch('/api/calendar/events/single', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(params),
   });
 
@@ -87,13 +118,20 @@ export async function createSingleCalendarEvent(
  * Create a recurring calendar event
  */
 export async function createRecurringCalendarEvent(
-  params: CreateRecurringEventParams
+  params: CreateRecurringEventParams,
+  idToken?: string
 ): Promise<any> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (idToken) {
+    headers['Authorization'] = `Bearer ${idToken}`;
+  }
+
   const response = await fetch('/api/calendar/events', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(params),
   });
 
@@ -118,7 +156,8 @@ export async function createRecurringCalendarEvent(
 export async function fetchCalendarEvents(
   timeMin: Date,
   timeMax: Date,
-  calendarId: string = 'primary'
+  calendarId: string = 'primary',
+  idToken?: string
 ): Promise<any[]> {
   /* 
    * Note: The API route expects 'start' and 'end' parameters, 
@@ -131,7 +170,15 @@ export async function fetchCalendarEvents(
     calendarId,
   });
 
-  const response = await fetch(`/api/calendar/events?${params.toString()}`);
+  const headers: HeadersInit = {};
+  if (idToken) {
+    headers['Authorization'] = `Bearer ${idToken}`;
+  }
+
+  const response = await fetch(`/api/calendar/events?${params.toString()}`, {
+    method: 'GET',
+    headers,
+  });
 
   if (!response.ok) {
     let error: any = {};
@@ -153,13 +200,20 @@ export async function fetchCalendarEvents(
  * Update a calendar event
  */
 export async function updateCalendarEvent(
-  params: UpdateEventParams
+  params: UpdateEventParams,
+  idToken?: string
 ): Promise<any> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (idToken) {
+    headers['Authorization'] = `Bearer ${idToken}`;
+  }
+
   const response = await fetch('/api/calendar/events/update', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(params),
   });
 
@@ -184,7 +238,8 @@ export async function updateCalendarEvent(
 export async function deleteCalendarEvent(
   eventId: string,
   instanceDate?: string,
-  calendarId: string = 'primary'
+  calendarId: string = 'primary',
+  idToken?: string
 ): Promise<void> {
   const params = new URLSearchParams({
     eventId,
@@ -195,8 +250,14 @@ export async function deleteCalendarEvent(
     params.append('instanceDate', instanceDate);
   }
 
+  const headers: HeadersInit = {};
+  if (idToken) {
+    headers['Authorization'] = `Bearer ${idToken}`;
+  }
+
   const response = await fetch(`/api/calendar/events?${params.toString()}`, {
     method: 'DELETE',
+    headers,
   });
 
   if (!response.ok) {
@@ -215,19 +276,33 @@ export async function deleteCalendarEvent(
 /**
  * Check if user is authenticated with Google Calendar
  */
-export async function checkGoogleCalendarAuth(): Promise<boolean> {
+/**
+ * Check if user is authenticated with Google Calendar
+ */
+export async function checkGoogleCalendarAuth(idToken?: string): Promise<boolean> {
   try {
+    const headers: HeadersInit = {
+      'Pragma': 'no-cache',
+      'Cache-Control': 'no-cache'
+    };
+
+    if (idToken) {
+      headers['Authorization'] = `Bearer ${idToken}`;
+    }
+
     const response = await fetch('/api/calendar/auth/status', {
       cache: 'no-store',
-      headers: {
-        'Pragma': 'no-cache',
-        'Cache-Control': 'no-cache'
-      }
+      headers
     });
-    if (!response.ok) return false;
+
+    if (!response.ok) {
+      return false;
+    }
+
     const data = await response.json();
     return data.isAuthenticated === true;
-  } catch {
+  } catch (error) {
+    console.error('Error checking auth status:', error);
     return false;
   }
 }
@@ -257,7 +332,8 @@ export async function addWorkoutLinksToEvent(
   existingDescription?: string,
   updateType: 'single' | 'all' = 'single',
   instanceDate?: string,
-  calendarId: string = 'primary'
+  calendarId: string = 'primary',
+  idToken?: string
 ): Promise<any> {
   console.log('[addWorkoutLinksToEvent] Called with:', {
     eventId,
@@ -292,7 +368,7 @@ export async function addWorkoutLinksToEvent(
       description: updatedDescription,
     },
     calendarId,
-  });
+  }, idToken);
 
   console.log('[addWorkoutLinksToEvent] API result:', result);
   return result;

@@ -1,4 +1,21 @@
-import { Timestamp } from 'firebase/firestore';
+import type { Timestamp } from 'firebase/firestore';
+
+export interface Account {
+  id: string;
+  name: string;
+  ownerId: string; // The primary user who owns the account (e.g., the trainer)
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface Membership {
+  id: string;
+  userId: string;
+  accountId: string;
+  role: 'owner' | 'trainer' | 'client';
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
 
 // Core Types
 export interface Client {
@@ -21,12 +38,24 @@ export interface Client {
   // Session tracking
   targetSessionsPerWeek?: number; // How many sessions client should do per week (baseline for billing)
   sessionCounts?: SessionCounts; // Actual session counts
+  ownerId?: string; // User ID of the trainer who owns this client
 }
 
 export interface EventGoal {
   id: string;
   description: string;
   date: string; // ISO date string (YYYY-MM-DD)
+}
+
+export interface Period {
+  id: string;
+  name: string;
+  color: string;
+  focus: string;
+  order?: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  createdBy?: string;
 }
 
 export interface TrainingPhase {
@@ -124,10 +153,15 @@ export interface MovementCategory {
   id: string;
   name: string;
   color: string; // Hex color code
+  order?: number;
+  linkedWorkoutStructureTemplateId?: string; // Link to template
   defaultConfiguration?: MovementConfiguration;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  createdBy?: string;
 }
+
+export type WorkoutCategory = MovementCategory;
 
 export interface Movement {
   id: string;
@@ -169,6 +203,7 @@ export interface WorkoutTemplate {
   rounds: WorkoutRound[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  ownerId?: string; // User ID of the trainer who owns this template
 }
 
 // Coachella-style Program Structure
@@ -189,6 +224,7 @@ export interface Program {
     focus: string;
     color: string;
   }>;
+  ownerId?: string; // User ID of the trainer who owns this program
 }
 
 export interface ProgramWeek {
@@ -271,6 +307,7 @@ export interface ScheduledWorkout {
   status: 'scheduled' | 'completed' | 'skipped';
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  ownerId?: string; // User ID of the trainer who owns this scheduled workout
 }
 
 // Client Program with Period and Template Assignment
@@ -344,6 +381,7 @@ export interface ClientWorkout {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string;
+  ownerId?: string; // User ID of the trainer who owns this workout
 }
 
 export interface ClientWorkoutWarmup {
@@ -398,18 +436,22 @@ export interface WorkoutLog {
   createdAt: Timestamp;
 }
 
+export interface WeekTemplateDay {
+  day: string;
+  workoutCategory: string;
+  variations?: string[];
+}
+
 export interface WeekTemplate {
   id: string;
   name: string;
-  createdBy: string; // coach ID
-  days: Array<{
-    dayNumber: number; // 1-7
-    workoutTemplateId: string;
-    sessionType: string;
-    // NEW: List of workout structure templates to rotate through
-    variations?: string[]; // IDs of WorkoutStructureTemplates
-  }>;
+  color: string;
+  days: WeekTemplateDay[];
+  order?: number;
   createdAt: Timestamp;
+  updatedAt: Timestamp;
+  createdBy?: string;
+  ownerId?: string; // User ID of the trainer who owns this template
 }
 
 // RPE Calculation Types
@@ -437,6 +479,7 @@ export interface CalendarState {
   selectedClient: string | null;
   scheduledWorkouts: ScheduledWorkout[];
   isLoading: boolean;
+  error: string | null;
 }
 
 // Form Types
@@ -484,5 +527,27 @@ export interface WorkoutStructureTemplate {
   sections: WorkoutStructureTemplateSection[]; // Ordered list
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  createdBy: string;
+  createdBy?: string;
+  ownerId?: string; // User ID of the trainer who owns this template
+}
+
+export interface WorkoutType {
+  id: string;
+  name: string;
+  color: string;
+  description: string;
+  order?: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  createdBy?: string;
+}
+
+export interface DayHours {
+  startHour: number;
+  endHour: number;
+}
+
+export interface BusinessHours {
+  daysOfWeek: number[]; // 0=Sunday, 1=Monday, ..., 6=Saturday
+  dayHours: { [dayIndex: number]: DayHours }; // Per-day hours
 }

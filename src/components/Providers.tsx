@@ -5,6 +5,8 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Toaster } from '@/components/ui/toaster';
 import { QueryProvider } from '@/lib/react-query/QueryProvider';
 
+import { AuthRefreshListener } from '@/components/auth/AuthRefreshListener';
+
 interface ProvidersProps {
   children: ReactNode;
 }
@@ -17,6 +19,7 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <ErrorBoundary>
       <QueryProvider>
+        <AuthRefreshListener />
         {children}
         <Toaster />
       </QueryProvider>

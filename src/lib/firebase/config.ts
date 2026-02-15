@@ -109,7 +109,7 @@ function initializeDb(): Firestore {
     }
     try {
       dbInstance = getFirestore(firebaseApp);
-      
+
       // Connect to Firestore Emulator ONLY in development mode
       // CRITICAL: Never use emulators in production builds
       if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
@@ -141,7 +141,7 @@ function initializeAuth(): Auth {
       throw new Error('Firebase not initialized. Please ensure Firebase configuration is available in window.__FIREBASE_CONFIG__ or environment variables.');
     }
     authInstance = getAuth(firebaseApp);
-    
+
     // Connect to Auth Emulator ONLY in development mode
     // CRITICAL: Never use emulators in production builds
     if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
@@ -184,7 +184,7 @@ async function waitForFirebaseConfig(maxWait = 2000): Promise<boolean> {
 export function getDb(): Firestore {
   // Allow server-side execution for API routes
   // The check for window is removed to allow server-side usage (e.g. in API routes)
-  
+
   try {
     return initializeDb();
   } catch (error) {
@@ -232,7 +232,16 @@ let _db: Firestore | null = null;
 export const db = new Proxy({} as Firestore, {
   get(_target, prop) {
     if (!_db) {
-      _db = getDb();
+      // Only try to initialize if we have config or are on server
+      // This prevents errors on initial load if config is delayed
+      try {
+        _db = getDb();
+      } catch (e) {
+        console.warn('Firestore proxy access failed (likely waiting for config):', e);
+        // Return a dummy that logs errors? Or just throw?
+        // Throwing is safer as it reveals bugs.
+        throw e;
+      }
     }
     const value = (_db as any)[prop];
     if (typeof value === 'function') {
@@ -242,12 +251,24 @@ export const db = new Proxy({} as Firestore, {
   }
 });
 
-export const auth: Auth = (() => {
-  const firebaseApp = ensureApp();
-  if (firebaseApp) {
-    return getAuth(firebaseApp);
+// Lazy export for auth - prevents initialization on import
+let _auth: Auth | null = null;
+export const auth = new Proxy({} as Auth, {
+  get(_target, prop) {
+    if (!_auth) {
+      if (typeof window === 'undefined') {
+        // On server, we generally advise against using Client Auth SDK
+        // But we allow it if called, just log a warning if needed
+        // console.warn('Accessing Firebase Auth on server.');
+      }
+      _auth = initializeAuth();
+    }
+    const value = (_auth as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(_auth);
+    }
+    return value;
   }
-  throw new Error('Firebase Auth not initialized. Please ensure Firebase configuration is available.');
-})();
+});
 
 export default app;

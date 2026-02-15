@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createOAuth2Client, setCredentials } from '@/lib/google-calendar/auth';
 import { createSingleEvent } from '@/lib/google-calendar/calendar-service';
 import { getStoredTokens, getValidAccessToken } from '@/lib/google-calendar/token-storage';
+import { getAuthenticatedUser } from '@/lib/auth/get-authenticated-user';
 
 /**
  * POST /api/calendar/events/single
@@ -32,8 +33,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Authenticate user
+    const userId = await getAuthenticatedUser(request);
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     // Get stored tokens
-    const tokens = await getStoredTokens();
+    const tokens = await getStoredTokens(userId);
 
     if (!tokens || !tokens.accessToken) {
       return NextResponse.json(
@@ -45,7 +55,7 @@ export async function POST(request: NextRequest) {
     const oauth2Client = createOAuth2Client();
 
     // Try to refresh token if needed
-    const validToken = await getValidAccessToken();
+    const validToken = await getValidAccessToken(userId);
 
     if (!validToken) {
       return NextResponse.json(

@@ -73,11 +73,12 @@ export async function GET() {
         // Check Firebase Admin SDK (New server-side storage)
         status.adminSdk = { initialized: false, readSuccess: false };
         try {
-            const { adminDb } = await import('@/lib/firebase/admin');
-            status.adminSdk.initialized = !!adminDb;
+            const { getAdminDb } = await import('@/lib/firebase/admin');
+            const db = getAdminDb();
+            status.adminSdk.initialized = !!db;
 
             try {
-                const adminTokensRef = adminDb.collection('googleCalendarTokens').doc('google-calendar-tokens');
+                const adminTokensRef = db.collection('googleCalendarTokens').doc('google-calendar-tokens');
                 const adminSnap = await adminTokensRef.get();
                 status.adminSdk.readSuccess = true;
                 status.adminSdk.docExists = adminSnap.exists;

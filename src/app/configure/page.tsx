@@ -116,13 +116,13 @@ interface WeekTemplate {
 }
 
 // Horizontal Day Item Component for Week Templates
-function HorizontalDayItem({ 
-  day, 
+function HorizontalDayItem({
+  day,
   index,
   onUpdate,
   onDelete
-}: { 
-  day: { day: string; workoutCategory: string }; 
+}: {
+  day: { day: string; workoutCategory: string };
   index: number;
   onUpdate: (index: number, updates: Partial<{ day: string; workoutCategory: string }>) => void;
   onDelete: (index: number) => void;
@@ -168,14 +168,14 @@ function HorizontalDayItem({
 // Helper function to count workout days by category for WeekTemplate
 function getWorkoutDaysSummary(template: WeekTemplate): string {
   const categoryCounts: Record<string, number> = {};
-  
+
   template.days.forEach(day => {
     const category = day.workoutCategory?.trim();
     if (category && category.toLowerCase() !== 'rest day') {
       categoryCounts[category] = (categoryCounts[category] || 0) + 1;
     }
   });
-  
+
   const parts: string[] = [];
   Object.entries(categoryCounts).forEach(([category, count]) => {
     // Handle pluralization
@@ -189,19 +189,19 @@ function getWorkoutDaysSummary(template: WeekTemplate): string {
     }
     parts.push(`${count} ${label}`);
   });
-  
+
   return parts.join(', ') || 'No workouts';
 }
 
 // Sortable Item Component
-function SortableItem({ 
-  item, 
-  onEdit, 
+function SortableItem({
+  item,
+  onEdit,
   onDelete,
   index,
   type
-}: { 
-  item: Period | WeekTemplate | WorkoutCategory | WorkoutType; 
+}: {
+  item: Period | WeekTemplate | WorkoutCategory | WorkoutType;
   onEdit: (item: any) => void;
   onDelete: (id: string) => void;
   index: number;
@@ -225,8 +225,8 @@ function SortableItem({
   return (
     <div ref={setNodeRef} style={style} className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white">
       <div className="flex items-center gap-3 flex-1">
-        <div 
-          className="w-4 h-4 rounded-full" 
+        <div
+          className="w-4 h-4 rounded-full"
           style={{ backgroundColor: item.color }}
         />
         <div>
@@ -273,7 +273,7 @@ export default function ConfigurePage() {
     if (!input) return '';
     return input.trim().replace(/\s+/g, ' ').toLowerCase();
   };
-  
+
   // Preserve original casing for display
   const preserveOriginalCasing = (original: string, normalized: string): string => {
     return original.trim().replace(/\s+/g, ' ');
@@ -336,15 +336,15 @@ export default function ConfigurePage() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
   const oauthToastShownRef = useRef(false);  // Track if we've already shown the OAuth success toast
-  
+
   // Sync local state with store state when it changes
   useEffect(() => {
     setIsGoogleCalendarConnected(storeIsConnected);
   }, [storeIsConnected]);
-  
+
   // Tab state
   const [activeTab, setActiveTab] = useState<'workout' | 'app'>('workout');
-  
+
   // Read tab from URL query param on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -355,7 +355,7 @@ export default function ConfigurePage() {
       }
     }
   }, []);
-  
+
   // Location management state
   const [uniqueLocations, setUniqueLocations] = useState<string[]>([]);
   const [editingLocation, setEditingLocation] = useState<LocationAbbreviation | null>(null);
@@ -376,7 +376,7 @@ export default function ConfigurePage() {
   const [classKeywordsInput, setClassKeywordsInput] = useState('');
   const [coachingColor, setCoachingColor] = useState('blue');
   const [classColor, setClassColor] = useState('purple');
-  
+
   // Sync keyword inputs from config on mount and when config changes
   useEffect(() => {
     if (calendarConfig.coachingKeywords) {
@@ -397,34 +397,34 @@ export default function ConfigurePage() {
   useEffect(() => {
     const handleOAuthCallback = async () => {
       if (typeof window === 'undefined') return;
-      
+
       const params = new URLSearchParams(window.location.search);
       const connected = params.get('connected');
       const hasError = params.get('error');
-      
+
       if (connected === 'true' && !oauthToastShownRef.current) {
         // We just completed OAuth, force re-check the connection status
         console.log('OAuth redirect detected, force re-checking auth status...');
         oauthToastShownRef.current = true;  // Mark that we've shown the toast
         setCheckingAuth(true);
-        
+
         const storeState = useCalendarStore.getState();
         await storeState.checkGoogleCalendarConnection();
-        
+
         const isConnected = useCalendarStore.getState().isGoogleCalendarConnected;
         setIsGoogleCalendarConnected(isConnected);
         setCheckingAuth(false);
-        
+
         if (isConnected) {
           toastSuccess('Google Calendar connected successfully!');
-          
+
           // Invalidate React Query caches so other pages will refetch with the new connection status
           const queryClient = getGlobalQueryClient();
           if (queryClient) {
             queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
           }
         }
-        
+
         // Clean URL: remove query params so this doesn't run again on refresh
         // Use replaceState to update the browser history without reloading
         const newUrl = window.location.pathname;
@@ -436,7 +436,7 @@ export default function ConfigurePage() {
         window.history.replaceState({ path: newUrl }, '', newUrl);
       }
     };
-    
+
     // Delay to ensure DOM is ready
     const timeoutId = setTimeout(handleOAuthCallback, 0);
     return () => clearTimeout(timeoutId);
@@ -448,7 +448,7 @@ export default function ConfigurePage() {
     fetchCalendars();
     fetchClients();
     fetchBusinessHours();
-    
+
     // Check Google Calendar auth status using the store's connection check
     // This ensures we use the same logic as the Header sync button
     const storeState = useCalendarStore.getState();
@@ -476,7 +476,7 @@ export default function ConfigurePage() {
         setUniqueLocations([]);
         return;
       }
-      
+
       try {
         // Fetch events for a wide date range to get all locations
         const today = new Date();
@@ -484,19 +484,19 @@ export default function ConfigurePage() {
         startDate.setMonth(today.getMonth() - 3); // 3 months back
         const endDate = new Date(today);
         endDate.setMonth(today.getMonth() + 3); // 3 months forward
-        
+
         const { fetchEvents } = useCalendarStore.getState();
         await fetchEvents({ start: startDate, end: endDate });
-        
+
         // Get events from store
         const { events, config } = useCalendarStore.getState();
-        
+
         // Extract locations from ALL events (not just coaching sessions)
         // This ensures we capture all locations including ones that might not be classified as coaching yet
         const locations = events
           .map(event => (event.location ? normalizeLocationKey(event.location) : ''))
           .filter((location): location is string => !!location && location.trim() !== '');
-        
+
         // Get unique locations
         const unique = Array.from(new Set(locations));
         setUniqueLocations(unique.sort());
@@ -504,7 +504,7 @@ export default function ConfigurePage() {
         console.error('Error fetching locations:', error);
       }
     };
-    
+
     if (activeTab === 'app' && isGoogleCalendarConnected) {
       fetchUniqueLocations();
     }
@@ -515,7 +515,7 @@ export default function ConfigurePage() {
     const urlParams = new URLSearchParams(window.location.search);
     const connected = urlParams.get('connected');
     const error = urlParams.get('error');
-    
+
     if (connected === 'true') {
       setIsGoogleCalendarConnected(true);
       // Remove query params from URL
@@ -531,17 +531,17 @@ export default function ConfigurePage() {
   const handleTestConnection = async () => {
     setTestingConnection(true);
     setSyncError(null);
-    
+
     try {
       // Try to fetch events for a small date range to test connection
       const now = new Date();
       const timeMin = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
       const timeMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days ahead
-      
+
       const response = await fetch(
         `/api/calendar/events?timeMin=${timeMin.toISOString()}&timeMax=${timeMax.toISOString()}&calendarId=primary`
       );
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         if (response.status === 401) {
@@ -554,7 +554,7 @@ export default function ConfigurePage() {
         }
         return;
       }
-      
+
       // Connection is working
       setSyncError(null);
       setIsGoogleCalendarConnected(true);
@@ -572,10 +572,29 @@ export default function ConfigurePage() {
   // Handle Google Calendar connection
   const handleConnectGoogleCalendar = async () => {
     try {
-      await initiateGoogleAuth();
+      setTestingConnection(true);
+      const { auth } = await import('@/lib/firebase/config');
+
+      // Wait a moment for auth to initialize if it hasn't
+      let currentUser = auth.currentUser;
+      if (!currentUser) {
+        // Simple retry once after 500ms
+        await new Promise(resolve => setTimeout(resolve, 500));
+        currentUser = auth.currentUser;
+      }
+
+      if (!currentUser) {
+        toastError('You must be signed in to connect Google Calendar. Please refresh or sign in again.');
+        return;
+      }
+
+      const idToken = await currentUser.getIdToken();
+      await initiateGoogleAuth(idToken);
     } catch (error) {
       console.error('Error initiating Google Calendar connection:', error);
-      toastError('Failed to connect to Google Calendar. Please try again.');
+      toastError(error instanceof Error ? error.message : 'Failed to connect to Google Calendar. Please try again.');
+    } finally {
+      setTestingConnection(false);
     }
   };
 
@@ -584,7 +603,7 @@ export default function ConfigurePage() {
     if (!confirm('Are you sure you want to disconnect Google Calendar? You will need to reconnect to create events.')) {
       return;
     }
-    
+
     try {
       await disconnectGoogleCalendar();
       setIsGoogleCalendarConnected(false);
@@ -604,20 +623,20 @@ export default function ConfigurePage() {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingWorkoutTypeId, setEditingWorkoutTypeId] = useState<string | null>(null);
   const [editingWorkoutStructureTemplate, setEditingWorkoutStructureTemplate] = useState<WorkoutStructureTemplate | null>(null);
-  
+
   // For new items (show form at top)
   const [showNewPeriodForm, setShowNewPeriodForm] = useState(false);
   const [showNewTemplateForm, setShowNewTemplateForm] = useState(false);
   const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
   const [showNewWorkoutTypeForm, setShowNewWorkoutTypeForm] = useState(false);
   const [showWorkoutStructureTemplateForm, setShowWorkoutStructureTemplateForm] = useState(false);
-  
+
   // Temporary editing state for inline editing
   const [editingPeriod, setEditingPeriod] = useState<Period | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<WeekTemplate | null>(null);
   const [editingCategory, setEditingCategory] = useState<WorkoutCategory | null>(null);
   const [editingWorkoutType, setEditingWorkoutType] = useState<WorkoutType | null>(null);
-  
+
   // Calendar configuration state
   const [showTestEventForm, setShowTestEventForm] = useState(false);
   const [testEventData, setTestEventData] = useState<TestEventInput>({
@@ -633,7 +652,7 @@ export default function ConfigurePage() {
   const [selectedTestStructure, setSelectedTestStructure] = useState<string>('none');
 
   const colors = [
-    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', 
+    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
     '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#6b7280'
   ];
 
@@ -722,10 +741,10 @@ export default function ConfigurePage() {
     if (editingTemplate) {
       try {
         // Filter out rest days before saving
-        const activeDays = editingTemplate.days.filter(day => 
+        const activeDays = editingTemplate.days.filter(day =>
           day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day'
         );
-        
+
         if (editingTemplate.id.startsWith('temp_')) {
           // New template
           await addWeekTemplate({
@@ -919,7 +938,7 @@ export default function ConfigurePage() {
       // Use the summary field for event title (contains keywords like "Personal Training")
       // Client name is stored separately and will be used for display in month view
       const eventTitle = testEventData.summary || 'Session';
-      
+
       // Create the calendar event
       await createTestEvent({
         ...testEventData,
@@ -927,7 +946,7 @@ export default function ConfigurePage() {
         // Store additional metadata in description for now
         description: `${testEventData.description || ''}${testEventData.description ? '\n\n' : ''}[Metadata: client=${selectedTestClient}, category=${selectedTestCategory}, structure=${selectedTestStructure}]`
       });
-      
+
       // Reset form
       setTestEventData({
         summary: '',
@@ -941,7 +960,7 @@ export default function ConfigurePage() {
       setSelectedTestCategory('none');
       setSelectedTestStructure('none');
       setShowTestEventForm(false);
-      
+
       toastSuccess('Test event created successfully!');
     } catch (error) {
       console.error('Failed to create test event:', error);
@@ -954,7 +973,7 @@ export default function ConfigurePage() {
     const normalizedOriginal = normalizeLocationKey(original);
     const abbreviations = calendarConfig.locationAbbreviations || [];
     const existing = abbreviations.find(abbr => normalizeLocationKey(abbr.original) === normalizedOriginal);
-    
+
     if (existing) {
       setEditingLocation({ ...existing, original: normalizeLocationKey(existing.original) });
       setLocationAbbreviationInput(existing.abbreviation);
@@ -970,20 +989,20 @@ export default function ConfigurePage() {
 
   const handleSaveLocationAbbreviation = async () => {
     if (!editingLocation) return;
-    
+
     try {
       const abbreviations = calendarConfig.locationAbbreviations || [];
       const normalizedOriginal = normalizeLocationKey(editingLocation.original);
       const existingIndex = abbreviations.findIndex(abbr => normalizeLocationKey(abbr.original) === normalizedOriginal);
       const existing = existingIndex >= 0 ? abbreviations[existingIndex] : undefined;
-      
+
       const updatedAbbr: LocationAbbreviation = {
         original: normalizedOriginal,
         abbreviation: locationAbbreviationInput.trim() || normalizedOriginal,
         // Preserve ignored state when editing an existing / N/A entry, default to false if undefined
         ignored: existing?.ignored ?? editingLocation.ignored ?? false
       };
-      
+
       let updatedAbbreviations: LocationAbbreviation[];
       if (existingIndex >= 0) {
         updatedAbbreviations = [...abbreviations];
@@ -991,13 +1010,13 @@ export default function ConfigurePage() {
       } else {
         updatedAbbreviations = [...abbreviations, updatedAbbr];
       }
-      
+
       // Normalize all abbreviations before saving - preserve original casing but use normalized for comparison
       const normalizedAbbreviations = updatedAbbreviations.map(a => {
         // Preserve original casing for display
         const originalDisplay = a.original.trim().replace(/\s+/g, ' ');
         const normalizedKey = normalizeLocationKey(a.original);
-        
+
         const normalized: LocationAbbreviation = {
           original: originalDisplay, // Keep original casing for display
           abbreviation: (a.abbreviation || '').trim() || originalDisplay,
@@ -1008,20 +1027,20 @@ export default function ConfigurePage() {
         }
         return { normalized, normalizedKey };
       }).filter(item => item.normalizedKey.length > 0);
-      
+
       // Deduplicate by normalized key (keep the last one if duplicates exist)
       const deduplicatedMap = new Map<string, LocationAbbreviation>();
       for (const item of normalizedAbbreviations) {
         deduplicatedMap.set(item.normalizedKey, item.normalized);
       }
       const deduplicatedAbbreviations = Array.from(deduplicatedMap.values());
-      
+
       // Update local state immediately
       updateCalendarConfig({ locationAbbreviations: deduplicatedAbbreviations });
-      
+
       // Also save directly to Firebase to ensure persistence
       await updateCalendarSyncConfig({ locationAbbreviations: deduplicatedAbbreviations });
-      
+
       toastSuccess('Location abbreviation saved');
       setEditingLocation(null);
       setLocationAbbreviationInput('');
@@ -1051,7 +1070,7 @@ export default function ConfigurePage() {
     const normalizedOriginal = normalizeLocationKey(original);
     const abbreviations = calendarConfig.locationAbbreviations || [];
     const existingIndex = abbreviations.findIndex(abbr => normalizeLocationKey(abbr.original) === normalizedOriginal);
-    
+
     let updatedAbbreviations: LocationAbbreviation[];
     if (existingIndex >= 0) {
       // Toggle ignored status
@@ -1068,7 +1087,7 @@ export default function ConfigurePage() {
         ignored: true
       }];
     }
-    
+
     updateCalendarConfig({ locationAbbreviations: updatedAbbreviations });
   };
 
@@ -1076,7 +1095,7 @@ export default function ConfigurePage() {
     try {
       const keywordArray = coachingKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
       // Ensure we always pass an array, never undefined
-      updateCalendarConfig({ 
+      updateCalendarConfig({
         coachingKeywords: keywordArray.length > 0 ? keywordArray : [],
         coachingColor
       });
@@ -1091,7 +1110,7 @@ export default function ConfigurePage() {
     try {
       const keywordArray = classKeywordsInput.split(',').map(k => k.trim()).filter(k => k);
       // Ensure we always pass an array, never undefined
-      updateCalendarConfig({ 
+      updateCalendarConfig({
         classKeywords: keywordArray.length > 0 ? keywordArray : [],
         classColor
       });
@@ -1170,968 +1189,960 @@ export default function ConfigurePage() {
 
         <TabsContent value="workout">
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Column */}
-        <div className="space-y-8">
-          {/* Periods Section */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5 icon-period" />
-                Periods
-              </h3>
-              <Button variant="outline" onClick={handleAddPeriod} size="sm">
-                <Plus className="h-4 w-4 mr-1.5 icon-add" />
-                Add Period
-              </Button>
-            </div>
-            
-            {/* New Period Form (at top) */}
-            {showNewPeriodForm && editingPeriod && (
-              <Card className="mb-4">
-                <CardHeader className="pb-3 px-3">
-                  <CardTitle className="text-base">Add Period</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 px-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <Input
-                      placeholder="Period name"
-                      value={editingPeriod.name}
-                      onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, name: e.target.value } : null)}
-                    />
-                    <Input
-                      placeholder="Focus"
-                      value={editingPeriod.focus}
-                      onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, focus: e.target.value } : null)}
-                    />
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium">Color:</label>
-                    <div className="flex gap-2">
-                      {colors.map((color) => (
-                        <button
-                          key={color}
-                          className={`w-6 h-6 rounded-full border-2 ${
-                            editingPeriod.color === color ? 'border-gray-900' : 'border-gray-300'
-                          }`}
-                          style={{ backgroundColor: color }}
-                          onClick={() => setEditingPeriod(prev => prev ? { ...prev, color } : null)}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Left Column */}
+            <div className="space-y-8">
+              {/* Periods Section */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <CalendarIcon className="h-5 w-5 icon-period" />
+                    Periods
+                  </h3>
+                  <Button variant="outline" onClick={handleAddPeriod} size="sm">
+                    <Plus className="h-4 w-4 mr-1.5 icon-add" />
+                    Add Period
+                  </Button>
+                </div>
+
+                {/* New Period Form (at top) */}
+                {showNewPeriodForm && editingPeriod && (
+                  <Card className="mb-4">
+                    <CardHeader className="pb-3 px-3">
+                      <CardTitle className="text-base">Add Period</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 px-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          placeholder="Period name"
+                          value={editingPeriod.name}
+                          onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, name: e.target.value } : null)}
                         />
+                        <Input
+                          placeholder="Focus"
+                          value={editingPeriod.focus}
+                          onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, focus: e.target.value } : null)}
+                        />
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <label className="text-sm font-medium">Color:</label>
+                        <div className="flex gap-2">
+                          {colors.map((color) => (
+                            <button
+                              key={color}
+                              className={`w-6 h-6 rounded-full border-2 ${editingPeriod.color === color ? 'border-gray-900' : 'border-gray-300'
+                                }`}
+                              style={{ backgroundColor: color }}
+                              onClick={() => setEditingPeriod(prev => prev ? { ...prev, color } : null)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-4">
+                        <Button variant="outline" onClick={handleSavePeriod} className="flex-1">
+                          <Save className="h-4 w-4 mr-2 icon-success" />
+                          Save Period
+                        </Button>
+                        <Button variant="outline" onClick={handleCancelPeriod} className="flex-1">
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Periods List */}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={periods.map(p => `period-${p.id}`)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3">
+                      {periods.map((period) => (
+                        editingPeriodId === period.id && editingPeriod ? (
+                          <Card key={period.id} className="py-0">
+                            <CardContent className="space-y-4 p-0 px-3 py-2">
+                              <div className="grid grid-cols-2 gap-4">
+                                <Input
+                                  placeholder="Period name"
+                                  value={editingPeriod.name}
+                                  onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, name: e.target.value } : null)}
+                                />
+                                <Input
+                                  placeholder="Focus"
+                                  value={editingPeriod.focus}
+                                  onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, focus: e.target.value } : null)}
+                                />
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <label className="text-sm font-medium">Color:</label>
+                                <div className="flex gap-2">
+                                  {colors.map((color) => (
+                                    <button
+                                      key={color}
+                                      className={`w-6 h-6 rounded-full border-2 ${editingPeriod.color === color ? 'border-gray-900' : 'border-gray-300'
+                                        }`}
+                                      style={{ backgroundColor: color }}
+                                      onClick={() => setEditingPeriod(prev => prev ? { ...prev, color } : null)}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button variant="outline" onClick={handleSavePeriod} className="flex-1">
+                                  <Save className="h-4 w-4 mr-2 icon-success" />
+                                  Save
+                                </Button>
+                                <Button variant="outline" onClick={handleCancelPeriod} className="flex-1">
+                                  <X className="h-4 w-4 mr-2" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          <SortableItem
+                            key={period.id}
+                            item={period}
+                            onEdit={handleEditPeriod}
+                            onDelete={handleDeletePeriod}
+                            index={periods.indexOf(period)}
+                            type="period"
+                          />
+                        )
                       ))}
                     </div>
-                  </div>
-                  <div className="flex gap-2 pt-4">
-                    <Button variant="outline" onClick={handleSavePeriod} className="flex-1">
-                      <Save className="h-4 w-4 mr-2 icon-success" />
-                      Save Period
-                    </Button>
-                    <Button variant="outline" onClick={handleCancelPeriod} className="flex-1">
-                      <X className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            
-            {/* Periods List */}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={periods.map(p => `period-${p.id}`)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-3">
-                  {periods.map((period) => (
-                    editingPeriodId === period.id && editingPeriod ? (
-                      <Card key={period.id} className="py-0">
-                        <CardContent className="space-y-4 p-0 px-3 py-2">
-                          <div className="grid grid-cols-2 gap-4">
-                            <Input
-                              placeholder="Period name"
-                              value={editingPeriod.name}
-                              onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, name: e.target.value } : null)}
-                            />
-                            <Input
-                              placeholder="Focus"
-                              value={editingPeriod.focus}
-                              onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, focus: e.target.value } : null)}
-                            />
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <label className="text-sm font-medium">Color:</label>
-                            <div className="flex gap-2">
-                              {colors.map((color) => (
-                                <button
-                                  key={color}
-                                  className={`w-6 h-6 rounded-full border-2 ${
-                                    editingPeriod.color === color ? 'border-gray-900' : 'border-gray-300'
-                                  }`}
-                                  style={{ backgroundColor: color }}
-                                  onClick={() => setEditingPeriod(prev => prev ? { ...prev, color } : null)}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={handleSavePeriod} className="flex-1">
-                              <Save className="h-4 w-4 mr-2 icon-success" />
-                              Save
-                            </Button>
-                            <Button variant="outline" onClick={handleCancelPeriod} className="flex-1">
-                              <X className="h-4 w-4 mr-2" />
-                              Cancel
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <SortableItem
-                        key={period.id}
-                        item={period}
-                        onEdit={handleEditPeriod}
-                        onDelete={handleDeletePeriod}
-                        index={periods.indexOf(period)}
-                        type="period"
-                      />
-                    )
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
 
-          {/* Week Templates Section */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Layers className="h-5 w-5 icon-template" />
-                Week Templates
-              </h3>
-              <Button variant="outline" onClick={handleAddWeekTemplate} size="sm">
-                <Plus className="h-4 w-4 mr-1.5 icon-add" />
-                Add Template
-              </Button>
-            </div>
-            
-            {/* New Week Template Form (at top) */}
-            {showNewTemplateForm && editingTemplate && (
-              <Card className="mb-4">
-                <CardHeader className="pb-3 px-3">
-                  <CardTitle className="text-base">Add Week Template</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 px-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <Input
-                      placeholder="Template name"
-                      value={editingTemplate.name}
-                      onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
-                    />
-                    <div className="flex items-center gap-4">
-                      <label className="text-sm font-medium">Color:</label>
-                      <div className="flex gap-2">
-                        {colors.map((color) => (
-                          <button
-                            key={color}
-                            className={`w-6 h-6 rounded-full border-2 ${
-                              editingTemplate.color === color ? 'border-gray-900' : 'border-gray-300'
-                            }`}
-                            style={{ backgroundColor: color }}
-                            onClick={() => setEditingTemplate(prev => prev ? { ...prev, color } : null)}
-                          />
-                        ))}
+              {/* Week Templates Section */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Layers className="h-5 w-5 icon-template" />
+                    Week Templates
+                  </h3>
+                  <Button variant="outline" onClick={handleAddWeekTemplate} size="sm">
+                    <Plus className="h-4 w-4 mr-1.5 icon-add" />
+                    Add Template
+                  </Button>
+                </div>
+
+                {/* New Week Template Form (at top) */}
+                {showNewTemplateForm && editingTemplate && (
+                  <Card className="mb-4">
+                    <CardHeader className="pb-3 px-3">
+                      <CardTitle className="text-base">Add Week Template</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 px-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          placeholder="Template name"
+                          value={editingTemplate.name}
+                          onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
+                        />
+                        <div className="flex items-center gap-4">
+                          <label className="text-sm font-medium">Color:</label>
+                          <div className="flex gap-2">
+                            {colors.map((color) => (
+                              <button
+                                key={color}
+                                className={`w-6 h-6 rounded-full border-2 ${editingTemplate.color === color ? 'border-gray-900' : 'border-gray-300'
+                                  }`}
+                                style={{ backgroundColor: color }}
+                                onClick={() => setEditingTemplate(prev => prev ? { ...prev, color } : null)}
+                              />
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium">Workout Days:</label>
-                      <Button onClick={addTemplateDay} size="sm" variant="outline">
-                        <Plus className="h-4 w-4 mr-1.5 icon-add" />
-                        Add Day
-                      </Button>
-                    </div>
-                    {editingTemplate.days
-                      .filter(day => day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day')
-                      .map((day, index) => {
-                        const originalIndex = editingTemplate.days.indexOf(day);
-                        return (
-                          <HorizontalDayItem
-                            key={originalIndex}
-                            day={day}
-                            index={originalIndex}
-                            onUpdate={updateTemplateDay}
-                            onDelete={deleteTemplateDay}
-                          />
-                        );
-                      })}
-                  </div>
-                  
-                  <div className="flex gap-2 pt-4">
-                    <Button variant="outline" onClick={handleSaveWeekTemplate} className="flex-1">
-                      <Save className="h-4 w-4 mr-2 icon-success" />
-                      Save Template
-                    </Button>
-                    <Button variant="outline" onClick={handleCancelWeekTemplate} className="flex-1">
-                      <X className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            
-            {/* Week Templates List */}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={weekTemplates.map(t => `template-${t.id}`)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-3">
-                  {weekTemplates.map((template) => (
-                    editingTemplateId === template.id && editingTemplate ? (
-                      <Card key={template.id} className="py-0">
-                        <CardContent className="space-y-4 p-0 px-3 py-2">
-                          <div className="grid grid-cols-2 gap-4">
-                            <Input
-                              placeholder="Template name"
-                              value={editingTemplate.name}
-                              onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
-                            />
-                            <div className="flex items-center gap-4">
-                              <label className="text-sm font-medium">Color:</label>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-medium">Workout Days:</label>
+                          <Button onClick={addTemplateDay} size="sm" variant="outline">
+                            <Plus className="h-4 w-4 mr-1.5 icon-add" />
+                            Add Day
+                          </Button>
+                        </div>
+                        {editingTemplate.days
+                          .filter(day => day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day')
+                          .map((day, index) => {
+                            const originalIndex = editingTemplate.days.indexOf(day);
+                            return (
+                              <HorizontalDayItem
+                                key={originalIndex}
+                                day={day}
+                                index={originalIndex}
+                                onUpdate={updateTemplateDay}
+                                onDelete={deleteTemplateDay}
+                              />
+                            );
+                          })}
+                      </div>
+
+                      <div className="flex gap-2 pt-4">
+                        <Button variant="outline" onClick={handleSaveWeekTemplate} className="flex-1">
+                          <Save className="h-4 w-4 mr-2 icon-success" />
+                          Save Template
+                        </Button>
+                        <Button variant="outline" onClick={handleCancelWeekTemplate} className="flex-1">
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Week Templates List */}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={weekTemplates.map(t => `template-${t.id}`)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3">
+                      {weekTemplates.map((template) => (
+                        editingTemplateId === template.id && editingTemplate ? (
+                          <Card key={template.id} className="py-0">
+                            <CardContent className="space-y-4 p-0 px-3 py-2">
+                              <div className="grid grid-cols-2 gap-4">
+                                <Input
+                                  placeholder="Template name"
+                                  value={editingTemplate.name}
+                                  onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
+                                />
+                                <div className="flex items-center gap-4">
+                                  <label className="text-sm font-medium">Color:</label>
+                                  <div className="flex gap-2">
+                                    {colors.map((color) => (
+                                      <button
+                                        key={color}
+                                        className={`w-6 h-6 rounded-full border-2 ${editingTemplate.color === color ? 'border-gray-900' : 'border-gray-300'
+                                          }`}
+                                        style={{ backgroundColor: color }}
+                                        onClick={() => setEditingTemplate(prev => prev ? { ...prev, color } : null)}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-sm font-medium">Workout Days:</label>
+                                  <Button onClick={addTemplateDay} size="sm" variant="outline">
+                                    <Plus className="h-4 w-4 mr-1.5 icon-add" />
+                                    Add Day
+                                  </Button>
+                                </div>
+                                {editingTemplate.days
+                                  .filter(day => day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day')
+                                  .map((day, index) => {
+                                    const originalIndex = editingTemplate.days.indexOf(day);
+                                    return (
+                                      <HorizontalDayItem
+                                        key={originalIndex}
+                                        day={day}
+                                        index={originalIndex}
+                                        onUpdate={updateTemplateDay}
+                                        onDelete={deleteTemplateDay}
+                                      />
+                                    );
+                                  })}
+                              </div>
+
                               <div className="flex gap-2">
-                                {colors.map((color) => (
-                                  <button
-                                    key={color}
-                                    className={`w-6 h-6 rounded-full border-2 ${
-                                      editingTemplate.color === color ? 'border-gray-900' : 'border-gray-300'
-                                    }`}
-                                    style={{ backgroundColor: color }}
-                                    onClick={() => setEditingTemplate(prev => prev ? { ...prev, color } : null)}
-                                  />
-                                ))}
+                                <Button variant="outline" onClick={handleSaveWeekTemplate} className="flex-1">
+                                  <Save className="h-4 w-4 mr-2 icon-success" />
+                                  Save
+                                </Button>
+                                <Button variant="outline" onClick={handleCancelWeekTemplate} className="flex-1">
+                                  <X className="h-4 w-4 mr-2" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          <SortableItem
+                            key={template.id}
+                            item={template}
+                            onEdit={handleEditWeekTemplate}
+                            onDelete={handleDeleteWeekTemplate}
+                            index={weekTemplates.indexOf(template)}
+                            type="template"
+                          />
+                        )
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-8">
+              {/* Workout Categories Section */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Dumbbell className="h-5 w-5 icon-workout" />
+                    Workout Categories
+                  </h3>
+                  <Button variant="outline" onClick={handleAddCategory} size="sm">
+                    <Plus className="h-4 w-4 mr-1.5 icon-add" />
+                    Add Category
+                  </Button>
+                </div>
+
+                {/* New Category Form (at top) */}
+                {showNewCategoryForm && editingCategory && (
+                  <Card className="mb-4">
+                    <CardHeader className="pb-3 px-3">
+                      <CardTitle className="text-base">Add Workout Category</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 px-3">
+                      <Input
+                        placeholder="Category name"
+                        value={editingCategory.name}
+                        onChange={(e) => setEditingCategory(prev => prev ? { ...prev, name: e.target.value } : null)}
+                      />
+                      <div className="flex items-center gap-4">
+                        <label className="text-sm font-medium">Color:</label>
+                        <div className="flex gap-2">
+                          {colors.map((color) => (
+                            <button
+                              key={color}
+                              className={`w-6 h-6 rounded-full border-2 ${editingCategory.color === color ? 'border-gray-900' : 'border-gray-300'
+                                }`}
+                              style={{ backgroundColor: color }}
+                              onClick={() => setEditingCategory(prev => prev ? { ...prev, color } : null)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-4">
+                        <Button variant="outline" onClick={handleSaveCategory} className="flex-1">
+                          <Save className="h-4 w-4 mr-2 icon-success" />
+                          Save Category
+                        </Button>
+                        <Button variant="outline" onClick={handleCancelCategory} className="flex-1">
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Categories List */}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={workoutCategories.map(c => `category-${c.id}`)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3">
+                      {workoutCategories.map((category) => (
+                        editingCategoryId === category.id && editingCategory ? (
+                          <Card key={category.id} className="py-0">
+                            <CardContent className="space-y-4 p-0 px-3 py-2">
+                              <Input
+                                placeholder="Category name"
+                                value={editingCategory.name}
+                                onChange={(e) => setEditingCategory(prev => prev ? { ...prev, name: e.target.value } : null)}
+                              />
+                              <div className="flex items-center gap-4">
+                                <label className="text-sm font-medium">Color:</label>
+                                <div className="flex gap-2">
+                                  {colors.map((color) => (
+                                    <button
+                                      key={color}
+                                      className={`w-6 h-6 rounded-full border-2 ${editingCategory.color === color ? 'border-gray-900' : 'border-gray-300'
+                                        }`}
+                                      style={{ backgroundColor: color }}
+                                      onClick={() => setEditingCategory(prev => prev ? { ...prev, color } : null)}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button variant="outline" onClick={handleSaveCategory} className="flex-1">
+                                  <Save className="h-4 w-4 mr-2 icon-success" />
+                                  Save
+                                </Button>
+                                <Button variant="outline" onClick={handleCancelCategory} className="flex-1">
+                                  <X className="h-4 w-4 mr-2" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          <div key={category.id} className="px-3 py-2 border rounded-lg">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-4">
+                                <div
+                                  className="w-4 h-4 rounded-full"
+                                  style={{ backgroundColor: category.color }}
+                                />
+                                <div>
+                                  <h4 className="font-semibold leading-tight">{category.name}</h4>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleEditCategory(category)}
+                                >
+                                  <Edit className="h-4 w-4 icon-edit" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleDeleteCategory(category.id)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
                             </div>
-                          </div>
-                          
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <label className="text-sm font-medium">Workout Days:</label>
-                              <Button onClick={addTemplateDay} size="sm" variant="outline">
-                                <Plus className="h-4 w-4 mr-1.5 icon-add" />
-                                Add Day
-                              </Button>
-                            </div>
-                            {editingTemplate.days
-                              .filter(day => day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day')
-                              .map((day, index) => {
-                                const originalIndex = editingTemplate.days.indexOf(day);
-                                return (
-                                  <HorizontalDayItem
-                                    key={originalIndex}
-                                    day={day}
-                                    index={originalIndex}
-                                    onUpdate={updateTemplateDay}
-                                    onDelete={deleteTemplateDay}
-                                  />
-                                );
-                              })}
-                          </div>
-                          
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={handleSaveWeekTemplate} className="flex-1">
-                              <Save className="h-4 w-4 mr-2 icon-success" />
-                              Save
-                            </Button>
-                            <Button variant="outline" onClick={handleCancelWeekTemplate} className="flex-1">
-                              <X className="h-4 w-4 mr-2" />
-                              Cancel
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <SortableItem
-                        key={template.id}
-                        item={template}
-                        onEdit={handleEditWeekTemplate}
-                        onDelete={handleDeleteWeekTemplate}
-                        index={weekTemplates.indexOf(template)}
-                        type="template"
-                      />
-                    )
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          </div>
-        </div>
 
-        {/* Right Column */}
-        <div className="space-y-8">
-          {/* Workout Categories Section */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Dumbbell className="h-5 w-5 icon-workout" />
-                Workout Categories
-              </h3>
-              <Button variant="outline" onClick={handleAddCategory} size="sm">
-                <Plus className="h-4 w-4 mr-1.5 icon-add" />
-                Add Category
-              </Button>
-            </div>
-            
-            {/* New Category Form (at top) */}
-            {showNewCategoryForm && editingCategory && (
-              <Card className="mb-4">
-                <CardHeader className="pb-3 px-3">
-                  <CardTitle className="text-base">Add Workout Category</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 px-3">
-                  <Input
-                    placeholder="Category name"
-                    value={editingCategory.name}
-                    onChange={(e) => setEditingCategory(prev => prev ? { ...prev, name: e.target.value } : null)}
-                  />
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium">Color:</label>
-                    <div className="flex gap-2">
-                      {colors.map((color) => (
-                        <button
-                          key={color}
-                          className={`w-6 h-6 rounded-full border-2 ${
-                            editingCategory.color === color ? 'border-gray-900' : 'border-gray-300'
-                          }`}
-                          style={{ backgroundColor: color }}
-                          onClick={() => setEditingCategory(prev => prev ? { ...prev, color } : null)}
-                        />
+                            {/* Linked Template Dropdown */}
+                            <div className="flex items-center gap-2">
+                              <label className="text-sm font-medium text-gray-700">Linked Template:</label>
+                              <Select
+                                value={category.linkedWorkoutStructureTemplateId || 'none'}
+                                onValueChange={(value) => {
+                                  updateWorkoutCategory(category.id, {
+                                    linkedWorkoutStructureTemplateId: value === 'none' ? '' : value
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="w-48 h-8 text-xs">
+                                  <SelectValue placeholder="None" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">None</SelectItem>
+                                  {workoutStructureTemplates.map((template) => (
+                                    <SelectItem key={template.id} value={template.id}>
+                                      {template.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        )
                       ))}
                     </div>
-                  </div>
-                  <div className="flex gap-2 pt-4">
-                    <Button variant="outline" onClick={handleSaveCategory} className="flex-1">
-                      <Save className="h-4 w-4 mr-2 icon-success" />
-                      Save Category
-                    </Button>
-                    <Button variant="outline" onClick={handleCancelCategory} className="flex-1">
-                      <X className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            
-            {/* Categories List */}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={workoutCategories.map(c => `category-${c.id}`)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-3">
-                  {workoutCategories.map((category) => (
-                    editingCategoryId === category.id && editingCategory ? (
-                      <Card key={category.id} className="py-0">
-                        <CardContent className="space-y-4 p-0 px-3 py-2">
-                          <Input
-                            placeholder="Category name"
-                            value={editingCategory.name}
-                            onChange={(e) => setEditingCategory(prev => prev ? { ...prev, name: e.target.value } : null)}
-                          />
-                          <div className="flex items-center gap-4">
-                            <label className="text-sm font-medium">Color:</label>
-                            <div className="flex gap-2">
-                              {colors.map((color) => (
-                                <button
-                                  key={color}
-                                  className={`w-6 h-6 rounded-full border-2 ${
-                                    editingCategory.color === color ? 'border-gray-900' : 'border-gray-300'
-                                  }`}
-                                  style={{ backgroundColor: color }}
-                                  onClick={() => setEditingCategory(prev => prev ? { ...prev, color } : null)}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={handleSaveCategory} className="flex-1">
-                              <Save className="h-4 w-4 mr-2 icon-success" />
-                              Save
-                            </Button>
-                            <Button variant="outline" onClick={handleCancelCategory} className="flex-1">
-                              <X className="h-4 w-4 mr-2" />
-                              Cancel
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <div key={category.id} className="px-3 py-2 border rounded-lg">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-4">
-                            <div 
-                              className="w-4 h-4 rounded-full" 
-                              style={{ backgroundColor: category.color }}
+                  </SortableContext>
+                </DndContext>
+              </div>
+
+              {/* Workout Structure Templates Section */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Layers className="h-5 w-5 icon-workout" />
+                    Workout Structure Templates
+                  </h3>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setEditingWorkoutStructureTemplate(null);
+                      setShowWorkoutStructureTemplateForm(true);
+                    }}
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-1.5 icon-add" />
+                    Add Template
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {workoutStructureTemplates.map((template) => (
+                    <WorkoutStructureTemplateCard
+                      key={template.id}
+                      template={template}
+                      workoutTypes={workoutTypes}
+                      onEdit={(template) => {
+                        setEditingWorkoutStructureTemplate(template);
+                        setShowWorkoutStructureTemplateForm(true);
+                      }}
+                      onDelete={deleteWorkoutStructureTemplate}
+                      onUpdateSection={(templateId, sectionIndex, updates) => {
+                        // Handle section updates
+                        const template = workoutStructureTemplates.find(t => t.id === templateId);
+                        if (template) {
+                          const updatedSections = [...template.sections];
+                          updatedSections[sectionIndex] = { ...updatedSections[sectionIndex], ...updates };
+                          updateWorkoutStructureTemplate(templateId, { sections: updatedSections });
+                        }
+                      }}
+                      onReorderSections={(templateId, fromIndex, toIndex) => {
+                        // Handle section reordering
+                        const template = workoutStructureTemplates.find(t => t.id === templateId);
+                        if (template) {
+                          const updatedSections = [...template.sections];
+                          const [movedSection] = updatedSections.splice(fromIndex, 1);
+                          updatedSections.splice(toIndex, 0, movedSection);
+                          // Update order indices
+                          const reorderedSections = updatedSections.map((section, index) => ({
+                            ...section,
+                            order: index
+                          }));
+                          updateWorkoutStructureTemplate(templateId, { sections: reorderedSections });
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Workout Types Section */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Settings className="h-5 w-5 icon-settings" />
+                    Workout Types
+                  </h3>
+                  <Button variant="outline" onClick={handleAddWorkoutType} size="sm">
+                    <Plus className="h-4 w-4 mr-1.5 icon-add" />
+                    Add Workout Type
+                  </Button>
+                </div>
+
+                {/* New Workout Type Form (at top) */}
+                {showNewWorkoutTypeForm && editingWorkoutType && (
+                  <Card className="mb-4">
+                    <CardHeader className="pb-3 px-3">
+                      <CardTitle className="text-base">Add Workout Type</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 px-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          placeholder="Workout type name"
+                          value={editingWorkoutType.name}
+                          onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, name: e.target.value } : null)}
+                        />
+                        <Input
+                          placeholder="Description"
+                          value={editingWorkoutType.description}
+                          onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, description: e.target.value } : null)}
+                        />
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <label className="text-sm font-medium">Color:</label>
+                        <div className="flex gap-2">
+                          {colors.map((color) => (
+                            <button
+                              key={color}
+                              className={`w-6 h-6 rounded-full border-2 ${editingWorkoutType.color === color ? 'border-gray-900' : 'border-gray-300'
+                                }`}
+                              style={{ backgroundColor: color }}
+                              onClick={() => setEditingWorkoutType(prev => prev ? { ...prev, color } : null)}
                             />
-                            <div>
-                              <h4 className="font-semibold leading-tight">{category.name}</h4>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEditCategory(category)}
-                            >
-                              <Edit className="h-4 w-4 icon-edit" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDeleteCategory(category.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        {/* Linked Template Dropdown */}
-                        <div className="flex items-center gap-2">
-                          <label className="text-sm font-medium text-gray-700">Linked Template:</label>
-                          <Select
-                            value={category.linkedWorkoutStructureTemplateId || 'none'}
-                            onValueChange={(value) => {
-                              updateWorkoutCategory(category.id, {
-                                linkedWorkoutStructureTemplateId: value === 'none' ? '' : value
-                              });
-                            }}
-                          >
-                            <SelectTrigger className="w-48 h-8 text-xs">
-                              <SelectValue placeholder="None" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
-                              {workoutStructureTemplates.map((template) => (
-                                <SelectItem key={template.id} value={template.id}>
-                                  {template.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          ))}
                         </div>
                       </div>
-                    )
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          </div>
+                      <div className="flex gap-2 pt-4">
+                        <Button variant="outline" onClick={handleSaveWorkoutType} className="flex-1">
+                          <Save className="h-4 w-4 mr-2 icon-success" />
+                          Save Workout Type
+                        </Button>
+                        <Button variant="outline" onClick={handleCancelWorkoutType} className="flex-1">
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
-          {/* Workout Structure Templates Section */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Layers className="h-5 w-5 icon-workout" />
-                Workout Structure Templates
-              </h3>
-              <Button
-                variant="outline"
-                onClick={() => {
-                setEditingWorkoutStructureTemplate(null);
-                setShowWorkoutStructureTemplateForm(true);
-              }}
-                size="sm"
-              >
-                <Plus className="h-4 w-4 mr-1.5 icon-add" />
-                Add Template
-              </Button>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-4">
-              {workoutStructureTemplates.map((template) => (
-                <WorkoutStructureTemplateCard
-                  key={template.id}
-                  template={template}
-                  workoutTypes={workoutTypes}
-                  onEdit={(template) => {
-                    setEditingWorkoutStructureTemplate(template);
-                    setShowWorkoutStructureTemplateForm(true);
-                  }}
-                  onDelete={deleteWorkoutStructureTemplate}
-                  onUpdateSection={(templateId, sectionIndex, updates) => {
-                    // Handle section updates
-                    const template = workoutStructureTemplates.find(t => t.id === templateId);
-                    if (template) {
-                      const updatedSections = [...template.sections];
-                      updatedSections[sectionIndex] = { ...updatedSections[sectionIndex], ...updates };
-                      updateWorkoutStructureTemplate(templateId, { sections: updatedSections });
-                    }
-                  }}
-                  onReorderSections={(templateId, fromIndex, toIndex) => {
-                    // Handle section reordering
-                    const template = workoutStructureTemplates.find(t => t.id === templateId);
-                    if (template) {
-                      const updatedSections = [...template.sections];
-                      const [movedSection] = updatedSections.splice(fromIndex, 1);
-                      updatedSections.splice(toIndex, 0, movedSection);
-                      // Update order indices
-                      const reorderedSections = updatedSections.map((section, index) => ({
-                        ...section,
-                        order: index
-                      }));
-                      updateWorkoutStructureTemplate(templateId, { sections: reorderedSections });
-                    }
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Workout Types Section */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Settings className="h-5 w-5 icon-settings" />
-                Workout Types
-              </h3>
-              <Button variant="outline" onClick={handleAddWorkoutType} size="sm">
-                <Plus className="h-4 w-4 mr-1.5 icon-add" />
-                Add Workout Type
-              </Button>
-            </div>
-            
-            {/* New Workout Type Form (at top) */}
-            {showNewWorkoutTypeForm && editingWorkoutType && (
-              <Card className="mb-4">
-                <CardHeader className="pb-3 px-3">
-                  <CardTitle className="text-base">Add Workout Type</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 px-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <Input
-                      placeholder="Workout type name"
-                      value={editingWorkoutType.name}
-                      onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, name: e.target.value } : null)}
-                    />
-                    <Input
-                      placeholder="Description"
-                      value={editingWorkoutType.description}
-                      onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, description: e.target.value } : null)}
-                    />
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium">Color:</label>
-                    <div className="flex gap-2">
-                      {colors.map((color) => (
-                        <button
-                          key={color}
-                          className={`w-6 h-6 rounded-full border-2 ${
-                            editingWorkoutType.color === color ? 'border-gray-900' : 'border-gray-300'
-                          }`}
-                          style={{ backgroundColor: color }}
-                          onClick={() => setEditingWorkoutType(prev => prev ? { ...prev, color } : null)}
-                        />
+                {/* Workout Types List */}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={workoutTypes.map(w => `workoutType-${w.id}`)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3">
+                      {workoutTypes.map((workoutType) => (
+                        editingWorkoutTypeId === workoutType.id && editingWorkoutType ? (
+                          <Card key={workoutType.id} className="py-0">
+                            <CardContent className="space-y-4 p-0 px-3 py-2">
+                              <div className="grid grid-cols-2 gap-4">
+                                <Input
+                                  placeholder="Workout type name"
+                                  value={editingWorkoutType.name}
+                                  onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, name: e.target.value } : null)}
+                                />
+                                <Input
+                                  placeholder="Description"
+                                  value={editingWorkoutType.description}
+                                  onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, description: e.target.value } : null)}
+                                />
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <label className="text-sm font-medium">Color:</label>
+                                <div className="flex gap-2">
+                                  {colors.map((color) => (
+                                    <button
+                                      key={color}
+                                      className={`w-6 h-6 rounded-full border-2 ${editingWorkoutType.color === color ? 'border-gray-900' : 'border-gray-300'
+                                        }`}
+                                      style={{ backgroundColor: color }}
+                                      onClick={() => setEditingWorkoutType(prev => prev ? { ...prev, color } : null)}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button variant="outline" onClick={handleSaveWorkoutType} className="flex-1">
+                                  <Save className="h-4 w-4 mr-2 icon-success" />
+                                  Save
+                                </Button>
+                                <Button variant="outline" onClick={handleCancelWorkoutType} className="flex-1">
+                                  <X className="h-4 w-4 mr-2" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          <SortableItem
+                            key={workoutType.id}
+                            item={workoutType}
+                            onEdit={handleEditWorkoutType}
+                            onDelete={handleDeleteWorkoutType}
+                            index={workoutTypes.indexOf(workoutType)}
+                            type="workoutType"
+                          />
+                        )
                       ))}
                     </div>
-                  </div>
-                  <div className="flex gap-2 pt-4">
-                    <Button variant="outline" onClick={handleSaveWorkoutType} className="flex-1">
-                      <Save className="h-4 w-4 mr-2 icon-success" />
-                      Save Workout Type
-                    </Button>
-                    <Button variant="outline" onClick={handleCancelWorkoutType} className="flex-1">
-                      <X className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            
-            {/* Workout Types List */}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={workoutTypes.map(w => `workoutType-${w.id}`)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-3">
-                  {workoutTypes.map((workoutType) => (
-                    editingWorkoutTypeId === workoutType.id && editingWorkoutType ? (
-                      <Card key={workoutType.id} className="py-0">
-                        <CardContent className="space-y-4 p-0 px-3 py-2">
-                          <div className="grid grid-cols-2 gap-4">
-                            <Input
-                              placeholder="Workout type name"
-                              value={editingWorkoutType.name}
-                              onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, name: e.target.value } : null)}
-                            />
-                            <Input
-                              placeholder="Description"
-                              value={editingWorkoutType.description}
-                              onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, description: e.target.value } : null)}
-                            />
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <label className="text-sm font-medium">Color:</label>
-                            <div className="flex gap-2">
-                              {colors.map((color) => (
-                                <button
-                                  key={color}
-                                  className={`w-6 h-6 rounded-full border-2 ${
-                                    editingWorkoutType.color === color ? 'border-gray-900' : 'border-gray-300'
-                                  }`}
-                                  style={{ backgroundColor: color }}
-                                  onClick={() => setEditingWorkoutType(prev => prev ? { ...prev, color } : null)}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={handleSaveWorkoutType} className="flex-1">
-                              <Save className="h-4 w-4 mr-2 icon-success" />
-                              Save
-                            </Button>
-                            <Button variant="outline" onClick={handleCancelWorkoutType} className="flex-1">
-                              <X className="h-4 w-4 mr-2" />
-                              Cancel
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <SortableItem
-                        key={workoutType.id}
-                        item={workoutType}
-                        onEdit={handleEditWorkoutType}
-                        onDelete={handleDeleteWorkoutType}
-                        index={workoutTypes.indexOf(workoutType)}
-                        type="workoutType"
-                      />
-                    )
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
         </TabsContent>
 
         <TabsContent value="app">
           {/* Google Calendar Configuration Section */}
           <div className="mt-4">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-            <Link className="h-6 w-6" />
-            Google Calendar Integration
-          </h2>
-          <p className="text-gray-600">Configure Google Calendar sync and test event creation.</p>
-        </div>
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+                <Link className="h-6 w-6" />
+                Google Calendar Integration
+              </h2>
+              <p className="text-gray-600">Configure Google Calendar sync and test event creation.</p>
+            </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Google Account & Authentication */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center justify-between">
-                <span>Google Account Connection</span>
-                {!checkingAuth && (
-                  <Badge 
-                    variant={
-                      syncError 
-                        ? "destructive" 
-                        : isGoogleCalendarConnected 
-                          ? "default" 
-                          : "secondary"
-                    }
-                    className={
-                      syncError 
-                        ? "bg-red-600" 
-                        : isGoogleCalendarConnected 
-                          ? "bg-green-600" 
-                          : ""
-                    }
-                  >
-                    {syncError 
-                      ? 'Sync Error' 
-                      : isGoogleCalendarConnected 
-                        ? 'Connected' 
-                        : 'Not Connected'}
-                  </Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {checkingAuth ? (
-                <div className="flex items-center justify-center p-4">
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  <span className="text-sm text-gray-600">Checking connection...</span>
-                </div>
-              ) : isGoogleCalendarConnected ? (
-                <>
-                  {/* Calendar Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Selected Calendar
-                    </label>
-                    <Select
-                      value={calendarConfig.selectedCalendarId || 'none'}
-                      onValueChange={(value) => {
-                        updateCalendarConfig({ 
-                          selectedCalendarId: value === 'none' ? undefined : value 
-                        });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a calendar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {calendars.map((calendar) => (
-                          <SelectItem key={calendar.id} value={calendar.id}>
-                            {calendar.summary} {calendar.primary && '(Primary)'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Sync Status */}
-                  {calendarConfig.selectedCalendarId && !syncError && (
-                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-sm text-green-700">
-                        ✓ Calendar sync enabled - events will appear on Schedule page
-                      </p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Google Account & Authentication */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center justify-between">
+                    <span>Google Account Connection</span>
+                    {!checkingAuth && (
+                      <Badge
+                        variant={
+                          syncError
+                            ? "destructive"
+                            : isGoogleCalendarConnected
+                              ? "default"
+                              : "secondary"
+                        }
+                        className={
+                          syncError
+                            ? "bg-red-600"
+                            : isGoogleCalendarConnected
+                              ? "bg-green-600"
+                              : ""
+                        }
+                      >
+                        {syncError
+                          ? 'Sync Error'
+                          : isGoogleCalendarConnected
+                            ? 'Connected'
+                            : 'Not Connected'}
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {checkingAuth ? (
+                    <div className="flex items-center justify-center p-4">
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      <span className="text-sm text-gray-600">Checking connection...</span>
                     </div>
-                  )}
+                  ) : isGoogleCalendarConnected ? (
+                    <>
+                      {/* Calendar Selection */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Selected Calendar
+                        </label>
+                        <Select
+                          value={calendarConfig.selectedCalendarId || 'none'}
+                          onValueChange={(value) => {
+                            updateCalendarConfig({
+                              selectedCalendarId: value === 'none' ? undefined : value
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a calendar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {calendars.map((calendar) => (
+                              <SelectItem key={calendar.id} value={calendar.id}>
+                                {calendar.summary} {calendar.primary && '(Primary)'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                  {/* Sync Error */}
-                  {syncError && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-red-800 mb-1">
-                            ⚠️ Sync Error
+                      {/* Sync Status */}
+                      {calendarConfig.selectedCalendarId && !syncError && (
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <p className="text-sm text-green-700">
+                            ✓ Calendar sync enabled - events will appear on Schedule page
                           </p>
-                          <p className="text-sm text-red-700 mb-2">
-                            {syncError}
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleConnectGoogleCalendar}
-                            className="text-red-700 border-red-300 hover:bg-red-100"
-                          >
-                            <RefreshCw className="h-3 w-3 mr-1" />
-                            Reconnect Google Calendar
-                          </Button>
+                        </div>
+                      )}
+
+                      {/* Sync Error */}
+                      {syncError && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-red-800 mb-1">
+                                ⚠️ Sync Error
+                              </p>
+                              <p className="text-sm text-red-700 mb-2">
+                                {syncError}
+                              </p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleConnectGoogleCalendar}
+                                className="text-red-700 border-red-300 hover:bg-red-100"
+                              >
+                                <RefreshCw className="h-3 w-3 mr-1" />
+                                Reconnect Google Calendar
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Test Connection Button */}
+                      <div className="pt-2 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleTestConnection}
+                          disabled={testingConnection}
+                          className="w-full mb-2"
+                        >
+                          {testingConnection ? (
+                            <>
+                              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                              Testing Connection...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-3 w-3 mr-1" />
+                              Test Connection
+                            </>
+                          )}
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleDisconnectGoogleCalendar}
+                          className="text-gray-600 w-full"
+                        >
+                          <X className="h-3 w-3 mr-1" />
+                          Disconnect Google Calendar
+                        </Button>
+                        <p className="text-xs text-gray-400 mt-2">
+                          If you see sync errors, click "Test Connection" to verify, or disconnect and reconnect to refresh permissions
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Not connected state */}
+                      <div className="text-center py-4">
+                        <p className="text-sm text-gray-600 mb-4">
+                          Connect your Google Calendar to sync coaching sessions and events.
+                        </p>
+                        <Button onClick={handleConnectGoogleCalendar}>
+                          <Link className="h-4 w-4 mr-2" />
+                          Connect Google Calendar
+                        </Button>
+                      </div>
+
+                      {/* Permissions info - only show when not connected */}
+                      <div className="pt-3 border-t">
+                        <p className="text-xs font-medium text-gray-500 mb-2">Required Permissions:</p>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="outline" className="text-xs">Read events</Badge>
+                          <Badge variant="outline" className="text-xs">Create events</Badge>
+                          <Badge variant="outline" className="text-xs">Modify events</Badge>
                         </div>
                       </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Calendar Configuration */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CalendarIcon className="h-5 w-5" />
+                    Event Detection
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-gray-600">
+                    Keywords to automatically categorize calendar events.
+                  </p>
+
+                  {/* Coaching Keywords */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className={`w-4 h-4 rounded-full ${AVAILABLE_COLORS.find(c => c.value === coachingColor)?.class || 'bg-blue-500'} ring-offset-2 hover:ring-2 focus:ring-2 ring-gray-400 outline-none transition-all`}
+                            type="button"
+                            aria-label="Pick color for coaching sessions"
+                          />
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-3" align="start">
+                          <div className="flex gap-2">
+                            {AVAILABLE_COLORS.map((color) => (
+                              <button
+                                key={color.value}
+                                className={`w-6 h-6 rounded-full ${color.class} hover:scale-110 transition-transform ${coachingColor === color.value ? 'ring-2 ring-offset-2 ring-gray-900' : ''}`}
+                                onClick={() => setCoachingColor(color.value)}
+                                title={color.name}
+                                type="button"
+                              />
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                      <label className="text-sm font-medium text-gray-700">
+                        Coaching Sessions
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Personal Training, PT, Training Session, Workout"
+                        value={coachingKeywordsInput}
+                        onChange={(e) => setCoachingKeywordsInput(e.target.value)}
+                        className="text-sm flex-1"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSaveCoachingKeywords}
+                        variant="outline"
+                      >
+                        <Save className="h-3 w-3 mr-1" />
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Class Session Keywords */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className={`w-4 h-4 rounded-full ${AVAILABLE_COLORS.find(c => c.value === classColor)?.class || 'bg-purple-500'} ring-offset-2 hover:ring-2 focus:ring-2 ring-gray-400 outline-none transition-all`}
+                            type="button"
+                            aria-label="Pick color for class sessions"
+                          />
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-3" align="start">
+                          <div className="flex gap-2">
+                            {AVAILABLE_COLORS.map((color) => (
+                              <button
+                                key={color.value}
+                                className={`w-6 h-6 rounded-full ${color.class} hover:scale-110 transition-transform ${classColor === color.value ? 'ring-2 ring-offset-2 ring-gray-900' : ''}`}
+                                onClick={() => setClassColor(color.value)}
+                                title={color.name}
+                                type="button"
+                              />
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                      <label className="text-sm font-medium text-gray-700">
+                        Class Sessions
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Class, Group Class, Group Training"
+                        value={classKeywordsInput}
+                        onChange={(e) => setClassKeywordsInput(e.target.value)}
+                        className="text-sm flex-1"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSaveClassKeywords}
+                        variant="outline"
+                      >
+                        <Save className="h-3 w-3 mr-1" />
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-500">
+                    Separate keywords with commas. Events matching these keywords will be color-coded on the schedule.
+                  </p>
+
+                  {/* Error Display */}
+                  {calendarError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-red-600">{calendarError}</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearCalendarError}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   )}
+                </CardContent>
+              </Card>
 
-                  {/* Test Connection Button */}
-                  <div className="pt-2 border-t">
-                    <Button 
-                      variant="outline"
-                      size="sm"
-                      onClick={handleTestConnection}
-                      disabled={testingConnection}
-                      className="w-full mb-2"
-                    >
-                      {testingConnection ? (
-                        <>
-                          <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                          Testing Connection...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="h-3 w-3 mr-1" />
-                          Test Connection
-                        </>
-                      )}
-                    </Button>
-                    
-                    <Button 
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDisconnectGoogleCalendar}
-                      className="text-gray-600 w-full"
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      Disconnect Google Calendar
-                    </Button>
-                    <p className="text-xs text-gray-400 mt-2">
-                      If you see sync errors, click "Test Connection" to verify, or disconnect and reconnect to refresh permissions
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Not connected state */}
-                  <div className="text-center py-4">
-                    <p className="text-sm text-gray-600 mb-4">
-                      Connect your Google Calendar to sync coaching sessions and events.
-                    </p>
-                    <Button onClick={handleConnectGoogleCalendar}>
-                      <Link className="h-4 w-4 mr-2" />
-                      Connect Google Calendar
-                    </Button>
-                  </div>
-
-                  {/* Permissions info - only show when not connected */}
-                  <div className="pt-3 border-t">
-                    <p className="text-xs font-medium text-gray-500 mb-2">Required Permissions:</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline" className="text-xs">Read events</Badge>
-                      <Badge variant="outline" className="text-xs">Create events</Badge>
-                      <Badge variant="outline" className="text-xs">Modify events</Badge>
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Calendar Configuration */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5" />
-                Event Detection
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Keywords to automatically categorize calendar events.
-              </p>
-
-              {/* Coaching Keywords */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button 
-                        className={`w-4 h-4 rounded-full ${AVAILABLE_COLORS.find(c => c.value === coachingColor)?.class || 'bg-blue-500'} ring-offset-2 hover:ring-2 focus:ring-2 ring-gray-400 outline-none transition-all`}
-                        type="button"
-                        aria-label="Pick color for coaching sessions"
-                      />
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-3" align="start">
-                      <div className="flex gap-2">
-                        {AVAILABLE_COLORS.map((color) => (
-                          <button
-                            key={color.value}
-                            className={`w-6 h-6 rounded-full ${color.class} hover:scale-110 transition-transform ${coachingColor === color.value ? 'ring-2 ring-offset-2 ring-gray-900' : ''}`}
-                            onClick={() => setCoachingColor(color.value)}
-                            title={color.name}
-                            type="button"
-                          />
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  <label className="text-sm font-medium text-gray-700">
-                    Coaching Sessions
-                  </label>
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Personal Training, PT, Training Session, Workout"
-                    value={coachingKeywordsInput}
-                    onChange={(e) => setCoachingKeywordsInput(e.target.value)}
-                    className="text-sm flex-1"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={handleSaveCoachingKeywords}
-                    variant="outline"
-                  >
-                    <Save className="h-3 w-3 mr-1" />
-                    Save
-                  </Button>
-                </div>
-              </div>
-
-              {/* Class Session Keywords */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button 
-                        className={`w-4 h-4 rounded-full ${AVAILABLE_COLORS.find(c => c.value === classColor)?.class || 'bg-purple-500'} ring-offset-2 hover:ring-2 focus:ring-2 ring-gray-400 outline-none transition-all`}
-                        type="button"
-                        aria-label="Pick color for class sessions"
-                      />
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-3" align="start">
-                      <div className="flex gap-2">
-                        {AVAILABLE_COLORS.map((color) => (
-                          <button
-                            key={color.value}
-                            className={`w-6 h-6 rounded-full ${color.class} hover:scale-110 transition-transform ${classColor === color.value ? 'ring-2 ring-offset-2 ring-gray-900' : ''}`}
-                            onClick={() => setClassColor(color.value)}
-                            title={color.name}
-                            type="button"
-                          />
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  <label className="text-sm font-medium text-gray-700">
-                    Class Sessions
-                  </label>
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Class, Group Class, Group Training"
-                    value={classKeywordsInput}
-                    onChange={(e) => setClassKeywordsInput(e.target.value)}
-                    className="text-sm flex-1"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={handleSaveClassKeywords}
-                    variant="outline"
-                  >
-                    <Save className="h-3 w-3 mr-1" />
-                    Save
-                  </Button>
-                </div>
-              </div>
-
-              <p className="text-xs text-gray-500">
-                Separate keywords with commas. Events matching these keywords will be color-coded on the schedule.
-              </p>
-
-              {/* Error Display */}
-              {calendarError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-red-600">{calendarError}</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearCalendarError}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-        </div>
-      </div>
+            </div>
+          </div>
 
           {/* App Calendar Settings Section */}
           <div className="mt-12 border-t pt-8">
@@ -2246,13 +2257,13 @@ export default function ConfigurePage() {
                       <span className="w-20 text-center">End</span>
                     </div>
                   </div>
-                  
+
                   {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, index) => {
                     const isSelected = (businessHours?.daysOfWeek ?? [1, 2, 3, 4, 5]).includes(index);
                     const dayHour = businessHours?.dayHours?.[index] ?? { startHour: 7, endHour: 20 };
-                    
+
                     return (
-                      <div 
+                      <div
                         key={day}
                         className="flex items-center justify-between gap-2"
                       >
@@ -2265,12 +2276,12 @@ export default function ConfigurePage() {
                               const newDays = currentDays.includes(index)
                                 ? currentDays.filter(d => d !== index).sort()
                                 : [...currentDays, index].sort();
-                              
+
                               // If adding day, initialize with default hours
                               if (!currentDays.includes(index) && !currentDayHours[index]) {
                                 currentDayHours[index] = { startHour: 7, endHour: 20 };
                               }
-                              
+
                               try {
                                 await updateBusinessHours({
                                   daysOfWeek: newDays,
@@ -2281,11 +2292,10 @@ export default function ConfigurePage() {
                                 console.error('Error updating business hours:', error);
                               }
                             }}
-                            className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${
-                              isSelected
-                                ? 'bg-primary border-primary'
-                                : 'bg-background border-input hover:border-primary/50'
-                            }`}
+                            className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${isSelected
+                              ? 'bg-primary border-primary'
+                              : 'bg-background border-input hover:border-primary/50'
+                              }`}
                           >
                             {isSelected && (
                               <svg className="w-2.5 h-2.5 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
@@ -2293,7 +2303,7 @@ export default function ConfigurePage() {
                               </svg>
                             )}
                           </button>
-                          <label 
+                          <label
                             className="text-xs cursor-pointer"
                             onClick={async () => {
                               const currentDays = businessHours?.daysOfWeek ?? [1, 2, 3, 4, 5];
@@ -2301,11 +2311,11 @@ export default function ConfigurePage() {
                               const newDays = currentDays.includes(index)
                                 ? currentDays.filter(d => d !== index).sort()
                                 : [...currentDays, index].sort();
-                              
+
                               if (!currentDays.includes(index) && !currentDayHours[index]) {
                                 currentDayHours[index] = { startHour: 7, endHour: 20 };
                               }
-                              
+
                               try {
                                 await updateBusinessHours({
                                   daysOfWeek: newDays,
@@ -2320,7 +2330,7 @@ export default function ConfigurePage() {
                             {day}
                           </label>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           <Select
                             value={dayHour.startHour.toString()}
@@ -2345,7 +2355,7 @@ export default function ConfigurePage() {
                             <SelectTrigger className="w-20 h-7 text-xs">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent 
+                            <SelectContent
                               className="max-h-[200px] [&>*]:scroll-smooth"
                               style={{ scrollBehavior: 'smooth' }}
                             >
@@ -2360,7 +2370,7 @@ export default function ConfigurePage() {
                               ))}
                             </SelectContent>
                           </Select>
-                          
+
                           <Select
                             value={dayHour.endHour.toString()}
                             onValueChange={async (value) => {
@@ -2384,7 +2394,7 @@ export default function ConfigurePage() {
                             <SelectTrigger className="w-20 h-7 text-xs">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent 
+                            <SelectContent
                               className="max-h-[200px] [&>*]:scroll-smooth"
                               style={{ scrollBehavior: 'smooth' }}
                             >
@@ -2403,7 +2413,7 @@ export default function ConfigurePage() {
                       </div>
                     );
                   })}
-                  
+
                   <p className="text-xs text-gray-500 pt-1 mt-1">
                     Only these hours will be displayed on the calendar view.
                   </p>
@@ -2450,7 +2460,7 @@ export default function ConfigurePage() {
                       .map((location) => {
                         const existingAbbr = calendarConfig.locationAbbreviations?.find(abbr => normalizeLocationKey(abbr.original) === normalizeLocationKey(location));
                         const isEditing = normalizeLocationKey(editingLocation?.original || '') === normalizeLocationKey(location);
-                        
+
                         return (
                           <div key={location} className="p-3 border rounded-lg">
                             <div className="flex items-center justify-between mb-2">
@@ -2562,7 +2572,7 @@ export default function ConfigurePage() {
                         </span>
                       </div>
                     </button>
-                    
+
                     {showIgnoredLocations && (
                       <div className="space-y-2 mt-2">
                         {/* Empty state */}
@@ -2585,7 +2595,7 @@ export default function ConfigurePage() {
                             const ignoredAbbrs = (calendarConfig.locationAbbreviations ?? []).filter(abbr => abbr.ignored);
                             const seen = new Set<string>();
                             const uniqueIgnored: LocationAbbreviation[] = [];
-                            
+
                             for (const abbr of ignoredAbbrs) {
                               const normalizedKey = normalizeLocationKey(abbr.original);
                               if (!seen.has(normalizedKey)) {
@@ -2593,96 +2603,96 @@ export default function ConfigurePage() {
                                 uniqueIgnored.push(abbr);
                               }
                             }
-                            
+
                             return uniqueIgnored;
                           })().map((existingAbbr) => {
-                              const location = existingAbbr.original;
-                              const isEditing = normalizeLocationKey(editingLocation?.original || '') === normalizeLocationKey(location);
-                              
-                              return (
-                                <div key={location} className="p-3 border rounded-lg bg-gray-50 opacity-75">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-sm font-medium text-gray-400 truncate" title={location}>
-                                          {location}
-                                        </p>
-                                        <Badge variant="secondary" className="bg-gray-200 text-gray-600 text-xs">
-                                          N/A
-                                        </Badge>
-                                      </div>
-                                      {!isEditing && (
-                                        <p className="text-xs text-gray-400 mt-1">
-                                          Display: <span className="font-medium">{existingAbbr.abbreviation}</span>
-                                        </p>
-                                      )}
-                                      <p className="text-xs text-gray-400 mt-1 italic">
-                                        Location will not be displayed in schedule
-                                      </p>
-                                    </div>
+                            const location = existingAbbr.original;
+                            const isEditing = normalizeLocationKey(editingLocation?.original || '') === normalizeLocationKey(location);
+
+                            return (
+                              <div key={location} className="p-3 border rounded-lg bg-gray-50 opacity-75">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                      {isEditing ? (
-                                        <>
-                                          <Input
-                                            value={locationAbbreviationInput}
-                                            onChange={(e) => setLocationAbbreviationInput(e.target.value)}
-                                            placeholder="Abbreviation"
-                                            className="w-32 h-8"
-                                          />
-                                          <Button
-                                            size="sm"
-                                            onClick={handleSaveLocationAbbreviation}
-                                            className="h-8"
-                                          >
-                                            <Save className="h-3 w-3 mr-1" />
-                                            Save
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                              setEditingLocation(null);
-                                              setLocationAbbreviationInput('');
-                                            }}
-                                            className="h-8"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </Button>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Button
-                                            size="sm"
-                                            variant="default"
-                                            onClick={() => handleToggleLocationIgnored(location)}
-                                            className="h-8 bg-gray-600 hover:bg-gray-700"
-                                          >
-                                            Show
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleAddLocationAbbreviation(location)}
-                                            className="h-8"
-                                          >
-                                            <Edit className="h-3 w-3 mr-1" />
-                                            Edit
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleDeleteLocationAbbreviation(location)}
-                                            className="h-8 text-red-600 hover:text-red-700"
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </>
-                                      )}
+                                      <p className="text-sm font-medium text-gray-400 truncate" title={location}>
+                                        {location}
+                                      </p>
+                                      <Badge variant="secondary" className="bg-gray-200 text-gray-600 text-xs">
+                                        N/A
+                                      </Badge>
                                     </div>
+                                    {!isEditing && (
+                                      <p className="text-xs text-gray-400 mt-1">
+                                        Display: <span className="font-medium">{existingAbbr.abbreviation}</span>
+                                      </p>
+                                    )}
+                                    <p className="text-xs text-gray-400 mt-1 italic">
+                                      Location will not be displayed in schedule
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {isEditing ? (
+                                      <>
+                                        <Input
+                                          value={locationAbbreviationInput}
+                                          onChange={(e) => setLocationAbbreviationInput(e.target.value)}
+                                          placeholder="Abbreviation"
+                                          className="w-32 h-8"
+                                        />
+                                        <Button
+                                          size="sm"
+                                          onClick={handleSaveLocationAbbreviation}
+                                          className="h-8"
+                                        >
+                                          <Save className="h-3 w-3 mr-1" />
+                                          Save
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setEditingLocation(null);
+                                            setLocationAbbreviationInput('');
+                                          }}
+                                          className="h-8"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          variant="default"
+                                          onClick={() => handleToggleLocationIgnored(location)}
+                                          className="h-8 bg-gray-600 hover:bg-gray-700"
+                                        >
+                                          Show
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleAddLocationAbbreviation(location)}
+                                          className="h-8"
+                                        >
+                                          <Edit className="h-3 w-3 mr-1" />
+                                          Edit
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleDeleteLocationAbbreviation(location)}
+                                          className="h-8 text-red-600 hover:text-red-700"
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
-                              );
-                            })
+                              </div>
+                            );
+                          })
                         )}
                       </div>
                     )}

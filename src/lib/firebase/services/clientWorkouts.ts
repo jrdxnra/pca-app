@@ -1,26 +1,35 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
   getDoc,
   getDocs,
-  query, 
+  query,
   where,
   orderBy,
   Timestamp,
   writeBatch
 } from 'firebase/firestore';
-import { db, getDb } from '../config';
-import type { 
-  ClientWorkout, 
+import { db, getDb, auth } from '../config';
+import type {
+  ClientWorkout,
   ClientWorkoutWarmup,
   ClientWorkoutRound,
-  WorkoutTemplate 
+  WorkoutTemplate
 } from '@/lib/types';
 
 const COLLECTION_NAME = 'clientWorkouts';
+
+// Helper to get current user ID
+function getOwnerId(): string {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Unauthorized');
+  }
+  return currentUser.uid;
+}
 
 /**
  * Create a new client workout
@@ -29,15 +38,16 @@ export async function createClientWorkout(
   clientWorkout: Omit<ClientWorkout, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<ClientWorkout> {
   const now = Timestamp.now();
-  
+
   const workoutData = {
     ...clientWorkout,
+    ownerId: getOwnerId(),
     createdAt: now,
     updatedAt: now,
   };
 
   const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), workoutData);
-  
+
   return {
     id: docRef.id,
     ...workoutData,
@@ -115,7 +125,7 @@ export async function fetchWorkoutsByDateRange(
     id: doc.id,
     ...doc.data(),
   } as ClientWorkout));
-  
+
   // Sort in memory to avoid requiring a composite index
   return workouts.sort((a, b) => {
     const dateA = a.date instanceof Timestamp ? a.date.toMillis() : new Date(a.date).getTime();
@@ -155,7 +165,7 @@ export async function copyTemplateToClientWorkout(
   template: WorkoutTemplate
 ): Promise<void> {
   const docRef = doc(getDb(), COLLECTION_NAME, workoutId);
-  
+
   // Convert template rounds to ClientWorkoutRounds
   const rounds: ClientWorkoutRound[] = template.rounds.map((round, roundIndex) => ({
     ordinal: roundIndex + 1,
@@ -237,6 +247,7 @@ export async function bulkCreateWorkouts(
     const docRef = doc(collection(getDb(), COLLECTION_NAME));
     batch.set(docRef, {
       ...workout,
+      ownerId: getOwnerId(),
       createdAt: now,
       updatedAt: now,
     });
@@ -271,7 +282,7 @@ export async function getWorkoutData(
 
   // Otherwise, fetch and use template data
   const template = await getTemplate(workout.workoutTemplateId);
-  
+
   if (!template) {
     // Template deleted, fall back to embedded data
     return {
@@ -332,6 +343,7 @@ export async function fetchAllWorkoutsByDateRange(
 ): Promise<ClientWorkout[]> {
   const q = query(
     collection(getDb(), COLLECTION_NAME),
+    where('ownerId', '==', getOwnerId()),
     where('date', '>=', startDate),
     where('date', '<=', endDate),
     orderBy('date', 'asc')
@@ -342,6 +354,6 @@ export async function fetchAllWorkoutsByDateRange(
     id: doc.id,
     ...doc.data(),
   } as ClientWorkout));
-  
+
   return workouts;
 }

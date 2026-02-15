@@ -1,22 +1,31 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
   getDoc,
   query,
   where,
   orderBy,
   onSnapshot,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
-import { db, getDb } from '../config';
+import { db, getDb, auth } from '../config';
 import { Program, ScheduledWorkout } from '@/lib/types';
 
 const PROGRAMS_COLLECTION = 'programs';
 const SCHEDULED_WORKOUTS_COLLECTION = 'scheduled-workouts';
+
+// Helper to get current user ID
+function getOwnerId(): string {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Unauthorized');
+  }
+  return currentUser.uid;
+}
 
 /**
  * Program CRUD Operations
@@ -28,6 +37,7 @@ export async function createProgram(
   try {
     const docRef = await addDoc(collection(getDb(), PROGRAMS_COLLECTION), {
       ...programData,
+      ownerId: getOwnerId(),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
@@ -42,7 +52,7 @@ export async function getProgram(id: string): Promise<Program | null> {
   try {
     const docRef = doc(getDb(), PROGRAMS_COLLECTION, id);
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       return { id: docSnap.id, ...docSnap.data() } as Program;
     }
@@ -55,13 +65,22 @@ export async function getProgram(id: string): Promise<Program | null> {
 
 export async function getAllPrograms(): Promise<Program[]> {
   try {
-    const q = query(collection(getDb(), PROGRAMS_COLLECTION), orderBy('startDate', 'desc'));
+    const q = query(
+      collection(getDb(), PROGRAMS_COLLECTION),
+      where('ownerId', '==', getOwnerId())
+    );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Program[];
+
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => {
+        const dateA = a.startDate?.toMillis() || 0;
+        const dateB = b.startDate?.toMillis() || 0;
+        return dateB - dateA;
+      }) as Program[];
   } catch (error) {
     console.error('Error getting programs:', error);
     throw error;
@@ -71,16 +90,21 @@ export async function getAllPrograms(): Promise<Program[]> {
 export async function getProgramsByClient(clientId: string): Promise<Program[]> {
   try {
     const q = query(
-      collection(getDb(), PROGRAMS_COLLECTION), 
-      where('clientId', '==', clientId),
-      orderBy('startDate', 'desc')
+      collection(getDb(), PROGRAMS_COLLECTION),
+      where('clientId', '==', clientId)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Program[];
+
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => {
+        const dateA = a.startDate?.toMillis() || 0;
+        const dateB = b.startDate?.toMillis() || 0;
+        return dateB - dateA;
+      }) as Program[];
   } catch (error) {
     console.error('Error getting programs by client:', error);
     throw error;
@@ -88,7 +112,7 @@ export async function getProgramsByClient(clientId: string): Promise<Program[]> 
 }
 
 export async function updateProgram(
-  id: string, 
+  id: string,
   updates: Partial<Omit<Program, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
@@ -123,6 +147,7 @@ export async function createScheduledWorkout(
   try {
     const docRef = await addDoc(collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION), {
       ...workoutData,
+      ownerId: getOwnerId(),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
@@ -137,7 +162,7 @@ export async function getScheduledWorkout(id: string): Promise<ScheduledWorkout 
   try {
     const docRef = doc(getDb(), SCHEDULED_WORKOUTS_COLLECTION, id);
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       return { id: docSnap.id, ...docSnap.data() } as ScheduledWorkout;
     }
@@ -151,16 +176,17 @@ export async function getScheduledWorkout(id: string): Promise<ScheduledWorkout 
 export async function getScheduledWorkoutsByProgram(programId: string): Promise<ScheduledWorkout[]> {
   try {
     const q = query(
-      collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION), 
-      where('programId', '==', programId),
-      orderBy('date')
+      collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION),
+      where('programId', '==', programId)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as ScheduledWorkout[];
+
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.date.toMillis() - b.date.toMillis()) as ScheduledWorkout[];
   } catch (error) {
     console.error('Error getting scheduled workouts by program:', error);
     throw error;
@@ -170,16 +196,17 @@ export async function getScheduledWorkoutsByProgram(programId: string): Promise<
 export async function getScheduledWorkoutsByClient(clientId: string): Promise<ScheduledWorkout[]> {
   try {
     const q = query(
-      collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION), 
-      where('clientId', '==', clientId),
-      orderBy('date')
+      collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION),
+      where('clientId', '==', clientId)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as ScheduledWorkout[];
+
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.date.toMillis() - b.date.toMillis()) as ScheduledWorkout[];
   } catch (error) {
     console.error('Error getting scheduled workouts by client:', error);
     throw error;
@@ -189,15 +216,17 @@ export async function getScheduledWorkoutsByClient(clientId: string): Promise<Sc
 export async function getAllScheduledWorkouts(): Promise<ScheduledWorkout[]> {
   try {
     const q = query(
-      collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION), 
-      orderBy('date')
+      collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION),
+      where('ownerId', '==', getOwnerId())
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as ScheduledWorkout[];
+
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.date.toMillis() - b.date.toMillis()) as ScheduledWorkout[];
   } catch (error) {
     console.error('Error getting all scheduled workouts:', error);
     throw error;
@@ -214,11 +243,17 @@ export async function getScheduledWorkoutsByDateRange(
       collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION),
       where('clientId', '==', clientId),
       where('date', '>=', Timestamp.fromDate(startDate)),
-      where('date', '<=', Timestamp.fromDate(endDate)),
-      orderBy('date')
+      where('date', '<=', Timestamp.fromDate(endDate))
     );
     const querySnapshot = await getDocs(q);
-    
+
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.date.toMillis() - b.date.toMillis()) as ScheduledWorkout[];
+
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -230,7 +265,7 @@ export async function getScheduledWorkoutsByDateRange(
 }
 
 export async function updateScheduledWorkout(
-  id: string, 
+  id: string,
   updates: Partial<Omit<ScheduledWorkout, 'id' | 'createdAt'>>
 ): Promise<void> {
   try {
@@ -275,7 +310,7 @@ export async function scheduleWorkoutFromTemplate(
     }
 
     const template = templateDoc.data();
-    
+
     const scheduledWorkout: Omit<ScheduledWorkout, 'id' | 'createdAt' | 'updatedAt'> = {
       programId,
       clientId,
@@ -307,7 +342,7 @@ export async function duplicateWeek(
     // Get workouts from source week
     const sourceWeekEnd = new Date(sourceWeekStart);
     sourceWeekEnd.setDate(sourceWeekEnd.getDate() + 6);
-    
+
     const sourceWorkouts = await getScheduledWorkoutsByDateRange(
       clientId,
       sourceWeekStart,
@@ -347,14 +382,23 @@ export async function duplicateWeek(
  */
 
 export function subscribeToPrograms(callback: (programs: Program[]) => void): () => void {
-  const q = query(collection(getDb(), PROGRAMS_COLLECTION), orderBy('startDate', 'desc'));
-  
+  const q = query(
+    collection(getDb(), PROGRAMS_COLLECTION),
+    where('ownerId', '==', getOwnerId())
+  );
+
   return onSnapshot(q, (querySnapshot) => {
-    const programs = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Program[];
-    
+    const programs = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => {
+        const dateA = a.startDate?.toMillis() || 0;
+        const dateB = b.startDate?.toMillis() || 0;
+        return dateB - dateA;
+      }) as Program[];
+
     callback(programs);
   }, (error) => {
     console.error('Error in programs subscription:', error);
@@ -367,16 +411,17 @@ export function subscribeToScheduledWorkouts(
 ): () => void {
   const q = query(
     collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION),
-    where('programId', '==', programId),
-    orderBy('date')
+    where('programId', '==', programId)
   );
-  
+
   return onSnapshot(q, (querySnapshot) => {
-    const workouts = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as ScheduledWorkout[];
-    
+    const workouts = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .sort((a: any, b: any) => a.date.toMillis() - b.date.toMillis()) as ScheduledWorkout[];
+
     callback(workouts);
   }, (error) => {
     console.error('Error in scheduled workouts subscription:', error);

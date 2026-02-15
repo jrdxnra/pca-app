@@ -42,6 +42,7 @@ export interface PeriodAssignment {
     defaultTime?: string;
     isAllDay?: boolean;
     dayTimes?: Array<{ time?: string; isAllDay: boolean; category?: string; deleted?: boolean }>;
+    skipCalendarSync?: boolean;
 }
 
 export interface ProgramTemplateAssignment {
@@ -172,7 +173,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
 
             // Generate days if week template is applied OR if dayTimes were provided (inline custom week)
             const hasDayTimes = assignment.dayTimes && assignment.dayTimes.length > 0;
-            
+
             if (weekTemplate || hasDayTimes) {
                 const days = [];
                 const currentDate = new Date(assignment.startDate);
@@ -187,10 +188,10 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
 
                 while (currentDate <= endDate) {
                     const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
-                    
+
                     // Get template day if week template exists
                     const templateDay = weekTemplate?.days.find((d: { day: string }) => d.day === dayOfWeek);
-                    
+
                     // Find day settings by matching day name
                     let dayTimeSettings = null;
                     if (weekTemplate && assignment.dayTimes) {
@@ -262,8 +263,8 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                         pEndStr === assignmentEndStr;
                 });
 
-                // Create events and workouts for days with times
-                if (newPeriod.days && newPeriod.days.length > 0) {
+                // Create events and workouts for days with times - skip if skipCalendarSync is true
+                if (!assignment.skipCalendarSync && newPeriod.days && newPeriod.days.length > 0) {
                     const periodIdToUse = createdPeriod?.id || clientProgramId;
                     const client = clients.find(c => c.id === assignment.clientId);
                     const clientName = client?.name || 'Client';

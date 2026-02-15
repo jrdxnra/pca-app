@@ -53,3 +53,6 @@ ui-debug.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+google-cloud-sdk/
+*.tar.gz
+.google-calendar-tokens*.json

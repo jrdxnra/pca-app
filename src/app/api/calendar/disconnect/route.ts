@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { clearStoredTokens } from '@/lib/google-calendar/token-storage';
+import { clearStoredTokens } from '@/lib/google-calendar/adapters/token-adapter';
 
 /**
  * POST /api/calendar/disconnect
@@ -7,7 +7,15 @@ import { clearStoredTokens } from '@/lib/google-calendar/token-storage';
  */
 export async function POST(request: NextRequest) {
   try {
-    await clearStoredTokens();
+    const { getAuthenticatedUser } = await import('@/lib/auth/get-authenticated-user');
+    const userId = await getAuthenticatedUser(request);
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    await clearStoredTokens(userId);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error disconnecting Google Calendar:', error);
@@ -17,4 +25,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -8,6 +8,13 @@ export interface GoogleCalendar {
   primary?: boolean;
 }
 
+export interface StoredTokens {
+  accessToken: string;
+  refreshToken: string | null;
+  expiryDate: number | null;
+  userId?: string; // For future multi-user support
+}
+
 export interface GoogleCalendarEvent {
   id: string;
   summary: string; // Event title
