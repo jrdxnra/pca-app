@@ -6,18 +6,29 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import { Loader2 } from 'lucide-react';
 
+import { MASTER_UID } from '@/lib/firebase/services/memberships';
+
 interface AuthGuardProps {
     children: React.ReactNode;
+    requireMaster?: boolean;
 }
 
-export function AuthGuard({ children }: AuthGuardProps) {
+export function AuthGuard({ children, requireMaster = false }: AuthGuardProps) {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [authenticated, setAuthenticated] = useState(false);
+    const [isAuthorized, setIsAuthorized] = useState(true);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             if (user) {
+                if (requireMaster && user.uid !== MASTER_UID) {
+                    setIsAuthorized(false);
+                    router.push('/dashboard');
+                    setLoading(false);
+                    return;
+                }
+
                 setAuthenticated(true);
                 // Check calendar connection once on mount/auth
                 // This ensures the store is up to date for Dashboard and other components
@@ -31,7 +42,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
         });
 
         return () => unsubscribe();
-    }, [router]);
+    }, [router, requireMaster]);
 
     if (loading) {
         return (
@@ -42,7 +53,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
         );
     }
 
-    if (!authenticated) {
+    if (!authenticated || !isAuthorized) {
         return null; // Will redirect via useEffect
     }
 

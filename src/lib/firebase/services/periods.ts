@@ -6,10 +6,12 @@ import {
   deleteDoc,
   getDocs,
   query,
+  where,
   orderBy,
   Timestamp
 } from 'firebase/firestore';
 import { db, getDb } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import { Period } from '../../types';
 
 export type { Period };
@@ -21,7 +23,7 @@ export const createPeriod = async (period: Omit<Period, 'id' | 'createdAt' | 'up
       ...period,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-      createdBy: 'current-user' // TODO: Get from auth context
+      ownerId: await resolveActiveAccountId()
     });
     return docRef.id;
   } catch (error) {
@@ -57,8 +59,12 @@ export const deletePeriod = async (id: string): Promise<void> => {
 
 export const fetchPeriods = async (): Promise<Period[]> => {
   try {
-    const dbInstance = getDb();
-    const q = query(collection(dbInstance, 'periods'), orderBy('order', 'asc'));
+    const accountId = await resolveActiveAccountId();
+    const q = query(
+      collection(getDb(), 'periods'),
+      where('ownerId', '==', accountId),
+      orderBy('order', 'asc')
+    );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,

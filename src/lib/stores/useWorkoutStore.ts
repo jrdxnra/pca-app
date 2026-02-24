@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { WorkoutTemplate, WorkoutRound, WorkoutExercise } from '@/lib/types';
-import { 
+import {
   getAllWorkoutTemplates,
   createWorkoutTemplate,
   updateWorkoutTemplate,
@@ -19,11 +19,11 @@ interface WorkoutStore {
   loading: boolean;
   error: string | null;
   searchTerm: string;
-  
+
   // Workout Builder State
   builderTemplate: WorkoutTemplate | null;
   isBuilderMode: boolean;
-  
+
   // Actions
   fetchWorkoutTemplates: () => Promise<void>;
   addWorkoutTemplate: (template: Omit<WorkoutTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
@@ -34,27 +34,27 @@ interface WorkoutStore {
   setCurrentTemplate: (template: WorkoutTemplate | null) => void;
   setSearchTerm: (term: string) => void;
   clearError: () => void;
-  
+
   // Workout Builder Actions
   startBuilder: (template?: WorkoutTemplate) => void;
   exitBuilder: () => void;
   updateBuilderTemplate: (template: WorkoutTemplate) => void;
   saveBuilderTemplate: () => Promise<string | null>;
-  
+
   // Round Management
   addRound: (round: Omit<WorkoutRound, 'orderIndex'>) => void;
   updateRound: (roundIndex: number, round: Partial<WorkoutRound>) => void;
   removeRound: (roundIndex: number) => void;
   reorderRounds: (fromIndex: number, toIndex: number) => void;
-  
+
   // Exercise Management
   addExercise: (roundIndex: number, exercise: WorkoutExercise) => void;
   updateExercise: (roundIndex: number, exerciseIndex: number, exercise: Partial<WorkoutExercise>) => void;
   removeExercise: (roundIndex: number, exerciseIndex: number) => void;
   reorderExercises: (roundIndex: number, fromIndex: number, toIndex: number) => void;
-  
+
   // Real-time subscription
-  subscribeToWorkoutTemplates: (createdBy?: string) => () => void;
+  subscribeToWorkoutTemplates: (accountId: string, createdBy?: string) => () => void;
 }
 
 export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
@@ -74,9 +74,9 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       const templates = await getAllWorkoutTemplates();
       set({ workoutTemplates: templates, loading: false });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch workout templates',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -91,16 +91,16 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       }
 
       const id = await createWorkoutTemplate(templateData);
-      
+
       // Refresh templates list
       await get().fetchWorkoutTemplates();
-      
+
       set({ loading: false });
       return id;
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to add workout template',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -110,33 +110,33 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await updateWorkoutTemplate(id, updates);
-      
+
       // Update local state
       const { workoutTemplates, currentTemplate, builderTemplate } = get();
-      const updatedTemplates = workoutTemplates.map(template => 
+      const updatedTemplates = workoutTemplates.map(template =>
         template.id === id ? { ...template, ...updates } : template
       );
-      
+
       // Update current template if it's the one being edited
-      const updatedCurrentTemplate = currentTemplate?.id === id 
-        ? { ...currentTemplate, ...updates } 
+      const updatedCurrentTemplate = currentTemplate?.id === id
+        ? { ...currentTemplate, ...updates }
         : currentTemplate;
-      
+
       // Update builder template if it's the one being edited
-      const updatedBuilderTemplate = builderTemplate?.id === id 
-        ? { ...builderTemplate, ...updates } 
+      const updatedBuilderTemplate = builderTemplate?.id === id
+        ? { ...builderTemplate, ...updates }
         : builderTemplate;
-      
-      set({ 
-        workoutTemplates: updatedTemplates, 
+
+      set({
+        workoutTemplates: updatedTemplates,
         currentTemplate: updatedCurrentTemplate,
         builderTemplate: updatedBuilderTemplate,
-        loading: false 
+        loading: false
       });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to update workout template',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -146,27 +146,27 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await deleteWorkoutTemplate(id);
-      
+
       // Remove from local state
       const { workoutTemplates, currentTemplate, builderTemplate } = get();
       const filteredTemplates = workoutTemplates.filter(template => template.id !== id);
-      
+
       // Clear current template if it's the one being deleted
       const updatedCurrentTemplate = currentTemplate?.id === id ? null : currentTemplate;
-      
+
       // Clear builder template if it's the one being deleted
       const updatedBuilderTemplate = builderTemplate?.id === id ? null : builderTemplate;
-      
-      set({ 
+
+      set({
         workoutTemplates: filteredTemplates,
         currentTemplate: updatedCurrentTemplate,
         builderTemplate: updatedBuilderTemplate,
-        loading: false 
+        loading: false
       });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to delete workout template',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -176,16 +176,16 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const id = await duplicateWorkoutTemplate(templateId, newName, createdBy);
-      
+
       // Refresh templates list
       await get().fetchWorkoutTemplates();
-      
+
       set({ loading: false });
       return id;
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to duplicate workout template',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -201,9 +201,9 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
         set({ workoutTemplates: templates, loading: false });
       }
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to search workout templates',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -223,9 +223,9 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
   // Workout Builder Actions
   startBuilder: (template) => {
     if (template) {
-      set({ 
+      set({
         builderTemplate: { ...template },
-        isBuilderMode: true 
+        isBuilderMode: true
       });
     } else {
       // Create new template with default rounds
@@ -239,18 +239,18 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
         createdAt: new Date() as any,
         updatedAt: new Date() as any,
       };
-      
-      set({ 
+
+      set({
         builderTemplate: newTemplate,
-        isBuilderMode: true 
+        isBuilderMode: true
       });
     }
   },
 
   exitBuilder: () => {
-    set({ 
+    set({
       builderTemplate: null,
-      isBuilderMode: false 
+      isBuilderMode: false
     });
   },
 
@@ -267,12 +267,12 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
         // Create new template
         const { id, createdAt, updatedAt, ...templateData } = builderTemplate;
         const newId = await get().addWorkoutTemplate(templateData);
-        
+
         // Update builder template with new ID
-        set({ 
+        set({
           builderTemplate: { ...builderTemplate, id: newId }
         });
-        
+
         return newId;
       } else {
         // Update existing template
@@ -444,8 +444,8 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
     set({ builderTemplate: updatedTemplate });
   },
 
-  subscribeToWorkoutTemplates: (createdBy) => {
-    return subscribeToWorkoutTemplates((templates) => {
+  subscribeToWorkoutTemplates: (accountId: string, createdBy?: string) => {
+    return subscribeToWorkoutTemplates(accountId, (templates) => {
       set({ workoutTemplates: templates });
     }, createdBy);
   },

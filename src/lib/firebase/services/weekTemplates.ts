@@ -11,21 +11,23 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import { WeekTemplate, WeekTemplateDay } from '../../types';
 
 export type { WeekTemplate, WeekTemplateDay };
 
-// Helper to get current user ID
-function getOwnerId(): string {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Unauthorized');
+// Helper to get current account ID
+async function getAccountId(): Promise<string> {
+  const accountId = await resolveActiveAccountId();
+  if (!accountId) {
+    throw new Error('Unauthorized or No Active Account');
   }
-  return currentUser.uid;
+  return accountId;
 }
 
 export const createWeekTemplate = async (template: Omit<WeekTemplate, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<string> => {
   try {
+    const accountId = await getAccountId();
     const docRef = await addDoc(collection(getDb(), 'weekTemplates'), {
       ...template,
       // Ensure variations are saved if present
@@ -35,8 +37,8 @@ export const createWeekTemplate = async (template: Omit<WeekTemplate, 'id' | 'cr
       })),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-      createdBy: getOwnerId(),
-      ownerId: getOwnerId()
+      createdBy: auth.currentUser?.uid,
+      ownerId: accountId
     });
     return docRef.id;
   } catch (error) {
@@ -79,9 +81,10 @@ export const deleteWeekTemplate = async (id: string): Promise<void> => {
 
 export const fetchWeekTemplates = async (): Promise<WeekTemplate[]> => {
   try {
+    const accountId = await getAccountId();
     const q = query(
       collection(getDb(), 'weekTemplates'),
-      where('ownerId', '==', getOwnerId()),
+      where('ownerId', '==', accountId),
       orderBy('order', 'asc')
     );
     const querySnapshot = await getDocs(q);

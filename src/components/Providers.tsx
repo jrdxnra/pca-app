@@ -19,8 +19,9 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <ErrorBoundary>
       <QueryProvider>
-        <AuthRefreshListener />
-        {children}
+        <AuthRefreshListener>
+          {children}
+        </AuthRefreshListener>
         <Toaster />
       </QueryProvider>
     </ErrorBoundary>

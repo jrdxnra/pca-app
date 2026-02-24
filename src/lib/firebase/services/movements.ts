@@ -13,18 +13,19 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import { Movement, MovementCategory } from '@/lib/types';
 import { getMovementCategory } from './movementCategories';
 
 const COLLECTION_NAME = 'movements';
 
-// Helper to get current user ID
-function getOwnerId(): string {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Unauthorized');
+// Helper to get current account ID
+async function getAccountId(): Promise<string> {
+  const accountId = await resolveActiveAccountId();
+  if (!accountId) {
+    throw new Error('Unauthorized or No Active Account');
   }
-  return currentUser.uid;
+  return accountId;
 }
 
 /**
@@ -70,7 +71,7 @@ export async function addMovement(
       ...(movementData.instructions && { instructions: movementData.instructions }),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-      ownerId: getOwnerId(),
+      ownerId: await getAccountId(),
     };
 
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), cleanData);
@@ -112,7 +113,7 @@ export async function getAllMovements(includeCategory = false): Promise<Movement
   try {
     const q = query(
       collection(getDb(), COLLECTION_NAME),
-      where('ownerId', '==', getOwnerId())
+      where('ownerId', '==', await getAccountId())
     );
     const querySnapshot = await getDocs(q);
 
@@ -153,7 +154,8 @@ export async function getMovementsByCategory(
   try {
     const q = query(
       collection(getDb(), COLLECTION_NAME),
-      where('categoryId', '==', categoryId)
+      where('categoryId', '==', categoryId),
+      where('ownerId', '==', await getAccountId())
     );
     const querySnapshot = await getDocs(q);
 
@@ -278,11 +280,13 @@ export async function reorderMovements(
  */
 export function subscribeToMovementsByCategory(
   categoryId: string,
+  accountId: string,
   callback: (movements: Movement[]) => void
 ): () => void {
   const q = query(
     collection(getDb(), COLLECTION_NAME),
-    where('categoryId', '==', categoryId)
+    where('categoryId', '==', categoryId),
+    where('ownerId', '==', accountId)
   );
 
   return onSnapshot(q, (querySnapshot) => {
@@ -308,10 +312,13 @@ export function subscribeToMovementsByCategory(
 /**
  * Subscribe to all movements changes
  */
-export function subscribeToMovements(callback: (movements: Movement[]) => void): () => void {
+export function subscribeToMovements(
+  accountId: string,
+  callback: (movements: Movement[]) => void
+): () => void {
   const q = query(
     collection(getDb(), COLLECTION_NAME),
-    where('ownerId', '==', getOwnerId())
+    where('ownerId', '==', accountId)
   );
 
   return onSnapshot(q, (querySnapshot) => {

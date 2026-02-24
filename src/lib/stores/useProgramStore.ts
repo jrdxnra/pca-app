@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Program, ScheduledWorkout } from '@/lib/types';
-import { 
+import {
   getAllPrograms,
   createProgram,
   updateProgram as updateProgramService,
@@ -35,16 +35,16 @@ interface ProgramStore {
   viewMode: 'month' | 'week' | 'day';
   loading: boolean;
   error: string | null;
-  
+
   // Calendar State
   calendarDate: Date;
   selectedDate: Date | null;
-  
+
   // Cache tracking
   _programsFetchTime: number | null;
   _workoutsFetchTime: number | null;
   _workoutsFetchKey: string | null; // Track what was fetched (programId, clientId, etc)
-  
+
   // Actions
   fetchPrograms: (force?: boolean) => Promise<void>;
   fetchProgramsByClient: (clientId: string, force?: boolean) => Promise<void>;
@@ -52,16 +52,16 @@ interface ProgramStore {
   fetchScheduledWorkoutsByClient: (clientId: string, force?: boolean) => Promise<void>;
   fetchAllScheduledWorkouts: (force?: boolean) => Promise<void>;
   fetchScheduledWorkoutsByDateRange: (clientId: string, startDate: Date, endDate: Date, force?: boolean) => Promise<void>;
-  
+
   addProgram: (program: Omit<Program, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   editProgram: (id: string, updates: Partial<Omit<Program, 'id' | 'createdAt'>>) => Promise<void>;
   updateProgram: (program: Program) => Promise<void>;
   removeProgram: (id: string) => Promise<void>;
-  
+
   addScheduledWorkout: (workout: Omit<ScheduledWorkout, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   editScheduledWorkout: (id: string, updates: Partial<Omit<ScheduledWorkout, 'id' | 'createdAt'>>) => Promise<void>;
   removeScheduledWorkout: (id: string) => Promise<void>;
-  
+
   scheduleWorkout: (
     programId: string,
     clientId: string,
@@ -70,14 +70,14 @@ interface ProgramStore {
     sessionType: string,
     keepLinked?: boolean
   ) => Promise<string>;
-  
+
   duplicateWeek: (
     programId: string,
     clientId: string,
     sourceWeekStart: Date,
     targetWeekStart: Date
   ) => Promise<void>;
-  
+
   // State Management
   setCurrentProgram: (program: Program | null) => void;
   setSelectedClient: (clientId: string | null) => void;
@@ -87,20 +87,20 @@ interface ProgramStore {
   setSelectedDate: (date: Date | null) => void;
   clearError: () => void;
   initializeSelectedClient: () => void;
-  
+
   // Calendar Navigation
   navigateMonth: (direction: number) => void;
   navigateWeek: (direction: number) => void;
   navigateDay: (direction: number) => void;
   goToToday: () => void;
-  
+
   // Utility Functions
   getWorkoutsForDate: (date: Date) => ScheduledWorkout[];
   getWorkoutsForWeek: (weekStart: Date) => ScheduledWorkout[];
   getWorkoutsForMonth: (month: number, year: number) => ScheduledWorkout[];
-  
+
   // Real-time subscriptions
-  subscribeToPrograms: () => () => void;
+  subscribeToPrograms: (accountId: string) => () => void;
   subscribeToScheduledWorkouts: (programId: string) => () => void;
 }
 
@@ -138,20 +138,20 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   // Actions
   fetchPrograms: async (force = false) => {
     const { _programsFetchTime, programs } = get();
-    
+
     // Skip if cache is fresh (unless forced)
     if (!force && programs.length > 0 && _programsFetchTime && Date.now() - _programsFetchTime < CACHE_DURATION) {
       return;
     }
-    
+
     set({ loading: true, error: null });
     try {
       const fetchedPrograms = await getAllPrograms();
       set({ programs: fetchedPrograms, loading: false, _programsFetchTime: Date.now() });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch programs',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -159,20 +159,20 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   fetchProgramsByClient: async (clientId, force = false) => {
     const { _programsFetchTime, programs, _workoutsFetchKey } = get();
     const cacheKey = `client:${clientId}`;
-    
+
     // Skip if cache is fresh and for same client (unless forced)
     if (!force && programs.length > 0 && _programsFetchTime && _workoutsFetchKey === cacheKey && Date.now() - _programsFetchTime < CACHE_DURATION) {
       return;
     }
-    
+
     set({ loading: true, error: null });
     try {
       const fetchedPrograms = await getProgramsByClient(clientId);
       set({ programs: fetchedPrograms, loading: false, _programsFetchTime: Date.now() });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch client programs',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -180,20 +180,20 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   fetchScheduledWorkouts: async (programId, force = false) => {
     const { _workoutsFetchTime, scheduledWorkouts, _workoutsFetchKey } = get();
     const cacheKey = `program:${programId}`;
-    
+
     // Skip if cache is fresh and for same program (unless forced)
     if (!force && scheduledWorkouts.length > 0 && _workoutsFetchTime && _workoutsFetchKey === cacheKey && Date.now() - _workoutsFetchTime < CACHE_DURATION) {
       return;
     }
-    
+
     set({ loading: true, error: null });
     try {
       const workouts = await getScheduledWorkoutsByProgram(programId);
       set({ scheduledWorkouts: workouts, loading: false, _workoutsFetchTime: Date.now(), _workoutsFetchKey: cacheKey });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch scheduled workouts',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -201,20 +201,20 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   fetchScheduledWorkoutsByClient: async (clientId, force = false) => {
     const { _workoutsFetchTime, scheduledWorkouts, _workoutsFetchKey } = get();
     const cacheKey = `client:${clientId}`;
-    
+
     // Skip if cache is fresh and for same client (unless forced)
     if (!force && scheduledWorkouts.length > 0 && _workoutsFetchTime && _workoutsFetchKey === cacheKey && Date.now() - _workoutsFetchTime < CACHE_DURATION) {
       return;
     }
-    
+
     set({ loading: true, error: null });
     try {
       const workouts = await getScheduledWorkoutsByClient(clientId);
       set({ scheduledWorkouts: workouts, loading: false, _workoutsFetchTime: Date.now(), _workoutsFetchKey: cacheKey });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch client workouts',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -222,20 +222,20 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   fetchAllScheduledWorkouts: async (force = false) => {
     const { _workoutsFetchTime, scheduledWorkouts, _workoutsFetchKey } = get();
     const cacheKey = 'all';
-    
+
     // Skip if cache is fresh (unless forced)
     if (!force && scheduledWorkouts.length > 0 && _workoutsFetchTime && _workoutsFetchKey === cacheKey && Date.now() - _workoutsFetchTime < CACHE_DURATION) {
       return;
     }
-    
+
     set({ loading: true, error: null });
     try {
       const workouts = await getAllScheduledWorkouts();
       set({ scheduledWorkouts: workouts, loading: false, _workoutsFetchTime: Date.now(), _workoutsFetchKey: cacheKey });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch all scheduled workouts',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -243,20 +243,20 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   fetchScheduledWorkoutsByDateRange: async (clientId, startDate, endDate, force = false) => {
     const { _workoutsFetchTime, scheduledWorkouts, _workoutsFetchKey } = get();
     const cacheKey = `range:${clientId}:${startDate.toISOString()}:${endDate.toISOString()}`;
-    
+
     // Skip if cache is fresh and for same range (unless forced)
     if (!force && scheduledWorkouts.length > 0 && _workoutsFetchTime && _workoutsFetchKey === cacheKey && Date.now() - _workoutsFetchTime < CACHE_DURATION) {
       return;
     }
-    
+
     set({ loading: true, error: null });
     try {
       const workouts = await getScheduledWorkoutsByDateRange(clientId, startDate, endDate);
       set({ scheduledWorkouts: workouts, loading: false, _workoutsFetchTime: Date.now(), _workoutsFetchKey: cacheKey });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch workouts for date range',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -269,9 +269,9 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
       set({ loading: false });
       return id;
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to create program',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -281,26 +281,26 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await updateProgramService(id, updates);
-      
+
       // Update local state
       const { programs, currentProgram } = get();
-      const updatedPrograms = programs.map(program => 
+      const updatedPrograms = programs.map(program =>
         program.id === id ? { ...program, ...updates } : program
       );
-      
-      const updatedCurrentProgram = currentProgram?.id === id 
-        ? { ...currentProgram, ...updates } 
+
+      const updatedCurrentProgram = currentProgram?.id === id
+        ? { ...currentProgram, ...updates }
         : currentProgram;
-      
-      set({ 
-        programs: updatedPrograms, 
+
+      set({
+        programs: updatedPrograms,
         currentProgram: updatedCurrentProgram,
-        loading: false 
+        loading: false
       });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to update program',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -310,26 +310,26 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await updateProgramService(program.id, program);
-      
+
       // Update local state
       const { programs, currentProgram } = get();
-      const updatedPrograms = programs.map(p => 
+      const updatedPrograms = programs.map(p =>
         p.id === program.id ? program : p
       );
-      
-      const updatedCurrentProgram = currentProgram?.id === program.id 
-        ? program 
+
+      const updatedCurrentProgram = currentProgram?.id === program.id
+        ? program
         : currentProgram;
-      
-      set({ 
-        programs: updatedPrograms, 
+
+      set({
+        programs: updatedPrograms,
         currentProgram: updatedCurrentProgram,
-        loading: false 
+        loading: false
       });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to update program',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -339,20 +339,20 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await deleteProgram(id);
-      
+
       const { programs, currentProgram } = get();
       const filteredPrograms = programs.filter(program => program.id !== id);
       const updatedCurrentProgram = currentProgram?.id === id ? null : currentProgram;
-      
-      set({ 
+
+      set({
         programs: filteredPrograms,
         currentProgram: updatedCurrentProgram,
-        loading: false 
+        loading: false
       });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to delete program',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -362,18 +362,18 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const id = await createScheduledWorkout(workoutData);
-      
+
       // Refresh scheduled workouts
       if (workoutData.programId) {
         await get().fetchScheduledWorkouts(workoutData.programId);
       }
-      
+
       set({ loading: false });
       return id;
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to schedule workout',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -383,18 +383,18 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await updateScheduledWorkout(id, updates);
-      
+
       // Update local state
       const { scheduledWorkouts } = get();
-      const updatedWorkouts = scheduledWorkouts.map(workout => 
+      const updatedWorkouts = scheduledWorkouts.map(workout =>
         workout.id === id ? { ...workout, ...updates } : workout
       );
-      
+
       set({ scheduledWorkouts: updatedWorkouts, loading: false });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to update scheduled workout',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -404,15 +404,15 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await deleteScheduledWorkout(id);
-      
+
       const { scheduledWorkouts } = get();
       const filteredWorkouts = scheduledWorkouts.filter(workout => workout.id !== id);
-      
+
       set({ scheduledWorkouts: filteredWorkouts, loading: false });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to delete scheduled workout',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -429,16 +429,16 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
         sessionType,
         keepLinked
       );
-      
+
       // Refresh scheduled workouts
       await get().fetchScheduledWorkouts(programId);
-      
+
       set({ loading: false });
       return id;
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to schedule workout from template',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -448,15 +448,15 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await duplicateWeek(programId, clientId, sourceWeekStart, targetWeekStart);
-      
+
       // Refresh scheduled workouts
       await get().fetchScheduledWorkouts(programId);
-      
+
       set({ loading: false });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to duplicate week',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -559,7 +559,7 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   getWorkoutsForDate: (date) => {
     const { scheduledWorkouts } = get();
     const targetDate = date.toDateString();
-    
+
     return scheduledWorkouts.filter(workout => {
       const workoutDate = workout.date.toDate().toDateString();
       return workoutDate === targetDate;
@@ -569,7 +569,7 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   getWorkoutsForWeek: (weekStart) => {
     const { scheduledWorkouts } = get();
     const weekEnd = getWeekEndDate(weekStart);
-    
+
     return scheduledWorkouts.filter(workout => {
       const workoutDate = workout.date.toDate();
       return workoutDate >= weekStart && workoutDate <= weekEnd;
@@ -578,7 +578,7 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
 
   getWorkoutsForMonth: (month, year) => {
     const { scheduledWorkouts } = get();
-    
+
     return scheduledWorkouts.filter(workout => {
       const workoutDate = workout.date.toDate();
       return workoutDate.getMonth() === month && workoutDate.getFullYear() === year;
@@ -586,8 +586,8 @@ export const useProgramStore = create<ProgramStore>((set, get) => ({
   },
 
   // Real-time subscriptions
-  subscribeToPrograms: () => {
-    return subscribeToPrograms((programs) => {
+  subscribeToPrograms: (accountId: string) => {
+    return subscribeToPrograms(accountId, (programs) => {
       set({ programs });
     });
   },

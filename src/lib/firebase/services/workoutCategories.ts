@@ -6,10 +6,12 @@ import {
   deleteDoc,
   getDocs,
   query,
+  where,
   orderBy,
   Timestamp
 } from 'firebase/firestore';
 import { db, getDb } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import { WorkoutCategory } from '../../types';
 
 export type { WorkoutCategory };
@@ -20,7 +22,7 @@ export const createWorkoutCategory = async (category: Omit<WorkoutCategory, 'id'
       ...category,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-      createdBy: 'current-user' // TODO: Get from auth context
+      ownerId: await resolveActiveAccountId()
     });
     return docRef.id;
   } catch (error) {
@@ -54,7 +56,12 @@ export const deleteWorkoutCategory = async (id: string): Promise<void> => {
 
 export const fetchWorkoutCategories = async (): Promise<WorkoutCategory[]> => {
   try {
-    const q = query(collection(getDb(), 'workoutCategories'), orderBy('order', 'asc'));
+    const accountId = await resolveActiveAccountId();
+    const q = query(
+      collection(getDb(), 'workoutCategories'),
+      where('ownerId', '==', accountId),
+      orderBy('order', 'asc')
+    );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,

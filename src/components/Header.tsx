@@ -12,19 +12,19 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [isSyncing, setIsSyncing] = useState(false);
-
-  // Hide global header on landing/marketing and login pages
-  if (pathname === '/' || pathname === '/login') return null;
-
-  // Disable sticky header on programs/schedule pages
-  const isSchedulePage = pathname?.startsWith('/programs');
-
   const { fetchEvents, isGoogleCalendarConnected, checkGoogleCalendarConnection } = useCalendarStore();
 
   // Check connection status on mount so the button reflects real status
   useEffect(() => {
     checkGoogleCalendarConnection();
   }, [checkGoogleCalendarConnection]);
+
+  // Hide global header on landing/marketing and login pages
+  // NOTE: This must be AFTER all hooks to comply with Rules of Hooks
+  if (pathname === '/' || pathname === '/login') return null;
+
+  // Disable sticky header on programs/schedule pages
+  const isSchedulePage = pathname?.startsWith('/programs');
 
   const handleCalendarSync = async () => {
     // If not connected, show feedback and navigate to configure page

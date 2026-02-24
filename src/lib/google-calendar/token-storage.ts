@@ -60,7 +60,8 @@ export async function storeTokens(tokens: StoredTokens, userId?: string): Promis
       const { getAdminDb } = await import('@/lib/firebase/admin');
       const db = getAdminDb();
 
-      const collectionName = userId ? 'users' : 'googleCalendarTokens';
+      console.log(`[storeTokens] Server-side detected. Storing tokens for ${userId || 'global'}`);
+
       const docPath = userId
         ? `users/${userId}/tokens/google-calendar`
         : `googleCalendarTokens/${TOKEN_DOC_ID}`;

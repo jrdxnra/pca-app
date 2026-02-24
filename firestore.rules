@@ -2,45 +2,54 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // OPTION 1: Temporary open access (extends expiration date)
-    // Use this if you haven't implemented Firebase Authentication yet
-    // Update the date below to extend access (format: year, month, day)
-    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isOwner(data) {
-      return data.ownerId == request.auth.uid;
+    function isMember(accountId) {
+      return exists(/databases/$(database)/documents/memberships/$(accountId + "_" + request.auth.uid));
     }
 
+    function isMasterUser() {
+      return request.auth != null && request.auth.uid == 'DuRPTA63JJOicaDVeF69XhpkTNh2';
+    }
 
-    // Generic rule for collections that support multi-tenancy
+    // 1. Memberships: Users can read their own memberships
+    match /memberships/{membershipId} {
+      // Allow read if user is the owner, or if document doesn't exist yet (to avoid 403 on check)
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
+      // Also allow reading if you are a member of the account
+      allow read: if isAuthenticated() && isMember(resource.data.accountId);
+      
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // 2. Accounts: Users can read accounts they are members of
+    match /accounts/{accountId} {
+      allow read: if isAuthenticated() && (isMember(accountId) || accountId == 'master');
+      allow create: if isAuthenticated();
+    }
+
+    // 3. Multi-Tenant Collections (The Silos)
     match /{collectionName}/{docId} {
-      // Allow read/write ONLY if the user is the owner
-      allow read, update, delete: if isAuthenticated() && isOwner(resource.data);
-      allow create: if isAuthenticated() && isOwner(request.resource.data);
+      allow read: if isAuthenticated() && 
+        !(collectionName in ['accounts', 'memberships', 'users', 'googleCalendarTokens']) &&
+        (isMasterUser() || resource.data.ownerId == 'master' || isMember(resource.data.ownerId));
+      
+      allow write: if isAuthenticated() && 
+        !(collectionName in ['accounts', 'memberships', 'users', 'googleCalendarTokens']) &&
+        (isMasterUser() || isMember(resource.data.ownerId) || isMember(request.resource.data.ownerId));
     }
 
-    // Allow users to manage their own tokens (e.g. Google Calendar)
-    match /users/{userId}/tokens/{tokenId} {
+    // 4. User-Specific data
+    match /users/{userId}/{allPaths=**} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Allow legacy token storage (temporary fix for OAuth callback)
+    // 5. Shared or legacy collections (if needed)
     match /googleCalendarTokens/{tokenId} {
       allow read, write: if isAuthenticated();
-    }
-
-    // Special collections - enforcing strict ownership as well
-    match /movements/{movementId} {
-      allow read, write: if isAuthenticated() && isOwner(resource.data);
-      allow create: if isAuthenticated() && isOwner(request.resource.data);
-    }
-    
-    match /movement-categories/{categoryId} {
-      allow read, write: if isAuthenticated() && isOwner(resource.data);
-      allow create: if isAuthenticated() && isOwner(request.resource.data);
     }
   }
 }

@@ -13,6 +13,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import type {
   ClientWorkout,
   ClientWorkoutWarmup,
@@ -22,13 +23,13 @@ import type {
 
 const COLLECTION_NAME = 'clientWorkouts';
 
-// Helper to get current user ID
-function getOwnerId(): string {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Unauthorized');
+// Helper to get current account ID
+async function getAccountId(): Promise<string> {
+  const accountId = await resolveActiveAccountId();
+  if (!accountId) {
+    throw new Error('Unauthorized or No Active Account');
   }
-  return currentUser.uid;
+  return accountId;
 }
 
 /**
@@ -37,11 +38,12 @@ function getOwnerId(): string {
 export async function createClientWorkout(
   clientWorkout: Omit<ClientWorkout, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<ClientWorkout> {
+  const accountId = await getAccountId();
   const now = Timestamp.now();
 
   const workoutData = {
     ...clientWorkout,
-    ownerId: getOwnerId(),
+    ownerId: accountId,
     createdAt: now,
     updatedAt: now,
   };
@@ -240,6 +242,7 @@ export async function createClientWorkoutFromTemplate(
 export async function bulkCreateWorkouts(
   workouts: Omit<ClientWorkout, 'id' | 'createdAt' | 'updatedAt'>[]
 ): Promise<void> {
+  const accountId = await getAccountId();
   const batch = writeBatch(db);
   const now = Timestamp.now();
 
@@ -247,7 +250,7 @@ export async function bulkCreateWorkouts(
     const docRef = doc(collection(getDb(), COLLECTION_NAME));
     batch.set(docRef, {
       ...workout,
-      ownerId: getOwnerId(),
+      ownerId: accountId,
       createdAt: now,
       updatedAt: now,
     });
@@ -341,9 +344,10 @@ export async function fetchAllWorkoutsByDateRange(
   startDate: Timestamp,
   endDate: Timestamp
 ): Promise<ClientWorkout[]> {
+  const accountId = await getAccountId();
   const q = query(
     collection(getDb(), COLLECTION_NAME),
-    where('ownerId', '==', getOwnerId()),
+    where('ownerId', '==', accountId),
     where('date', '>=', startDate),
     where('date', '<=', endDate),
     orderBy('date', 'asc')

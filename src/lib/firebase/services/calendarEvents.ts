@@ -33,9 +33,9 @@ export async function getCalendarEventsByDateRange(
   try {
     console.log('[getCalendarEventsByDateRange] Fetching events for:', { start: startDate.toISOString(), end: endDate.toISOString() });
 
-    // Get current user token for auth check
-    // We need to pass the ID token because checkGoogleCalendarAuth needs it to verify the user
-    // on the server side (via /api/calendar/auth/status)
+    // Get current user token for auth
+    // IMPORTANT: Must wait for auth state to resolve, not just check currentUser,
+    // because during page navigation auth.currentUser may be null momentarily.
     const { auth } = await import('@/lib/firebase/config');
     let idToken: string | undefined;
 
@@ -43,17 +43,36 @@ export async function getCalendarEventsByDateRange(
       try {
         idToken = await auth.currentUser.getIdToken();
       } catch (e) {
-        console.warn('Failed to get ID token for calendar auth check:', e);
+        console.warn('Failed to get ID token:', e);
       }
+    } else {
+      // Wait for auth state to resolve (prevents race condition during navigation)
+      idToken = await new Promise<string | undefined>((resolve) => {
+        const unsubscribe = auth.onAuthStateChanged(async (user) => {
+          unsubscribe();
+          if (user) {
+            try {
+              resolve(await user.getIdToken());
+            } catch (e) {
+              console.warn('Failed to get ID token after auth state change:', e);
+              resolve(undefined);
+            }
+          } else {
+            resolve(undefined);
+          }
+        });
+        // Timeout after 3 seconds to avoid hanging
+        setTimeout(() => {
+          unsubscribe();
+          resolve(undefined);
+        }, 3000);
+      });
     }
 
-    const isGoogleCalendarConnected = await checkGoogleCalendarAuth(idToken);
-    console.log('[getCalendarEventsByDateRange] Google Calendar connected:', isGoogleCalendarConnected);
-
-    if (!isGoogleCalendarConnected) {
-      console.warn('⚠️ Google Calendar is not connected. Calendar events will not be available.');
-      console.warn('💡 To fix: Go to Configure → App Config → Connect Google Calendar');
-      return [];
+    // If we still don't have a token, throw so React Query treats this as an error
+    // (not a successful empty response) and can retry
+    if (!idToken) {
+      throw new Error('Not authenticated — waiting for auth state');
     }
 
     // Get calendar config to know which calendar to use

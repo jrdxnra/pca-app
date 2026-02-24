@@ -13,17 +13,18 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import { WorkoutTemplate, WorkoutRound } from '@/lib/types';
 
 const COLLECTION_NAME = 'workout-templates';
 
-// Helper to get current user ID
-function getOwnerId(): string {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Unauthorized');
+// Helper to get current account ID
+async function getAccountId(): Promise<string> {
+  const accountId = await resolveActiveAccountId();
+  if (!accountId) {
+    throw new Error('Unauthorized or No Active Account');
   }
-  return currentUser.uid;
+  return accountId;
 }
 
 /**
@@ -36,7 +37,7 @@ export async function createWorkoutTemplate(
   try {
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...templateData,
-      ownerId: getOwnerId(),
+      ownerId: await getAccountId(),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
@@ -66,7 +67,7 @@ export async function getAllWorkoutTemplates(): Promise<WorkoutTemplate[]> {
   try {
     const q = query(
       collection(getDb(), COLLECTION_NAME),
-      where('ownerId', '==', getOwnerId())
+      where('ownerId', '==', await getAccountId())
     );
     const querySnapshot = await getDocs(q);
 
@@ -152,13 +153,14 @@ export async function deleteWorkoutTemplate(id: string): Promise<void> {
  * Real-time subscription to workout templates
  */
 export function subscribeToWorkoutTemplates(
+  accountId: string,
   callback: (templates: WorkoutTemplate[]) => void,
   createdBy?: string
 ): () => void {
   // By default, only show templates owned by the user
   let q = query(
     collection(getDb(), COLLECTION_NAME),
-    where('ownerId', '==', getOwnerId())
+    where('ownerId', '==', accountId)
   );
 
   if (createdBy) {

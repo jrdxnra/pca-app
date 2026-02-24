@@ -15,7 +15,8 @@ import {
   AlertCircle,
   Plus,
   ArrowRight,
-  Cake
+  Cake,
+  SquareArrowOutUpRight
 } from "lucide-react";
 import { useDashboardStore } from '@/lib/stores/useDashboardStore';
 import { useClientStore } from '@/lib/stores/useClientStore';
@@ -49,21 +50,9 @@ export default function DashboardPage() {
   const { calendarDate, setCalendarDate } = useProgramStore();
   const { workoutCategories, fetchWorkoutCategories } = useConfigurationStore();
 
-  // Selected date for mini calendar (defaults to calendarDate)
-  // Initialize with null to avoid hydration mismatch, then set on client
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-
-  // Sync selectedDate with calendarDate when it changes (e.g., from schedule page)
-  useEffect(() => {
-    setSelectedDate(calendarDate);
-  }, [calendarDate]);
-
-  // Initialize on mount (client-side only)
-  useEffect(() => {
-    if (selectedDate === null && calendarDate) {
-      setSelectedDate(calendarDate);
-    }
-  }, []);
+  // Selected date for mini calendar - defaults to TODAY on the dashboard
+  // (Unlike the Schedule tab, the dashboard should always show today on load)
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
 
   // Initial data fetch
   useEffect(() => {
@@ -108,6 +97,16 @@ export default function DashboardPage() {
   const handleMiniCalendarDateSelect = (date: Date) => {
     setSelectedDate(date);
     setCalendarDate(date);
+  };
+
+  // Generate Google Calendar URL for the current week
+  const handleOpenGoogleCalendar = () => {
+    const weekStart = new Date(selectedDate);
+    weekStart.setDate(selectedDate.getDate() - selectedDate.getDay());
+    const year = weekStart.getFullYear();
+    const month = weekStart.getMonth() + 1;
+    const day = weekStart.getDate();
+    window.open(`https://calendar.google.com/calendar/u/0/r/week/${year}/${month}/${day}`, '_blank');
   };
 
   // Handle event click
@@ -228,8 +227,8 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* Client Progress */}
-              <Card className="py-1 gap-0" style={{ minHeight: '88px', display: 'flex', flexDirection: 'column' }}>
+              {/* Client Progress - HIDDEN */}
+              {/* <Card className="py-1 gap-0" style={{ minHeight: '88px', display: 'flex', flexDirection: 'column' }}>
                 <CardContent className="px-2 pt-0 pb-2" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
                   <div className="flex items-center justify-between w-full">
                     <div>
@@ -240,7 +239,7 @@ export default function DashboardPage() {
                     <TrendingUp className="h-5 w-5 icon-progress" />
                   </div>
                 </CardContent>
-              </Card>
+              </Card> */}
 
               {/* Total Clients */}
               <Card className="py-1 gap-0" style={{ minHeight: '88px', display: 'flex', flexDirection: 'column' }}>
@@ -404,11 +403,20 @@ export default function DashboardPage() {
               clients={clients}
               selectedClientId={null}
               headerActions={
-                <MiniCalendarTooltip
-                  currentDate={calendarDate}
-                  selectedDate={selectedDate || calendarDate}
-                  onDateSelect={handleMiniCalendarDateSelect}
-                />
+                <div className="flex items-center gap-0 -space-x-1">
+                  <button
+                    onClick={handleOpenGoogleCalendar}
+                    className="p-2 hover:bg-gray-100 rounded transition-colors translate-y-px"
+                    title="Open this week in Google Calendar"
+                  >
+                    <SquareArrowOutUpRight className="h-5 w-5 icon-schedule" />
+                  </button>
+                  <MiniCalendarTooltip
+                    currentDate={calendarDate}
+                    selectedDate={selectedDate || calendarDate}
+                    onDateSelect={handleMiniCalendarDateSelect}
+                  />
+                </div>
               }
               onEventClick={handleScheduleEventClick}
             />

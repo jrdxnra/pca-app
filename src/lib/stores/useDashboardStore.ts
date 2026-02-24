@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { 
-  DashboardStats, 
-  RecentActivity, 
+import {
+  DashboardStats,
+  RecentActivity,
   UpcomingSession,
   getDashboardStats,
   getRecentActivity,
@@ -25,7 +25,7 @@ interface DashboardStore {
   }[];
   loading: boolean;
   error: string | null;
-  
+
   // Actions
   fetchDashboardData: () => Promise<void>;
   fetchStats: () => Promise<void>;
@@ -33,9 +33,9 @@ interface DashboardStore {
   fetchUpcomingSessions: () => Promise<void>;
   fetchClientProgress: () => Promise<void>;
   clearError: () => void;
-  
+
   // Real-time subscriptions
-  subscribeToStats: () => () => void;
+  subscribeToStats: (accountId: string) => () => void;
 }
 
 export const useDashboardStore = create<DashboardStore>((set, get) => ({
@@ -125,8 +125,8 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   },
 
   // Real-time subscriptions
-  subscribeToStats: () => {
-    return subscribeToDashboardStats((stats) => {
+  subscribeToStats: (accountId: string) => {
+    return subscribeToDashboardStats(accountId, (stats) => {
       set({ stats });
     });
   },

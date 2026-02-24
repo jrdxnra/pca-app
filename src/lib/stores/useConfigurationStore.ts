@@ -532,16 +532,33 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
 
   // Bulk fetch
   fetchAll: async () => {
-    const { fetchPeriods, fetchWeekTemplates, fetchWorkoutCategories, fetchWorkoutTypes, fetchWorkoutStructureTemplates, fetchBusinessHours } = get();
-    await Promise.all([
-      fetchPeriods(),
-      fetchWeekTemplates(),
-      fetchWorkoutCategories(),
-      fetchWorkoutTypes(),
-      fetchWorkoutStructureTemplates(),
-      get().fetchFullWorkoutTemplates(), // Add this
-      fetchBusinessHours()
-    ]);
+    const state = get();
+    if (state.loading) return;
+
+    const {
+      fetchPeriods,
+      fetchWeekTemplates,
+      fetchWorkoutCategories,
+      fetchWorkoutTypes,
+      fetchWorkoutStructureTemplates,
+      fetchBusinessHours,
+      fetchFullWorkoutTemplates
+    } = state;
+
+    try {
+      set({ loading: true });
+      await Promise.all([
+        fetchPeriods(),
+        fetchWeekTemplates(),
+        fetchWorkoutCategories(),
+        fetchWorkoutTypes(),
+        fetchWorkoutStructureTemplates(),
+        fetchFullWorkoutTemplates(),
+        fetchBusinessHours()
+      ]);
+    } finally {
+      set({ loading: false });
+    }
   }
 }));
 

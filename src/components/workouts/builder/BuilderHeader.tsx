@@ -42,7 +42,12 @@ interface BuilderHeaderProps {
 
   }) => Promise<void>;
 
-  onAssignWeek: (periodId: string, weekTemplateId: string) => Promise<void>;
+  onAssignWeek: (assignment: {
+    weekTemplateId: string;
+    clientId: string;
+    startDate: Date;
+    endDate: Date;
+  }) => Promise<void>;
 
   // Quick workout
   onWorkoutCreated: () => void;
@@ -92,19 +97,6 @@ export function BuilderHeader({
 }: BuilderHeaderProps) {
   const clientName = clientId ? (clients.find(c => c.id === clientId)?.name || 'Unknown Client') : '';
   const existingAssignments = clientId ? (clientPrograms.find(cp => cp.clientId === clientId)?.periods || []) : [];
-
-  const getCurrentPeriod = () => {
-    if (!existingAssignments.length) return undefined;
-
-    // Find period that covers the current calendar date
-    return existingAssignments.find((p: any) => {
-      const start = safeToDate(p.startDate);
-      const end = safeToDate(p.endDate);
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
-      return calendarDate >= start && calendarDate <= end;
-    });
-  };
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-1 gap-y-4">
@@ -239,12 +231,14 @@ export function BuilderHeader({
           onAssignPeriod={onAssignPeriod}
           existingAssignments={existingAssignments}
         />
-        <AssignWeekDialog
-          weekTemplates={weekTemplates}
-          currentPeriod={getCurrentPeriod()}
-          onAssignWeek={onAssignWeek}
-          loading={loading}
-        />
+        {clientId && (
+          <AssignWeekDialog
+            clientId={clientId}
+            weekTemplates={weekTemplates}
+            onAssignWeek={onAssignWeek}
+            loading={loading}
+          />
+        )}
 
 
 

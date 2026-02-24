@@ -17,6 +17,9 @@ export function useClientProgramsByClient(
       return getClientProgramsByClient(clientId);
     },
     enabled: !!clientId,
+    retry: 2, // Retry for transient auth failures
+    retryDelay: 1000,
+    refetchOnMount: true, // Always refetch when component mounts
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
     ...options,
@@ -49,7 +52,7 @@ export function useClientPrograms(
   const clientProgramsQuery = useClientProgramsByClient(selectedClientId || undefined, {
     ...options,
   });
-  
+
   const allProgramsQuery = useAllClientPrograms({
     ...options,
   });

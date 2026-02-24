@@ -9,6 +9,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import { Client, Program, ScheduledWorkout, WorkoutTemplate, Movement, ClientWorkout } from '@/lib/types';
 
 export interface DashboardStats {
@@ -43,13 +44,13 @@ export interface UpcomingSession {
   roundCount: number;
 }
 
-// Helper to get current user ID
-function getOwnerId(): string {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Unauthorized');
+// Helper to get current account ID
+async function getAccountId(): Promise<string> {
+  const accountId = await resolveActiveAccountId();
+  if (!accountId) {
+    throw new Error('Unauthorized or No Active Account');
   }
-  return currentUser.uid;
+  return accountId;
 }
 
 /**
@@ -60,7 +61,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
 
-    const ownerId = getOwnerId();
+    const ownerId = await getAccountId();
 
     // Get all collections data filtered by ownerId
     const [clientsSnapshot, programsSnapshot, workoutsSnapshot, movementsSnapshot, scheduledWorkoutsSnapshot] = await Promise.all([
@@ -119,7 +120,7 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const ownerId = getOwnerId();
+    const ownerId = await getAccountId();
 
     // Get recent clients
     const recentClientsQuery = query(
@@ -235,7 +236,7 @@ export async function getUpcomingSessions(): Promise<UpcomingSession[]> {
     const sevenDaysFromNow = new Date(startOfToday.getTime() + (7 * 24 * 60 * 60 * 1000));
     sevenDaysFromNow.setHours(23, 59, 59, 999); // End of day 7 days from now
 
-    const ownerId = getOwnerId();
+    const ownerId = await getAccountId();
 
     // Get upcoming client workouts (the actual workouts being used)
     const upcomingQuery = query(
@@ -316,7 +317,7 @@ export async function getClientProgressSummary(): Promise<{
   lastWorkout?: Date;
 }[]> {
   try {
-    const ownerId = getOwnerId();
+    const ownerId = await getAccountId();
 
     // Get all active clients
     const clientsQuery = query(
@@ -374,16 +375,14 @@ export async function getClientProgressSummary(): Promise<{
 /**
  * Real-time dashboard stats subscription
  */
-export function subscribeToDashboardStats(callback: (stats: DashboardStats) => void): () => void {
+export function subscribeToDashboardStats(
+  accountId: string,
+  callback: (stats: DashboardStats) => void
+): () => void {
   // For real-time updates, we'll need to subscribe to multiple collections
   // This is a simplified version - in production you might want to optimize this
 
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    console.warn('Unauthorized access attempt to subscribeToDashboardStats');
-    return () => { };
-  }
-  const ownerId = currentUser.uid;
+  const ownerId = accountId;
 
   const unsubscribeFunctions: (() => void)[] = [];
 

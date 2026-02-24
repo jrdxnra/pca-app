@@ -1,6 +1,7 @@
 import type { CalendarSyncConfig, LocationAbbreviation } from '@/lib/google-calendar/types';
+import { resolveActiveAccountId } from './memberships';
 
-const DOC_ID = 'calendar-config';
+const DOC_ID_PREFIX = 'calendar-config';
 
 type FirestoreCalendarConfig = {
   selectedCalendarId?: string;
@@ -23,9 +24,6 @@ function isTruthyStringArray(value: unknown): value is string[] {
 
 function normalizeIgnoredFlag(value: unknown, abbreviation: string): boolean | undefined {
   if (typeof value === 'boolean') return value;
-  // Legacy: some saves used abbreviation value to mean "ignored"
-  const abbr = (abbreviation || '').trim().toLowerCase();
-  if (abbr === 'n/a' || abbr === 'na') return true;
   return undefined;
 }
 
@@ -122,18 +120,20 @@ export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promi
     const { doc, getDoc, setDoc, Timestamp } = await import('firebase/firestore');
     const { getDb } = await import('../config');
     const db = getDb();
+    const accountId = await resolveActiveAccountId();
 
-    if (!db) {
-      console.warn('Firestore not initialized, returning defaults');
+    if (!db || !accountId) {
+      console.warn('Firestore/Account not initialized, returning defaults');
       return defaults;
     }
-    const docRef = doc(db, 'configuration', DOC_ID);
+    const docRef = doc(db, 'configuration', `${DOC_ID_PREFIX}-${accountId}`);
     const snap = await getDoc(docRef);
 
     if (!snap.exists()) {
       // Seed defaults so config exists for all clients.
       const seeded: CalendarSyncConfig = { ...defaults };
       await setDoc(docRef, {
+        ownerId: accountId,
         selectedCalendarId: seeded.selectedCalendarId ?? null,
         coachingKeywords: seeded.coachingKeywords,
         coachingColor: seeded.coachingColor ?? null,
@@ -159,6 +159,7 @@ export async function getCalendarSyncConfig(defaults: CalendarSyncConfig): Promi
 
     // If we detected legacy shapes, write back the normalized version.
     await setDoc(docRef, {
+      ownerId: accountId,
       selectedCalendarId: normalized.selectedCalendarId ?? null,
       coachingKeywords: normalized.coachingKeywords,
       coachingColor: normalized.coachingColor ?? null,
@@ -183,14 +184,15 @@ export async function updateCalendarSyncConfig(updates: Partial<CalendarSyncConf
     const { doc, setDoc, Timestamp } = await import('firebase/firestore');
     const { getDb } = await import('../config');
     const db = getDb();
+    const accountId = await resolveActiveAccountId();
 
-    if (!db) {
-      console.warn('Firestore not initialized, skipping save');
+    if (!db || !accountId) {
+      console.warn('Firestore/Account not initialized, skipping save');
       return;
     }
-    const docRef = doc(db, 'configuration', DOC_ID);
+    const docRef = doc(db, 'configuration', `${DOC_ID_PREFIX}-${accountId}`);
 
-    const payload: Record<string, unknown> = {};
+    const payload: Record<string, unknown> = { ownerId: accountId };
     if (updates.selectedCalendarId !== undefined) payload.selectedCalendarId = updates.selectedCalendarId ?? null;
     if (updates.coachingKeywords !== undefined) payload.coachingKeywords = updates.coachingKeywords ?? [];
     if (updates.coachingColor !== undefined) payload.coachingColor = updates.coachingColor ?? null;

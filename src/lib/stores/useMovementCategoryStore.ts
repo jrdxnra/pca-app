@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { MovementCategory } from '@/lib/types';
-import { 
+import {
   getAllMovementCategories,
   addMovementCategory,
   updateMovementCategory,
@@ -15,7 +15,7 @@ interface MovementCategoryStore {
   selectedCategory: MovementCategory | null;
   loading: boolean;
   error: string | null;
-  
+
   // Actions
   fetchCategories: () => Promise<void>;
   addCategory: (categoryData: Omit<MovementCategory, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
@@ -24,9 +24,9 @@ interface MovementCategoryStore {
   setSelectedCategory: (category: MovementCategory | null) => void;
   clearError: () => void;
   initializeDefaults: () => Promise<void>;
-  
+
   // Real-time subscription
-  subscribeToCategories: () => () => void;
+  subscribeToCategories: (accountId: string) => () => void;
 }
 
 export const useMovementCategoryStore = create<MovementCategoryStore>((set, get) => ({
@@ -41,16 +41,16 @@ export const useMovementCategoryStore = create<MovementCategoryStore>((set, get)
     set({ loading: true, error: null });
     try {
       const categories = await getAllMovementCategories();
-      set({ 
-        categories, 
+      set({
+        categories,
         loading: false,
         // Auto-select first category if none selected
         selectedCategory: get().selectedCategory || (categories.length > 0 ? categories[0] : null)
       });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch categories',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -63,9 +63,9 @@ export const useMovementCategoryStore = create<MovementCategoryStore>((set, get)
       set({ loading: false });
       return id;
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to add category',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -75,26 +75,26 @@ export const useMovementCategoryStore = create<MovementCategoryStore>((set, get)
     set({ loading: true, error: null });
     try {
       await updateMovementCategory(id, updates);
-      
+
       // Update local state
       const { categories, selectedCategory } = get();
-      const updatedCategories = categories.map(category => 
+      const updatedCategories = categories.map(category =>
         category.id === id ? { ...category, ...updates } : category
       );
-      
-      const updatedSelectedCategory = selectedCategory?.id === id 
-        ? { ...selectedCategory, ...updates } 
+
+      const updatedSelectedCategory = selectedCategory?.id === id
+        ? { ...selectedCategory, ...updates }
         : selectedCategory;
-      
-      set({ 
-        categories: updatedCategories, 
+
+      set({
+        categories: updatedCategories,
         selectedCategory: updatedSelectedCategory,
-        loading: false 
+        loading: false
       });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to update category',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -104,24 +104,24 @@ export const useMovementCategoryStore = create<MovementCategoryStore>((set, get)
     set({ loading: true, error: null });
     try {
       await deleteMovementCategory(id);
-      
+
       const { categories, selectedCategory } = get();
       const filteredCategories = categories.filter(category => category.id !== id);
-      
+
       // If deleted category was selected, select first remaining category
-      const newSelectedCategory = selectedCategory?.id === id 
+      const newSelectedCategory = selectedCategory?.id === id
         ? (filteredCategories.length > 0 ? filteredCategories[0] : null)
         : selectedCategory;
-      
-      set({ 
+
+      set({
         categories: filteredCategories,
         selectedCategory: newSelectedCategory,
-        loading: false 
+        loading: false
       });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to delete category',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -142,22 +142,22 @@ export const useMovementCategoryStore = create<MovementCategoryStore>((set, get)
       await get().fetchCategories();
       set({ loading: false });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to initialize default categories',
-        loading: false 
+        loading: false
       });
       throw error;
     }
   },
 
   // Real-time subscription
-  subscribeToCategories: () => {
-    return subscribeToMovementCategories((categories) => {
+  subscribeToCategories: (accountId) => {
+    return subscribeToMovementCategories(accountId, (categories) => {
       const { selectedCategory } = get();
-      
+
       // Update categories
       set({ categories });
-      
+
       // Update selected category if it still exists, otherwise select first
       if (selectedCategory) {
         const updatedSelectedCategory = categories.find(c => c.id === selectedCategory.id);

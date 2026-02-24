@@ -117,7 +117,6 @@ export default function BuilderPage() {
 
 
   // Client selection state - initialized from URL or localStorage
-  // This is the PRIMARY source of truth for client selection (not the URL)
   const [clientIdImmediate, setClientIdImmediate] = useState<string | null>(() => {
     // First check URL, then localStorage
     if (urlClientId) return urlClientId;
@@ -128,8 +127,21 @@ export default function BuilderPage() {
   });
 
   // Use deferred value to keep old UI visible while new data loads
-  // This prevents the schedule from "flashing" during client switches
   const clientId = useDeferredValue(clientIdImmediate);
+
+  // Sync URL on initial load: if client is from localStorage but not in URL, add it
+  useEffect(() => {
+    if (clientIdImmediate && !urlClientId) {
+      router.replace(`/workouts/builder?client=${clientIdImmediate}`, { scroll: false });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync state from URL when urlClientId changes (e.g., after router.replace)
+  useEffect(() => {
+    if (urlClientId && urlClientId !== clientIdImmediate) {
+      setClientIdImmediate(urlClientId);
+    }
+  }, [urlClientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   // Client programs hook - uses local client state (not URL) to avoid reloads
@@ -137,14 +149,20 @@ export default function BuilderPage() {
     clientPrograms,
     isLoading: clientProgramsLoading,
     assignPeriod: hookAssignPeriod,
+    assignWeekTemplate,
     fetchClientPrograms,
     updatePeriod
   } = useClientPrograms(clientId);
 
-  const handleAssignWeek = useCallback(async (periodId: string, weekTemplateId: string) => {
+  const handleAssignWeek = useCallback(async (assignment: {
+    weekTemplateId: string;
+    clientId: string;
+    startDate: Date;
+    endDate: Date;
+  }) => {
     try {
       setLoading(true);
-      await updatePeriod(periodId, { weekTemplateId });
+      await assignWeekTemplate(assignment);
       toastSuccess('Week Template assigned successfully');
     } catch (error) {
       console.error('Error assigning week template:', error);
@@ -152,7 +170,7 @@ export default function BuilderPage() {
     } finally {
       setLoading(false);
     }
-  }, [updatePeriod]);
+  }, [assignWeekTemplate]);
 
   // Simple local state - only day view is supported now
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('day');
@@ -350,6 +368,13 @@ export default function BuilderPage() {
         logger.debug('[Builder] Got workout result:', workout ? 'SUCCESS' : 'NULL');
 
         if (workout) {
+          // Skip if this workout belongs to a different client than selected
+          if (clientId && workout.clientId && workout.clientId !== clientId) {
+            logger.debug('[Builder] SKIP - workout belongs to different client:', workout.clientId, 'vs selected:', clientId);
+            processedWorkoutIds.current.add(workoutId);
+            return;
+          }
+
           logger.debug('[Builder] Workout details:', {
             id: workout.id,
             clientId: workout.clientId,
@@ -614,17 +639,35 @@ export default function BuilderPage() {
     let end: Date;
 
     if (selectedPeriod) {
-      start = safeToDate(selectedPeriod.startDate);
-      end = safeToDate(selectedPeriod.endDate);
-      const calculatedWeeks = calculateWeeks(start, end, selectedPeriod.periodName);
+      // Use the raw period start/end for calculateWeeks
+      const periodStart = safeToDate(selectedPeriod.startDate);
+      const periodEnd = safeToDate(selectedPeriod.endDate);
+      const calculatedWeeks = calculateWeeks(periodStart, periodEnd, selectedPeriod.periodName);
       setWeeks(calculatedWeeks);
+
+      // But for fetching workouts, we must back up to the Monday of that first week
+      // to match what calculateWeeks renders visually
+      start = new Date(periodStart);
+      const dayOfWeek = start.getDay();
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      start.setDate(start.getDate() + diff);
+      start.setHours(0, 0, 0, 0);
+
+      // And push the end to Sunday of the last week (12 weeks later or period end)
+      end = new Date(periodEnd);
+      end.setHours(23, 59, 59, 999);
     } else {
-      // No period - show next 12 weeks from calendarDate (or today)
+      // No period - show 12 weeks starting from Monday of the current week
+      // Must include the full current week so workouts earlier this week aren't missed
       const startDate = calendarDate || new Date();
       start = new Date(startDate);
+      // Back up to Monday of the current week
+      const dayOfWeek = start.getDay(); // 0=Sun, 1=Mon, ...
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      start.setDate(start.getDate() + mondayOffset);
       start.setHours(0, 0, 0, 0);
-      end = new Date(startDate);
-      end.setDate(startDate.getDate() + (12 * 7));
+      end = new Date(start);
+      end.setDate(start.getDate() + (12 * 7));
       end.setHours(23, 59, 59, 999);
       const calculatedWeeks = calculateWeeks(start, end);
       setWeeks(calculatedWeeks);
@@ -661,9 +704,17 @@ export default function BuilderPage() {
       localStorage.setItem('selectedClient', newClientId);
     }
 
-    // Just update state - don't touch URL at all
-    // useDeferredValue will keep old UI visible while new data loads
+    // Clear all editing state so previous client's workouts don't bleed over
+    setEditingWorkouts({});
+    setCreatingWorkouts({});
+    setOpenDates(new Set());
+    setSavingEditors(new Set());
+    // NOTE: Do NOT clear processedWorkoutIds - prevents the old URL workoutId
+    // from re-opening during the brief window before router.replace takes effect
+
+    // Update BOTH state (for immediate UI) AND URL (for consistent data loading)
     setClientIdImmediate(newClientId);
+    router.replace(`/workouts/builder?client=${newClientId}`, { scroll: false });
   };
 
   // CONSOLIDATED: Single period detection effect
@@ -745,15 +796,27 @@ export default function BuilderPage() {
         logger.debug('[Builder] Set period and switched to week view');
       }
     } else {
-      // No period contains target date - use fallback (most recent or upcoming)
-      const sortedPeriods = [...clientProgram.periods].sort((a, b) => {
-        const aStart = safeToDate(a.startDate).getTime();
-        const bStart = safeToDate(b.startDate).getTime();
-        return aStart - bStart;
-      });
+      // No period contains target date - pick the CLOSEST period (by days)
+      // This ensures Builder tab and schedule click show the same period
 
-      const upcomingPeriod = sortedPeriods.find(p => safeToDate(p.startDate) > targetDate);
-      const fallbackPeriod = upcomingPeriod || sortedPeriods[sortedPeriods.length - 1];
+      const closestPeriod = clientProgram.periods.reduce((closest, p) => {
+        const pStart = safeToDate(p.startDate);
+        const pEnd = safeToDate(p.endDate);
+        // Distance = shortest gap between targetDate and the period's range
+        const distance = targetDate < pStart
+          ? pStart.getTime() - targetDate.getTime()
+          : targetDate > pEnd
+            ? targetDate.getTime() - pEnd.getTime()
+            : 0; // inside period (shouldn't happen in fallback, but handle it)
+        console.log(`[Builder] FALLBACK: Period "${p.periodName}" start=${pStart.toISOString()} end=${pEnd.toISOString()} distance=${Math.round(distance / (1000 * 60 * 60 * 24))} days`);
+        if (!closest || distance < closest.distance) {
+          return { period: p, distance };
+        }
+        return closest;
+      }, null as { period: ClientProgramPeriod; distance: number } | null);
+
+      const fallbackPeriod = closestPeriod?.period || null;
+
 
       if (fallbackPeriod) {
         logger.debug('[Builder] Using fallback period:', fallbackPeriod.periodName);
@@ -1935,7 +1998,7 @@ export default function BuilderPage() {
                                         <div className="flex flex-col items-center justify-center p-2">
                                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mb-1"></div>
                                         </div>
-                                      ) : inPeriod ? (
+                                      ) : (inPeriod || !selectedPeriod) ? (
                                         <div className="flex flex-col items-center gap-1">
                                           <Plus className="w-5 h-5 opacity-50 group-hover:opacity-100 transition-opacity" />
                                           <span className="opacity-0 group-hover:opacity-100 transition-opacity">Add Workout</span>
@@ -2276,7 +2339,7 @@ export default function BuilderPage() {
                                       <div className="flex flex-col items-center justify-center p-2">
                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mb-1"></div>
                                       </div>
-                                    ) : inPeriod ? (
+                                    ) : (inPeriod || !selectedPeriod) ? (
                                       <div className="flex flex-col items-center gap-1">
                                         <Plus className="w-5 h-5 opacity-50 group-hover:opacity-100 transition-opacity" />
                                         <span className="opacity-0 group-hover:opacity-100 transition-opacity">Add Workout</span>

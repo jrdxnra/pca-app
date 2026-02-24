@@ -1,5 +1,24 @@
 # Future Improvements & Notes
 
+## Deferred Features
+
+### Workouts Tab (Hidden)
+- **Status:** Temporarily hidden to focus on core stability (Movements & Schedule).
+- **Next Steps:** Re-enable once the workout list and logging functions are ready for testing.
+- **Reference:** Navigation.tsx (Workouts menu item commented out).
+
+### Client Logins & Client Access Role
+- **Status:** Deferred for future development.
+- **Goal:** Allow clients to log in via Google.
+- **Permissions:** Clients should only be able to view their own assigned workouts and calendar schedule. They should not have access to the dashboard analytics, movement catalog editing, or configuration.
+
+### Unified Login + Google Calendar Auth
+- **Status:** Planned cleanup.
+- **Problem:** Login already requests `calendar` scope and saves OAuth tokens, but the app has a separate "Connect Google Calendar" step in Configure. This is redundant — if you're logged in with Google, calendar access is already granted.
+- **Goal:** Remove the separate calendar connection flow. Trust the login tokens for calendar access. Only show "disconnected" if an actual Google Calendar API call fails (e.g., token revoked), not via a pre-check.
+- **Reference:** `src/app/login/page.tsx` (already requests calendar scope), `src/lib/firebase/services/calendarEvents.ts`, `src/lib/stores/useCalendarStore.ts` (`checkGoogleCalendarConnection`).
+
+---
 This file contains notes and ideas for future improvements to the PCA app. Items can be added, updated, or marked as completed as work progresses.
 
 ---

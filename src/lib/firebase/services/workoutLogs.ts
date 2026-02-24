@@ -11,17 +11,18 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import type { WorkoutLog } from '@/lib/types';
 
 const COLLECTION_NAME = 'workoutLogs';
 
-// Helper to get current user ID
-function getOwnerId(): string {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Unauthorized');
+// Helper to get current account ID
+async function getAccountId(): Promise<string> {
+  const accountId = await resolveActiveAccountId();
+  if (!accountId) {
+    throw new Error('Unauthorized or No Active Account');
   }
-  return currentUser.uid;
+  return accountId;
 }
 
 /**
@@ -30,11 +31,12 @@ function getOwnerId(): string {
 export async function createWorkoutLog(
   workoutLog: Omit<WorkoutLog, 'id' | 'createdAt'>
 ): Promise<WorkoutLog> {
+  const accountId = await getAccountId();
   const now = Timestamp.now();
 
   const logData = {
     ...workoutLog,
-    ownerId: getOwnerId(),
+    ownerId: accountId,
     createdAt: now,
   };
 
@@ -92,9 +94,10 @@ export async function getWorkoutLogByScheduledWorkout(
  * Get all workout logs for a specific client
  */
 export async function fetchClientWorkoutLogs(clientId: string): Promise<WorkoutLog[]> {
+  const accountId = await getAccountId();
   const q = query(
     collection(getDb(), COLLECTION_NAME),
-    where('ownerId', '==', getOwnerId()),
+    where('ownerId', '==', accountId),
     where('clientId', '==', clientId),
     orderBy('completedDate', 'desc')
   );

@@ -483,10 +483,6 @@ export default function ProgramsPage() {
 
     const selectedClientData = selectedClient ? clients.find(c => c.id === selectedClient) : null;
 
-    const handleEditStructure = (programId: string) => {
-        router.push(`/programs/builder/${programId}`);
-    };
-
     // Handler for assigning periods - uses shared hook for consistent behavior with builder tab
     const handleAssignPeriod = async (assignment: {
         clientId: string;

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Movement } from '@/lib/types';
-import { 
+import {
   getAllMovements,
   getMovementsByCategory,
   addMovement,
@@ -19,7 +19,7 @@ interface MovementStore {
   error: string | null;
   searchTerm: string;
   currentCategoryId: string | null;
-  
+
   // Actions
   fetchMovements: () => Promise<void>;
   fetchMovementsByCategory: (categoryId: string) => Promise<void>;
@@ -31,9 +31,9 @@ interface MovementStore {
   setSearchTerm: (term: string) => void;
   setCurrentCategory: (categoryId: string | null) => void;
   clearError: () => void;
-  
+
   // Real-time subscription
-  subscribeToMovements: (categoryId: string) => () => void;
+  subscribeToMovements: (categoryId: string, accountId: string) => () => void;
 }
 
 export const useMovementStore = create<MovementStore>((set, get) => ({
@@ -51,9 +51,9 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
       const movements = await getAllMovements(true); // Include category data
       set({ movements, loading: false });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch movements',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -64,9 +64,9 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
       const movements = await getMovementsByCategory(categoryId, true);
       set({ movements, loading: false });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch movements',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -76,24 +76,24 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
     try {
       // Get next ordinal for the category
       const ordinal = await getNextOrdinal(movementData.categoryId);
-      
+
       const id = await addMovement({
         ...movementData,
         ordinal
       });
-      
+
       // Refresh movements for current category
       const { currentCategoryId } = get();
       if (currentCategoryId === movementData.categoryId) {
         await get().fetchMovementsByCategory(currentCategoryId);
       }
-      
+
       set({ loading: false });
       return id;
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to add movement',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -103,18 +103,18 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await updateMovement(id, updates);
-      
+
       // Update local state
       const { movements } = get();
-      const updatedMovements = movements.map(movement => 
+      const updatedMovements = movements.map(movement =>
         movement.id === id ? { ...movement, ...updates } : movement
       );
-      
+
       set({ movements: updatedMovements, loading: false });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to update movement',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -124,15 +124,15 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await deleteMovement(id);
-      
+
       const { movements } = get();
       const filteredMovements = movements.filter(movement => movement.id !== id);
-      
+
       set({ movements: filteredMovements, loading: false });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to delete movement',
-        loading: false 
+        loading: false
       });
       throw error;
     }
@@ -144,9 +144,9 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
       const movements = await searchMovements(searchTerm, true);
       set({ movements, loading: false });
     } catch (error) {
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to search movements',
-        loading: false 
+        loading: false
       });
     }
   },
@@ -155,12 +155,12 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
     // Optimistic update - don't set loading to avoid UI flicker during drag
     const { movements } = get();
     const categoryMovements = movements.filter(m => m.categoryId === categoryId);
-    
+
     // Optimistically reorder in local state
     const reordered = [...categoryMovements];
     const [movedMovement] = reordered.splice(draggedIndex, 1);
     reordered.splice(dropIndex, 0, movedMovement);
-    
+
     // Update ordinals optimistically
     const updatedMovements = movements.map(m => {
       if (m.categoryId === categoryId) {
@@ -171,9 +171,9 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
       }
       return m;
     });
-    
+
     set({ movements: updatedMovements });
-    
+
     try {
       await reorderMovementsInCategory(categoryId, draggedIndex, dropIndex);
       // Silently refresh to ensure sync, but don't show loading
@@ -181,7 +181,7 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
     } catch (error) {
       // Revert on error
       set({ movements });
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to reorder movements'
       });
       throw error;
@@ -201,9 +201,9 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
   },
 
   // Real-time subscription
-  subscribeToMovements: (categoryId) => {
+  subscribeToMovements: (categoryId: string, accountId: string) => {
     set({ currentCategoryId: categoryId });
-    return subscribeToMovementsByCategory(categoryId, (movements) => {
+    return subscribeToMovementsByCategory(categoryId, accountId, (movements) => {
       set({ movements });
     });
   },

@@ -1,54 +1,74 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase/config';
-import { useClientStore } from '@/lib/stores/useClientStore';
-import { useProgramStore } from '@/lib/stores/useProgramStore';
-import { useDashboardStore } from '@/lib/stores/useDashboardStore';
-import { useMovementStore } from '@/lib/stores/useMovementStore';
-import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { getActiveMembership } from '@/lib/firebase/services/memberships';
+import { provisionNewAccount, ensureAccountProvisioned } from '@/lib/firebase/services/cloning';
 
 /**
- * AuthRefreshListener
- * Listens for auth state changes and triggers store re-fetches.
- * This ensures that when a user logs in, the data is isolated to their UID.
+ * Component that listens for auth changes and ensures the user has 
+ * an active account and membership. If not, it provisions one.
  */
-export function AuthRefreshListener() {
-    const lastUserId = useRef<string | null>(null);
-
-    const fetchClients = useClientStore(state => state.fetchClients);
-    const fetchPrograms = useProgramStore(state => state.fetchPrograms);
-    const fetchDashboardData = useDashboardStore(state => state.fetchDashboardData);
-    const fetchMovements = useMovementStore(state => state.fetchMovements);
-    const fetchCategories = useMovementCategoryStore(state => state.fetchCategories);
+export function AuthRefreshListener({ children }: { children: React.ReactNode }) {
+    const [provisioning, setProvisioning] = useState(false);
 
     useEffect(() => {
-        const unsubscribe = auth.onAuthStateChanged((user) => {
-            const currentUserId = user?.uid || null;
+        let isMounted = true;
 
-            // Only re-fetch if the user has changed (to avoid redundant fetches)
-            if (currentUserId !== lastUserId.current) {
-                lastUserId.current = currentUserId;
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user && isMounted) {
+                try {
+                    // Check if user has an account
+                    const membership = await getActiveMembership(user.uid);
 
-                if (currentUserId) {
-                    console.log('[AuthRefreshListener] User changed/logged in, refreshing stores...', currentUserId);
+                    if (!isMounted) return;
 
-                    // Trigger re-fetches for all stores
-                    // We force re-fetch to ignore cache since owner identity changed
-                    fetchClients(true).catch(console.error);
-                    fetchPrograms(true).catch(console.error);
-                    fetchDashboardData().catch(console.error);
-                    fetchMovements().catch(console.error);
-                    fetchCategories().catch(console.error);
-                } else {
-                    console.log('[AuthRefreshListener] User logged out, clearing or keeping empty stores.');
-                    // You might want to clear stores here if needed
+                    if (!membership && !provisioning) {
+                        console.log('No membership found for user, provisioning account...');
+                        setProvisioning(true);
+                        await provisionNewAccount(user.uid, user.displayName || 'Coach');
+                        console.log('Account provisioned successfully');
+
+                        if (isMounted) {
+                            setProvisioning(false);
+                            // Instead of reload, we rely on the state update to trigger 
+                            // a re-check if needed, or just let the app proceed.
+                            // The user might need one more manual refresh if Firestore 
+                            // is slow, but at least it won't loop.
+                        }
+                    } else if (membership && !provisioning) {
+                        // User has a membership, but let's check if the library is empty
+                        if (membership.accountId !== 'master') {
+                            setProvisioning(true);
+                            await ensureAccountProvisioned(membership.accountId);
+                            if (isMounted) setProvisioning(false);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking/provisioning account:', error);
+                    if (isMounted) setProvisioning(false);
                 }
             }
         });
 
-        return () => unsubscribe();
-    }, [fetchClients, fetchPrograms, fetchDashboardData, fetchMovements, fetchCategories]);
+        return () => {
+            isMounted = false;
+            unsubscribe();
+        };
+    }, []); // Only run once on mount
 
-    return null; // This component doesn't render anything
+    if (provisioning) {
+        return (
+            <div className="flex h-screen w-full items-center justify-center bg-black">
+                <div className="text-center">
+                    <div className="mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-primary mx-auto"></div>
+                    <p className="text-xl font-medium text-white">Preparing your library...</p>
+                    <p className="mt-2 text-sm text-gray-400">Setting up your personal coaching workspace</p>
+                </div>
+            </div>
+        );
+    }
+
+    return <>{children}</>;
 }

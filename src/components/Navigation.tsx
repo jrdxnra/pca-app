@@ -17,6 +17,7 @@ import {
   User
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { MASTER_UID } from '@/lib/firebase/services/memberships';
 
 const mainNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -26,10 +27,10 @@ const mainNavigation = [
 ];
 
 const menuNavigation = [
-  { name: 'Workouts', href: '/workouts', icon: Zap },
+  // { name: 'Workouts', href: '/workouts', icon: Zap },
   { name: 'Movements', href: '/movements', icon: Dumbbell },
   { name: 'Configuration', href: '/configure', icon: Settings },
-  { name: 'App Status', href: '/health', icon: Activity },
+  { name: 'App Status', href: '/health', icon: Activity, requireMaster: true },
 ];
 
 // Main Navigation - Left aligned with logo
@@ -157,10 +158,10 @@ export function ProfileMenu() {
           />
           <div className="absolute right-0 top-full mt-2 w-64 rounded-md border bg-background shadow-lg z-50 p-1 flex flex-col max-h-[80vh] overflow-y-auto">
             {/* User Info */}
-            <div className="px-3 py-2 text-sm text-foreground border-b mb-1">
-              <div className="font-medium truncate">{displayName}</div>
-              <div className="text-xs text-muted-foreground truncate">{user.email}</div>
-            </div>
+            <Link href="/profile" className="block px-3 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground border-b mb-1 transition-colors group cursor-pointer" onClick={() => setIsOpen(false)}>
+              <div className="font-medium truncate group-hover:underline">{displayName}</div>
+              <div className="text-xs text-muted-foreground group-hover:text-foreground truncate transition-colors">{user.email}</div>
+            </Link>
 
             {/* Mobile-Only Main Navigation */}
             <div className="md:hidden">
@@ -194,26 +195,28 @@ export function ProfileMenu() {
             <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider md:hidden">
               Tools
             </div>
-            {menuNavigation.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={cn(
-                    'flex w-full items-center px-2 py-2 text-sm rounded-sm transition-colors',
-                    isActive
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'hover:bg-accent text-muted-foreground hover:text-foreground'
-                  )}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Icon className="mr-3 h-4 w-4" />
-                  {item.name}
-                </Link>
-              );
-            })}
+            {menuNavigation
+              .filter(item => !item.requireMaster || user.uid === MASTER_UID)
+              .map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={cn(
+                      'flex w-full items-center px-2 py-2 text-sm rounded-sm transition-colors',
+                      isActive
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'hover:bg-accent text-muted-foreground hover:text-foreground'
+                    )}
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Icon className="mr-3 h-4 w-4" />
+                    {item.name}
+                  </Link>
+                );
+              })}
 
             <div className="h-px bg-border my-1" />
 

@@ -13,6 +13,7 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import { MovementCategory } from '@/lib/types';
 
 const COLLECTION_NAME = 'movement-categories';
@@ -33,9 +34,12 @@ export async function addMovementCategory(
   categoryData: Omit<MovementCategory, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   try {
+    const accountId = await resolveActiveAccountId();
+    if (!accountId) throw new Error('Unauthorized');
+
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...categoryData,
-      ownerId: getOwnerId(),
+      ownerId: accountId,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
@@ -69,9 +73,11 @@ export async function getMovementCategory(id: string): Promise<MovementCategory 
  */
 export async function getAllMovementCategories(): Promise<MovementCategory[]> {
   try {
+    const accountId = await resolveActiveAccountId();
     const q = query(
       collection(getDb(), COLLECTION_NAME),
-      where('ownerId', '==', getOwnerId())
+      where('ownerId', '==', accountId),
+      orderBy('order', 'asc')
     );
     const querySnapshot = await getDocs(q);
 
@@ -122,10 +128,14 @@ export async function deleteMovementCategory(id: string): Promise<void> {
 /**
  * Subscribe to movement categories changes
  */
-export function subscribeToMovementCategories(callback: (categories: MovementCategory[]) => void): () => void {
+export function subscribeToMovementCategories(
+  accountId: string,
+  callback: (categories: MovementCategory[]) => void
+): () => void {
   const q = query(
     collection(getDb(), COLLECTION_NAME),
-    where('ownerId', '==', getOwnerId())
+    where('ownerId', '==', accountId),
+    orderBy('order', 'asc')
   );
 
   return onSnapshot(q, (querySnapshot) => {

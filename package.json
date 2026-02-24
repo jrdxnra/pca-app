@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 --webpack",
+    "dev": "next dev -H 0.0.0.0",
     "dev:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true next dev -H 0.0.0.0 --webpack",
     "emulators": "firebase emulators:start",
     "emulators:exec": "firebase emulators:exec",

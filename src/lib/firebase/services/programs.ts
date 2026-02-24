@@ -13,18 +13,19 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import { Program, ScheduledWorkout } from '@/lib/types';
 
 const PROGRAMS_COLLECTION = 'programs';
 const SCHEDULED_WORKOUTS_COLLECTION = 'scheduled-workouts';
 
-// Helper to get current user ID
-function getOwnerId(): string {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Unauthorized');
+// Helper to get current account ID
+async function getAccountId(): Promise<string> {
+  const accountId = await resolveActiveAccountId();
+  if (!accountId) {
+    throw new Error('Unauthorized or No Active Account');
   }
-  return currentUser.uid;
+  return accountId;
 }
 
 /**
@@ -37,7 +38,7 @@ export async function createProgram(
   try {
     const docRef = await addDoc(collection(getDb(), PROGRAMS_COLLECTION), {
       ...programData,
-      ownerId: getOwnerId(),
+      ownerId: await getAccountId(),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
@@ -67,7 +68,7 @@ export async function getAllPrograms(): Promise<Program[]> {
   try {
     const q = query(
       collection(getDb(), PROGRAMS_COLLECTION),
-      where('ownerId', '==', getOwnerId())
+      where('ownerId', '==', await getAccountId())
     );
     const querySnapshot = await getDocs(q);
 
@@ -147,7 +148,7 @@ export async function createScheduledWorkout(
   try {
     const docRef = await addDoc(collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION), {
       ...workoutData,
-      ownerId: getOwnerId(),
+      ownerId: await getAccountId(),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
@@ -217,7 +218,7 @@ export async function getAllScheduledWorkouts(): Promise<ScheduledWorkout[]> {
   try {
     const q = query(
       collection(getDb(), SCHEDULED_WORKOUTS_COLLECTION),
-      where('ownerId', '==', getOwnerId())
+      where('ownerId', '==', await getAccountId())
     );
     const querySnapshot = await getDocs(q);
 
@@ -381,10 +382,13 @@ export async function duplicateWeek(
  * Real-time subscriptions
  */
 
-export function subscribeToPrograms(callback: (programs: Program[]) => void): () => void {
+export function subscribeToPrograms(
+  accountId: string,
+  callback: (programs: Program[]) => void
+): () => void {
   const q = query(
     collection(getDb(), PROGRAMS_COLLECTION),
-    where('ownerId', '==', getOwnerId())
+    where('ownerId', '==', accountId)
   );
 
   return onSnapshot(q, (querySnapshot) => {

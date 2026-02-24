@@ -53,6 +53,13 @@ export interface ProgramTemplateAssignment {
     notes?: string;
 }
 
+export interface WeekTemplateAssignment {
+    weekTemplateId: string;
+    clientId: string;
+    startDate: Date;
+    endDate: Date;
+}
+
 interface UseClientProgramsResult {
     // State
     clientPrograms: ClientProgram[];
@@ -63,6 +70,7 @@ interface UseClientProgramsResult {
     fetchClientPrograms: (clientId?: string | null) => Promise<void>;
     assignPeriod: (assignment: PeriodAssignment) => Promise<void>;
     assignProgramTemplate: (assignment: ProgramTemplateAssignment) => Promise<void>;
+    assignWeekTemplate: (assignment: WeekTemplateAssignment) => Promise<void>;
     updatePeriod: (periodId: string, updates: Partial<ClientProgramPeriod>) => Promise<void>;
     deletePeriod: (periodId: string, clientId: string) => Promise<void>;
     clearAllPeriods: (clientId: string) => Promise<void>;
@@ -476,6 +484,121 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
         }
     }, [clientPrograms, selectedClientId, fetchClientProgramsAsync]);
 
+    // Assign a week template directly with a date range (creates a period internally)
+    const assignWeekTemplate = useCallback(async (assignment: WeekTemplateAssignment) => {
+        setMutationLoading(true);
+        setMutationError(null);
+
+        try {
+            const weekTemplate = weekTemplates.find(wt => wt.id === assignment.weekTemplateId);
+            if (!weekTemplate) {
+                throw new Error('Week template not found');
+            }
+
+            // Find or create client program
+            const clientProgram = clientPrograms.find(cp => cp.clientId === assignment.clientId);
+            let clientProgramId: string;
+
+            if (!clientProgram) {
+                // Create new client program
+                const newClientProgram = await createClientProgram({
+                    clientId: assignment.clientId,
+                    startDate: Timestamp.fromDate(assignment.startDate),
+                    endDate: Timestamp.fromDate(assignment.endDate),
+                    status: 'active' as const,
+                    periods: [],
+                    createdBy: 'current-user' // TODO: Get from auth
+                });
+                clientProgramId = newClientProgram.id;
+            } else {
+                clientProgramId = clientProgram.id;
+            }
+
+            // Create a special period for the week template assignment
+            const newPeriod: Omit<ClientProgramPeriod, 'id'> = {
+                periodConfigId: 'week_template_assignment',
+                periodName: `Week Template: ${weekTemplate.name}`,
+                periodColor: weekTemplate.color || '#9ca3af',
+                startDate: Timestamp.fromDate(assignment.startDate),
+                endDate: Timestamp.fromDate(assignment.endDate),
+                weekTemplateId: assignment.weekTemplateId,
+                days: []
+            };
+
+            // Generate days from the week template
+            const days = [];
+            const currentDate = new Date(assignment.startDate);
+            const endDate = new Date(assignment.endDate);
+
+            while (currentDate <= endDate) {
+                const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+                const templateDay = weekTemplate.days.find((d: { day: string }) => d.day === dayOfWeek);
+
+                const finalCategory = templateDay?.workoutCategory || 'Rest Day';
+                const isRestDayCategory = finalCategory.toLowerCase().includes('rest');
+                const category = workoutCategories.find(wc => wc.name === finalCategory);
+
+                if (finalCategory && templateDay) {
+                    days.push({
+                        date: Timestamp.fromDate(new Date(currentDate)),
+                        workoutCategory: finalCategory,
+                        workoutCategoryColor: category?.color || '#6b7280',
+                        time: undefined, // Default to no time for direct week template assignments
+                        isAllDay: false
+                    });
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            newPeriod.days = days;
+
+            // Save period to Firebase
+            await addPeriodToClientProgram(clientProgramId, newPeriod);
+
+            // Fetch updated program
+            await fetchClientProgramsAsync(assignment.clientId);
+
+            const queryData = queryClient.getQueryData<ClientProgram[]>(queryKeys.clientPrograms.byClient(assignment.clientId));
+            const updatedPrograms = queryData || await getClientProgramsByClient(assignment.clientId);
+            const updatedProgram = updatedPrograms[0];
+
+            if (updatedProgram && newPeriod.days.length > 0) {
+                const createdPeriod = updatedProgram.periods[updatedProgram.periods.length - 1]; // The latest one
+                const periodIdToUse = createdPeriod?.id || clientProgramId;
+
+                // Create workouts for each day
+                for (const day of newPeriod.days) {
+                    if (day.workoutCategory.toLowerCase().includes('rest')) continue;
+
+                    try {
+                        const dayDate = safeToDate(day.date);
+                        const normalizedDayDate = new Date(dayDate);
+                        normalizedDayDate.setHours(0, 0, 0, 0);
+
+                        await createClientWorkout({
+                            clientId: assignment.clientId,
+                            periodId: periodIdToUse,
+                            date: Timestamp.fromDate(normalizedDayDate),
+                            dayOfWeek: getDay(normalizedDayDate),
+                            categoryName: day.workoutCategory,
+                            isModified: false,
+                            createdBy: 'system'
+                        });
+                    } catch (err) {
+                        console.error('Error creating workout for day:', err);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error assigning week template:', err);
+            setMutationError(err instanceof Error ? err.message : 'Failed to assign week template');
+            throw err;
+        } finally {
+            setMutationLoading(false);
+            await fetchClientProgramsAsync(assignment.clientId);
+        }
+    }, [clientPrograms, weekTemplates, workoutCategories, fetchClientProgramsAsync]);
+
+
     // Update a period
     const updatePeriodAsync = useCallback(async (periodId: string, updates: Partial<ClientProgramPeriod>) => {
         if (!selectedClientId) return;
@@ -602,6 +725,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
         fetchClientPrograms: fetchClientProgramsAsync,
         assignPeriod,
         assignProgramTemplate,
+        assignWeekTemplate,
         updatePeriod: updatePeriodAsync,
         deletePeriod: deletePeriodAsync,
         clearAllPeriods,

@@ -12,17 +12,18 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import { WorkoutStructureTemplate, WorkoutStructureTemplateSection } from '@/lib/types';
 
 const COLLECTION_NAME = 'workoutStructureTemplates';
 
-// Helper to get current user ID
-function getOwnerId(): string {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Unauthorized');
+// Helper to get current account ID
+async function getAccountId(): Promise<string> {
+  const accountId = await resolveActiveAccountId();
+  if (!accountId) {
+    throw new Error('Unauthorized or No Active Account');
   }
-  return currentUser.uid;
+  return accountId;
 }
 
 /**
@@ -32,12 +33,13 @@ export const createWorkoutStructureTemplate = async (
   template: Omit<WorkoutStructureTemplate, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>
 ): Promise<string> => {
   try {
+    const accountId = await getAccountId();
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...template,
-      ownerId: getOwnerId(),
+      ownerId: accountId,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-      createdBy: getOwnerId()
+      createdBy: auth.currentUser?.uid
     });
     return docRef.id;
   } catch (error) {
@@ -81,9 +83,10 @@ export const deleteWorkoutStructureTemplate = async (id: string): Promise<void> 
  */
 export const fetchWorkoutStructureTemplates = async (): Promise<WorkoutStructureTemplate[]> => {
   try {
+    const accountId = await getAccountId();
     const q = query(
       collection(getDb(), COLLECTION_NAME),
-      where('ownerId', '==', getOwnerId()),
+      where('ownerId', '==', accountId),
       orderBy('createdAt', 'asc')
     );
     const querySnapshot = await getDocs(q);
@@ -103,20 +106,31 @@ export const fetchWorkoutStructureTemplates = async (): Promise<WorkoutStructure
 export const subscribeToWorkoutStructureTemplates = (
   callback: (templates: WorkoutStructureTemplate[]) => void
 ): () => void => {
-  const q = query(
-    collection(getDb(), COLLECTION_NAME),
-    where('ownerId', '==', getOwnerId()),
-    orderBy('createdAt', 'asc')
-  );
+  const q = async () => {
+    const accountId = await getAccountId();
+    return query(
+      collection(getDb(), COLLECTION_NAME),
+      where('ownerId', '==', accountId),
+      orderBy('createdAt', 'asc')
+    );
+  };
 
-  return onSnapshot(q, (querySnapshot) => {
-    const templates = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as WorkoutStructureTemplate[];
-    callback(templates);
-  }, (error) => {
-    console.error('Error subscribing to workout structure templates:', error);
+  let unsubscribe: (() => void) | undefined;
+
+  q().then(queryObj => {
+    unsubscribe = onSnapshot(queryObj, (querySnapshot) => {
+      const templates = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as WorkoutStructureTemplate[];
+      callback(templates);
+    }, (error) => {
+      console.error('Error subscribing to workout structure templates:', error);
+    });
   });
+
+  return () => {
+    if (unsubscribe) unsubscribe();
+  };
 };
 

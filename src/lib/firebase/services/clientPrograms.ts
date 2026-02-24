@@ -12,6 +12,7 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
+import { resolveActiveAccountId } from './memberships';
 import { ClientProgram, ClientProgramPeriod } from '@/lib/types';
 
 const COLLECTION_NAME = 'client-programs';
@@ -37,13 +38,13 @@ function cleanForFirebase(obj: any): any {
   return obj;
 }
 
-// Helper to get current user ID
-function getOwnerId(): string {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Unauthorized');
+// Helper to get current account ID
+async function getAccountId(): Promise<string> {
+  const accountId = await resolveActiveAccountId();
+  if (!accountId) {
+    throw new Error('Unauthorized or No Active Account');
   }
-  return currentUser.uid;
+  return accountId;
 }
 
 /**
@@ -54,10 +55,11 @@ export async function createClientProgram(
   clientProgramData: Omit<ClientProgram, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<ClientProgram> {
   try {
+    const accountId = await getAccountId();
     const now = Timestamp.now();
     const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), {
       ...clientProgramData,
-      ownerId: getOwnerId(),
+      ownerId: accountId,
       createdAt: now,
       updatedAt: now,
     });
@@ -95,9 +97,10 @@ export async function getClientProgram(id: string): Promise<ClientProgram | null
 
 export async function getClientProgramsByClient(clientId: string): Promise<ClientProgram[]> {
   try {
+    const accountId = await getAccountId();
     const q = query(
       collection(getDb(), COLLECTION_NAME),
-      where('ownerId', '==', getOwnerId()),
+      where('ownerId', '==', accountId),
       where('clientId', '==', clientId),
       orderBy('startDate', 'desc')
     );
@@ -115,9 +118,10 @@ export async function getClientProgramsByClient(clientId: string): Promise<Clien
 
 export async function getAllClientPrograms(): Promise<ClientProgram[]> {
   try {
+    const accountId = await getAccountId();
     const q = query(
       collection(getDb(), COLLECTION_NAME),
-      where('ownerId', '==', getOwnerId()),
+      where('ownerId', '==', accountId),
       orderBy('startDate', 'desc')
     );
     const querySnapshot = await getDocs(q);
@@ -298,6 +302,7 @@ export async function assignProgramTemplateToClient(
   }
 ): Promise<ClientProgram> {
   try {
+    const accountId = await getAccountId();
     // Create a new client program for this assignment
     const clientProgramData = {
       clientId: assignment.clientId,
@@ -307,8 +312,8 @@ export async function assignProgramTemplateToClient(
       status: 'active' as const,
       periods: [],
       notes: assignment.notes || '',
-      createdBy: getOwnerId(),
-      ownerId: getOwnerId(),
+      createdBy: auth.currentUser!.uid,
+      ownerId: accountId,
     };
 
     return await createClientProgram(clientProgramData);
