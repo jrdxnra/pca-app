@@ -210,7 +210,7 @@ npm update
 
 **📊 Performance Monitoring:**
 - Add web vitals tracking (Core Web Vitals)
-- Consider: Vercel Analytics, Google Analytics 4, or custom tracking
+- Consider: Google Analytics 4 or custom tracking
 - Monitor: LCP, FID, CLS, TTFB
 
 ### Phase 3 Additional Features

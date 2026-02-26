@@ -131,9 +131,7 @@ export default function LandingPage() {
       </div>
 
       <div className="relative z-10">
-        {/* Grain Overlay - Disabled for iOS Performance
-        <div className="fixed inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] mix-blend-multiply pointer-events-none -z-5" />
-        */}
+        {/* Grain Overlay removed (external asset). */}
 
         {/* --- Header Navigation --- */}
         <motion.header

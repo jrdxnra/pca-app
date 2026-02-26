@@ -53,6 +53,62 @@
 
 ---
 
+## Firebase Authentication Issues
+
+### Error: auth/unauthorized-domain (GitHub Codespaces)
+
+**Problem**: When accessing the app from GitHub Codespaces, you get `Firebase: Error (auth/unauthorized-domain)`.
+
+**Example URL**: `https://jubilant-goldfish-5gg6gww654r27vgr-3000.app.github.dev/login`
+
+**Cause**: Firebase doesn't recognize your Codespaces URL as an authorized domain for authentication.
+
+**Solution**:
+1. Go to [Firebase Console](https://console.firebase.google.com/project/performancecoachapp-26bd1)
+2. Navigate to **Authentication** > **Settings** > **Authorized domains** tab
+3. Click **Add domain**
+4. Add your Codespaces domain (without the protocol or port):
+   ```
+   jubilant-goldfish-5gg6gww654r27vgr-3000.app.github.dev
+   ```
+   ⚠️ **Important**: 
+   - Do NOT include `https://` at the beginning
+   - Do NOT include the path (like `/login`)
+   - Include the full subdomain exactly as shown in your browser
+5.Common Mistakes**:
+- ❌ Adding `https://jubilant-goldfish-5gg6gww654r27vgr-3000.app.github.dev/login`
+- ❌ Adding `jubilant-goldfish-5gg6gww654r27vgr-3000.app.github.dev/`
+- ✅ Adding `jubilant-goldfish-5gg6gww654r27vgr-3000.app.github.dev`
+
+**Still not working?**
+1. **Double-check the domain** in Firebase Console - make sure it's listed under Authorized domains
+2. **Try incognito mode** - sometimes browser cache causes issues
+3. **Check the browser console** - look for the exact domain in the error message
+4. **Verify you're on the right Firebase project** - should be `performancecoachapp-26bd1`
+
+**For Wildcard Support** (if your Codespace URL keeps changing):
+- Firebase doesn't support wildcard domains in the free tier
+- You'll need to add each new Codespace URL individually
+- Alternatively, use `localhost` for development by port forwarding
+
+**To Use Localhost Instead**:
+1. In VS Code Codespaces, go to the **Ports** tab
+2. Find port `3000` and set visibility to **Public**
+3. You can then access via the forwarded port URL
+4. Or use VS Code's port forwarding to a
+**For Wildcard Support** (if your Codespace URL keeps changing):
+- Firebase doesn't support wildcard domains in the free tier
+- You'll need to add each new Codespace URL individually
+- Alternatively, use `localhost` for development by port forwarding
+
+**To Use Localhost Instead**:
+1. In VS Code Codespaces, go to the **Ports** tab
+2. Find port `3000` and make it **Public**
+3. Forward the port to your local machine
+4. Access via `http://localhost:3000` (already authorized in Firebase)
+
+---
+
 ## Google Calendar Integration Issues
 
 ### Error 403: access_denied - "App has not completed Google verification process"
@@ -184,4 +240,19 @@ curl http://localhost:3000/api/calendar/auth/status
 4. **Make sure Google Calendar API is enabled** in Google Cloud Console
 5. **Ensure your email is in the test users list** (for testing mode apps)
 
----*Last Updated: January 10, 2026*
+---
+
+## Deployment Issues
+
+### Firebase Deployments
+
+**Problem**: Deployment failures or missing updates after a deploy.
+
+**Checklist**:
+1. Verify `npm run deploy:firebase` completed without errors
+2. Confirm Cloud Run revision updated in Google Cloud Console
+3. Confirm Firebase Hosting deploy completed
+4. Hard refresh the browser to clear cached assets
+
+---
+*Last Updated: February 26, 2026*

@@ -42,16 +42,14 @@ You could set up a VM to run a dev server:
 - Full control (it's a Linux VM)
 - Can run `npm run dev`
 - Can set up hot reload
-- More flexible than Render
 
 ### Cons:
 - **Expensive**: $50-100/month for decent VM (2-4GB RAM)
 - Need to set up yourself (SSH, security, etc.)
-- More complex than Render
+- More complex than managed hosting
 - Still might hit memory limits
 
 ### Cost Comparison:
-- **Render Pro**: $85/month (4GB RAM, managed)
 - **GCP VM**: $50-100/month (2-4GB RAM, you manage it)
 - **Not much savings**, and more work
 
@@ -74,7 +72,6 @@ You could set up a VM to run a dev server:
 - You manage everything
 
 ### 3. **Railway** (~$20/month)
-- Similar to Render
 - Might have same memory issues
 - Less established
 
@@ -85,10 +82,9 @@ You could set up a VM to run a dev server:
 **Firebase/Google Cloud doesn't have a "dev server" service.**
 
 Your options are:
-1. **Render Pro** ($85/month) - Easiest, managed, works
-2. **Buy a laptop** ($1,500) - One-time cost, own it
-3. **Cloud VM** ($50-100/month) - More work, similar cost
-4. **Use production builds** (free/cheap) - No hot reload, but fast deployments
+1. **Buy a laptop** ($1,500) - One-time cost, own it
+2. **Cloud VM** ($50-100/month) - More work, similar cost
+3. **Use production builds** (free/cheap) - No hot reload, but fast deployments
 
 ---
 
@@ -97,7 +93,7 @@ Your options are:
 Since Firebase can't do hot reload, your best options are:
 
 1. **Buy the laptop** - Best long-term value
-2. **Render Pro** - Easiest cloud solution
+2. **Cloud VM** - Most flexible, more setup
 3. **Use production builds** - Accept 2-4 min deployments instead of hot reload
 
 **Firebase is not the solution for hot reload.**

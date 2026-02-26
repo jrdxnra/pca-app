@@ -4,14 +4,6 @@ This document tracks project preferences, deployment strategy, and structural de
 
 ## Deployment Strategy
 
-### Vercel = Testing Environment
-- **Purpose**: Quick testing and development validation
-- **Deployment**: Automatic via GitHub pushes
-- **Use Case**: 
-  - Test new features before production
-  - Quick iterations during development
-  - Preview deployments for review
-
 ### Firebase = Production/Live Updates
 - **Purpose**: Live production environment for end users
 - **Deployment**: Manual via `npm run deploy:firebase`
@@ -20,7 +12,7 @@ This document tracks project preferences, deployment strategy, and structural de
   - Production updates and releases
   - Live environment with real data
 
-**Workflow**: Test on Vercel → Validate → Deploy to Firebase when ready
+**Workflow**: Validate locally → Deploy to Firebase when ready
 
 ## Project Structure
 
@@ -74,12 +66,6 @@ src/
 
 ## Deployment Preferences
 
-### Vercel (Testing)
-- Automatic deployments on push to main
-- Preview deployments for PRs
-- Environment variables in Vercel dashboard
-- Quick rollback via Vercel dashboard
-
 ### Firebase (Production)
 - Manual deployment via script: `npm run deploy:firebase`
 - Cloud Run for Next.js server + API routes
@@ -101,7 +87,7 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 NEXT_PUBLIC_FIREBASE_APP_ID
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
-GOOGLE_REDIRECT_URI (different for Vercel vs Firebase)
+GOOGLE_REDIRECT_URI
 ```
 
 ## Git Workflow
@@ -113,11 +99,9 @@ GOOGLE_REDIRECT_URI (different for Vercel vs Firebase)
   - **Purpose**: Testing new calendar features without affecting the stable `main` codebase.
   - **Do NOT merge to main** until fully validated and user explicit approval.
 - Feature branches for new development
-- Test on Vercel before merging to main
 
 ### Commits & Deployment Frequency
 - **CRITICAL: Batch related fixes into single commits** - Don't push after every small fix
-- **Vercel free tier limit: 100 deployments/day** - Exceeding this blocks deployments for 8+ hours
 - **Before pushing**: Test locally with `npm run build` when possible
 - **Group related changes**: Multiple small fixes should be one commit, not many
 - **Only push when necessary**: Not after every single line change
@@ -145,12 +129,10 @@ GOOGLE_REDIRECT_URI (different for Vercel vs Firebase)
 
 ### API Routes
 - Next.js API routes require server-side execution
-- Vercel: Native Next.js support ✅
 - Firebase: Requires Cloud Run (not static hosting) ✅
 
 ### Google OAuth
 - Redirect URI must match deployment URL
-- Vercel: `https://your-vercel-app.vercel.app/api/auth/google/callback`
 - Firebase: `https://your-firebase-app.web.app/api/auth/google/callback`
 
 ### Build Configuration
@@ -161,7 +143,6 @@ GOOGLE_REDIRECT_URI (different for Vercel vs Firebase)
 ## Documentation Files
 
 - `README.md` - Project overview
-- `VERCEL_SETUP.md` - Vercel deployment guide
 - `FIREBASE_SETUP.md` - Firebase + Cloud Run setup
 - `QUICK_START_FIREBASE.md` - Quick Firebase deployment reference
 - `DEPLOYMENT_CHECKLIST.md` - Pre-production checklist
@@ -177,7 +158,6 @@ GOOGLE_REDIRECT_URI (different for Vercel vs Firebase)
 ### Deployment Frequency (CRITICAL)
 - **BATCH FIXES**: Multiple related fixes = ONE commit, not many
 - **TEST LOCALLY FIRST**: Run `npm run build` before pushing/deploying
-- **Vercel limit**: 100 deployments/day on free tier - exceeding blocks deployments
 - **Firebase**: Same rules apply - batch fixes, test locally, don't deploy after every small change
 - **Only push/deploy when necessary**: Not after every small change
 - **Group related changes**: All fixes for the same issue should be one commit

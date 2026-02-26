@@ -1293,7 +1293,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
     // 1. Date only (no title, no parentheses)
     if (workout?.date) {
-      const date = new Date(workout.date.seconds ? workout.date.seconds * 1000 : workout.date);
+      const rawDate = workout.date;
+      const date = typeof rawDate === 'object' && rawDate !== null && 'toDate' in rawDate
+        ? (rawDate as { toDate: () => Date }).toDate()
+        : new Date(rawDate as string | number);
       const dateStr = date.toLocaleDateString('en-US');
       plain += dateStr + "\n";
       rich += "<b>" + dateStr + "</b><br>";

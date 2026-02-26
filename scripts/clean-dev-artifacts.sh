@@ -26,7 +26,6 @@ FILES_TO_REMOVE=(
   "BRANCH_*.md"
   "CODESPACES_DEV.md"
   "DEV_BRANCH_CLEANUP_ANALYSIS.md"
-  "ADD_VERCEL_ENV_NOW.md"
   "GOOGLE_CALENDAR_SETUP.md"
   "HOW-TO.md"
   "TROUBLESHOOTING.md"
@@ -41,7 +40,6 @@ FILES_TO_REMOVE=(
   "PROGRESS_SUMMARY.md"
   "PHASE_STATUS_REPORT.md"
   "REACT_ERROR_310_PREVENTION.md"
-  "RENDER_DEV_*.md"
 )
 
 echo "🧹 Cleaning up development artifacts from main branch..."

@@ -15,12 +15,12 @@ export function createOAuth2Client(redirectUri?: string): OAuth2Client {
     finalRedirectUri = redirectUri;
   } else if (process.env.GOOGLE_REDIRECT_URI) {
     finalRedirectUri = process.env.GOOGLE_REDIRECT_URI;
-  } else if (process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === undefined) {
+  } else if (process.env.NODE_ENV === 'development') {
     // Only allow localhost fallback in local development
     finalRedirectUri = 'http://localhost:3000/api/auth/google/callback';
   } else {
     // In production, we must have a redirect URI
-    throw new Error('GOOGLE_REDIRECT_URI environment variable is required in production. Please set it in Vercel (Environment Variables) or Firebase (Cloud Run service environment variables).');
+    throw new Error('GOOGLE_REDIRECT_URI environment variable is required in production. Please set it in Firebase (Cloud Run service environment variables).');
   }
 
   if (!clientId || !clientSecret) {

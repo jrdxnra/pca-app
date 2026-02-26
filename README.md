@@ -77,18 +77,12 @@ src/
 
 ## Deployment
 
-### Testing Environment: Vercel
-- **Purpose**: Quick testing and development validation
-- **Deployment**: Automatic via GitHub pushes
-- **Setup**: See [VERCEL_SETUP.md](./VERCEL_SETUP.md)
-- **Status**: Environment variables configured ✅
-
 ### Production Environment: Firebase + Cloud Run
 - **Purpose**: Live production environment for end users
 - **Deployment**: Manual via `npm run deploy:firebase`
 - **Setup**: See [FIREBASE_SETUP.md](./FIREBASE_SETUP.md) and [QUICK_START_FIREBASE.md](./QUICK_START_FIREBASE.md)
 
-**Workflow**: Test on Vercel → Validate → Deploy to Firebase when ready
+**Workflow**: Validate locally → Deploy to Firebase when ready
 
 See [PROJECT_PREFERENCES.md](./PROJECT_PREFERENCES.md) for deployment strategy details.
 

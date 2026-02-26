@@ -95,25 +95,11 @@
 - Firebase Hosting: ~$5/month
 - **Total: ~$25/month**
 
-## Comparison: Vercel vs Firebase + Cloud Run
-
-### Vercel (Your Testing Environment)
-- **Free Tier**: 100 GB bandwidth, unlimited requests
-- **Hobby Plan**: FREE (for personal projects)
-- **Pro Plan**: $20/month (if you need more)
-
-### Firebase + Cloud Run (Your Production)
-- **Free Tier**: Very generous (2M requests, 10 GB storage)
-- **Cost**: $0-5/month for small apps
-- **Scales**: Pay only for what you use
-
 ## Key Points
 
 1. **Docker is FREE** - it's just a tool, no subscription needed
 2. **Google Cloud has generous free tiers** - likely $0/month
 3. **Pay-per-use** - only pay when you exceed free tiers
-4. **Vercel is also free** for testing
-
 ## Bottom Line
 
 **For your use case:**

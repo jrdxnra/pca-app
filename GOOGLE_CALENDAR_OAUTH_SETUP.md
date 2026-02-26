@@ -28,10 +28,10 @@ If you see a warning about OAuth consent screen:
 3. Name it: "PCA App Web Client" (or similar)
 4. **Authorized JavaScript origins**:
    - `http://localhost:3000` (for local dev)
-   - `https://your-domain.vercel.app` (your production domain)
+   - `https://your-firebase-domain.web.app` (your production domain)
 5. **Authorized redirect URIs**:
    - `http://localhost:3000/api/auth/google/callback`
-   - `https://your-domain.vercel.app/api/auth/google/callback`
+   - `https://your-firebase-domain.web.app/api/auth/google/callback`
 6. Click **CREATE**
 
 ## Step 4: Copy Credentials
@@ -42,19 +42,19 @@ After creating, you'll see:
 
 ## Step 5: Add to Environment Variables
 
-Add these to your Vercel project (or `.env.local` for local):
+Add these to your Cloud Run service env vars (or `.env.local` for local):
 
 ```
 GOOGLE_CLIENT_ID=your-client-id-here
 GOOGLE_CLIENT_SECRET=your-client-secret-here
-GOOGLE_REDIRECT_URI=https://your-domain.vercel.app/api/auth/google/callback
+GOOGLE_REDIRECT_URI=https://your-firebase-domain.web.app/api/auth/google/callback
 ```
 
-### For Vercel:
-1. Go to your Vercel project
-2. Settings → Environment Variables
-3. Add the three variables above
-4. Redeploy your app
+### For Firebase (Cloud Run):
+1. Go to Google Cloud Console → Cloud Run → `pca-app`
+2. Click **Edit & Deploy New Revision**
+3. Add the three variables above in **Environment Variables**
+4. Deploy the revision
 
 ### For Local Development:
 Add to `.env.local`:
@@ -96,6 +96,6 @@ GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 ## Important Notes
 
 - The redirect URI must **exactly match** what's configured in Google Cloud Console
-- For production, use your actual Vercel domain
+- For production, use your actual Firebase Hosting domain
 - Never commit `.env.local` to git (it's in `.gitignore`)
 - The OAuth client ID is safe to expose (it's public), but keep the secret secure
