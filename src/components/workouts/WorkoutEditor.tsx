@@ -1291,10 +1291,12 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     let plain = "";
     let rich = "";
 
-    // 1. Title & Notes
-    if (title) {
-      plain += title + "\n";
-      rich += "<b>" + title + "</b><br>";
+    // 1. Date only (no title, no parentheses)
+    if (workout?.date) {
+      const date = new Date(workout.date.seconds ? workout.date.seconds * 1000 : workout.date);
+      const dateStr = date.toLocaleDateString('en-US');
+      plain += dateStr + "\n";
+      rich += "<b>" + dateStr + "</b><br>";
     }
     if (notes) {
       plain += "Workout Notes\n" + notes + "\n";
@@ -1319,7 +1321,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
       let st = "";
 
       const isUnilateral = m?.configuration?.unilateral;
-      if (workload.reps) st += " " + workload.reps + (isUnilateral ? "ea" : ""); // e.g. "10", "8-12", or "8ea"
+      if (workload.reps) st += " x" + workload.reps + (isUnilateral ? "ea" : ""); // e.g. "x10", "x8-12", or "x8ea"
       if (workload.weight || workload.weightMeasure === 'bw') {
         if (workload.weightMeasure === 'bw') {
           st += " BW";
@@ -1336,8 +1338,13 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
       return { name, details: st.trim() };
     };
 
-    // 3. Rounds
+    // 3. Rounds (skip empty ones)
     rounds.forEach((round, i) => {
+      // Skip rounds with no movements
+      if (!round.movementUsages || round.movementUsages.length === 0) {
+        return;
+      }
+
       const setText = round.sets > 1 ? "sets" : "set";
       const headerPlain = `Round ${i + 1} (${round.sets} ${setText})`;
       const headerRich = `<b>Round ${i + 1}</b> (${round.sets} ${setText})`;
