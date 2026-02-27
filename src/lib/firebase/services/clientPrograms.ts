@@ -288,6 +288,75 @@ export async function deleteAllPeriodsFromClientProgram(
   }
 }
 
+export async function deleteDaysFromPeriod(
+  clientProgramId: string,
+  periodId: string,
+  daysToDelete: string[] // Array of day names like ['Monday', 'Wednesday']
+): Promise<void> {
+  try {
+    const clientProgram = await getClientProgram(clientProgramId);
+    if (!clientProgram) {
+      throw new Error('Client program not found');
+    }
+
+    const updatedPeriods = clientProgram.periods.map(period => {
+      if (period.id !== periodId) return period;
+
+      // Filter out days that match the days to delete
+      const updatedDays = period.days.filter(day => {
+        const dayDate = day.date instanceof Date 
+          ? day.date 
+          : day.date.toDate 
+            ? day.date.toDate() 
+            : new Date(day.date.seconds * 1000);
+        const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'long' });
+        return !daysToDelete.includes(dayName);
+      });
+
+      return {
+        ...period,
+        days: updatedDays
+      };
+    });
+
+    await updateClientProgram(clientProgramId, {
+      periods: updatedPeriods
+    });
+
+    console.log('Successfully deleted days from period:', periodId, daysToDelete);
+  } catch (error) {
+    console.error('Error deleting days from period:', error);
+    throw error;
+  }
+}
+
+export async function archivePeriod(
+  clientProgramId: string,
+  periodId: string
+): Promise<void> {
+  try {
+    const clientProgram = await getClientProgram(clientProgramId);
+    if (!clientProgram) {
+      throw new Error('Client program not found');
+    }
+
+    const updatedPeriods = clientProgram.periods.map(period =>
+      period.id === periodId 
+        ? { ...period, archived: true, archivedAt: Timestamp.now() } 
+        : period
+    );
+
+    await updateClientProgram(clientProgramId, {
+      periods: updatedPeriods as any
+    });
+
+    console.log('Successfully archived period:', periodId);
+  } catch (error) {
+    console.error('Error archiving period:', error);
+    throw error;
+  }
+}
+
 /**
  * Program template assignment operations
  */

@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coach Invite & Onboarding Flow</title>
+  <style>
+    :root {
+      --bg: #0b0f16;
+      --bg-2: #111827;
+      --accent: #f59e0b;
+      --accent-2: #22c55e;
+      --accent-3: #60a5fa;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --card: #0f172a;
+      --line: #1f2937;
+      --danger: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1200px 800px at 20% -10%, #1f2937 0%, transparent 55%),
+                  radial-gradient(900px 600px at 100% 0%, #0f766e 0%, transparent 45%),
+                  var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      padding: 40px 24px 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: clamp(28px, 4vw, 44px);
+      margin: 0 0 8px;
+      letter-spacing: 0.5px;
+    }
+
+    p.lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(14px, 2vw, 18px);
+    }
+
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--line);
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px 24px 60px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+
+    .lane {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .lane::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(400px 120px at 0% 0%, rgba(245,158,11,0.08), transparent 70%);
+      pointer-events: none;
+    }
+
+    .lane h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      color: var(--accent);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(160px, 1fr));
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      min-height: 120px;
+      position: relative;
+    }
+
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .tag {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--text);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .arrow {
+      position: absolute;
+      right: -10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      color: var(--accent-3);
+    }
+
+    .card:last-child .arrow { display: none; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 20px;
+    }
+
+    .details {
+      background: var(--bg-2);
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 16px;
+      color: var(--muted);
+    }
+
+    .details h4 {
+      margin: 0 0 10px;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .details ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(34,197,94,0.1);
+      color: var(--accent-2);
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(34,197,94,0.3);
+      font-size: 12px;
+    }
+
+    .warn {
+      background: rgba(239,68,68,0.08);
+      color: var(--danger);
+      border-color: rgba(239,68,68,0.25);
+    }
+
+    @media (max-width: 1100px) {
+      .flow { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 720px) {
+      .flow { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+    }
+
+    @media (max-width: 520px) {
+      .flow { grid-template-columns: 1fr; }
+      .card { min-height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Coach Invite & Onboarding Flow</h1>
+    <p class="lead">Admin-driven invitations, secure acceptance, and enforced calendar onboarding.</p>
+    <div class="legend">
+      <span><i class="dot" style="background: var(--accent)"></i> Admin actions</span>
+      <span><i class="dot" style="background: var(--accent-3)"></i> Coach actions</span>
+      <span><i class="dot" style="background: var(--accent-2)"></i> System automation</span>
+      <span><i class="dot" style="background: var(--danger)"></i> Hard gate</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="lane">
+      <h2>End-to-End Flow</h2>
+      <div class="flow">
+        <div class="card">
+          <h3>1. Admin Sends Invite</h3>
+          <p>Owner uses Admin tab to invite a coach by email + role.</p>
+          <span class="tag">Admin</span>
+          <div class="arrow">→</div>
+        </div>
+        <div class="card">
+          <h3>2. Invitation Created</h3>
+          <p>System stores pending invitation and generates a secure link.</p>
+          <span class="tag">System</span>
+          <div class="arrow">→</div>
+        </div>
+        <div class="card">
+          <h3>3. Email Delivered</h3>
+          <p>Coach receives invite email with accept link.</p>
+          <span class="tag">System</span>
+          <div class="arrow">→</div>
+        </div>
+        <div class="card">
+          <h3>4. Coach Accepts</h3>
+          <p>Coach logs in and accepts invitation (email match enforced).</p>
+          <span class="tag">Coach</span>
+          <div class="arrow">→</div>
+        </div>
+        <div class="card">
+          <h3>5. Account + Membership</h3>
+          <p>System creates membership and ensures account data exists.</p>
+          <span class="tag">System</span>
+          <div class="arrow">→</div>
+        </div>
+        <div class="card">
+          <h3>6. Calendar Connect</h3>
+          <p>Coach must connect Google Calendar before access is granted.</p>
+          <span class="tag">Gate</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="lane grid-2">
+      <div>
+        <h2>Admin Responsibilities</h2>
+        <div class="details">
+          <h4>Admin Panel Actions</h4>
+          <ul>
+            <li>Create invites (email + role).</li>
+            <li>View pending invitations.</li>
+            <li>Revoke invites if needed.</li>
+            <li>Remove coaches to disable access.</li>
+          </ul>
+        </div>
+        <div style="height: 14px"></div>
+        <div class="details">
+          <h4>Admin Data Effects</h4>
+          <ul>
+            <li>Creates invitations with status: pending.</li>
+            <li>Membership is created only after acceptance.</li>
+            <li>Roles enforce permissions in Firestore rules.</li>
+          </ul>
+        </div>
+      </div>
+      <div>
+        <h2>Coach Responsibilities</h2>
+        <div class="details">
+          <h4>Coach Actions</h4>
+          <ul>
+            <li>Open invite link.</li>
+            <li>Sign in with Google.</li>
+            <li>Accept invite.</li>
+            <li>Complete calendar connection.</li>
+          </ul>
+        </div>
+        <div style="height: 14px"></div>
+        <div class="details">
+          <h4>Access Gates</h4>
+          <div class="pill warn">Calendar connect required</div>
+          <p style="margin-top: 10px; font-size: 13px; color: var(--muted);">
+            Until the calendar is connected, the coach can not access the main app.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="lane">
+      <h2>Data Objects & Status</h2>
+      <div class="flow">
+        <div class="card">
+          <h3>Invitation</h3>
+          <p>accountId, invitedEmail, role, status, invitedBy</p>
+          <span class="tag">pending → accepted/declined</span>
+          <div class="arrow">→</div>
+        </div>
+        <div class="card">
+          <h3>Membership</h3>
+          <p>userId, accountId, role</p>
+          <span class="tag">created on accept</span>
+          <div class="arrow">→</div>
+        </div>
+        <div class="card">
+          <h3>Account Provision</h3>
+          <p>Clone master config if empty</p>
+          <span class="tag">auto</span>
+          <div class="arrow">→</div>
+        </div>
+        <div class="card">
+          <h3>Calendar Tokens</h3>
+          <p>Stored under /users/{uid}/googleCalendarTokens</p>
+          <span class="tag">required</span>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

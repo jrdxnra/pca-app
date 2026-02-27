@@ -9,6 +9,7 @@ import { Client } from '@/lib/types';
 import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBuilderDialog';
 import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
 import { AssignWeekDialog } from '@/components/programs/AssignWeekDialog';
+import { ManageWeekDialog } from '@/components/programs/ManageWeekDialog';
 import { safeToDate } from '@/lib/utils/dateHelpers';
 import { ClientProgramPeriod } from '@/lib/types';
 
@@ -49,6 +50,9 @@ interface BuilderHeaderProps {
     endDate: Date;
   }) => Promise<void>;
 
+  onDeleteDays?: (periodId: string, daysToDelete: string[]) => Promise<void>;
+  onArchivePeriod?: (periodId: string) => Promise<void>;
+
   // Quick workout
   onWorkoutCreated: () => void;
 
@@ -86,6 +90,8 @@ export function BuilderHeader({
   clientPrograms,
   onAssignPeriod,
   onAssignWeek,
+  onDeleteDays,
+  onArchivePeriod,
   onWorkoutCreated,
   weekOrder,
   onWeekOrderChange,
@@ -231,11 +237,15 @@ export function BuilderHeader({
           onAssignPeriod={onAssignPeriod}
           existingAssignments={existingAssignments}
         />
-        {clientId && (
-          <AssignWeekDialog
+        {clientId && onDeleteDays && onArchivePeriod && (
+          <ManageWeekDialog
             clientId={clientId}
+            clientName={clientName}
             weekTemplates={weekTemplates}
+            existingAssignments={existingAssignments}
             onAssignWeek={onAssignWeek}
+            onDeleteDays={onDeleteDays}
+            onArchivePeriod={onArchivePeriod}
             loading={loading}
           />
         )}

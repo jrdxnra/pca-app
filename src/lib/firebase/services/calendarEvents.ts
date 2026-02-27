@@ -3,6 +3,7 @@ import { getDb } from '../config';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import { fetchCalendarEvents as fetchGoogleCalendarEvents, checkGoogleCalendarAuth } from '@/lib/google-calendar/api-client';
 import { getCalendarSyncConfig } from './calendarConfig';
+import { toastError } from '@/components/ui/toaster';
 
 /**
  * Calendar Events Service
@@ -156,10 +157,12 @@ export async function getCalendarEventsByDateRange(
     });
 
     // Check if it's an authentication error
-    if (errorMessage.includes('Authentication') || errorMessage.includes('401') || errorMessage.includes('Not authenticated')) {
+    if (errorMessage.includes('Authentication') || errorMessage.includes('401') || errorMessage.includes('Not authenticated') || errorMessage.includes('Token expired')) {
       console.warn('💡 Google Calendar authentication failed. Please reconnect: Configure → App Config → Connect Google Calendar');
+      toastError('Google Calendar connection expired. Please reconnect in App Config.');
     } else if (errorMessage.includes('Permission') || errorMessage.includes('403')) {
       console.warn('💡 Google Calendar permission denied. Please reconnect with proper permissions: Configure → App Config → Connect Google Calendar');
+      toastError('Google Calendar permission denied. Please reconnect with proper permissions.');
     }
 
     // Return empty array instead of throwing to prevent React Query retry loops

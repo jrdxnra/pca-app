@@ -151,7 +151,9 @@ export default function BuilderPage() {
     assignPeriod: hookAssignPeriod,
     assignWeekTemplate,
     fetchClientPrograms,
-    updatePeriod
+    updatePeriod,
+    deleteDaysFromPeriod,
+    archivePeriod
   } = useClientPrograms(clientId);
 
   const handleAssignWeek = useCallback(async (assignment: {
@@ -171,6 +173,34 @@ export default function BuilderPage() {
       setLoading(false);
     }
   }, [assignWeekTemplate]);
+
+  const handleDeleteDays = useCallback(async (periodId: string, daysToDelete: string[]) => {
+    try {
+      if (!clientId) return;
+      setLoading(true);
+      await deleteDaysFromPeriod(periodId, clientId, daysToDelete);
+      toastSuccess(`Deleted ${daysToDelete.length} day(s) from period`);
+    } catch (error) {
+      console.error('Error deleting days:', error);
+      toastError('Failed to delete days');
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId, deleteDaysFromPeriod]);
+
+  const handleArchivePeriod = useCallback(async (periodId: string) => {
+    try {
+      if (!clientId) return;
+      setLoading(true);
+      await archivePeriod(periodId, clientId);
+      toastSuccess('Period archived successfully');
+    } catch (error) {
+      console.error('Error archiving period:', error);
+      toastError('Failed to archive period');
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId, archivePeriod]);
 
   // Simple local state - only day view is supported now
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('day');
@@ -1764,6 +1794,8 @@ export default function BuilderPage() {
               clientPrograms={clientPrograms}
               onAssignPeriod={handleAssignPeriod}
               onAssignWeek={handleAssignWeek}
+              onDeleteDays={handleDeleteDays}
+              onArchivePeriod={handleArchivePeriod}
               onWorkoutCreated={() => {
                 // Force re-fetch workouts and calendar events
                 setCalendarDate(new Date(calendarDate));

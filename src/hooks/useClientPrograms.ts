@@ -15,7 +15,9 @@ import {
     updatePeriodInClientProgram,
     deletePeriodFromClientProgram,
     deleteAllPeriodsFromClientProgram,
-    assignProgramTemplateToClient
+    assignProgramTemplateToClient,
+    deleteDaysFromPeriod,
+    archivePeriod
 } from '@/lib/firebase/services/clientPrograms';
 // React Query hooks for fetching
 import { useClientPrograms as useClientProgramsQuery } from '@/hooks/queries/useClientPrograms';
@@ -74,6 +76,8 @@ interface UseClientProgramsResult {
     updatePeriod: (periodId: string, updates: Partial<ClientProgramPeriod>) => Promise<void>;
     deletePeriod: (periodId: string, clientId: string) => Promise<void>;
     clearAllPeriods: (clientId: string) => Promise<void>;
+    deleteDaysFromPeriod: (periodId: string, clientId: string, daysToDelete: string[]) => Promise<void>;
+    archivePeriod: (periodId: string, clientId: string) => Promise<void>;
 
     // Helpers
     findPeriodForDate: (date: Date, clientId: string) => ClientProgramPeriod | null;
@@ -718,6 +722,70 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
         }
     }, [clientPrograms, selectedClientId, fetchClientProgramsAsync]);
 
+    // Delete specific days from a period
+    const deleteDaysFromPeriodAsync = useCallback(async (periodId: string, clientId: string, daysToDelete: string[]) => {
+        setMutationLoading(true);
+        setMutationError(null);
+
+        try {
+            const clientProgram = clientPrograms.find(cp => cp.clientId === clientId);
+            if (!clientProgram) {
+                throw new Error('Client program not found');
+            }
+
+            await deleteDaysFromPeriod(clientProgram.id, periodId, daysToDelete);
+            
+            // Also delete corresponding workouts for those days
+            const period = clientProgram.periods.find(p => p.id === periodId);
+            if (period) {
+                // Find and delete workouts for the specified days
+                const workoutsToDelete = await fetchWorkoutsByDateRange(
+                    clientId,
+                    period.startDate,
+                    period.endDate
+                );
+
+                for (const workout of workoutsToDelete) {
+                    const workoutDate = workout.date.toDate();
+                    const dayName = workoutDate.toLocaleDateString('en-US', { weekday: 'long' });
+                    if (daysToDelete.includes(dayName)) {
+                        await deleteClientWorkout(workout.id);
+                    }
+                }
+            }
+
+            await fetchClientProgramsAsync(selectedClientId);
+        } catch (err) {
+            console.error('Error deleting days from period:', err);
+            setMutationError(err instanceof Error ? err.message : 'Failed to delete days');
+            throw err;
+        } finally {
+            setMutationLoading(false);
+        }
+    }, [clientPrograms, selectedClientId, fetchClientProgramsAsync]);
+
+    // Archive a period (soft delete)
+    const archivePeriodAsync = useCallback(async (periodId: string, clientId: string) => {
+        setMutationLoading(true);
+        setMutationError(null);
+
+        try {
+            const clientProgram = clientPrograms.find(cp => cp.clientId === clientId);
+            if (!clientProgram) {
+                throw new Error('Client program not found');
+            }
+
+            await archivePeriod(clientProgram.id, periodId);
+            await fetchClientProgramsAsync(selectedClientId);
+        } catch (err) {
+            console.error('Error archiving period:', err);
+            setMutationError(err instanceof Error ? err.message : 'Failed to archive period');
+            throw err;
+        } finally {
+            setMutationLoading(false);
+        }
+    }, [clientPrograms, selectedClientId, fetchClientProgramsAsync]);
+
     return {
         clientPrograms,
         isLoading,
@@ -729,6 +797,8 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
         updatePeriod: updatePeriodAsync,
         deletePeriod: deletePeriodAsync,
         clearAllPeriods,
+        deleteDaysFromPeriod: deleteDaysFromPeriodAsync,
+        archivePeriod: archivePeriodAsync,
         findPeriodForDate,
         getClientProgram: getClientProgramForClient
     };

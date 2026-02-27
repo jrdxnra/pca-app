@@ -14,10 +14,12 @@ import {
   Settings,
   Activity,
   LogOut,
-  User
+  User,
+  Shield
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { MASTER_UID } from '@/lib/firebase/services/memberships';
+import { getActiveMembership } from '@/lib/firebase/services/memberships';
 
 const mainNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -36,10 +38,43 @@ const menuNavigation = [
 // Main Navigation - Left aligned with logo
 export function Navigation() {
   const pathname = usePathname();
+  const [user, setUser] = useState<any | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let unsubscribe: () => void;
+
+    import('@/lib/firebase/config').then(({ auth }) => {
+      unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+        setUser(currentUser);
+
+        if (currentUser) {
+          try {
+            const membership = await getActiveMembership(currentUser.uid);
+            setUserRole(membership?.role || null);
+          } catch (error) {
+            console.error('Error fetching membership:', error);
+          }
+        }
+
+        setLoading(false);
+      });
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  const navItems = [...mainNavigation];
+  if (userRole === 'owner') {
+    navItems.push({ name: 'Admin', href: '/admin', icon: Shield });
+  }
 
   return (
     <nav className="hidden md:flex items-center space-x-1 md:space-x-2 lg:space-x-4">
-      {mainNavigation.map((item) => {
+      {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href;
 
@@ -68,6 +103,7 @@ export function ProfileMenu() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<any | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -75,8 +111,19 @@ export function ProfileMenu() {
 
     // Dynamic import to avoid SSR issues with Firebase
     import('@/lib/firebase/config').then(({ auth }) => {
-      unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
         setUser(currentUser);
+        
+        // Check user's role
+        if (currentUser) {
+          try {
+            const membership = await getActiveMembership(currentUser.uid);
+            setUserRole(membership?.role || null);
+          } catch (error) {
+            console.error('Error fetching membership:', error);
+          }
+        }
+        
         setLoading(false);
       });
     });
@@ -218,7 +265,25 @@ export function ProfileMenu() {
                 );
               })}
 
-            <div className="h-px bg-border my-1" />
+            {/* Admin Tab - Only for Owners */}
+            {userRole === 'owner' && (
+              <>
+                <div className="h-px bg-border my-1 mx-2" />
+                <Link
+                  href="/admin"
+                  className={cn(
+                    'flex w-full items-center px-2 py-2 text-sm rounded-sm transition-colors',
+                    pathname === '/admin'
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'hover:bg-accent text-muted-foreground hover:text-foreground'
+                  )}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <Shield className="mr-3 h-4 w-4" />
+                  Admin
+                </Link>
+              </>
+            )}
 
             {/* Sign Out */}
             <button

@@ -17,6 +17,19 @@ export interface Membership {
   updatedAt: Timestamp;
 }
 
+export interface Invitation {
+  id: string;
+  accountId: string;
+  invitedEmail: string;
+  role: 'trainer' | 'client';
+  status: 'pending' | 'accepted' | 'declined';
+  invitedBy: string; // UID of the account owner
+  acceptedAt?: Timestamp;
+  declinedAt?: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 // Core Types
 export interface Client {
   id: string;
@@ -333,6 +346,8 @@ export interface ClientProgramPeriod {
   endDate: Timestamp;
   weekTemplateId?: string; // References week template from configuration
   days: ClientProgramDay[];
+  archived?: boolean; // For soft-deleting/hiding periods
+  archivedAt?: Timestamp;
 }
 
 export interface ClientProgramDay {
