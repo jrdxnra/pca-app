@@ -15,7 +15,8 @@ import {
   Activity,
   LogOut,
   User,
-  Shield
+  Shield,
+  BarChart3
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { MASTER_UID } from '@/lib/firebase/services/memberships';
@@ -30,6 +31,7 @@ const mainNavigation = [
 
 const menuNavigation = [
   // { name: 'Workouts', href: '/workouts', icon: Zap },
+  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Movements', href: '/movements', icon: Dumbbell },
   { name: 'Configuration', href: '/configure', icon: Settings },
   { name: 'App Status', href: '/health', icon: Activity, requireMaster: true },
@@ -68,9 +70,6 @@ export function Navigation() {
   }, []);
 
   const navItems = [...mainNavigation];
-  if (userRole === 'owner') {
-    navItems.push({ name: 'Admin', href: '/admin', icon: Shield });
-  }
 
   return (
     <nav className="hidden md:flex items-center space-x-1 md:space-x-2 lg:space-x-4">
