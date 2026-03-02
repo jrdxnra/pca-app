@@ -219,10 +219,10 @@ function namesMatch(clientName: string, attendeeName: string): boolean {
 }
 
 /**
- * Extract attendee names from calendar event, filtering out coach/trainer and room resources
+ * Extract attendee names from calendar event, filtering out coach and room resources
  * 
  * @param event - Google Calendar event
- * @param coachPatterns - Email patterns to filter (coach/trainer emails)
+ * @param coachPatterns - Email patterns to filter (coach emails)
  * @returns Array of attendee display names (or emails as fallback), excluding coach
  */
 export function extractAttendeeNames(
@@ -241,7 +241,7 @@ export function extractAttendeeNames(
           return false;
         }
 
-        // Filter out coach/trainer
+        // Filter out coach
         const identifier = displayName || email;
         if (isCoachAttendee(identifier, coachPatterns)) {
           return false;

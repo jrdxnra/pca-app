@@ -37,9 +37,6 @@ export function createOAuth2Client(redirectUri?: string): OAuth2Client {
     redirectUri: finalRedirectUri
   });
 
-  // Verify the redirect URI is set correctly
-  console.log('[OAuth] OAuth2Client redirectUri:', oauth2Client.redirectUri);
-
   return oauth2Client;
 }
 

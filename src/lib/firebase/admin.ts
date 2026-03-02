@@ -31,6 +31,10 @@ export function getFirebaseAdminApp() {
             if (process.env.FIREBASE_SERVICE_ACCOUNT) {
                 try {
                     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+                    // Some env-stored service accounts omit project_id; add it to satisfy Admin SDK
+                    if (!serviceAccount.project_id) {
+                        serviceAccount.project_id = projectId;
+                    }
                     options.credential = admin.credential.cert(serviceAccount);
                     console.log('[Firebase Admin] Using service account from environment');
                 } catch (e) {

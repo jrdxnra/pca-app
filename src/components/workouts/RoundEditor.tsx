@@ -16,6 +16,7 @@ import {
 import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
 import { MovementUsageEditor } from './MovementUsageEditor';
 import { InlineMovementEditor } from './InlineMovementEditor';
+import { resolveWorkoutType } from '@/lib/workouts/workoutTypeUtils';
 
 interface RoundEditorProps {
   round: ClientWorkoutRound;
@@ -78,7 +79,7 @@ export function RoundEditor({
 
   // Update round section/type
   const updateSectionType = (workoutTypeId: string) => {
-    const workoutType = workoutTypes.find(wt => wt.id === workoutTypeId);
+    const workoutType = resolveWorkoutType(workoutTypes, workoutTypeId);
     if (!workoutType) return;
 
     onUpdate({
@@ -235,7 +236,7 @@ export function RoundEditor({
 
   const { gridColumns: unifiedGridTemplate, enabledFields: unifiedEnabledFields, availableFields } = calculateUnifiedGrid();
 
-  const selectedWorkoutType = workoutTypes.find(wt => wt.id === round.workoutTypeId);
+  const selectedWorkoutType = resolveWorkoutType(workoutTypes, round.workoutTypeId, round.sectionName);
   const headerBackgroundColor = selectedWorkoutType?.color ? `${selectedWorkoutType.color}15` : 'transparent'; // 15 = ~8% opacity
 
   return (

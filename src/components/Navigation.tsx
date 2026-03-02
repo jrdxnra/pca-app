@@ -20,19 +20,18 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { MASTER_UID } from '@/lib/firebase/services/memberships';
-import { getActiveMembership } from '@/lib/firebase/services/memberships';
 
 const mainNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Schedule', href: '/programs', icon: Calendar },
   { name: 'Builder', href: '/workouts/builder', icon: Wrench },
   { name: 'Clients', href: '/clients', icon: Users },
+  { name: 'Movements', href: '/movements', icon: Activity },
 ];
 
 const menuNavigation = [
   // { name: 'Workouts', href: '/workouts', icon: Zap },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { name: 'Movements', href: '/movements', icon: Dumbbell },
   { name: 'Configuration', href: '/configure', icon: Settings },
   { name: 'App Status', href: '/health', icon: Activity, requireMaster: true },
 ];
@@ -40,34 +39,6 @@ const menuNavigation = [
 // Main Navigation - Left aligned with logo
 export function Navigation() {
   const pathname = usePathname();
-  const [user, setUser] = useState<any | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let unsubscribe: () => void;
-
-    import('@/lib/firebase/config').then(({ auth }) => {
-      unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
-        setUser(currentUser);
-
-        if (currentUser) {
-          try {
-            const membership = await getActiveMembership(currentUser.uid);
-            setUserRole(membership?.role || null);
-          } catch (error) {
-            console.error('Error fetching membership:', error);
-          }
-        }
-
-        setLoading(false);
-      });
-    });
-
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, []);
 
   const navItems = [...mainNavigation];
 
@@ -102,7 +73,6 @@ export function ProfileMenu() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<any | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -110,19 +80,8 @@ export function ProfileMenu() {
 
     // Dynamic import to avoid SSR issues with Firebase
     import('@/lib/firebase/config').then(({ auth }) => {
-      unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+      unsubscribe = auth.onAuthStateChanged((currentUser) => {
         setUser(currentUser);
-        
-        // Check user's role
-        if (currentUser) {
-          try {
-            const membership = await getActiveMembership(currentUser.uid);
-            setUserRole(membership?.role || null);
-          } catch (error) {
-            console.error('Error fetching membership:', error);
-          }
-        }
-        
         setLoading(false);
       });
     });
@@ -172,6 +131,7 @@ export function ProfileMenu() {
   const photoUrl = user.photoURL;
   const displayName = user.displayName || user.email || 'User';
   const initial = displayName[0]?.toUpperCase() || 'U';
+  const isMasterUser = user.uid === MASTER_UID;
 
   return (
     <div className="relative ml-2">
@@ -264,8 +224,8 @@ export function ProfileMenu() {
                 );
               })}
 
-            {/* Admin Tab - Only for Owners */}
-            {userRole === 'owner' && (
+            {/* Admin Tab - Only for Master Admin */}
+            {isMasterUser && (
               <>
                 <div className="h-px bg-border my-1 mx-2" />
                 <Link

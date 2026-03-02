@@ -65,6 +65,7 @@ import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
 import { safeToDate } from '@/lib/utils/dateHelpers';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
 import { logger } from '@/lib/utils/logger';
+import { resolveWorkoutTypeColor } from '@/lib/workouts/workoutTypeUtils';
 
 export default function BuilderPage() {
   const router = useRouter();
@@ -531,7 +532,7 @@ export default function BuilderPage() {
         ordinal: index + 1,
         sets: 1,
         sectionName: section.workoutTypeName,
-        sectionColor: workoutTypes.find(wt => wt.id === section.workoutTypeId)?.color || '#6b7280',
+        sectionColor: resolveWorkoutTypeColor(workoutTypes, section.workoutTypeId, section.workoutTypeName),
         workoutTypeId: section.workoutTypeId,
         movementUsages: [{
           ordinal: 1,

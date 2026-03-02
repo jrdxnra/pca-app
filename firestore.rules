@@ -18,8 +18,8 @@ service cloud.firestore {
       return getUserRole(accountId) == 'owner';
     }
 
-    function isTrainer(accountId) {
-      return getUserRole(accountId) in ['owner', 'trainer'];
+    function isCoach(accountId) {
+      return getUserRole(accountId) in ['owner', 'coach', 'trainer'];
     }
 
     function isMasterUser() {
@@ -46,7 +46,7 @@ service cloud.firestore {
       // Owners can create invitations
       allow create: if isAuthenticated() && isOwner(request.resource.data.accountId) && 
         request.resource.data.status == 'pending' &&
-        request.resource.data.role in ['trainer', 'client'];
+        request.resource.data.role in ['coach', 'client'];
       
       // Owners/invited users can update (accept/decline)
       allow update: if isAuthenticated() && (isOwner(resource.data.accountId) || resource.data.invitedEmail == request.auth.token.email);
@@ -61,30 +61,61 @@ service cloud.firestore {
       allow create: if false; // Only via backend provisioning
     }
 
-    // 4. Multi-Tenant Collections (The Silos)
-    match /{collectionName}/{docId} {
-      // Read: Trainers and clients can read their account's data
-      allow read: if isAuthenticated() && 
-        !(collectionName in ['accounts', 'memberships', 'users', 'googleCalendarTokens', 'invitations']) &&
-        (isMasterUser() || resource.data.ownerId == 'master' || isMember(resource.data.ownerId));
-      
-      // Write: Only trainers and owners can write
-      allow write: if isAuthenticated() && 
-        !(collectionName in ['accounts', 'memberships', 'users', 'googleCalendarTokens', 'invitations']) &&
-        (isMasterUser() || isTrainer(resource.data.ownerId) || isTrainer(request.resource.data.ownerId));
+    // 4. Configuration: Account-scoped settings (e.g., calendar config)
+    match /configuration/{configId} {
+      function getConfigOwner() {
+        return request.resource != null && request.resource.data.ownerId != null
+          ? request.resource.data.ownerId
+          : resource != null && resource.data.ownerId != null
+            ? resource.data.ownerId
+            : null;
+      }
+
+      allow read: if isAuthenticated() && (
+        resource == null ||
+        isMasterUser() ||
+        (resource != null && (resource.data.ownerId == 'master' || isMember(resource.data.ownerId)))
+      );
+
+      allow write: if isAuthenticated() && (
+        isMasterUser() ||
+        (resource != null && isCoach(resource.data.ownerId)) ||
+        (getConfigOwner() != null && isCoach(getConfigOwner()))
+      );
     }
 
-    // 5. User-Specific data (personal tokens, preferences)
+    // 5. Multi-Tenant Collections (The Silos)
+    match /{collectionName}/{docId} {
+      // Read: Coaches and clients can read their account's data
+      allow read: if isAuthenticated() && 
+        !(collectionName in ['accounts', 'memberships', 'users', 'googleCalendarTokens', 'invitations', 'configuration']) &&
+        (
+          resource == null ||
+          isMasterUser() ||
+          (resource != null && (resource.data.ownerId == 'master' || isMember(resource.data.ownerId)))
+        );
+      
+      // Write: Only coaches and owners can write
+      allow write: if isAuthenticated() && 
+        !(collectionName in ['accounts', 'memberships', 'users', 'googleCalendarTokens', 'invitations', 'configuration']) &&
+        (
+          isMasterUser() ||
+          (resource != null && isCoach(resource.data.ownerId)) ||
+          (request.resource != null && request.resource.data.ownerId != null && isCoach(request.resource.data.ownerId))
+        );
+    }
+
+    // 6. User-Specific data (personal tokens, preferences)
     match /users/{userId}/{allPaths=**} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // 6. Calendar Tokens: User-scoped, not globally readable
+    // 7. Calendar Tokens: User-scoped, not globally readable
     match /users/{userId}/googleCalendarTokens/{tokenId} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Legacy calendar tokens (for backward compatibility)
+    // 8. Legacy calendar tokens (for backward compatibility)
     match /googleCalendarTokens/{tokenId} {
       allow read, write: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }

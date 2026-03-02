@@ -7,10 +7,29 @@ import { useCalendarEvents } from '@/hooks/queries/useCalendarEvents';
 import { useClientStore } from '@/lib/stores/useClientStore';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import { getCalendarSyncConfig } from '@/lib/firebase/services/calendarConfig';
+
+const COLOR_HEX_MAP = {
+  blue:   { bar: '#3b82f6', text: '#2563eb' },
+  green:  { bar: '#22c55e', text: '#16a34a' },
+  purple: { bar: '#a21caf', text: '#7e22ce' },
+  orange: { bar: '#f97316', text: '#ea580c' },
+  red:    { bar: '#ef4444', text: '#dc2626' },
+  yellow: { bar: '#eab308', text: '#ca8a04' },
+  pink:   { bar: '#ec4899', text: '#db2777' },
+  indigo: { bar: '#6366f1', text: '#4f46e5' },
+  teal:   { bar: '#14b8a6', text: '#0d9488' },
+};
+
+type ColorKey = keyof typeof COLOR_HEX_MAP;
+
+const isColorKey = (value: string): value is ColorKey => value in COLOR_HEX_MAP;
+
+const ensureColor = (candidate: string | null | undefined, fallback: ColorKey): ColorKey =>
+  candidate && isColorKey(candidate) ? candidate : fallback;
 
 export default function AnalyticsPage() {
   const { clients, fetchClients } = useClientStore();
-  const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'year'>('month');
 
   // Get current month range
   const today = new Date();
@@ -31,55 +50,71 @@ export default function AnalyticsPage() {
     yearEnd
   );
 
+  // Fetch user-configured colors for coaching/class
+  const [coachingColor, setCoachingColor] = useState<ColorKey>('blue');
+  const [classColor, setClassColor] = useState<ColorKey>('green');
+  useEffect(() => {
+    getCalendarSyncConfig({ coachingColor: 'blue', classColor: 'green', coachingKeywords: [], classKeywords: [] })
+      .then(cfg => {
+        setCoachingColor(ensureColor(cfg.coachingColor, 'blue'));
+        setClassColor(ensureColor(cfg.classColor, 'green'));
+      });
+  }, []);
+
   // Fetch clients on mount
   useEffect(() => {
     fetchClients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Get the range to analyze based on selected period
-  const rangeStart = selectedPeriod === 'month' ? monthStart : yearStart;
-  const rangeEnd = selectedPeriod === 'month' ? monthEnd : yearEnd;
 
-  // Filter events for selected period
-  const periodEvents = calendarEvents.filter(event => {
+  // Filter events for current month and year
+  const monthEvents = calendarEvents.filter(event => {
     const eventDate = new Date(event.start.dateTime);
-    return eventDate >= rangeStart && eventDate <= rangeEnd;
+    return eventDate >= monthStart && eventDate <= monthEnd;
+  });
+  const yearEvents = calendarEvents.filter(event => {
+    const eventDate = new Date(event.start.dateTime);
+    return eventDate >= yearStart && eventDate <= yearEnd;
   });
 
-  // Count coaching and class sessions
-  const coachingSessions = periodEvents.filter(event => event.isCoachingSession).length;
-  const classSessions = periodEvents.filter(event => event.isClassSession).length;
+  // Count coaching and class sessions for current month
+  const coachingSessions = monthEvents.filter(event => event.isCoachingSession).length;
+  const classSessions = monthEvents.filter(event => event.isClassSession).length;
   const totalSessions = coachingSessions + classSessions;
 
-  // Count unique clients engaged in coaching sessions
+  // Count unique clients engaged in coaching/class sessions for current month
   const clientsWithSessions = new Set(
-    periodEvents
+    monthEvents
       .filter(event => event.isCoachingSession || event.isClassSession)
       .map(event => event.preConfiguredClient || event.linkedWorkoutId)
       .filter(Boolean)
   ).size;
 
-  // Count events by day of week for pattern analysis
-  const eventsByDayOfWeek = new Map<string, number>();
+  // Count coaching and class sessions by day of week for current month
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  dayNames.forEach(day => eventsByDayOfWeek.set(day, 0));
-
-  periodEvents.forEach(event => {
+  const sessionsByDay: { [day: string]: { coaching: number; classes: number } } = {};
+  dayNames.forEach(day => {
+    sessionsByDay[day] = { coaching: 0, classes: 0 };
+  });
+  monthEvents.forEach(event => {
     const eventDate = new Date(event.start.dateTime);
     const dayName = dayNames[eventDate.getDay()];
-    eventsByDayOfWeek.set(dayName, (eventsByDayOfWeek.get(dayName) || 0) + 1);
+    if (event.isCoachingSession) {
+      sessionsByDay[dayName].coaching += 1;
+    }
+    if (event.isClassSession) {
+      sessionsByDay[dayName].classes += 1;
+    }
   });
 
   // Count active clients (excluding deleted)
   const activeClients = clients.filter(client => !client.isDeleted).length;
 
   // Average sessions per active client
-  const avgSessionsPerClient = activeClients > 0 ? (totalSessions / activeClients).toFixed(1) : '0';
 
-  const periodLabel = selectedPeriod === 'month' 
-    ? format(today, 'MMMM yyyy')
-    : format(today, 'yyyy');
+  const avgSessionsPerClient = activeClients > 0 ? (totalSessions / activeClients).toFixed(1) : '0';
+  const periodLabel = format(today, 'MMMM yyyy');
 
   if (isLoading) {
     return (
@@ -94,55 +129,80 @@ export default function AnalyticsPage() {
     <AuthGuard>
       <div className="w-full px-4 pt-1 pb-8 space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold flex items-center gap-2">
-              <BarChart3 className="h-8 w-8" />
-              Analytics
-            </h1>
-            <p className="text-muted-foreground mt-1">Performance metrics and session data</p>
-          </div>
-
-          {/* Period Selector */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setSelectedPeriod('month')}
-              className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                selectedPeriod === 'month'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              This Month
-            </button>
-            <button
-              onClick={() => setSelectedPeriod('year')}
-              className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                selectedPeriod === 'year'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              This Year
-            </button>
-          </div>
+        <div className="flex items-center gap-2 mb-2">
+          <BarChart3 className="h-8 w-8" />
+          <h1 className="text-4xl font-bold">Analytics</h1>
         </div>
-
-        {/* Key Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Total Sessions */}
+        <p className="text-muted-foreground mb-4">Performance metrics and session data</p>
+        {/* Consolidated Top Row: This Week, This Month, This Year */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {/* This Week Total */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Sessions</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">This Week</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <p className="text-3xl font-bold">{totalSessions}</p>
+                <p className="text-3xl font-bold" style={{ color: (COLOR_HEX_MAP[coachingColor]?.text) || '#2563eb' }}>
+                  {(() => {
+                    const now = new Date();
+                    const weekStart = new Date(now);
+                    weekStart.setDate(now.getDate() - now.getDay());
+                    weekStart.setHours(0, 0, 0, 0);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekStart.getDate() + 6);
+                    weekEnd.setHours(23, 59, 59, 999);
+                    const weekEvents = calendarEvents.filter(event => {
+                      const eventDate = new Date(event.start.dateTime);
+                      return eventDate >= weekStart && eventDate <= weekEnd;
+                    });
+                    return weekEvents.filter(event => event.isCoachingSession || event.isClassSession).length;
+                  })()}
+                </p>
                 <Calendar className="h-5 w-5 text-muted-foreground" />
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Coaching & Class sessions in {periodLabel}</p>
+              <p className="text-xs text-muted-foreground mt-2">Sessions this week</p>
             </CardContent>
           </Card>
+          {/* This Month Total */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">This Month</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <p className="text-3xl font-bold" style={{ color: (COLOR_HEX_MAP[coachingColor]?.text) || '#2563eb' }}>
+                  {calendarEvents.filter(event => {
+                    const eventDate = new Date(event.start.dateTime);
+                    return eventDate >= monthStart && eventDate <= monthEnd && (event.isCoachingSession || event.isClassSession);
+                  }).length}
+                </p>
+                <Calendar className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Sessions this month</p>
+            </CardContent>
+          </Card>
+          {/* This Year Total */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">This Year</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <p className="text-3xl font-bold" style={{ color: (COLOR_HEX_MAP[classColor]?.text) || '#16a34a' }}>
+                  {calendarEvents.filter(event => {
+                    const eventDate = new Date(event.start.dateTime);
+                    return eventDate >= yearStart && eventDate <= yearEnd && (event.isCoachingSession || event.isClassSession);
+                  }).length}
+                </p>
+                <Calendar className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Sessions this year</p>
+            </CardContent>
+          </Card>
+        </div>
+        {/* Key Stats (no Total Sessions card) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-4">
 
           {/* Coaching Sessions */}
           <Card>
@@ -151,8 +211,8 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <p className="text-3xl font-bold text-blue-600">{coachingSessions}</p>
-                <TrendingUp className="h-5 w-5 text-blue-600" />
+                <p className="text-3xl font-bold" style={{ color: (COLOR_HEX_MAP[coachingColor]?.text) || '#2563eb' }}>{coachingSessions}</p>
+                <TrendingUp className="h-5 w-5" style={{ color: (COLOR_HEX_MAP[coachingColor]?.text) || '#2563eb' }} />
               </div>
               <p className="text-xs text-muted-foreground mt-2">Individual sessions</p>
             </CardContent>
@@ -165,8 +225,8 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <p className="text-3xl font-bold text-purple-600">{classSessions}</p>
-                <Users className="h-5 w-5 text-purple-600" />
+                <p className="text-3xl font-bold" style={{ color: (COLOR_HEX_MAP[classColor]?.text) || '#16a34a' }}>{classSessions}</p>
+                <Users className="h-5 w-5" style={{ color: (COLOR_HEX_MAP[classColor]?.text) || '#16a34a' }} />
               </div>
               <p className="text-xs text-muted-foreground mt-2">Group sessions</p>
             </CardContent>
@@ -179,8 +239,8 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <p className="text-3xl font-bold text-green-600">{avgSessionsPerClient}</p>
-                <BarChart3 className="h-5 w-5 text-green-600" />
+                <p className="text-3xl font-bold" style={{ color: '#16a34a' }}>{avgSessionsPerClient}</p>
+                <BarChart3 className="h-5 w-5" style={{ color: '#16a34a' }} />
               </div>
               <p className="text-xs text-muted-foreground mt-2">Per active client</p>
             </CardContent>
@@ -189,32 +249,113 @@ export default function AnalyticsPage() {
 
         {/* Session Breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Sessions by Day of Week */}
+          {/* Monthly Grouped Bar Chart for Last 6 Months */}
           <Card>
             <CardHeader>
-              <CardTitle>Sessions by Day of Week</CardTitle>
-              <CardDescription>Distribution of sessions throughout the week</CardDescription>
+              <CardTitle>Sessions by Month (Last 6 Months)</CardTitle>
+              <CardDescription>Coaching, Class, and Client counts per month</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {Array.from(eventsByDayOfWeek.entries()).map(([day, count]) => {
-                  const maxCount = Math.max(...Array.from(eventsByDayOfWeek.values()));
-                  const percentage = maxCount > 0 ? (count / maxCount) * 100 : 0;
-                  return (
-                    <div key={day} className="flex items-center gap-3">
-                      <p className="text-sm font-medium min-w-[70px]">{day}</p>
-                      <div className="flex-1 bg-muted rounded-full h-8 overflow-hidden relative">
-                        <div
-                          className="bg-primary h-full transition-all duration-300"
-                          style={{ width: `${percentage}%` }}
-                        />
-                        <p className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-foreground">
-                          {count}
-                        </p>
+              <div className="flex items-end gap-6 mb-6 h-64">
+                {(() => {
+                  type MonthBucket = {
+                    label: string;
+                    year: number;
+                    month: number;
+                    start: Date;
+                    end: Date;
+                  };
+
+                  const months: MonthBucket[] = [];
+                  const now = new Date();
+                  for (let i = 5; i >= 0; i--) {
+                    const firstOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    months.push({
+                      label: firstOfMonth.toLocaleString('default', { month: 'short' }),
+                      year: firstOfMonth.getFullYear(),
+                      month: firstOfMonth.getMonth(),
+                      start: new Date(firstOfMonth.getFullYear(), firstOfMonth.getMonth(), 1),
+                      end: new Date(firstOfMonth.getFullYear(), firstOfMonth.getMonth() + 1, 0, 23, 59, 59, 999)
+                    });
+                  }
+
+                  const bucketData = months.map(bucket => {
+                    const monthEvents = calendarEvents.filter(event => {
+                      const eventDate = new Date(event.start.dateTime);
+                      return eventDate >= bucket.start && eventDate <= bucket.end;
+                    });
+                    const coachingCount = monthEvents.filter(e => e.isCoachingSession).length;
+                    const classCount = monthEvents.filter(e => e.isClassSession).length;
+                    return {
+                      ...bucket,
+                      coachingCount,
+                      classCount,
+                      clientCount: activeClients
+                    };
+                  });
+
+                  const allCounts = bucketData.flatMap(data => [data.coachingCount, data.classCount, data.clientCount]);
+                  const globalMaxCount = Math.max(...allCounts, 1);
+
+                  return bucketData.map(({ label, year, coachingCount, classCount, clientCount }) => (
+                    <div key={label + year} className="flex flex-col items-center w-16">
+                      <div className="flex items-end gap-1 h-48 relative">
+                        {/* Coaching bar */}
+                        <div className="flex flex-col items-center">
+                          <span className="text-xs font-bold mb-1" style={{ color: (COLOR_HEX_MAP[coachingColor]?.text) || '#2563eb' }}>{coachingCount}</span>
+                          <div
+                            className="w-4 rounded-t transition-all duration-300"
+                            style={{
+                              height: `${Math.max((coachingCount / globalMaxCount) * 140, 0)}px`,
+                              backgroundColor: (COLOR_HEX_MAP[coachingColor]?.bar) || '#3b82f6'
+                            }}
+                            title={`Coaching: ${coachingCount}`}
+                          />
+                        </div>
+                        {/* Class bar */}
+                        <div className="flex flex-col items-center">
+                          <span className="text-xs font-bold mb-1" style={{ color: (COLOR_HEX_MAP[classColor]?.text) || '#16a34a' }}>{classCount}</span>
+                          <div
+                            className="w-4 rounded-t transition-all duration-300"
+                            style={{
+                              height: `${Math.max((classCount / globalMaxCount) * 140, 0)}px`,
+                              backgroundColor: (COLOR_HEX_MAP[classColor]?.bar) || '#22c55e'
+                            }}
+                            title={`Class: ${classCount}`}
+                          />
+                        </div>
+                        {/* Client bar (always green) */}
+                        <div className="flex flex-col items-center">
+                          <span className="text-xs font-bold mb-1" style={{ color: '#16a34a' }}>{clientCount}</span>
+                          <div
+                            className="w-4 rounded-t transition-all duration-300"
+                            style={{
+                              height: `${Math.max((clientCount / globalMaxCount) * 140, 0)}px`,
+                              backgroundColor: '#22c55e'
+                            }}
+                            title={`Clients: ${clientCount}`}
+                          />
+                        </div>
                       </div>
+                      <span className="mt-2 text-xs font-medium text-muted-foreground">{label}</span>
                     </div>
-                  );
-                })}
+                  ));
+                })()}
+              </div>
+              {/* Legend */}
+              <div className="flex gap-4 mt-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-4 h-4 rounded" style={{ backgroundColor: (COLOR_HEX_MAP[coachingColor]?.bar) || '#3b82f6' }} />
+                  <span className="text-xs">Coaching</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-4 h-4 rounded" style={{ backgroundColor: (COLOR_HEX_MAP[classColor]?.bar) || '#22c55e' }} />
+                  <span className="text-xs">Class</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-4 h-4 rounded" style={{ backgroundColor: '#22c55e' }} />
+                  <span className="text-xs">Clients</span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -248,29 +389,6 @@ export default function AnalyticsPage() {
           </Card>
         </div>
 
-        {/* Info Card */}
-        <Card className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
-          <CardHeader>
-            <CardTitle className="text-blue-900 dark:text-blue-100">About This Analytics</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-blue-800 dark:text-blue-200 space-y-2">
-            <p>
-              • <strong>Total Sessions:</strong> Count of all coaching and class sessions detected in your calendar
-            </p>
-            <p>
-              • <strong>Coaching Sessions:</strong> Individual one-on-one sessions identified by event detection keywords
-            </p>
-            <p>
-              • <strong>Class Sessions:</strong> Group sessions identified by class keywords
-            </p>
-            <p>
-              • <strong>Sessions by Day:</strong> Visual breakdown showing which days of the week are busiest
-            </p>
-            <p>
-              • <strong>Engagement Rate:</strong> Percentage of active clients who had at least one session in the period
-            </p>
-          </CardContent>
-        </Card>
       </div>
     </AuthGuard>
   );

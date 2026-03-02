@@ -78,14 +78,34 @@ export const createMembership = async (userId: string, accountId: string, role: 
 
 // Basic memoization for account resolution in a single session
 let sessionAccountId: string | null = null;
+let sessionAccountUid: string | null = null;
+let authListenerRegistered = false;
+
+const clearAccountResolutionCache = (): void => {
+    sessionAccountId = null;
+    sessionAccountUid = null;
+};
+
+const registerAuthListener = (): void => {
+    if (authListenerRegistered || typeof window === 'undefined') return;
+    authListenerRegistered = true;
+    auth.onAuthStateChanged((user) => {
+        if (!user) {
+            clearAccountResolutionCache();
+        }
+    });
+};
+
+export const resetAccountResolutionCache = (): void => {
+    clearAccountResolutionCache();
+};
 export const MASTER_UID = 'DuRPTA63JJOicaDVeF69XhpkTNh2';
 
 /**
  * Helper to get the current user's account ID
  */
 export const resolveActiveAccountId = async (): Promise<string | null> => {
-    // 1. Check session cache
-    if (sessionAccountId) return sessionAccountId;
+    registerAuthListener();
 
     // Small helper to wait for auth state if it's currently null
     const getAuthUser = (): Promise<any> => {
@@ -114,10 +134,19 @@ export const resolveActiveAccountId = async (): Promise<string | null> => {
 
     console.log(`[resolveActiveAccountId] Resolving for UID: ${user.uid}`);
 
+    if (sessionAccountId && sessionAccountUid === user.uid) {
+        return sessionAccountId;
+    }
+
+    if (sessionAccountUid && sessionAccountUid !== user.uid) {
+        clearAccountResolutionCache();
+    }
+
     // 2. Short-circuit for Master User to ensure stability
     if (user.uid === MASTER_UID) {
         console.log('[resolveActiveAccountId] Master user detected, resolving to "master"');
         sessionAccountId = 'master';
+        sessionAccountUid = user.uid;
         return 'master';
     }
 
@@ -126,6 +155,7 @@ export const resolveActiveAccountId = async (): Promise<string | null> => {
         if (membership?.accountId) {
             console.log(`[resolveActiveAccountId] Resolved to account: ${membership.accountId}`);
             sessionAccountId = membership.accountId;
+            sessionAccountUid = user.uid;
             return membership.accountId;
         }
     } catch (error) {

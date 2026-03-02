@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirebaseAdminApp, getAdminDb } from '@/lib/firebase/admin';
 
-// Initialize Firebase Admin
-if (!getApps().length) {
-    initializeApp({
-        credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '{}')),
-    });
-}
-
-const db = getFirestore();
+const adminApp = getFirebaseAdminApp();
+const auth = getAuth(adminApp);
+const db = getAdminDb();
 
 /**
  * POST /api/admin/invitations
@@ -24,11 +18,12 @@ export async function POST(request: NextRequest) {
         }
 
         const token = authHeader.split('Bearer ')[1];
-        const decodedToken = await getAuth().verifyIdToken(token);
+        const decodedToken = await auth.verifyIdToken(token);
         const userId = decodedToken.uid;
 
         const body = await request.json();
-        const { invitedEmail, role } = body;
+        const { invitedEmail, role: rawRole } = body;
+        const role = rawRole === 'trainer' ? 'coach' : rawRole;
 
         if (!invitedEmail || !role) {
             return NextResponse.json(
@@ -37,7 +32,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (!['trainer', 'client'].includes(role)) {
+        if (!['coach', 'client'].includes(role)) {
             return NextResponse.json(
                 { error: 'Invalid role' },
                 { status: 400 }
@@ -117,7 +112,7 @@ export async function GET(request: NextRequest) {
         }
 
         const token = authHeader.split('Bearer ')[1];
-        const decodedToken = await getAuth().verifyIdToken(token);
+        const decodedToken = await auth.verifyIdToken(token);
         const userId = decodedToken.uid;
 
         // Verify user is account owner

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PC+ Role-Based Access Overview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-start: #3c2aff;
+            --bg-end: #1f164d;
+            --card-bg: #140f2b;
+            --accent: #43ffd2;
+            --accent-soft: rgba(67, 255, 210, 0.2);
+            --danger: #ff6b81;
+            --danger-soft: rgba(255, 107, 129, 0.15);
+            --text-strong: #f7f6ff;
+            --text-muted: #bebce7;
+            --grid-line: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', 'Space Grotesk', sans-serif;
+            min-height: 100vh;
+            background: radial-gradient(circle at 20% 20%, rgba(67, 255, 210, 0.15), transparent 45%),
+                        radial-gradient(circle at 80% 0%, rgba(255, 255, 255, 0.07), transparent 55%),
+                        linear-gradient(135deg, var(--bg-start), var(--bg-end));
+            color: var(--text-strong);
+            padding: 48px 5vw 80px;
+        }
+
+        .page-title {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            padding: 6px 16px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(2rem, 4vw, 3.4rem);
+            margin: 12px 0 8px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1rem;
+            max-width: 720px;
+            margin: 0 auto;
+            line-height: 1.5;
+        }
+
+        .matrix-card {
+            margin: 48px auto 0;
+            background: var(--card-bg);
+            border-radius: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 32px;
+            box-shadow: 0 25px 65px rgba(10, 5, 35, 0.55);
+            max-width: 1200px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 24px;
+        }
+
+        thead th {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            padding: 18px 16px;
+            border-bottom: 1px solid var(--grid-line);
+        }
+
+        thead th:first-child {
+            text-align: left;
+        }
+
+        tbody td,
+        tbody th {
+            padding: 16px;
+            border-bottom: 1px solid var(--grid-line);
+        }
+
+        tbody th {
+            text-align: left;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-strong);
+        }
+
+        tbody td {
+            text-align: center;
+        }
+
+        tbody tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .role-card {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .role-card span {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+
+        .badge.positive {
+            color: var(--accent);
+            background: var(--accent-soft);
+        }
+
+        .badge.negative {
+            color: var(--danger);
+            background: var(--danger-soft);
+        }
+
+        .legend {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-top: 24px;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .callouts {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .callout {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--grid-line);
+            border-radius: 16px;
+            padding: 14px 18px;
+            font-size: 0.92rem;
+            line-height: 1.4;
+        }
+
+        .callout strong {
+            display: block;
+            color: var(--text-strong);
+            font-family: 'Space Grotesk', sans-serif;
+            margin-bottom: 4px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+
+        .legend-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+
+        .legend-dot.grant {
+            background: var(--accent);
+        }
+
+        .legend-dot.partial {
+            background: #ffb347;
+        }
+
+        .legend-dot.deny {
+            background: var(--danger);
+        }
+
+        .partial {
+            color: #ffb347;
+        }
+
+        @media (max-width: 960px) {
+            thead th,
+            tbody td,
+            tbody th {
+                padding: 12px;
+            }
+
+            h1 {
+                font-size: 2.2rem;
+            }
+        }
+
+        @media (max-width: 720px) {
+            table,
+            thead,
+            tbody,
+            th,
+            td,
+            tr {
+                display: block;
+            }
+
+            thead {
+                display: none;
+            }
+
+            tbody tr {
+                margin-bottom: 18px;
+                border: 1px solid var(--grid-line);
+                border-radius: 18px;
+                padding: 12px 0;
+            }
+
+            tbody th {
+                padding: 0 16px 12px;
+            }
+
+            tbody td {
+                padding: 8px 16px;
+                text-align: left;
+            }
+
+            tbody td::before {
+                content: attr(data-label);
+                display: block;
+                font-size: 0.8rem;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                margin-bottom: 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="page-title">
+        <span class="pill">PC+ Access Control</span>
+        <h1>Role-Based Access Matrix</h1>
+        <p class="subtitle">
+            This matrix reflects the current RBAC plan: every coach owns their own account, clients stay scoped to that
+            account, and the master/dev user keeps global oversight. Use this to verify that permissions align with the
+            invite + provisioning flow we just locked in.
+        </p>
+    </header>
+
+    <section class="matrix-card">
+        <div class="legend">
+            <div class="legend-item"><span class="legend-dot grant"></span>Full Access</div>
+            <div class="legend-item"><span class="legend-dot partial"></span>Scoped Access</div>
+            <div class="legend-item"><span class="legend-dot deny"></span>Not Permitted</div>
+        </div>
+
+        <div class="callouts">
+            <div class="callout">
+                <strong>Dev Environment</strong>
+                Master sandbox tied to your global UID. Only you can reach it for testing before promoting changes to live coaches.
+            </div>
+            <div class="callout">
+                <strong>Production Workspace</strong>
+                Live data siloed per account. Account owners (coaches) and their teams operate here without seeing other accounts.
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Permission</th>
+                    <th>
+                        <div class="role-card">
+                            Master Admin
+                            <span>(Dev / Global UID)</span>
+                        </div>
+                    </th>
+                    <th>
+                        <div class="role-card">
+                            Account Owner
+                            <span>(Coach & Account)</span>
+                        </div>
+                    </th>
+                    <th>
+                        <div class="role-card">
+                            Coach
+                            <span>(Within Owner Account)</span>
+                        </div>
+                    </th>
+                    <th>
+                        <div class="role-card">
+                            Client
+                            <span>(End User)</span>
+                        </div>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>Access Dev Environment</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge negative">✖ No</span></td>
+                    <td data-label="Client"><span class="badge negative">✖ No</span></td>
+                </tr>
+                <tr>
+                    <th>Access Production Workspace</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Own Account</span></td>
+                    <td data-label="Coach"><span class="badge positive">✔ Own Account</span></td>
+                    <td data-label="Client"><span class="badge partial">◐ Self Only</span></td>
+                </tr>
+                <tr>
+                    <th>View/Manage All Accounts</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge partial">◐ Own Account</span></td>
+                    <td data-label="Client"><span class="badge negative">✖ No</span></td>
+                </tr>
+                <tr>
+                    <th>Manage Shared Catalog (Movements & Types)</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge positive">✔ Own Copy</span></td>
+                    <td data-label="Client"><span class="badge negative">✖ No</span></td>
+                </tr>
+                <tr>
+                    <th>Invite / Remove Coaches</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge negative">✖ No</span></td>
+                    <td data-label="Client"><span class="badge negative">✖ No</span></td>
+                </tr>
+                <tr>
+                    <th>Invite / Remove Clients</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge positive">✔ Own Clients</span></td>
+                    <td data-label="Client"><span class="badge negative">✖ No</span></td>
+                </tr>
+                <tr>
+                    <th>Create / Edit Programs & Workouts</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge positive">✔ Full (Account)</span></td>
+                    <td data-label="Client"><span class="badge partial">◐ Log Only</span></td>
+                </tr>
+                <tr>
+                    <th>View All Client Progress & Logs</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge partial">◐ Own Clients</span></td>
+                    <td data-label="Client"><span class="badge partial">◐ Self</span></td>
+                </tr>
+                <tr>
+                    <th>Manage Billing & Account Settings</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge negative">✖ No</span></td>
+                    <td data-label="Client"><span class="badge negative">✖ No</span></td>
+                </tr>
+                <tr>
+                    <th>Manage Calendar Sync & Integrations</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge partial">◐ Own Calendar</span></td>
+                    <td data-label="Client"><span class="badge negative">✖ No</span></td>
+                </tr>
+                <tr>
+                    <th>Run Imports / Backfills / Exports</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge negative">✖ No</span></td>
+                    <td data-label="Client"><span class="badge negative">✖ No</span></td>
+                </tr>
+                <tr>
+                    <th>Support Escalations (override rules)</th>
+                    <td data-label="Master Admin"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Account Owner"><span class="badge positive">✔ Full</span></td>
+                    <td data-label="Coach"><span class="badge negative">✖ No</span></td>
+                    <td data-label="Client"><span class="badge negative">✖ No</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+</body>
+</html>

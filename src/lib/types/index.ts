@@ -3,7 +3,7 @@ import type { Timestamp } from 'firebase/firestore';
 export interface Account {
   id: string;
   name: string;
-  ownerId: string; // The primary user who owns the account (e.g., the trainer)
+  ownerId: string; // The primary user who owns the account (e.g., the coach)
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -12,7 +12,7 @@ export interface Membership {
   id: string;
   userId: string;
   accountId: string;
-  role: 'owner' | 'trainer' | 'client';
+  role: 'owner' | 'coach' | 'client';
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -21,7 +21,7 @@ export interface Invitation {
   id: string;
   accountId: string;
   invitedEmail: string;
-  role: 'trainer' | 'client';
+  role: 'coach' | 'client';
   status: 'pending' | 'accepted' | 'declined';
   invitedBy: string; // UID of the account owner
   acceptedAt?: Timestamp;
@@ -51,7 +51,7 @@ export interface Client {
   // Session tracking
   targetSessionsPerWeek?: number; // How many sessions client should do per week (baseline for billing)
   sessionCounts?: SessionCounts; // Actual session counts
-  ownerId?: string; // User ID of the trainer who owns this client
+  ownerId?: string; // User ID of the coach who owns this client
 }
 
 export interface EventGoal {
@@ -216,7 +216,7 @@ export interface WorkoutTemplate {
   rounds: WorkoutRound[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  ownerId?: string; // User ID of the trainer who owns this template
+  ownerId?: string; // User ID of the coach who owns this template
 }
 
 // Coachella-style Program Structure
@@ -237,7 +237,7 @@ export interface Program {
     focus: string;
     color: string;
   }>;
-  ownerId?: string; // User ID of the trainer who owns this program
+  ownerId?: string; // User ID of the coach who owns this program
 }
 
 export interface ProgramWeek {
@@ -320,7 +320,7 @@ export interface ScheduledWorkout {
   status: 'scheduled' | 'completed' | 'skipped';
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  ownerId?: string; // User ID of the trainer who owns this scheduled workout
+  ownerId?: string; // User ID of the coach who owns this scheduled workout
 }
 
 // Client Program with Period and Template Assignment
@@ -396,7 +396,7 @@ export interface ClientWorkout {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string;
-  ownerId?: string; // User ID of the trainer who owns this workout
+  ownerId?: string; // User ID of the coach who owns this workout
 }
 
 export interface ClientWorkoutWarmup {
@@ -466,7 +466,7 @@ export interface WeekTemplate {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy?: string;
-  ownerId?: string; // User ID of the trainer who owns this template
+  ownerId?: string; // User ID of the coach who owns this template
 }
 
 // RPE Calculation Types
@@ -543,7 +543,7 @@ export interface WorkoutStructureTemplate {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy?: string;
-  ownerId?: string; // User ID of the trainer who owns this template
+  ownerId?: string; // User ID of the coach who owns this template
 }
 
 export interface WorkoutType {

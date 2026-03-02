@@ -7,9 +7,11 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: false,
   },
-  // Use webpack instead of Turbopack in development (to reduce memory usage)
-  // Add empty turbopack config to silence the warning
-  turbopack: {},
+  experimental: {
+    // Disable build worker to avoid SIGTERM exits inside constrained dev containers
+    webpackBuildWorker: false,
+  },
+  // Do not opt into Turbopack; stick with webpack which is more stable in CI
   // Treat googleapis as external to avoid bundling issues
   serverExternalPackages: ['googleapis', 'google-auth-library', 'firebase-admin', 'puppeteer'],
 };

@@ -34,7 +34,7 @@ export default function AdminPage() {
     const [success, setSuccess] = useState('');
     const [showInviteForm, setShowInviteForm] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteRole, setInviteRole] = useState<'trainer' | 'client'>('trainer');
+    const [inviteRole, setInviteRole] = useState<'coach' | 'client'>('coach');
     const [inviting, setInviting] = useState(false);
 
     // Check if user is owner
@@ -259,9 +259,9 @@ export default function AdminPage() {
                             <select
                                 id="role"
                                 value={inviteRole}
-                                onChange={(e) => setInviteRole(e.target.value as 'trainer' | 'client')}
+                                onChange={(e) => setInviteRole(e.target.value as 'coach' | 'client')}
                             >
-                                <option value="trainer">Trainer</option>
+                                <option value="coach">Coach</option>
                                 <option value="client">Client</option>
                             </select>
                         </div>

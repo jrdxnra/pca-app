@@ -10,16 +10,17 @@ import {
     deleteDoc,
     Timestamp
 } from 'firebase/firestore';
-import { getDb } from '../config';
+import { auth, getDb } from '../config';
 import { Invitation } from '../../types';
 import { resolveActiveAccountId } from './memberships';
+import { provisionNewAccount } from './cloning';
 
 const COLLECTION_NAME = 'invitations';
 
 /**
  * Send invitation to a coach to join the account
  */
-export const sendInvitation = async (invitedEmail: string, role: 'trainer' | 'client', invitedBy: string): Promise<string> => {
+export const sendInvitation = async (invitedEmail: string, role: 'coach' | 'client', invitedBy: string): Promise<string> => {
     try {
         const accountId = await resolveActiveAccountId();
         if (!accountId) throw new Error('Unauthorized');
@@ -101,12 +102,23 @@ export const acceptInvitation = async (invitationId: string, userId: string): Pr
         if (!invitationSnap.exists()) throw new Error('Invitation not found');
 
         const invitation = invitationSnap.data() as Invitation;
+        const invitationRole = String(invitation.role);
+        // Legacy data sometimes stored "trainer"; treat it the same as "coach"
+        const isCoachLikeRole = invitationRole === 'coach' || invitationRole === 'trainer';
 
-        // Import createMembership to avoid circular dependency at top level
-        const { createMembership } = await import('./memberships');
+        if (isCoachLikeRole) {
+            const coachName =
+                auth.currentUser?.displayName ||
+                auth.currentUser?.email?.split('@')[0] ||
+                invitation.invitedEmail.split('@')[0] ||
+                'Coach';
 
-        // Create membership
-        await createMembership(userId, invitation.accountId, invitation.role);
+            await provisionNewAccount(userId, coachName);
+        } else {
+            // Import createMembership to avoid circular dependency at top level
+            const { createMembership } = await import('./memberships');
+            await createMembership(userId, invitation.accountId, invitation.role);
+        }
 
         // Mark invitation as accepted
         await updateDoc(invitationRef, {

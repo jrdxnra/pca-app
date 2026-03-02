@@ -400,34 +400,36 @@ export default function ClientsPage() {
       )}
 
       {/* Edit Client Dialog */}
-      <AddClientDialog
-        client={editingClient || null}
-        open={!!editingClient && editDialogOpen}
-        onOpenChange={(open) => {
-          setEditDialogOpen(open);
-          if (!open) {
-            setEditingClient(null);
-          }
-        }}
-        periods={periods || []}
-        clientPrograms={clientPrograms}
-        onClientRefresh={async () => {
-          // Refetch all clients to get updated trainingPhases and eventGoals
-          await fetchClients();
-          // Update the local editingClient with the refreshed data from the store
-          if (editingClient) {
-            const refreshedClient = clients.find(c => c.id === editingClient.id);
-            if (refreshedClient) {
-              setEditingClient(refreshedClient);
+      {editingClient && (
+        <AddClientDialog
+          client={editingClient}
+          open={editDialogOpen}
+          onOpenChange={(open) => {
+            setEditDialogOpen(open);
+            if (!open) {
+              setEditingClient(null);
             }
-          }
-        }}
-        onClientProgramsRefresh={async () => {
-          if (editingClient) {
-            await fetchClientPrograms(editingClient.id);
-          }
-        }}
-      />
+          }}
+          periods={periods || []}
+          clientPrograms={clientPrograms}
+          onClientRefresh={async () => {
+            // Refetch all clients to get updated trainingPhases and eventGoals
+            await fetchClients();
+            // Update the local editingClient with the refreshed data from the store
+            if (editingClient) {
+              const refreshedClient = clients.find(c => c.id === editingClient.id);
+              if (refreshedClient) {
+                setEditingClient(refreshedClient);
+              }
+            }
+          }}
+          onClientProgramsRefresh={async () => {
+            if (editingClient) {
+              await fetchClientPrograms(editingClient.id);
+            }
+          }}
+        />
+      )}
 
       {/* Period Assignment Dialog - matches schedule page props exactly */}
       {periodDialogClient && (

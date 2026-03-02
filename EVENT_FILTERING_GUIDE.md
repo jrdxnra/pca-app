@@ -215,7 +215,7 @@ Currently not recommended, but you can:
 
 **Cover Variations:**
 - ✅ "Group Class", "Group Training", "Group Session"
-- Covers different ways trainers name group events
+- Covers different ways coaches name group events
 
 **Use Abbreviations:**
 - ✅ "PT" for Personal Training

@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirebaseAdminApp, getAdminDb } from '@/lib/firebase/admin';
 
-// Initialize Firebase Admin
-if (!getApps().length) {
-    initializeApp({
-        credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '{}')),
-    });
-}
-
-const db = getFirestore();
+const adminApp = getFirebaseAdminApp();
+const auth = getAuth(adminApp);
+const db = getAdminDb();
 
 /**
  * POST /api/admin/coaches
@@ -24,7 +18,7 @@ export async function GET(request: NextRequest) {
         }
 
         const token = authHeader.split('Bearer ')[1];
-        const decodedToken = await getAuth().verifyIdToken(token);
+        const decodedToken = await auth.verifyIdToken(token);
         const userId = decodedToken.uid;
 
         // Get user's membership
@@ -47,21 +41,24 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Get all trainers in the account
-        const coachesQuery = db.collection('memberships').where('accountId', '==', accountId).where('role', '==', 'trainer');
+        // Get all coaches in the account (legacy documents may still use "trainer")
+        const coachesQuery = db.collection('memberships')
+            .where('accountId', '==', accountId)
+            .where('role', 'in', ['coach', 'trainer']);
         const coachSnaps = await coachesQuery.get();
 
         const coaches = [];
         for (const doc of coachSnaps.docs) {
             const coachData = doc.data();
-            const userRecord = await getAuth().getUser(coachData.userId);
+            const userRecord = await auth.getUser(coachData.userId);
+            const normalizedRole = coachData.role === 'trainer' ? 'coach' : coachData.role;
             
             coaches.push({
                 id: doc.id,
                 userId: coachData.userId,
                 email: userRecord.email,
                 displayName: userRecord.displayName,
-                role: coachData.role,
+                role: normalizedRole,
                 createdAt: coachData.createdAt.toDate(),
                 updatedAt: coachData.updatedAt.toDate(),
             });
@@ -89,7 +86,7 @@ export async function DELETE(request: NextRequest) {
         }
 
         const token = authHeader.split('Bearer ')[1];
-        const decodedToken = await getAuth().verifyIdToken(token);
+        const decodedToken = await auth.verifyIdToken(token);
         const userId = decodedToken.uid;
 
         const membershipId = request.nextUrl.searchParams.get('membershipId');

@@ -25,6 +25,7 @@ import {
   WorkoutStructureTemplate
 } from '@/lib/types';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
+import { resolveWorkoutType, resolveWorkoutTypeColor } from '@/lib/workouts/workoutTypeUtils';
 
 // Helper function to abbreviate workout type names
 function abbreviateWorkoutType(name: string): string {
@@ -109,7 +110,7 @@ function getTemplateAbbreviationList(template: WorkoutStructureTemplate, workout
   return template.sections
     .sort((a, b) => a.order - b.order)
     .map(section => {
-      const workoutType = workoutTypes.find(wt => wt.id === section.workoutTypeId);
+      const workoutType = resolveWorkoutType(workoutTypes, section.workoutTypeId, section.workoutTypeName);
       return {
         abbrev: abbreviateWorkoutType(section.workoutTypeName),
         color: workoutType?.color || '#6b7280'
@@ -1002,7 +1003,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           ordinal: index + 1,
           sets: 1,
           sectionName: section.workoutTypeName,
-          sectionColor: workoutTypes.find(wt => wt.id === section.workoutTypeId)?.color,
+          sectionColor: resolveWorkoutTypeColor(workoutTypes, section.workoutTypeId, section.workoutTypeName),
           workoutTypeId: section.workoutTypeId,
           movementUsages: [{
             ordinal: 1,
@@ -1744,7 +1745,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   if (isInline) {
     // Helper to update round section name/type
     const updateRoundSection = (roundIndex: number, workoutTypeId: string) => {
-      const workoutType = workoutTypes.find(wt => wt.id === workoutTypeId);
+      const workoutType = resolveWorkoutType(workoutTypes, workoutTypeId);
       if (!workoutType) return;
 
       const updated = [...rounds];

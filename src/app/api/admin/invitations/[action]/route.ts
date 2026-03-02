@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { ensureCoachAccountProvisioned } from '@/lib/firebase/admin/provision';
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -74,7 +75,29 @@ export async function POST(
                 );
             }
 
-            // Create membership
+            if (invitation.role === 'coach' || invitation.role === 'trainer') {
+                const coachName = decodedToken.name || invitation.invitedEmail?.split('@')[0] || 'Coach';
+                const provisionResult = await ensureCoachAccountProvisioned({
+                    userId,
+                    displayName: coachName,
+                    email: invitation.invitedEmail,
+                });
+
+                await db.collection('invitations').doc(invitationId).update({
+                    status: 'accepted',
+                    acceptedAt: new Date(),
+                    updatedAt: new Date(),
+                    linkedAccountId: provisionResult.accountId,
+                });
+
+                return NextResponse.json({
+                    success: true,
+                    message: 'Coach account provisioned',
+                    accountId: provisionResult.accountId,
+                });
+            }
+
+            // Non-coach invitations stay within the inviter's account
             const membershipId = `${invitation.accountId}_${userId}`;
             await db.collection('memberships').doc(membershipId).set({
                 userId,
@@ -84,7 +107,6 @@ export async function POST(
                 updatedAt: new Date(),
             });
 
-            // Mark invitation as accepted
             await db.collection('invitations').doc(invitationId).update({
                 status: 'accepted',
                 acceptedAt: new Date(),

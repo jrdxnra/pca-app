@@ -1,9 +1,10 @@
 # Use the official Node.js runtime as base image
 FROM node:20-alpine AS base
+# Install glibc compatibility + bash once so all stages inherit it
+RUN apk add --no-cache libc6-compat bash
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Copy package files

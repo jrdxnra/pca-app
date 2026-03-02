@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight, Edit, Trash2, GripVertical } from 'lucide-re
 import { WorkoutStructureTemplate } from '@/lib/types';
 import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
 import { WorkoutTypeConfigurationForm } from './WorkoutTypeConfigurationForm';
+import { resolveWorkoutTypeColor } from '@/lib/workouts/workoutTypeUtils';
 
 interface WorkoutStructureTemplateCardProps {
   template: WorkoutStructureTemplate;
@@ -38,9 +39,8 @@ export function WorkoutStructureTemplateCard({
     setExpandedSections(newExpanded);
   };
 
-  const getWorkoutTypeColor = (workoutTypeId: string) => {
-    const workoutType = workoutTypes.find(wt => wt.id === workoutTypeId);
-    return workoutType?.color || '#6b7280';
+  const getWorkoutTypeColor = (workoutTypeId?: string, workoutTypeName?: string) => {
+    return resolveWorkoutTypeColor(workoutTypes, workoutTypeId, workoutTypeName);
   };
 
   const sortedSections = [...template.sections].sort((a, b) => a.order - b.order);
@@ -77,7 +77,6 @@ export function WorkoutStructureTemplateCard({
         <div className="space-y-2">
           {sortedSections.map((section, index) => {
             const isExpanded = expandedSections.has(index);
-            const workoutType = workoutTypes.find(wt => wt.id === section.workoutTypeId);
             
             return (
               <div key={`${section.workoutTypeId}-${index}`} className="border rounded-lg">
@@ -85,7 +84,7 @@ export function WorkoutStructureTemplateCard({
                   <div className="flex items-center gap-3">
                     <GripVertical className="h-4 w-4 text-gray-400 cursor-grab" />
                     <Badge 
-                      style={{ backgroundColor: getWorkoutTypeColor(section.workoutTypeId) }}
+                      style={{ backgroundColor: getWorkoutTypeColor(section.workoutTypeId, section.workoutTypeName) }}
                       className="text-white font-medium"
                     >
                       {section.workoutTypeName}

@@ -134,10 +134,10 @@ export default function DashboardPage() {
   currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
   currentWeekEnd.setHours(23, 59, 59, 999);
 
-  // Count this week's coaching sessions
+  // Count this week's coaching sessions (coaching only, not classes)
   const weeksSessions = calendarEvents.filter(event => {
     const eventDate = new Date(event.start.dateTime);
-    return eventDate >= currentWeekStart && eventDate <= currentWeekEnd && (event.isCoachingSession || event.isClassSession);
+    return eventDate >= currentWeekStart && eventDate <= currentWeekEnd && event.isCoachingSession;
   }).length;
 
   // Get workout category names from configuration
@@ -241,12 +241,12 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* Week's Total Sessions */}
+              {/* Week's Coaching Sessions */}
               <Card className="py-1 gap-0" style={{ minHeight: '88px', display: 'flex', flexDirection: 'column' }}>
                 <CardContent className="px-2 pt-0 pb-2" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
                   <div className="flex items-center justify-between w-full">
                     <div>
-                      <p className="text-xs text-muted-foreground">Week&apos;s Total Sessions</p>
+                      <p className="text-xs text-muted-foreground">Week&apos;s Coaching Sessions</p>
                       <p className="text-2xl font-bold">{weeksSessions}</p>
                     </div>
                     <Calendar className="h-5 w-5 icon-schedule" />

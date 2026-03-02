@@ -29,6 +29,7 @@ import { Plus, X, ChevronDown, ChevronRight, GripVertical } from 'lucide-react';
 import { WorkoutStructureTemplate, WorkoutStructureTemplateSection } from '@/lib/types';
 import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
 import { WorkoutTypeConfigurationForm } from './WorkoutTypeConfigurationForm';
+import { resolveWorkoutType } from '@/lib/workouts/workoutTypeUtils';
 
 const templateSchema = z.object({
   name: z.string().min(1, 'Template name is required').max(100, 'Name must be less than 100 characters'),
@@ -212,7 +213,7 @@ export function WorkoutStructureTemplateDialog({
                   <div className="space-y-3">
                     {sections.map((section, index) => {
                       const isExpanded = expandedSections.has(index);
-                      const workoutType = workoutTypes.find(wt => wt.id === section.workoutTypeId);
+                      const workoutType = resolveWorkoutType(workoutTypes, section.workoutTypeId, section.workoutTypeName);
                       
                       return (
                         <div key={`${section.workoutTypeId}-${index}`} className="border rounded-lg">
