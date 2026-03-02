@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,11 +20,12 @@ import {
 
 // Import hooks and types
 import { useClients } from '@/hooks/queries/useClients';
+import { useSetupHubProgress } from '@/hooks/useSetupHubProgress';
 import { useCalendarEvents } from '@/hooks/queries/useCalendarEvents';
 import { useProgramStore } from '@/lib/stores/useProgramStore';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
-import { ClientWorkout, ClientProgramPeriod } from '@/lib/types';
+import { ClientWorkout } from '@/lib/types';
 import { TwoColumnWeekView } from '@/components/programs/TwoColumnWeekView';
 import { fetchWorkoutsByDateRange, fetchAllWorkoutsByDateRange } from '@/lib/firebase/services/clientWorkouts';
 import { Timestamp } from 'firebase/firestore';
@@ -39,6 +40,7 @@ import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBui
 
 // Mutations
 import { useUpdateCalendarEvent, useDeleteCalendarEvent } from '@/hooks/mutations/useCalendarMutations';
+import { SetupHubDialog } from '@/components/onboarding/SetupHubDialog';
 
 export default function SchedulePage() {
     const router = useRouter();
@@ -52,7 +54,10 @@ export default function SchedulePage() {
     const navigateWeek = useProgramStore(state => state.navigateWeek);
 
     // Calendar store for mutations
-    const linkToWorkout = useCalendarStore(state => state.linkToWorkout);
+    const { isGoogleCalendarConnected, selectedCalendarId } = useCalendarStore(state => ({
+        isGoogleCalendarConnected: state.isGoogleCalendarConnected,
+        selectedCalendarId: state.config.selectedCalendarId,
+    }));
 
     // Mutations
     const updateCalendarEventMutation = useUpdateCalendarEvent();
@@ -217,6 +222,47 @@ export default function SchedulePage() {
         setQuickWorkoutDialogOpen(true);
     };
 
+    const calendarReady = Boolean(isGoogleCalendarConnected && selectedCalendarId);
+    const hasClients = clients.length > 0;
+    const { status: onboardingStatus, isLoading: onboardingLoading, needsSetup } = useSetupHubProgress(calendarReady, hasClients);
+
+    const [showSetupHub, setShowSetupHub] = useState(false);
+    const [hubDismissed, setHubDismissed] = useState(false);
+    const lastStatusRef = useRef<string>('init');
+
+    useEffect(() => {
+        const statusKey = `${calendarReady ? 1 : 0}-${hasClients ? 1 : 0}-${onboardingStatus?.calendarComplete ? 1 : 0}-${onboardingStatus?.clientsComplete ? 1 : 0}`;
+        if (statusKey !== lastStatusRef.current) {
+            lastStatusRef.current = statusKey;
+            setHubDismissed(false);
+        }
+    }, [calendarReady, hasClients, onboardingStatus]);
+
+    useEffect(() => {
+        if (needsSetup === undefined || onboardingLoading || clientsLoading) {
+            return;
+        }
+
+        if (needsSetup) {
+            if (!hubDismissed) {
+                setShowSetupHub(true);
+            }
+        } else {
+            setShowSetupHub(false);
+            setHubDismissed(false);
+        }
+    }, [needsSetup, onboardingLoading, clientsLoading, hubDismissed]);
+
+    const handleSetupOpenChange = (open: boolean) => {
+        if (!open) {
+            setShowSetupHub(false);
+            setHubDismissed(true);
+        } else {
+            setHubDismissed(false);
+            setShowSetupHub(true);
+        }
+    };
+
     return (
         <div className="flex flex-col h-screen bg-gray-50">
             {/* Header */}
@@ -334,6 +380,16 @@ export default function SchedulePage() {
                     </div>
                 </div>
             )}
+
+            <SetupHubDialog
+                open={showSetupHub}
+                onOpenChange={handleSetupOpenChange}
+                calendarReady={calendarReady}
+                hasClients={hasClients}
+                onConnectCalendar={() => router.push('/configure?tab=app')}
+                onAddClients={() => router.push('/clients')}
+                selectedCalendarLabel={selectedCalendarId || undefined}
+            />
 
             {/* Batch 1: Event Action Dialog */}
             {selectedEventForAction && (

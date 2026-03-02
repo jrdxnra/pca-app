@@ -1,9 +1,10 @@
 "use client";
 
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,9 +41,11 @@ import {
 } from 'lucide-react';
 import { WorkoutStructureTemplateCard } from '@/components/configure/WorkoutStructureTemplateCard';
 import { WorkoutStructureTemplateDialog } from '@/components/configure/WorkoutStructureTemplateDialog';
+import { SetupHubFlow } from '@/components/onboarding/SetupHubFlow';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { useClientStore } from '@/lib/stores/useClientStore';
+import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { WorkoutStructureTemplate } from '@/lib/types';
 import { TestEventInput, LocationAbbreviation } from '@/lib/google-calendar/types';
 import { initiateGoogleAuth, checkGoogleCalendarAuth, disconnectGoogleCalendar } from '@/lib/google-calendar/api-client';
@@ -72,6 +75,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { toastSuccess, toastError, toastWarning } from '@/components/ui/toaster';
 import { getAppTimezone, setAppTimezone, getBrowserTimezone, hasTimezoneChanged, COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/utils/timezone';
 import { Clock } from 'lucide-react';
+import { useSetupHubProgress } from '@/hooks/useSetupHubProgress';
 
 const AVAILABLE_COLORS = [
   { name: 'Blue', value: 'blue', class: 'bg-blue-500' },
@@ -113,6 +117,25 @@ interface WeekTemplate {
     workoutCategory: string;
   }[];
   order?: number;
+}
+
+interface ChecklistAction {
+  label: string;
+  onClick: () => void;
+  variant?: 'default' | 'outline' | 'ghost';
+}
+
+interface ChecklistStep {
+  title: string;
+  description: string;
+  actions: ChecklistAction[];
+  complete: boolean;
+}
+
+interface ChecklistSection {
+  title: string;
+  description: string;
+  steps: ChecklistStep[];
 }
 
 // Horizontal Day Item Component for Week Templates
@@ -320,6 +343,8 @@ export default function ConfigurePage() {
   } = useCalendarStore();
 
   const { clients, fetchClients } = useClientStore();
+  const { movements, fetchMovements } = useMovementStore();
+  const router = useRouter();
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -335,7 +360,24 @@ export default function ConfigurePage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
   const oauthToastShownRef = useRef(false);  // Track if we've already shown the OAuth success toast
+  const calendarSectionRef = useRef<HTMLDivElement | null>(null);
+  const businessHoursSectionRef = useRef<HTMLDivElement | null>(null);
+  const locationSectionRef = useRef<HTMLDivElement | null>(null);
+  const periodsSectionRef = useRef<HTMLDivElement | null>(null);
+  const weekTemplatesSectionRef = useRef<HTMLDivElement | null>(null);
+  const workoutCategoriesSectionRef = useRef<HTMLDivElement | null>(null);
+  const workoutStructuresSectionRef = useRef<HTMLDivElement | null>(null);
+  const workoutTypesSectionRef = useRef<HTMLDivElement | null>(null);
+  const calendarReady = Boolean(isGoogleCalendarConnected && calendarConfig.selectedCalendarId);
+  const hasClients = clients.length > 0;
+  const selectedCalendarSummary = calendars.find(calendar => calendar.id === calendarConfig.selectedCalendarId)?.summary;
+  const selectedCalendarLabel = selectedCalendarSummary || calendarConfig.selectedCalendarId;
+  const { needsSetup: needsSetupHub, isLoading: onboardingLoading } = useSetupHubProgress(calendarReady, hasClients);
+  const celebrationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const checklistCompleteRef = useRef(false);
+  const confettiColors = ['#6366F1', '#10B981', '#FBBF24', '#F472B6'];
 
   // Sync local state with store state when it changes
   useEffect(() => {
@@ -343,18 +385,204 @@ export default function ConfigurePage() {
   }, [storeIsConnected]);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'workout' | 'app'>('workout');
+  const [activeTab, setActiveTab] = useState<'workout' | 'app' | 'setup'>('workout');
 
   // Read tab from URL query param on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam === 'app') {
-        setActiveTab('app');
+      if (tabParam === 'app' || tabParam === 'workout' || tabParam === 'setup') {
+        setActiveTab(tabParam as 'workout' | 'app' | 'setup');
       }
     }
   }, []);
+
+  const handleScrollToCalendarSettings = () => {
+    setActiveTab('app');
+
+    requestAnimationFrame(() => {
+      calendarSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const handleGoToClients = () => {
+    router.push('/clients');
+  };
+
+  const handleSetupHubFinish = () => {
+    router.push('/schedule');
+  };
+
+  const scrollToSection = (tab: 'app' | 'workout', sectionRef: RefObject<HTMLDivElement | null>) => {
+    setActiveTab(tab);
+    requestAnimationFrame(() => {
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const handleScrollToBusinessHours = () => scrollToSection('app', businessHoursSectionRef);
+  const handleScrollToLocation = () => scrollToSection('app', locationSectionRef);
+  const handleScrollToPeriods = () => scrollToSection('workout', periodsSectionRef);
+  const handleScrollToWeekTemplates = () => scrollToSection('workout', weekTemplatesSectionRef);
+  const handleScrollToWorkoutCategories = () => scrollToSection('workout', workoutCategoriesSectionRef);
+  const handleScrollToWorkoutStructures = () => scrollToSection('workout', workoutStructuresSectionRef);
+  const handleScrollToWorkoutTypes = () => scrollToSection('workout', workoutTypesSectionRef);
+  const handleGoToMovements = () => router.push('/movements');
+
+  const hasConfiguredBusinessHours = Boolean(
+    (businessHours?.daysOfWeek?.length ?? 0) > 0 &&
+    Object.keys(businessHours?.dayHours ?? {}).length > 0
+  );
+  const hasLocationAlias = Boolean((calendarConfig.locationAbbreviations ?? []).some(abbr => !abbr.ignored && abbr.abbreviation?.trim()));
+  const hasWorkoutCategory = workoutCategories.length > 0;
+  const hasMovement = (movements?.length ?? 0) > 0;
+  const hasWorkoutType = workoutTypes.length > 0;
+  const hasWorkoutStructure = workoutStructureTemplates.length > 0;
+  const hasLinkedStructure = workoutCategories.some(category => Boolean(category.linkedWorkoutStructureTemplateId));
+  const hasWeekTemplate = weekTemplates.length > 0;
+  const hasPeriod = periods.length > 0;
+
+  const setupTaskSections: ChecklistSection[] = [
+    {
+      title: 'Calendar display defaults',
+      description: 'Lock in the window and locations that define how your schedule renders everywhere in PCA.',
+      steps: [
+        {
+          title: 'Update your business hours',
+          description: 'Set the earliest start and latest end time your gym operates. The schedule grid only renders events inside this window, so coaches see a focused view and the app knows the boundaries for auto-populating workout slots.',
+          complete: hasConfiguredBusinessHours,
+          actions: [
+            { label: 'Business Hours', onClick: handleScrollToBusinessHours, variant: 'default' },
+          ],
+        },
+        {
+          title: 'Update your first location',
+          description: 'Map the long Google Calendar location text to a short label (e.g., "Iron Warehouse" -> "IW"). The schedule and PDFs will use the friendly alias.',
+          complete: hasLocationAlias,
+          actions: [
+            { label: 'Location Manager', onClick: handleScrollToLocation, variant: 'default' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Create your own category + movement',
+      description: 'Add at least one workout category (strength, skill, conditioning, etc.) and pair it with a movement in the Movements area so templates can reference actual exercises.',
+      steps: [
+        {
+          title: 'Create your own workout category',
+          description: 'Stand up a category such as Strength, Conditioning, or Recovery so weeks and workouts have meaningful labels.',
+          complete: hasWorkoutCategory,
+          actions: [
+            { label: 'Workout Categories', onClick: handleScrollToWorkoutCategories, variant: 'default' },
+          ],
+        },
+        {
+          title: 'Add at least one movement',
+          description: 'Add a movement (or import from the library) so templates can reference actual exercises when you build structures.',
+          complete: hasMovement,
+          actions: [
+            { label: 'Open Movements', onClick: handleGoToMovements, variant: 'default' },
+          ],
+        }
+      ],
+    },
+    {
+      title: 'Create your own workout type',
+      description: 'Define labels like "Strength Block" or "Recovery Circuit" that appear when logging or filtering workouts. Each type can use its own color for quick scanning.',
+      steps: [
+        {
+          title: 'Create your own workout type',
+          description: 'Define labels like "Strength Block" or "Recovery Circuit" that appear when logging or filtering workouts.',
+          complete: hasWorkoutType,
+          actions: [
+            { label: 'Workout Types', onClick: handleScrollToWorkoutTypes, variant: 'default' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Create your own workout structure',
+      description: 'Build a reusable structure (warm-up, strength superset, finisher, etc.) so coaches can drop in complete sessions with one click.',
+      steps: [
+        {
+          title: 'Create your own workout structure',
+          description: 'Lay out the blocks that make up a training session and save them for re-use.',
+          complete: hasWorkoutStructure,
+          actions: [
+            { label: 'Structure Templates', onClick: handleScrollToWorkoutStructures, variant: 'default' },
+          ],
+        },
+        {
+          title: 'Link a structure to a category',
+          description: 'Inside each workout category card you can set a default structure template so the Builder pre-populates fields automatically.',
+          complete: hasLinkedStructure,
+          actions: [
+            { label: 'Open Categories', onClick: handleScrollToWorkoutCategories, variant: 'default' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Create your own week template',
+      description: 'Lay out how many strength, conditioning, or recovery days you run in a week. Templates speed up assigning programs to new clients.',
+      steps: [
+        {
+          title: 'Create your own week template',
+          description: 'Design a week blueprint that mixes the right categories across seven days.',
+          complete: hasWeekTemplate,
+          actions: [
+            { label: 'Week Templates', onClick: handleScrollToWeekTemplates, variant: 'default' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Create your own period',
+      description: 'Periods define larger cycles (e.g., Hypertrophy Q2). They bundle multiple week templates and keep reporting grouped by phase.',
+      steps: [
+        {
+          title: 'Create your own period',
+          description: 'Combine week templates into macro cycles so the roster stays aligned to the same theme.',
+          complete: hasPeriod,
+          actions: [
+            { label: 'Periods', onClick: handleScrollToPeriods, variant: 'default' },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const totalChecklistSteps = setupTaskSections.reduce((sectionAcc, section) => sectionAcc + section.steps.length, 0);
+  const completedChecklistSteps = setupTaskSections.reduce((sectionAcc, section) => (
+    sectionAcc + section.steps.filter(step => step.complete).length
+  ), 0);
+  const checklistProgressPercent = totalChecklistSteps === 0
+    ? 0
+    : Math.round((completedChecklistSteps / totalChecklistSteps) * 100);
+  const checklistComplete = totalChecklistSteps > 0 && completedChecklistSteps === totalChecklistSteps;
+
+  useEffect(() => {
+    if (checklistComplete && !checklistCompleteRef.current) {
+      setShowCelebration(true);
+      if (celebrationTimeoutRef.current) {
+        clearTimeout(celebrationTimeoutRef.current);
+      }
+      celebrationTimeoutRef.current = setTimeout(() => {
+        setShowCelebration(false);
+      }, 4500);
+    } else if (!checklistComplete && checklistCompleteRef.current) {
+      setShowCelebration(false);
+    }
+    checklistCompleteRef.current = checklistComplete;
+
+    return () => {
+      if (celebrationTimeoutRef.current) {
+        clearTimeout(celebrationTimeoutRef.current);
+      }
+    };
+  }, [checklistComplete]);
 
   // Location management state
   const [uniqueLocations, setUniqueLocations] = useState<string[]>([]);
@@ -448,6 +676,7 @@ export default function ConfigurePage() {
     fetchCalendars();
     fetchClients();
     fetchBusinessHours();
+    fetchMovements();
 
     // Check Google Calendar auth status using the store's connection check
     // This ensures we use the same logic as the Header sync button
@@ -467,7 +696,7 @@ export default function ConfigurePage() {
         setShowTimezonePrompt(true);
       }
     }
-  }, [fetchAllConfig, fetchCalendars, fetchClients, fetchBusinessHours]);
+  }, [fetchAllConfig, fetchCalendars, fetchClients, fetchBusinessHours, fetchMovements]);
 
   // Fetch unique locations from calendar events
   useEffect(() => {
@@ -1175,16 +1404,18 @@ export default function ConfigurePage() {
   }
 
   return (
+    <>
     <div className="container mx-auto px-4 pt-1 pb-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Configuration</h1>
         <p className="text-gray-600">Manage your periods, templates, categories, and workout types.</p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'workout' | 'app')}>
-        <TabsList className="mb-6">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'workout' | 'app' | 'setup')}>
+        <TabsList className="mb-6 flex flex-wrap gap-2">
           <TabsTrigger value="workout">Workout Config.</TabsTrigger>
           <TabsTrigger value="app">App Config.</TabsTrigger>
+          <TabsTrigger value="setup">Coach Setup Hub</TabsTrigger>
         </TabsList>
 
         <TabsContent value="workout">
@@ -1193,7 +1424,7 @@ export default function ConfigurePage() {
             {/* Left Column */}
             <div className="space-y-8">
               {/* Periods Section */}
-              <div>
+              <div ref={periodsSectionRef}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <CalendarIcon className="h-5 w-5 icon-period" />
@@ -1319,7 +1550,7 @@ export default function ConfigurePage() {
               </div>
 
               {/* Week Templates Section */}
-              <div>
+              <div ref={weekTemplatesSectionRef}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Layers className="h-5 w-5 icon-template" />
@@ -1488,7 +1719,7 @@ export default function ConfigurePage() {
             {/* Right Column */}
             <div className="space-y-8">
               {/* Workout Categories Section */}
-              <div>
+              <div ref={workoutCategoriesSectionRef}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Dumbbell className="h-5 w-5 icon-workout" />
@@ -1647,7 +1878,7 @@ export default function ConfigurePage() {
               </div>
 
               {/* Workout Structure Templates Section */}
-              <div>
+              <div ref={workoutStructuresSectionRef}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Layers className="h-5 w-5 icon-workout" />
@@ -1707,7 +1938,7 @@ export default function ConfigurePage() {
               </div>
 
               {/* Workout Types Section */}
-              <div>
+              <div ref={workoutTypesSectionRef}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Settings className="h-5 w-5 icon-settings" />
@@ -1849,7 +2080,8 @@ export default function ConfigurePage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Google Account & Authentication */}
-              <Card>
+              <div ref={calendarSectionRef}>
+                <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center justify-between">
                     <span>Google Account Connection</span>
@@ -2009,7 +2241,8 @@ export default function ConfigurePage() {
                     </>
                   )}
                 </CardContent>
-              </Card>
+                </Card>
+              </div>
 
               {/* Calendar Configuration */}
               <Card>
@@ -2242,7 +2475,8 @@ export default function ConfigurePage() {
               </Card>
 
               {/* Business Hours Settings */}
-              <Card>
+              <div ref={businessHoursSectionRef}>
+                <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Clock className="h-5 w-5" />
@@ -2418,12 +2652,13 @@ export default function ConfigurePage() {
                     Only these hours will be displayed on the calendar view.
                   </p>
                 </CardContent>
-              </Card>
+                </Card>
+              </div>
             </div>
           </div>
 
           {/* Location Management Section */}
-          <div className="mt-12 border-t pt-8">
+          <div className="mt-12 border-t pt-8" ref={locationSectionRef}>
             <div className="mb-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
                 <MapPin className="h-6 w-6" />
@@ -2702,6 +2937,105 @@ export default function ConfigurePage() {
             )}
           </div>
         </TabsContent>
+
+        <TabsContent value="setup">
+          <div className="mt-4 space-y-6">
+            <div className="flex flex-col gap-2">
+              <h2 className="text-2xl font-bold text-gray-900">Coach Setup Hub</h2>
+              <p className="text-gray-600">Complete these two checks once. After that PCA keeps your schedule synced automatically.</p>
+              <div>
+                {onboardingLoading || typeof needsSetupHub === 'undefined' ? (
+                  <Badge variant="secondary" className="bg-gray-100 text-gray-600 w-fit">
+                    Checking setup...
+                  </Badge>
+                ) : needsSetupHub ? (
+                  <Badge variant="secondary" className="bg-amber-50 text-amber-700 border border-amber-200 w-fit">
+                    Setup needed
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 w-fit">
+                    Setup complete
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <SetupHubFlow
+              calendarReady={calendarReady}
+              hasClients={hasClients}
+              onConnectCalendar={handleScrollToCalendarSettings}
+              onAddClients={handleGoToClients}
+              selectedCalendarLabel={selectedCalendarLabel || undefined}
+              layout="page"
+              showHeader={false}
+              onFinish={handleSetupHubFinish}
+              onDismiss={() => setActiveTab('app')}
+            />
+
+            <div className="space-y-4">
+              <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
+                  <span>{completedChecklistSteps}/{totalChecklistSteps} complete</span>
+                  <div className="flex-1 h-2 rounded-full bg-gray-200">
+                    <div
+                      className="h-2 rounded-full bg-indigo-500 transition-all"
+                      style={{ width: `${checklistProgressPercent}%` }}
+                    />
+                  </div>
+                  <span className="w-12 text-xs text-right text-gray-500">{checklistProgressPercent}%</span>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">Build the rest of your system</h3>
+                <p className="text-gray-600">Once calendar + clients are synced, walk down this checklist so workouts, templates, and locations match your business.</p>
+              </div>
+              <div className="space-y-4">
+                {setupTaskSections.map((section, sectionIndex) => (
+                  <Card key={section.title} className="flex flex-col">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900 text-white text-sm font-semibold">
+                          {sectionIndex + 1}
+                        </div>
+                        <div>
+                          <CardTitle className="text-base">{section.title}</CardTitle>
+                          <p className="text-sm text-gray-600">{section.description}</p>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {section.steps.map((step) => (
+                        <div key={`${section.title}-${step.title}`} className="rounded-xl border border-gray-200 bg-white/80 p-4">
+                          <div className="flex items-start gap-3">
+                            <div className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${step.complete ? 'bg-emerald-500 text-white' : 'border border-gray-400 text-transparent'}`}>
+                              {step.complete ? '✓' : ''}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-gray-800">{step.title}</p>
+                              <p className="text-xs text-gray-600 mt-1">{step.description}</p>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {step.actions.map((action) => (
+                              <Button
+                                key={`${section.title}-${step.title}-${action.label}`}
+                                variant={action.variant ?? 'outline'}
+                                size="sm"
+                                onClick={action.onClick}
+                              >
+                                {action.label}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Workout Structure Template Dialog */}
@@ -2721,5 +3055,49 @@ export default function ConfigurePage() {
         }}
       />
     </div>
+    {showCelebration && (
+      <>
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center">
+          <div className="rounded-3xl bg-white/90 px-6 py-4 text-center shadow-2xl border border-indigo-100">
+            <p className="text-sm font-semibold text-indigo-600">All setup tasks complete</p>
+            <p className="text-2xl font-bold text-gray-900">Nice work!</p>
+          </div>
+        </div>
+        <div className="pointer-events-none fixed inset-0 z-30 overflow-hidden">
+          {Array.from({ length: 24 }).map((_, index) => (
+            <span
+              key={`confetti-${index}`}
+              className="confetti-piece"
+              style={{
+                left: `${(index / 24) * 100}%`,
+                animationDelay: `${index * 0.08}s`,
+                backgroundColor: confettiColors[index % confettiColors.length],
+              }}
+            />
+          ))}
+        </div>
+        <style jsx>{`
+          .confetti-piece {
+            position: absolute;
+            top: -10px;
+            width: 8px;
+            height: 16px;
+            border-radius: 2px;
+            animation: confettiFall 2.8s ease-in forwards;
+          }
+          @keyframes confettiFall {
+            0% {
+              transform: translateY(0) rotate(0deg);
+              opacity: 1;
+            }
+            100% {
+              transform: translateY(120vh) rotate(360deg);
+              opacity: 0;
+            }
+          }
+        `}</style>
+      </>
+    )}
+    </>
   );
 }

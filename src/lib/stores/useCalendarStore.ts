@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { GoogleCalendar, GoogleCalendarEvent, CalendarSyncConfig, DateRange, TestEventInput } from '@/lib/google-calendar/types';
 import {
   fetchCalendarEvents,
+  fetchUserCalendars,
   checkGoogleCalendarAuth,
   addWorkoutLinksToEvent,
   createSingleCalendarEvent,
@@ -111,17 +112,34 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   fetchCalendars: async () => {
     set({ loading: true, error: null });
     try {
-      // For now, use a simple calendar list
-      // In the future, this could fetch from Google Calendar API
-      const calendars: GoogleCalendar[] = [
-        {
-          id: 'primary',
-          summary: 'Primary Calendar',
-          timeZone: 'America/Los_Angeles',
-          primary: true,
-        },
-      ];
-      set({ calendars, loading: false });
+      const idToken = await getFirebaseIdToken();
+      const calendars = await fetchUserCalendars(idToken);
+
+      const resolvedCalendars: GoogleCalendar[] =
+        calendars && calendars.length > 0
+          ? calendars
+          : [
+              {
+                id: 'primary',
+                summary: 'Primary Calendar',
+                timeZone: 'America/Los_Angeles',
+                primary: true,
+              },
+            ];
+
+      const currentConfig = get().config;
+      const hasSelectedCalendar =
+        currentConfig.selectedCalendarId &&
+        resolvedCalendars.some((calendar) => calendar.id === currentConfig.selectedCalendarId);
+
+      const nextConfig = hasSelectedCalendar
+        ? currentConfig
+        : {
+            ...currentConfig,
+            selectedCalendarId: resolvedCalendars[0]?.id,
+          };
+
+      set({ calendars: resolvedCalendars, config: nextConfig, loading: false });
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to fetch calendars',

@@ -38,6 +38,17 @@ To protect `main` from dev-only artifacts (like `FUTURE_IMPROVEMENTS.md`), follo
 3. **Execute Cleanup**: Run `npm run clean:main`
 4. Commit: `git commit -a -m "cleanup: remove dev artifacts after merge"`
 
+### Dev → Admin → Coach Release Ladder
+Large feature launches now move through three lanes before coaches ever see them:
+- **Dev (Quick Account)**: Fast iteration using the DEC sandbox/secondary Google account. Feature flags are allowed, mocks are fine, goal is to prove the flow works end-to-end.
+- **Admin (Prod Validation)**: Uses the real production backend but authenticates only with the admin secondary account. Confirms OAuth scopes, calendar sharing, and metadata writes without touching coach data.
+- **Coaches (Live Rollout)**: After admin sign-off, enable the feature flag for coach accounts and distribute the onboarding guide ([COACH_SECONDARY_ACCOUNT_ONBOARDING.md](COACH_SECONDARY_ACCOUNT_ONBOARDING.md)). Roll out coach-by-coach while monitoring logs.
+
+Ship checklist for larger updates:
+1. Finish DEV testing with DEC account, document findings.
+2. Promote the build/flag to ADMIN lane, capture sign-off.
+3. Prepare comms + support, then enable for coach cohort(s) in production.
+
 ---
 
 ## 2. Local Development Environment

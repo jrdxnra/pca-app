@@ -118,6 +118,11 @@ export const queryKeys = {
     current: () => [...queryKeys.calendarConfig.all, 'current'] as const,
   },
 
+  coachOnboarding: {
+    all: ['coachOnboarding'] as const,
+    status: () => [...queryKeys.coachOnboarding.all, 'status'] as const,
+  },
+
   // Dashboard
   dashboard: {
     all: ['dashboard'] as const,

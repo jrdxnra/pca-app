@@ -1,3 +1,5 @@
+import type { GoogleCalendar } from '@/lib/google-calendar/types';
+
 /**
  * Client-side API wrapper for Google Calendar operations
  * This makes it easy to call the Next.js API routes from React components
@@ -180,6 +182,34 @@ export async function createRecurringCalendarEvent(
   }
 
   return response.json();
+}
+
+/**
+ * Fetch the list of calendars accessible to the user
+ */
+export async function fetchUserCalendars(idToken?: string): Promise<GoogleCalendar[]> {
+  const headers = await buildAuthHeaders({}, idToken);
+
+  const response = await fetch('/api/calendar/calendars', {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    let error: any = {};
+    try {
+      error = await response.json();
+    } catch {
+      // ignore parse errors
+    }
+    const err = new Error(error.error || 'Failed to fetch calendars');
+    (err as any).status = response.status;
+    throw err;
+  }
+
+  const data = await response.json();
+  return data.calendars || [];
 }
 
 /**
