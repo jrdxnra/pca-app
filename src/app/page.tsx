@@ -8,9 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Calendar,
   Zap,
-  Users,
   ArrowRight,
-  CheckCircle2,
   LayoutDashboard,
   Shield,
   Target,
@@ -140,8 +138,8 @@ export default function LandingPage() {
         >
           <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2 group">
-              <div className="bg-primary p-2 rounded-xl group-hover:scale-110 transition-transform shadow-lg shadow-primary/20">
-                <Zap className="h-5 w-5 text-white" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white font-black tracking-tight group-hover:scale-105 transition-transform shadow-lg shadow-primary/30">
+                PC+
               </div>
               <span className="text-xl font-bold tracking-tight text-gray-900">
                 Performance <span className="text-primary">Coach +</span>
@@ -177,7 +175,7 @@ export default function LandingPage() {
               transition={{ duration: 0.6, delay: 0.1 }}
               className="text-5xl md:text-7xl font-extrabold tracking-tight text-gray-900 leading-[1.1]"
             >
-              Coach Smarter. <br />
+              Coach Smarter.<br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">
                 Achieve More.
               </span>
@@ -189,8 +187,7 @@ export default function LandingPage() {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed"
             >
-              The ultimate unified toolkit for elite coaches. Manage your roster,
-              build world-class programming, and sync everything with Google Calendar.
+              The ultimate unified toolkit for elite coaches. Manage your roster, build world-class programming, and sync everything with Google Calendar.
             </motion.p>
 
             <motion.div
@@ -220,20 +217,67 @@ export default function LandingPage() {
               className="relative mt-20 p-2 bg-white/40 backdrop-blur-sm border border-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)]"
             >
               <div className="aspect-[16/9] bg-gray-900 rounded-[2rem] overflow-hidden relative group">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-blue-600/20 opacity-40" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <LayoutDashboard className="h-20 w-20 text-white/10" />
-                </div>
-                {/* Representative elements */}
-                <div className="absolute top-8 left-8 right-8 h-12 bg-white/10 rounded-xl flex items-center px-6 gap-4">
-                  <div className="h-3 w-3 rounded-full bg-red-400" />
-                  <div className="h-3 w-3 rounded-full bg-yellow-400" />
-                  <div className="h-3 w-3 rounded-full bg-green-400" />
-                </div>
-                <div className="absolute top-28 left-8 w-64 bottom-8 bg-white/5 rounded-2xl p-6 space-y-4">
-                  <div className="h-4 w-32 bg-white/20 rounded-md" />
-                  <div className="h-4 w-48 bg-white/10 rounded-md" />
-                  <div className="h-4 w-40 bg-white/10 rounded-md" />
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/25 via-transparent to-blue-600/30 opacity-70" />
+                <div className="absolute inset-0 flex flex-col gap-6 p-8 text-white/70">
+                  <div className="bg-white/10 rounded-2xl px-6 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-2.5 w-2.5 rounded-full bg-lime-300" />
+                      <p className="text-sm font-semibold tracking-wide text-white/80">Coach Workspace</p>
+                    </div>
+                    <div className="flex gap-2 text-xs uppercase tracking-widest text-white/60">
+                      <span>Templates</span>
+                      <span className="text-white">Calendar Sync</span>
+                      <span>Clients</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-6 h-full">
+                    <div className="w-60 space-y-4">
+                      {["Warm-Up", "Plyo Block", "Strength", "Speed"].map((label, idx) => (
+                        <div
+                          key={label}
+                          className={`rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold tracking-tight ${idx === 1 ? "bg-primary/40 text-white" : "text-white/70"}`}
+                        >
+                          {label}
+                          <div className="mt-2 h-1.5 w-full rounded-full bg-white/10">
+                            <div className="h-full rounded-full bg-white/60" style={{ width: `${40 + idx * 15}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex-1 space-y-4">
+                      <div className="grid grid-cols-3 gap-4">
+                        {["Split Squat", "MB Throws", "Hurdle Hops"].map((item, idx) => (
+                          <div key={item} className="rounded-2xl bg-white/10 p-4">
+                            <p className="text-xs uppercase tracking-widest text-white/50">Block {idx + 1}</p>
+                            <p className="text-base font-semibold text-white/90">{item}</p>
+                            <p className="text-[11px] text-white/60">4 x 6 @ controlled tempo</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="rounded-3xl bg-white/5 px-6 py-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs uppercase tracking-widest text-white/50">Calendar push</p>
+                          <p className="text-white font-semibold">Week 12 · Offseason</p>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <span className="text-white/60">12 sessions linked</span>
+                          <span className="rounded-full bg-primary/50 px-4 py-1 text-white font-semibold">Sync ready</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="w-48 rounded-3xl bg-white/5 p-4 space-y-3">
+                      <p className="text-xs uppercase tracking-widest text-white/50">Today</p>
+                      {["Force Lab", "Pitching", "Recovery"].map((slot, idx) => (
+                        <div key={slot} className="rounded-2xl bg-white/10 px-3 py-2">
+                          <p className="text-[11px] text-white/50">{idx + 6}:00</p>
+                          <p className="text-sm text-white font-semibold">{slot}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -255,22 +299,22 @@ export default function LandingPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
                 {
-                  icon: Calendar,
-                  title: "Unified Schedule",
+                  icon: LayoutDashboard,
+                  title: "Movement tagging",
                   color: "bg-blue-500",
-                  desc: "Full Google Calendar two-way sync. Never double-book a session again."
+                  desc: "Tag PP/MB/Ballistics, tempo, and equipment once—surface them instantly inside the builder."
                 },
                 {
                   icon: Target,
-                  title: "Pro Builder",
+                  title: "Reusable structures",
                   color: "bg-primary",
-                  desc: "The fastest workout architect on the market. Drag, drop, and deploy."
+                  desc: "Store warm-ups, blocks, and full templates with color rules so new weeks take minutes."
                 },
                 {
-                  icon: Users,
-                  title: "Client Insights",
+                  icon: Calendar,
+                  title: "Calendar parity",
                   color: "bg-emerald-500",
-                  desc: "Track progress, volume, and adherence with deep visual analytics."
+                  desc: "Every workout stays linked to its Google Calendar event with live edits both ways."
                 }
               ].map((feature, i) => (
                 <motion.div
@@ -289,6 +333,94 @@ export default function LandingPage() {
                 </motion.div>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* --- How It Works Section --- */}
+        <section id="how-it-works" className="py-24 px-6 bg-white/30 backdrop-blur-sm">
+          <div className="max-w-6xl mx-auto space-y-14">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-center space-y-4"
+            >
+              <p className="text-xs font-bold tracking-[0.3em] text-primary uppercase">
+                How It Works
+              </p>
+              <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900">
+                Five simple steps from idea to action.
+              </h2>
+              <p className="text-gray-500 max-w-2xl mx-auto">
+                Log in, connect Google Calendar, build the plan, and run training from one dashboard—no extra tools or exports.
+              </p>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+              {[
+                {
+                  step: "01",
+                  icon: Shield,
+                  title: "Sign in",
+                  desc: "Use your team login and land on the dashboard with everything already organized."
+                },
+                {
+                  step: "02",
+                  icon: Calendar,
+                  title: "Sync your calendar",
+                  desc: "Connect Google Calendar once and every session appears in Performance Coach+ automatically."
+                },
+                {
+                  step: "03",
+                  icon: Target,
+                  title: "Build the plan",
+                  desc: "Drag in warm-ups, blocks, and notes to shape the exact workout flow you want."
+                },
+                {
+                  step: "04",
+                  icon: LayoutDashboard,
+                  title: "Send it out",
+                  desc: "Push the schedule to athletes with one click—times, colors, and reminders stay in sync."
+                },
+                {
+                  step: "05",
+                  icon: BarChart3,
+                  title: "Track results",
+                  desc: "See who finished, how much work got done, and what needs adjusting without leaving the app."
+                }
+              ].map((item, index) => (
+                <motion.div
+                  key={item.step}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.05 }}
+                  className="relative rounded-[2.5rem] bg-gray-900 text-white p-6 shadow-xl shadow-primary/10 border border-white/10 flex flex-col gap-4"
+                >
+                  <div className="absolute -top-4 left-6 bg-primary text-white text-xs font-bold tracking-[0.3em] px-3 py-1 rounded-full">
+                    Step {item.step}
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center">
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold leading-tight">{item.title}</h3>
+                    <p className="text-sm text-white/70 leading-relaxed">{item.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="rounded-[3rem] border border-dashed border-gray-200 bg-white/80 px-10 py-8 text-center"
+            >
+              <p className="text-lg text-gray-600">
+                One stop for planning, scheduling, and checking progress—so you stay focused on coaching, not software.
+              </p>
+            </motion.div>
           </div>
         </section>
 

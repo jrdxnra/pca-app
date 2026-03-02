@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
-import { CalendarClock, CheckCircle2, Loader2, Sparkles, Activity, ShieldCheck, Zap } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Loader2, Sparkles, Activity, ShieldCheck } from 'lucide-react';
 import app from '@/lib/firebase/config';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -198,8 +198,8 @@ export default function LoginPage() {
                                 className="relative group"
                             >
                                 <div className="absolute -inset-1 bg-gradient-to-r from-primary to-blue-600 rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>
-                                <div className="relative bg-white w-16 h-16 rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm">
-                                    <Zap className="text-primary w-8 h-8 fill-primary/10" />
+                                <div className="relative w-16 h-16 rounded-2xl flex items-center justify-center bg-primary text-white font-black tracking-tight shadow-sm">
+                                    PC+
                                 </div>
                             </motion.div>
 
