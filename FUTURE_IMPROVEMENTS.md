@@ -259,6 +259,70 @@ Transform the current duplicate-workout approach for multi-client sessions into 
 3. Migrate existing duplicate workouts to group format (optional)
 4. Add group workout viewing/editing UI
 
+---
+
+## AI Agent System (Genkit + Firebase)
+**Date Added:** April 8, 2026  
+**Priority:** Low (Pinned for later)  
+**Status:** Deferred
+
+### Goal
+Add an AI agent layer using Firebase Genkit that can reason over app knowledge, retrieve relevant material with vector search, and execute safe app actions through typed tools.
+
+### Architecture Snapshot
+
+**Brain (Logic & Reasoning):**
+- Framework: Firebase Genkit
+- Model: Gemini 1.5 Flash (cost-efficient, high-context)
+- Orchestration: Genkit Flows
+- Pattern: ReAct (Reason + Act)
+
+**Material (Knowledge / RAG):**
+- Storage: Cloud Firestore with vector search
+- Pipeline:
+	1. Chunk source docs
+	2. Generate embeddings with Gemini
+	3. Store chunks + vectors in Firestore index
+- Planned material source: `/docs/knowledge-base`
+
+**Execution (Tools):**
+- Tool style: Genkit tools implemented as TypeScript functions with Zod schemas
+- Planned tool directory: `src/agents/tools/`
+- Planned capabilities:
+	- `searchMaterial` (vector retrieval)
+	- `firebaseAdmin` (safe app read/write actions)
+	- `externalAPI` (future third-party integrations)
+
+### Deferred Next Feature Placeholder
+- Feature Name: TBD
+- Goal: TBD
+- New Material Needed: TBD
+- New Execution Tool: TBD
+
+### Architecture Visual Reference (Pin This)
+- Purpose: Keep one canonical architecture diagram for this feature so implementation decisions stay easy to follow.
+- Primary image path (when added): `public/architecture/ai-agent-system-v1.png`
+- Markdown embed to use in docs:
+	- `![AI Agent System Architecture](public/architecture/ai-agent-system-v1.png)`
+- If the architecture changes, save a new versioned image (for example: `ai-agent-system-v2.png`) instead of overwriting history.
+
+### Visual Change Log (Update Whenever Diagram Changes)
+| Version | Date | What Changed | Reason |
+|---|---|---|---|
+| v1 | 2026-04-08 | Initial Brain/Material/Execution flow captured | Baseline for future implementation |
+
+### Dev Workflow Notes (For When This Is Resumed)
+- Local debugger: `genkit start` (port 4000)
+- Deployment target: Firebase Functions (`firebase deploy --only functions`)
+- Firebase extension to evaluate: `googlecloud/firestore-vector-search`
+
+### Resume Checklist
+1. Create `AGENTS.md` in the repo root with the finalized Brain/Material/Execution spec.
+2. Define the first concrete tool (Material retrieval or one app action) and its Zod schema.
+3. Add initial knowledge-base docs under `/docs/knowledge-base` and test retrieval quality.
+4. Validate local flow behavior in Codespaces before any production deploy.
+5. Add/update the architecture image and append one row to the Visual Change Log.
+
 ### Related Components
 - `src/lib/services/clientMatching.ts` - Already returns multiple matches
 - Workout builder - Needs group workout creation mode
