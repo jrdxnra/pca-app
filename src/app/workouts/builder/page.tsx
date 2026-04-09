@@ -56,6 +56,7 @@ import {
   fetchClientWorkouts,
   getClientWorkout
 } from '@/lib/firebase/services/clientWorkouts';
+import { getCalendarEventsByDateRange } from '@/lib/firebase/services/calendarEvents';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useClientStore } from '@/lib/stores/useClientStore';
@@ -66,6 +67,7 @@ import { safeToDate } from '@/lib/utils/dateHelpers';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
 import { logger } from '@/lib/utils/logger';
 import { resolveWorkoutTypeColor } from '@/lib/workouts/workoutTypeUtils';
+import { getEventClientId, getEventCategory, getLinkedWorkoutId } from '@/lib/utils/event-patterns';
 
 export default function BuilderPage() {
   const router = useRouter();
@@ -355,7 +357,8 @@ export default function BuilderPage() {
           fetchAllConfig(),
           fetchClients(),
           fetchPrograms(),
-          fetchAllScheduledWorkouts()
+          fetchAllScheduledWorkouts(),
+          refreshCalendarEvents() // Fetch calendar events for eventId-based navigation
         ]);
       } catch (error) {
         console.error('Error loading data:', error);
@@ -365,15 +368,14 @@ export default function BuilderPage() {
     };
 
     loadData();
-  }, [fetchAllConfig, fetchClients, fetchPrograms, fetchAllScheduledWorkouts]);
+  }, [fetchAllConfig, fetchClients, fetchPrograms, fetchAllScheduledWorkouts, refreshCalendarEvents]);
 
   // Load and open workout when workoutId is provided in URL
   useEffect(() => {
     logger.debug('[Builder] ========================================');
     logger.debug('[Builder] loadWorkoutById effect running');
     logger.debug('[Builder] workoutId:', workoutId);
-    logger.debug('[Builder] loading:', loading);
-    logger.debug('[Builder] clientId:', clientId);
+    logger.debug('[Builder] urlClientId:', urlClientId);
     logger.debug('[Builder] ========================================');
 
     if (!workoutId) {
@@ -387,11 +389,6 @@ export default function BuilderPage() {
       return;
     }
 
-    if (loading) {
-      logger.debug('[Builder] SKIP - still loading initial data');
-      return;
-    }
-
     const loadWorkoutById = async () => {
       try {
         logger.debug('[Builder] Fetching workout from Firebase:', workoutId);
@@ -399,9 +396,10 @@ export default function BuilderPage() {
         logger.debug('[Builder] Got workout result:', workout ? 'SUCCESS' : 'NULL');
 
         if (workout) {
-          // Skip if this workout belongs to a different client than selected
-          if (clientId && workout.clientId && workout.clientId !== clientId) {
-            logger.debug('[Builder] SKIP - workout belongs to different client:', workout.clientId, 'vs selected:', clientId);
+          // Skip if this workout belongs to a different client than URL client
+          // Use urlClientId (immediate) instead of clientId (deferred) to avoid race conditions
+          if (urlClientId && workout.clientId && workout.clientId !== urlClientId) {
+            logger.debug('[Builder] SKIP - workout belongs to different client:', workout.clientId, 'vs URL client:', urlClientId);
             processedWorkoutIds.current.add(workoutId);
             return;
           }
@@ -428,7 +426,7 @@ export default function BuilderPage() {
           setCalendarDate(normalizedDate);
 
           // If client not in URL, update URL with workout's client
-          if (workout.clientId && !clientId) {
+          if (workout.clientId && !urlClientId) {
             logger.debug('[Builder] Updating URL with client from workout:', workout.clientId);
             // Use replace to not add to history since we're just filling in missing info
             router.replace(`/workouts/builder?client=${workout.clientId}&date=${dateParam}&workoutId=${workoutId}`, { scroll: false });
@@ -457,7 +455,7 @@ export default function BuilderPage() {
     };
 
     loadWorkoutById();
-  }, [workoutId, loading, clientId]);
+  }, [workoutId, urlClientId, dateParam, router]);
 
   // Helper function to create date key for tracking open days
   const getDateKey = (date: Date): string => {
@@ -1123,90 +1121,173 @@ export default function BuilderPage() {
   useEffect(() => {
     if (!eventId || loading) return;
 
-    // Wait for calendar events to load
-    if (calendarEvents.length === 0) return;
+    // If there's a workoutId in the URL, let the workoutId effect handle it
+    if (workoutId) {
+      logger.debug('[Builder] workoutId in URL, skipping eventId effect');
+      return;
+    }
 
     // Don't process the same eventId twice
     if (processedEventIdRef.current === eventId) return;
 
     const event = calendarEvents.find(e => e.id === eventId);
-    if (!event) return;
-
-    // If event already has a linked workout, let the workoutId effect handle it
-    if (event.linkedWorkoutId) {
-      logger.debug('[Builder] Event has linked workout, skipping');
-      processedEventIdRef.current = eventId;
-      return;
-    }
-
-    // Get client from event
-    const eventClientId = event.preConfiguredClient ||
-      (event.description?.match(/\[Metadata:.*client=([^,}]+)/)?.[1]?.trim());
-
-    if (eventClientId && eventClientId !== 'none' && !clientId) {
-      handleClientChange(eventClientId);
-    }
-
-    // Get event details
-    const eventDate = new Date(event.start.dateTime);
-
-    // Set calendar date
-    setCalendarDate(eventDate);
-
-    // Get the category from URL or event
-    const category = categoryParam || event.preConfiguredCategory ||
-      (event.description?.match(/category=([^,\s}\]]+)/)?.[1]);
-
-    // If event is already assigned to a client, open inline editor directly instead of Quick Workout dialog
-    const hasAssignedClient = eventClientId && eventClientId !== 'none';
-    const effectiveClientId = clientId || eventClientId;
-
-    if (hasAssignedClient && effectiveClientId) {
-      logger.debug('[Builder] Event is assigned, opening inline editor directly');
-      processedEventIdRef.current = eventId;
-
-      const dateKey = getDateKey(eventDate);
-
-      // Check if there's a draft or if we should create new
-      const draftKey = `${dateKey}-${effectiveClientId}-new`;
-      const hasDraft = localStorage.getItem(`pca-workout-draft-${draftKey}`);
-
-      // Open the inline editor for this date
-      setCreatingWorkouts(prev => ({
-        ...prev,
-        [dateKey]: {
-          date: eventDate,
-          category: category || '',
-          color: workoutCategories.find(c => c.name === category)?.color || '#3B82F6'
+    if (!event) {
+      // Fallback: event not found in current calendar cache (different calendar,
+      // delayed sync, or range mismatch). Resolve workout by date across clients.
+      const resolveFallbackWorkout = async () => {
+        try {
+          const { getEventWorkoutLinkByEventId } = await import('@/lib/firebase/services/eventWorkoutLinks');
+          const trackerLink = await getEventWorkoutLinkByEventId(eventId);
+          if (trackerLink?.workoutId) {
+            const params = new URLSearchParams();
+            if (dateParam) params.set('date', dateParam);
+            params.set('eventId', eventId);
+            params.set('workoutId', trackerLink.workoutId);
+            if (urlClientId) {
+              params.set('client', urlClientId);
+            } else if (trackerLink.clientId) {
+              params.set('client', trackerLink.clientId);
+            }
+            processedEventIdRef.current = eventId;
+            router.replace(`/workouts/builder?${params.toString()}`, { scroll: false });
+            return;
+          }
+        } catch (error) {
+          console.error('[Builder] Tracker link resolution failed:', error);
         }
-      }));
-      setOpenDates(prev => new Set(prev).add(dateKey));
 
-      logger.debug('[Builder] Opened inline editor for', dateKey, 'with category:', category, 'hasDraft:', !!hasDraft);
+        if (!dateParam) return;
+
+        // Wait for clients to load before attempting cross-client lookup.
+        if (storeClients.length === 0) {
+          return;
+        }
+
+        try {
+          const [year, month, day] = dateParam.split('-').map(Number);
+          const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+          const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
+          const { fetchWorkoutsByDateRange } = await import('@/lib/firebase/services/clientWorkouts');
+          const { Timestamp } = await import('firebase/firestore');
+
+          const candidateClients = urlClientId
+            ? storeClients.filter(c => c.id === urlClientId)
+            : storeClients;
+
+          const checks = await Promise.all(
+            candidateClients.map(async (client) => {
+              const workouts = await fetchWorkoutsByDateRange(
+                client.id,
+                Timestamp.fromDate(dayStart),
+                Timestamp.fromDate(dayEnd)
+              );
+              return { clientId: client.id, workouts };
+            })
+          );
+
+          const matches = checks.flatMap(c =>
+            c.workouts.map(w => ({ clientId: c.clientId, workoutId: w.id }))
+          );
+
+          if (matches.length > 0) {
+            // Deterministic fallback: first match by date range ordering.
+            const match = matches[0];
+            const params = new URLSearchParams();
+            params.set('date', dateParam);
+            params.set('eventId', eventId);
+            params.set('client', match.clientId);
+            params.set('workoutId', match.workoutId);
+            processedEventIdRef.current = eventId;
+            router.replace(`/workouts/builder?${params.toString()}`, { scroll: false });
+            return;
+          }
+        } catch (error) {
+          console.error('[Builder] Fallback workout resolution failed:', error);
+        }
+      };
+
+      resolveFallbackWorkout();
       return;
     }
 
-    // No assigned client - open Quick Workout dialog
-    const eventTime = event.start.dateTime ?
-      new Date(event.start.dateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+    const resolveLinkedWorkoutAndContinue = async () => {
+      let resolvedWorkoutId = event.linkedWorkoutId;
+      let trackerClientId: string | undefined;
 
-    logger.debug('[Builder] No client assigned, opening Quick Workout dialog with:', {
-      date: dateParam,
-      category: categoryParam,
-      eventId
-    });
+      if (!resolvedWorkoutId) {
+        try {
+          const { getEventWorkoutLinkByEventId } = await import('@/lib/firebase/services/eventWorkoutLinks');
+          const trackerLink = await getEventWorkoutLinkByEventId(eventId);
+          if (trackerLink?.workoutId) {
+            resolvedWorkoutId = trackerLink.workoutId;
+            trackerClientId = trackerLink.clientId || undefined;
+          }
+        } catch (error) {
+          console.error('[Builder] Failed to resolve linked workout from tracker:', error);
+        }
+      }
 
-    processedEventIdRef.current = eventId;
+      // If event already has a linked workout, normalize URL with workoutId so the
+      // workout loading effect can open it deterministically.
+      if (resolvedWorkoutId) {
+        logger.debug('[Builder] Event has linked workout, routing to workoutId');
+        processedEventIdRef.current = eventId;
+        const params = new URLSearchParams();
+        if (urlClientId) {
+          params.set('client', urlClientId);
+        } else if (trackerClientId) {
+          params.set('client', trackerClientId);
+        }
+        if (dateParam) params.set('date', dateParam);
+        params.set('eventId', eventId);
+        params.set('workoutId', resolvedWorkoutId);
+        router.replace(`/workouts/builder?${params.toString()}`, { scroll: false });
+        return;
+      }
 
-    setQuickWorkoutInitialData({
-      date: dateParam || undefined,
-      category: category || undefined,
-      time: eventTime || undefined,
-      eventId: eventId
-    });
-    setQuickWorkoutDialogOpen(true);
+      // Get client from event
+      const eventClientId = getEventClientId(event) || trackerClientId;
 
-  }, [eventId, loading, calendarEvents.length, clientId, categoryParam, dateParam, workoutCategories]);
+      // Only call handleClientChange if client is NOT already in the URL
+      // (handleClientChange calls router.replace which would lose the eventId)
+      if (eventClientId && eventClientId !== 'none' && !urlClientId) {
+        handleClientChange(eventClientId);
+      }
+
+      // Get event details
+      const eventDate = new Date(event.start.dateTime);
+
+      // Set calendar date
+      setCalendarDate(eventDate);
+
+      // Get the category from URL or event
+      const category = categoryParam || event.preConfiguredCategory || getEventCategory(event);
+
+      // Event has no linked workout - open Quick Workout dialog to assign/create workout
+      const eventTime = event.start.dateTime ?
+        new Date(event.start.dateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+
+      logger.debug('[Builder] Opening Quick Workout dialog for unlinked event:', {
+        date: dateParam,
+        category: categoryParam,
+        eventId,
+        hasClient: !!eventClientId
+      });
+
+      processedEventIdRef.current = eventId;
+
+      setQuickWorkoutInitialData({
+        date: dateParam || undefined,
+        category: category || undefined,
+        time: eventTime || undefined,
+        eventId: eventId
+      });
+      setQuickWorkoutDialogOpen(true);
+    };
+
+    resolveLinkedWorkoutAndContinue();
+
+  }, [eventId, workoutId, loading, calendarEvents, clientId, categoryParam, dateParam, workoutCategories, router, searchParams, storeClients, urlClientId]);
 
   const handleSaveWorkout = async (workoutData: any, dateKey: string) => {
     try {
@@ -1232,7 +1313,7 @@ export default function BuilderPage() {
         console.log('[handleSaveWorkout] Creating workout, eventId:', workoutEventId, 'workoutId:', createdWorkout.id);
         if (workoutEventId && createdWorkout.id) {
           try {
-            await linkToWorkout(workoutEventId, createdWorkout.id);
+            await linkToWorkout(workoutEventId, createdWorkout.id, clientId ?? undefined);
             console.log('Successfully linked workout to calendar event:', workoutEventId);
           } catch (error) {
             console.error('Failed to link workout to calendar event:', error);
@@ -1260,7 +1341,7 @@ export default function BuilderPage() {
         console.log('[handleSaveWorkout] Updating workout, eventId:', workoutEventId, 'workoutId:', editingWorkout.id);
         if (workoutEventId && editingWorkout.id) {
           try {
-            await linkToWorkout(workoutEventId, editingWorkout.id);
+            await linkToWorkout(workoutEventId, editingWorkout.id, clientId ?? undefined);
             console.log('Successfully updated workout links on calendar event:', workoutEventId);
           } catch (error) {
             console.error('Failed to update workout links on calendar event:', error);
