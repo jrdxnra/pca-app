@@ -12,7 +12,7 @@ import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import { GoogleCalendarEventCard } from './GoogleCalendarEventCard';
-import { QuickWorkoutCreationDialog } from './QuickWorkoutCreationDialog';
+import { EventActionDialog } from './EventActionDialog';
 
 import { TwoColumnWeekView } from './TwoColumnWeekView';
 import { fetchWorkoutsByDateRange, fetchAllWorkoutsByDateRange } from '@/lib/firebase/services/clientWorkouts';
@@ -71,7 +71,7 @@ export function ModernCalendarView({
 
   // Quick workout creation dialog state
   const [quickWorkoutDialogOpen, setQuickWorkoutDialogOpen] = React.useState(false);
-  const [selectedEventForWorkout, setSelectedEventForWorkout] = React.useState<GoogleCalendarEvent | null>(null);
+  const [selectedEventForAction, setSelectedEventForAction] = React.useState<GoogleCalendarEvent | null>(null);
 
   // Workouts state - persistent across client switches, filter by client/date when rendering
   const [allWorkouts, setAllWorkouts] = React.useState<ClientWorkout[]>([]);
@@ -1994,6 +1994,9 @@ export function ModernCalendarView({
             const eventIdParam = `&eventId=${event.id}`;
             const buildWorkoutUrl = `/workouts/builder?${clientParam}date=${dateParam}${eventIdParam}`;
             router.push(buildWorkoutUrl);
+          } else if (event.isCoachingSession && !clientIdToUse) {
+            // No client assigned - open Event Action dialog to assign client
+            setSelectedEventForAction(event);
           }
         }}
         onWorkoutClick={(workout) => {
@@ -2016,16 +2019,23 @@ export function ModernCalendarView({
         />
       )}
 
-      {/* Quick Workout Creation Dialog */}
-      <QuickWorkoutCreationDialog
-        open={quickWorkoutDialogOpen}
-        onOpenChange={setQuickWorkoutDialogOpen}
-        event={selectedEventForWorkout}
-        onCreateWorkout={(clientId, workoutStructureId, eventId) => {
-          // This will be handled by the dialog itself - it navigates to the builder
-          console.log('Creating workout:', { clientId, workoutStructureId, eventId });
-        }}
-      />
+      {/* Event Action Dialog for unassigned events */}
+      {selectedEventForAction && (
+        <EventActionDialog
+          open={!!selectedEventForAction}
+          onOpenChange={(open) => !open && setSelectedEventForAction(null)}
+          event={selectedEventForAction}
+          clientId={selectedClient ?? undefined}
+          allEvents={calendarEvents}
+          clients={clients}
+          clientPrograms={clientPrograms}
+          onClientAssigned={() => {
+            // Refresh calendar after assignment
+            setSelectedEventForAction(null);
+            // Parent will handle refreshing via React Query
+          }}
+        />
+      )}
     </div>
   );
 }
