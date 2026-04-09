@@ -141,7 +141,11 @@ export function ExerciseRow({ exercise, roundIndex, exerciseIndex, isFirst, isLa
 
   const handleRemoveNote = () => {
     setShowNotes(false);
+  };
+
+  const handleDeleteNote = () => {
     updateExercise(roundIndex, exerciseIndex, { notes: '' });
+    setShowNotes(false);
   };
 
   return (
@@ -313,9 +317,16 @@ export function ExerciseRow({ exercise, roundIndex, exerciseIndex, isFirst, isLa
                   Add Note
                 </DropdownMenuItem>
               ) : (
-                <DropdownMenuItem onClick={handleRemoveNote}>
-                  Remove Note
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={handleRemoveNote}>
+                    Hide Note
+                  </DropdownMenuItem>
+                  {showNotes && exercise.notes && (
+                    <DropdownMenuItem onClick={handleDeleteNote} className="text-red-600">
+                      Delete Note
+                    </DropdownMenuItem>
+                  )}
+                </>
               )}
               {!isFirst && (
                 <DropdownMenuItem onClick={handleMoveUp}>
