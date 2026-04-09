@@ -37,6 +37,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+type HighlightStatus = 'new' | 'updated' | null;
+
 interface MovementListProps {
   movements: Movement[];
   categoryId: string;
@@ -52,7 +54,7 @@ function SortableMovementItem({
   currentEditData,
   editFormData,
   hasChanges,
-  expandedMovements,
+  highlightStatus,
   onToggleExpanded,
   onUpdateEditField,
   onSaveEdit,
@@ -65,7 +67,7 @@ function SortableMovementItem({
   currentEditData: any;
   editFormData: Record<string, any>;
   hasChanges: Record<string, boolean>;
-  expandedMovements: Set<string>;
+  highlightStatus: HighlightStatus;
   onToggleExpanded: (id: string) => void;
   onUpdateEditField: (id: string, field: string, value: any) => void;
   onSaveEdit: (id: string) => void;
@@ -88,10 +90,16 @@ function SortableMovementItem({
   };
 
   const configBadges = getConfigurationBadges(movement.configuration);
+  const rowHighlightClass =
+    highlightStatus === 'new'
+      ? 'bg-sky-50 border-sky-200'
+      : highlightStatus === 'updated'
+        ? 'bg-orange-50 border-orange-200'
+        : '';
 
   return (
     <div ref={setNodeRef} style={style} className="relative">
-      <Card className="overflow-hidden py-0">
+      <Card className={`overflow-hidden py-0 ${rowHighlightClass}`}>
         <CardContent className="p-0">
           {/* Movement Header */}
           <div className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors">
@@ -111,6 +119,16 @@ function SortableMovementItem({
               <div className="flex-1 min-w-0">
                 <h4 className="font-medium text-sm leading-tight">{movement.name}</h4>
               </div>
+              {highlightStatus === 'new' && (
+                <Badge variant="outline" className="text-[10px] border-sky-300 text-sky-700 bg-sky-100">
+                  New
+                </Badge>
+              )}
+              {highlightStatus === 'updated' && (
+                <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-700 bg-orange-100">
+                  Changed
+                </Badge>
+              )}
             </div>
           </div>
 
@@ -337,6 +355,19 @@ export const MovementList = React.memo(function MovementList({ movements, catego
     return badges;
   };
 
+  const getHighlightStatus = (movement: Movement): HighlightStatus => {
+    const highlight = movement.importHighlight;
+    if (!highlight) return null;
+
+    const expiresAtDate = (highlight.expiresAt as any)?.toDate?.();
+    if (!expiresAtDate || !(expiresAtDate instanceof Date)) return null;
+    if (expiresAtDate.getTime() < Date.now()) return null;
+
+    if (highlight.kind === 'new') return 'new';
+    if (highlight.kind === 'updated') return 'updated';
+    return null;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -517,7 +548,7 @@ export const MovementList = React.memo(function MovementList({ movements, catego
                   currentEditData={currentEditData}
                   editFormData={editFormData}
                   hasChanges={hasChanges}
-                  expandedMovements={expandedMovements}
+                  highlightStatus={getHighlightStatus(movement)}
                   onToggleExpanded={toggleExpanded}
                   onUpdateEditField={updateEditField}
                   onSaveEdit={saveEdit}
@@ -556,6 +587,21 @@ export const MovementList = React.memo(function MovementList({ movements, catego
     prevProps.categoryId === nextProps.categoryId &&
     prevProps.categoryColor === nextProps.categoryColor &&
     prevProps.loading === nextProps.loading &&
-    prevProps.movements.every((m, i) => m.id === nextProps.movements[i]?.id)
+    prevProps.movements.every((m, i) => {
+      const n = nextProps.movements[i];
+      if (!n) return false;
+      const prevUpdatedAt = (m.updatedAt as any)?.toMillis?.() || 0;
+      const nextUpdatedAt = (n.updatedAt as any)?.toMillis?.() || 0;
+      const prevHighlightKind = m.importHighlight?.kind || '';
+      const nextHighlightKind = n.importHighlight?.kind || '';
+      const prevHighlightExpiry = (m.importHighlight?.expiresAt as any)?.toMillis?.() || 0;
+      const nextHighlightExpiry = (n.importHighlight?.expiresAt as any)?.toMillis?.() || 0;
+      return (
+        m.id === n.id &&
+        prevUpdatedAt === nextUpdatedAt &&
+        prevHighlightKind === nextHighlightKind &&
+        prevHighlightExpiry === nextHighlightExpiry
+      );
+    })
   );
 });

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Select,
@@ -11,11 +12,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus, Dumbbell, Palette } from 'lucide-react';
+import { MovementCategory } from '@/lib/types';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { AddCategoryDialog } from '@/components/movements/AddCategoryDialog';
 import { EditCategoryDialog } from '@/components/movements/EditCategoryDialog';
 import { AddMovementDialog } from '@/components/movements/AddMovementDialog';
+import { BulkMovementUploadDialog } from '@/components/movements/BulkMovementUploadDialog';
 import { MovementList } from '@/components/movements/MovementList';
 
 export default function MovementsPage() {
@@ -66,6 +69,14 @@ export default function MovementsPage() {
   const loading = categoriesLoading || movementsLoading;
   const error = categoriesError || movementsError;
 
+  const isCategoryRecentlyNew = (category: MovementCategory): boolean => {
+    const highlight = category?.importHighlight;
+    if (!highlight || highlight.kind !== 'new') return false;
+    const expiresAt = (highlight.expiresAt as any)?.toDate?.();
+    if (!expiresAt || !(expiresAt instanceof Date)) return false;
+    return expiresAt.getTime() >= Date.now();
+  };
+
   return (
     <div className="w-full px-1 pt-1 pb-4 space-y-2">
       {/* Toolbar */}
@@ -91,6 +102,11 @@ export default function MovementsPage() {
                           style={{ backgroundColor: selectedCategory.color }}
                         />
                         <span className="truncate">{selectedCategory.name}</span>
+                        {isCategoryRecentlyNew(selectedCategory) && (
+                          <Badge variant="outline" className="text-[10px] border-sky-300 text-sky-700 bg-sky-100">
+                            New
+                          </Badge>
+                        )}
                       </div>
                     )}
                   </SelectValue>
@@ -104,6 +120,11 @@ export default function MovementsPage() {
                           style={{ backgroundColor: category.color }}
                         />
                         <span>{category.name}</span>
+                        {isCategoryRecentlyNew(category) && (
+                          <Badge variant="outline" className="text-[10px] border-sky-300 text-sky-700 bg-sky-100">
+                            New
+                          </Badge>
+                        )}
                       </div>
                     </SelectItem>
                   ))}
@@ -113,6 +134,15 @@ export default function MovementsPage() {
 
             {/* Right - Actions */}
             <div className="flex items-center gap-2">
+              <BulkMovementUploadDialog
+                categories={categories}
+                onImportComplete={async () => {
+                  await fetchCategories();
+                  if (selectedCategory) {
+                    await fetchMovementsByCategory(selectedCategory.id);
+                  }
+                }}
+              />
               {selectedCategory && (
                 <AddMovementDialog 
                   categoryId={selectedCategory.id}
@@ -183,6 +213,8 @@ export default function MovementsPage() {
                       key={category.id}
                       onClick={() => setSelectedCategory(category)}
                       className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors hover:bg-accent min-w-0 ${
+                        isCategoryRecentlyNew(category) ? 'bg-sky-50 border border-sky-200' : ''
+                      } ${
                         selectedCategory?.id === category.id 
                           ? 'bg-primary/10 border border-primary/20' 
                           : 'hover:bg-muted'
@@ -193,6 +225,11 @@ export default function MovementsPage() {
                         style={{ backgroundColor: category.color }}
                       />
                       <span className="flex-1 font-medium text-sm truncate">{category.name}</span>
+                      {isCategoryRecentlyNew(category) && (
+                        <Badge variant="outline" className="text-[10px] border-sky-300 text-sky-700 bg-sky-100">
+                          New
+                        </Badge>
+                      )}
                       <EditCategoryDialog category={category} />
                     </div>
                   ))
@@ -240,7 +277,14 @@ export default function MovementsPage() {
                         style={{ backgroundColor: selectedCategory.color }}
                       />
                       <div>
-                        <CardTitle className="text-lg">{selectedCategory.name}</CardTitle>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          {selectedCategory.name}
+                          {isCategoryRecentlyNew(selectedCategory) && (
+                            <Badge variant="outline" className="text-[10px] border-sky-300 text-sky-700 bg-sky-100">
+                              New
+                            </Badge>
+                          )}
+                        </CardTitle>
                         <CardDescription>
                           {movements.length} movement{movements.length !== 1 ? 's' : ''}
                         </CardDescription>

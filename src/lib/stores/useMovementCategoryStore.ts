@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Timestamp } from 'firebase/firestore';
 import { MovementCategory } from '@/lib/types';
 import {
   getAllMovementCategories,
@@ -58,7 +59,19 @@ export const useMovementCategoryStore = create<MovementCategoryStore>((set, get)
   addCategory: async (categoryData) => {
     set({ loading: true, error: null });
     try {
-      const id = await addMovementCategory(categoryData);
+      const now = new Date();
+      const expiresAt = new Date(now);
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      const id = await addMovementCategory({
+        ...categoryData,
+        importHighlight: {
+          kind: 'new',
+          source: 'manual',
+          at: Timestamp.fromDate(now),
+          expiresAt: Timestamp.fromDate(expiresAt),
+        },
+      });
       await get().fetchCategories(); // Refresh to get updated list
       set({ loading: false });
       return id;

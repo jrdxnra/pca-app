@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Timestamp } from 'firebase/firestore';
 import { Movement } from '@/lib/types';
 import {
   getAllMovements,
@@ -77,9 +78,19 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
       // Get next ordinal for the category
       const ordinal = await getNextOrdinal(movementData.categoryId);
 
+      const now = new Date();
+      const expiresAt = new Date(now);
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
       const id = await addMovement({
         ...movementData,
-        ordinal
+        ordinal,
+        importHighlight: {
+          kind: 'new',
+          source: 'manual',
+          at: Timestamp.fromDate(now),
+          expiresAt: Timestamp.fromDate(expiresAt),
+        },
       });
 
       // Refresh movements for current category
@@ -102,7 +113,19 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
   editMovement: async (id, updates) => {
     set({ loading: true, error: null });
     try {
-      await updateMovement(id, updates);
+      const now = new Date();
+      const expiresAt = new Date(now);
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      await updateMovement(id, {
+        ...updates,
+        importHighlight: {
+          kind: 'updated',
+          source: 'manual',
+          at: Timestamp.fromDate(now),
+          expiresAt: Timestamp.fromDate(expiresAt),
+        }
+      });
 
       // Update local state
       const { movements } = get();

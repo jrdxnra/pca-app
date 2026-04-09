@@ -169,6 +169,12 @@ export interface MovementCategory {
   order?: number;
   linkedWorkoutStructureTemplateId?: string; // Link to template
   defaultConfiguration?: MovementConfiguration;
+  importHighlight?: {
+    kind: 'new';
+    source: 'bulk-upload' | 'manual';
+    at: Timestamp;
+    expiresAt: Timestamp;
+  };
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy?: string;
@@ -185,6 +191,12 @@ export interface Movement {
   configuration: MovementConfiguration;
   instructions?: string;
   links: string[]; // Video URLs or other resources
+  importHighlight?: {
+    kind: 'new' | 'updated';
+    source: 'bulk-upload' | 'manual';
+    at: Timestamp;
+    expiresAt: Timestamp;
+  };
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -416,12 +428,24 @@ export interface ClientWorkoutRound {
   movementUsages: ClientWorkoutMovementUsage[];
 }
 
+export interface WorkoutSetEntry {
+  reps?: string;
+  tempo?: string;
+  time?: string;
+  weight?: string;
+  distance?: number;
+  pace?: number;
+  percentage?: number;
+  rpe?: string;
+}
+
 export interface ClientWorkoutMovementUsage {
   ordinal: number;
   movementId: string;
   categoryId: string;
   note?: string;
   targetWorkload: ClientWorkoutTargetWorkload;
+  setEntries?: WorkoutSetEntry[]; // Optional per-set values when coach expands a movement by round sets
 }
 
 export interface ClientWorkoutTargetWorkload extends TargetWorkload { }

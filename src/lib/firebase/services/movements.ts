@@ -19,6 +19,16 @@ import { getMovementCategory } from './movementCategories';
 
 const COLLECTION_NAME = 'movements';
 
+export interface AddMovementInput {
+  name: string;
+  categoryId: string;
+  ordinal: number;
+  configuration?: Movement['configuration'];
+  links?: string[];
+  instructions?: string;
+  importHighlight?: Movement['importHighlight'];
+}
+
 // Helper to get current account ID
 async function getAccountId(): Promise<string> {
   const accountId = await resolveActiveAccountId();
@@ -33,7 +43,7 @@ async function getAccountId(): Promise<string> {
  * If configuration is not provided, uses the category's default configuration
  */
 export async function addMovement(
-  movementData: Omit<Movement, 'id' | 'createdAt' | 'updatedAt'>
+  movementData: AddMovementInput
 ): Promise<string> {
   try {
     // If no configuration provided, try to get it from category
@@ -69,6 +79,7 @@ export async function addMovement(
       configuration: configuration,
       links: movementData.links || [],
       ...(movementData.instructions && { instructions: movementData.instructions }),
+      ...(movementData.importHighlight && { importHighlight: movementData.importHighlight }),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
       ownerId: await getAccountId(),
@@ -207,6 +218,7 @@ export async function updateMovement(
     if (updates.configuration !== undefined) cleanUpdates.configuration = updates.configuration;
     if (updates.links !== undefined) cleanUpdates.links = updates.links;
     if (updates.instructions !== undefined) cleanUpdates.instructions = updates.instructions;
+    if (updates.importHighlight !== undefined) cleanUpdates.importHighlight = updates.importHighlight;
 
     await updateDoc(docRef, cleanUpdates);
   } catch (error) {

@@ -1,0 +1,6 @@
+Instructions: Create a copy before editing. One movement per row starting under the header row.
+Instructions: Required fields are categoryName and movementName. links and instructions are optional; leave blank to keep existing values unchanged.
+Instructions: Re-uploading this file can add new movements and update links/instructions for existing movements with matching categoryName + movementName.
+categoryName,movementName,links,instructions
+Squat,Back Squat,https://example.com/video,Barbell back squat
+Horizontal Push,Push Up,,Bodyweight push variation
