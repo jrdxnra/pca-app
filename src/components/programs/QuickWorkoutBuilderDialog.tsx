@@ -166,6 +166,11 @@ export function QuickWorkoutBuilderDialog({
   const { createTestEvent, linkToWorkout, deleteEvent, events: calendarEvents, updateEvent } = useCalendarStore();
   const { findPeriodForDate } = useClientPrograms(clientId);
 
+  const normalizeTemplateSelection = (value?: string): string => {
+    if (!value) return '';
+    return value.replace(/^structure-(fill|ai):/, '');
+  };
+
   // Handle initialOpen changes
   useEffect(() => {
     if (initialOpen) {
@@ -240,7 +245,7 @@ export function QuickWorkoutBuilderDialog({
     // If we have an eventId to link to (from calendar event), link it
     if (eventIdToLink && createdWorkout?.id) {
       try {
-        await linkToWorkout(eventIdToLink, createdWorkout.id);
+        await linkToWorkout(eventIdToLink, createdWorkout.id, workoutData.clientId);
         console.log('✅ Linked workout to existing calendar event:', createdWorkout.id, eventIdToLink);
       } catch (error) {
         console.error('❌ Error linking workout to calendar event:', error);
@@ -272,7 +277,7 @@ export function QuickWorkoutBuilderDialog({
         });
 
         // Link event to workout
-        await linkToWorkout(event.id, createdWorkout.id);
+        await linkToWorkout(event.id, createdWorkout.id, workoutData.clientId);
 
         console.log('✅ Created calendar event for workout:', createdWorkout.id, event.id);
       } catch (error) {
@@ -299,7 +304,8 @@ export function QuickWorkoutBuilderDialog({
       const category = workoutCategories.find(cat => cat.name === selectedCategory);
 
       const linkedTemplateId = category?.linkedWorkoutStructureTemplateId;
-      const templateIdToUse = selectedTemplate || linkedTemplateId;
+      const selectedTemplateId = normalizeTemplateSelection(selectedTemplate);
+      const templateIdToUse = selectedTemplateId || linkedTemplateId;
       const template = templateIdToUse && workoutStructureTemplates.find(t => t.id === templateIdToUse);
       const appliedTemplateId = template ? templateIdToUse : undefined;
 
@@ -385,7 +391,8 @@ export function QuickWorkoutBuilderDialog({
       const category = workoutCategories.find(cat => cat.name === selectedCategory);
 
       const linkedTemplateId = category?.linkedWorkoutStructureTemplateId;
-      const templateIdToUse = selectedTemplate || linkedTemplateId;
+      const selectedTemplateId = normalizeTemplateSelection(selectedTemplate);
+      const templateIdToUse = selectedTemplateId || linkedTemplateId;
       const template = templateIdToUse && workoutStructureTemplates.find(t => t.id === templateIdToUse);
       const appliedTemplateId = template ? templateIdToUse : undefined;
 
@@ -593,6 +600,31 @@ export function QuickWorkoutBuilderDialog({
                       <SelectValue placeholder="Select template (optional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      {workoutStructureTemplates.map((template) => {
+                        const category = workoutCategories.find(cat => cat.name === selectedCategory);
+                        const isLinked = category?.linkedWorkoutStructureTemplateId === template.id;
+                        const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
+                        return (
+                          <SelectItem key={`fill-${template.id}`} value={`structure-fill:${template.id}`}>
+                            <div className="flex items-center gap-2 w-full">
+                              <span>{template.name} + Fill{isLinked ? ' (default)' : ''}</span>
+                              {abbrevList.length > 0 && (
+                                <div className="flex items-center gap-1 ml-auto">
+                                  {abbrevList.map((item, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
+                                      style={{ backgroundColor: item.color }}
+                                    >
+                                      {item.abbrev}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
                       {workoutStructureTemplates.map((template) => {
                         const category = workoutCategories.find(cat => cat.name === selectedCategory);
                         const isLinked = category?.linkedWorkoutStructureTemplateId === template.id;

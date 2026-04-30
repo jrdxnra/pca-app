@@ -7,6 +7,34 @@ import { storeTokens, getStoredTokens } from '@/lib/google-calendar/adapters/tok
  * Handles OAuth callback from Google, exchanges code for tokens, and stores them
  */
 export async function GET(request: NextRequest) {
+  const isCloudEnvironment = Boolean(process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT);
+
+  const getSafeOrigin = () => {
+    const origin = request.nextUrl.origin;
+    try {
+      const url = new URL(origin);
+      if (url.hostname === '0.0.0.0' || url.hostname === '::' || url.hostname === '[::]') {
+        url.hostname = 'localhost';
+      }
+      return url.origin;
+    } catch {
+      return 'http://localhost:3000';
+    }
+  };
+
+  const getBaseUrl = () => {
+    if (!isCloudEnvironment) {
+      return getSafeOrigin();
+    }
+
+    const envRedirectUri = process.env.GOOGLE_REDIRECT_URI?.trim();
+    if (envRedirectUri) {
+      return envRedirectUri.replace('/api/auth/google/callback', '');
+    }
+
+    return 'https://performancecoach.web.app';
+  };
+
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
   const error = searchParams.get('error');
@@ -15,48 +43,23 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('OAuth error:', error);
-    // Determine base URL for redirect
-    let baseUrl = request.nextUrl.origin;
-    if (process.env.GOOGLE_REDIRECT_URI) {
-      baseUrl = process.env.GOOGLE_REDIRECT_URI.replace('/api/auth/google/callback', '');
-    } else if (process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT) {
-      baseUrl = 'https://performancecoach.web.app';
-    }
-
+    const baseUrl = getBaseUrl();
     return NextResponse.redirect(`${baseUrl}/configure?error=${encodeURIComponent(error)}`);
   }
 
   if (!code) {
     console.error('[OAuth Callback] No code received');
-    return NextResponse.redirect(
-      new URL('/configure?error=no_code', request.url)
-    );
+    const baseUrl = getBaseUrl();
+    return NextResponse.redirect(`${baseUrl}/configure?error=no_code`);
   }
 
   try {
-    // Use GOOGLE_REDIRECT_URI from environment if set (must match what was used in auth)
-    // Otherwise, build from request origin (for local development)
-    let callbackUrl: string;
     const envRedirectUri = process.env.GOOGLE_REDIRECT_URI?.trim();
+    const callbackUrl = isCloudEnvironment
+      ? (envRedirectUri || 'https://performancecoach.web.app/api/auth/google/callback')
+      : `${getSafeOrigin()}/api/auth/google/callback`;
 
-    if (envRedirectUri && envRedirectUri.length > 0) {
-      callbackUrl = envRedirectUri;
-      console.log('[OAuth Callback] Using GOOGLE_REDIRECT_URI:', callbackUrl);
-    } else {
-      // Fallback to dynamic origin (local development only)
-      const origin = request.nextUrl.origin;
-      const isCloudRun = origin.includes('0.0.0.0') || origin.includes('127.0.0.1') || process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT;
-
-      if (isCloudRun) {
-        console.error('[OAuth Callback] ERROR: Running on Cloud Run but GOOGLE_REDIRECT_URI not set!');
-        return NextResponse.redirect(
-          new URL('/configure?error=GOOGLE_REDIRECT_URI_not_configured', request.url)
-        );
-      }
-
-      callbackUrl = `${origin}/api/auth/google/callback`;
-      console.warn('[OAuth Callback] WARNING: GOOGLE_REDIRECT_URI not set! Using:', callbackUrl);
-    }
+    console.log('[OAuth Callback] callbackUrl used for token exchange:', callbackUrl);
 
     // Exchange code for tokens
     const tokens = await getTokensFromCode(code, callbackUrl);
@@ -82,44 +85,13 @@ export async function GET(request: NextRequest) {
     }, userId);
 
     console.log('[OAuth Callback] Tokens stored successfully via adapter');
-
-    // Redirect to configure page with success
-    let redirectUrl: string;
-    if (process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT) {
-      // Cloud Run
-      if (envRedirectUri && envRedirectUri.length > 0) {
-        const baseUrl = envRedirectUri.replace('/api/auth/google/callback', '');
-        redirectUrl = `${baseUrl}/configure?connected=true`;
-      } else {
-        redirectUrl = 'https://performancecoach.web.app/configure?connected=true';
-      }
-      return NextResponse.redirect(redirectUrl);
-    } else {
-      // Local dev
-      if (envRedirectUri && envRedirectUri.length > 0) {
-        const baseUrl = envRedirectUri.replace('/api/auth/google/callback', '');
-        redirectUrl = `${baseUrl}/configure?connected=true`;
-      } else {
-        const hostname = request.headers.get('host')?.split(':')[0] || 'localhost';
-        redirectUrl = `https://${hostname}/configure?connected=true`;
-      }
-      return NextResponse.redirect(redirectUrl);
-    }
+    const baseUrl = getBaseUrl();
+    return NextResponse.redirect(`${baseUrl}/configure?connected=true`);
   } catch (error) {
     console.error('Error exchanging code for tokens:', error);
     const errorMessage = error instanceof Error ? error.message : 'token_exchange_failed';
 
-    // Determine safe base URL for error redirect
-    let baseUrl = request.nextUrl.origin;
-
-    if (process.env.GOOGLE_REDIRECT_URI && process.env.GOOGLE_REDIRECT_URI.length > 0) {
-      // Use configured production URI base
-      baseUrl = process.env.GOOGLE_REDIRECT_URI.replace('/api/auth/google/callback', '');
-    } else if (process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT) {
-      // Fallback for Cloud Run if env var missing
-      baseUrl = 'https://performancecoach.web.app';
-    }
-
+    const baseUrl = getBaseUrl();
     return NextResponse.redirect(`${baseUrl}/configure?error=${encodeURIComponent(errorMessage)}`);
   }
 }

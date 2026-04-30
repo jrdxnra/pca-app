@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { getActiveMembership } from '@/lib/firebase/services/memberships';
 import styles from './admin.module.css';
+import type { KnowledgeEntry } from '@/app/api/admin/knowledge/route';
 
 interface Coach {
     id: string;
@@ -36,6 +37,24 @@ export default function AdminPage() {
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteRole, setInviteRole] = useState<'coach' | 'client'>('coach');
     const [inviting, setInviting] = useState(false);
+    const [activeTab, setActiveTab] = useState<'team' | 'knowledge'>('team');
+
+    // Knowledge state
+    const [knowledgeEntries, setKnowledgeEntries] = useState<KnowledgeEntry[]>([]);
+    const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+    const [editingEntry, setEditingEntry] = useState<KnowledgeEntry | null>(null);
+    const [showKnowledgeForm, setShowKnowledgeForm] = useState(false);
+    const [knowledgeSaving, setKnowledgeSaving] = useState(false);
+    const emptyEntry = (): KnowledgeEntry => ({
+        title: '',
+        summary: '',
+        useWhen: [''],
+        avoidWhen: [''],
+        decisionRules: [''],
+        movementBias: [''],
+        loadingGuidance: [''],
+        coachingNotes: [''],
+    });
 
     // Check if user is owner
     useEffect(() => {
@@ -202,6 +221,80 @@ export default function AdminPage() {
         }
     };
 
+    const loadKnowledge = async () => {
+        if (!idToken) return;
+        setKnowledgeLoading(true);
+        try {
+            const res = await fetch('/api/admin/knowledge', {
+                headers: { authorization: `Bearer ${idToken}` },
+            });
+            const data = await res.json();
+            setKnowledgeEntries(data.entries || []);
+        } catch {
+            // silently fail — knowledge dir may not exist yet
+        } finally {
+            setKnowledgeLoading(false);
+        }
+    };
+
+    const handleSaveKnowledge = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingEntry || !idToken) return;
+        setKnowledgeSaving(true);
+        try {
+            const res = await fetch('/api/admin/knowledge', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    authorization: `Bearer ${idToken}`,
+                },
+                body: JSON.stringify(editingEntry),
+            });
+            if (!res.ok) throw new Error('Failed to save');
+            setSuccess('Knowledge entry saved.');
+            setShowKnowledgeForm(false);
+            setEditingEntry(null);
+            await loadKnowledge();
+        } catch {
+            setError('Failed to save knowledge entry.');
+        } finally {
+            setKnowledgeSaving(false);
+        }
+    };
+
+    const handleDeleteKnowledge = async (id: string) => {
+        if (!idToken || !window.confirm('Delete this knowledge entry?')) return;
+        try {
+            const res = await fetch(`/api/admin/knowledge?id=${encodeURIComponent(id)}`, {
+                method: 'DELETE',
+                headers: { authorization: `Bearer ${idToken}` },
+            });
+            if (!res.ok) throw new Error('Failed to delete');
+            setSuccess('Entry deleted.');
+            setKnowledgeEntries((prev) => prev.filter((e) => e.id !== id));
+        } catch {
+            setError('Failed to delete entry.');
+        }
+    };
+
+    const updateListField = (field: keyof KnowledgeEntry, index: number, value: string) => {
+        if (!editingEntry) return;
+        const list = [...((editingEntry[field] as string[]) || [])];
+        list[index] = value;
+        setEditingEntry({ ...editingEntry, [field]: list });
+    };
+
+    const addListItem = (field: keyof KnowledgeEntry) => {
+        if (!editingEntry) return;
+        setEditingEntry({ ...editingEntry, [field]: [...((editingEntry[field] as string[]) || []), ''] });
+    };
+
+    const removeListItem = (field: keyof KnowledgeEntry, index: number) => {
+        if (!editingEntry) return;
+        const list = ((editingEntry[field] as string[]) || []).filter((_, i) => i !== index);
+        setEditingEntry({ ...editingEntry, [field]: list });
+    };
+
     if (loading) {
         return (
             <div className={styles.container}>
@@ -222,12 +315,32 @@ export default function AdminPage() {
         <div className={styles.container}>
             <div className={styles.header}>
                 <h1>Admin Panel</h1>
-                <p>Manage coaches and team members</p>
+                <p>Manage coaches, team members, and training knowledge</p>
             </div>
 
             {error && <div className={styles.alert + ' ' + styles.error}>{error}</div>}
             {success && <div className={styles.alert + ' ' + styles.success}>{success}</div>}
 
+            {/* Tab Navigation */}
+            <div className={styles.tabNav}>
+                <button
+                    className={styles.tabButton + (activeTab === 'team' ? ' ' + styles.tabButtonActive : '')}
+                    onClick={() => setActiveTab('team')}
+                >
+                    Team
+                </button>
+                <button
+                    className={styles.tabButton + (activeTab === 'knowledge' ? ' ' + styles.tabButtonActive : '')}
+                    onClick={() => {
+                        setActiveTab('knowledge');
+                        if (knowledgeEntries.length === 0) loadKnowledge();
+                    }}
+                >
+                    Training Knowledge
+                </button>
+            </div>
+
+            {activeTab === 'team' && (<>
             {/* Coaches Section */}
             <section className={styles.section}>
                 <div className={styles.sectionHeader}>
@@ -327,6 +440,127 @@ export default function AdminPage() {
                                         </div>
                                     </div>
                                 ))}
+                        </div>
+                    )}
+                </section>
+            )}
+            </>)}
+
+            {activeTab === 'knowledge' && (
+                <section className={styles.section}>
+                    <div className={styles.sectionHeader}>
+                        <div>
+                            <h2>Training Knowledge</h2>
+                            <p className={styles.sectionDescription}>
+                                Author your programming principles, movement rules, and coaching style. This library guides workout generation.
+                            </p>
+                        </div>
+                        <button
+                            className={styles.primaryButton}
+                            onClick={() => { setEditingEntry(emptyEntry()); setShowKnowledgeForm(true); }}
+                        >
+                            + Add Principle
+                        </button>
+                    </div>
+
+                    {showKnowledgeForm && editingEntry && (
+                        <form className={styles.knowledgeForm} onSubmit={handleSaveKnowledge}>
+                            <h3 className={styles.formTitle}>{editingEntry.id ? 'Edit Principle' : 'New Principle'}</h3>
+
+                            <div className={styles.formGroup}>
+                                <label>Title *</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. Strength Block Progression"
+                                    value={editingEntry.title}
+                                    onChange={(e) => setEditingEntry({ ...editingEntry, title: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            <div className={styles.formGroup}>
+                                <label>Summary</label>
+                                <textarea
+                                    placeholder="One paragraph explaining the principle..."
+                                    value={editingEntry.summary || ''}
+                                    onChange={(e) => setEditingEntry({ ...editingEntry, summary: e.target.value })}
+                                    rows={3}
+                                />
+                            </div>
+
+                            {(
+                                [
+                                    { field: 'useWhen' as const, label: 'Use When', placeholder: 'e.g. Goal: hypertrophy, Phase: accumulation' },
+                                    { field: 'avoidWhen' as const, label: 'Avoid When', placeholder: 'e.g. Recovery week, Injury: lower back' },
+                                    { field: 'decisionRules' as const, label: 'Decision Rules', placeholder: 'e.g. If strength phase → prefer compound lifts first' },
+                                    { field: 'movementBias' as const, label: 'Movement Bias', placeholder: 'e.g. Primary: hinge, squat, push, pull' },
+                                    { field: 'loadingGuidance' as const, label: 'Loading Guidance', placeholder: 'e.g. Intensity: 70-85% 1RM, Volume: 3-5 sets x 3-6 reps' },
+                                    { field: 'coachingNotes' as const, label: 'Coaching Notes', placeholder: 'e.g. Cue: brace before descent' },
+                                ] as const
+                            ).map(({ field, label, placeholder }) => (
+                                <div key={field} className={styles.formGroup}>
+                                    <label>{label}</label>
+                                    {(editingEntry[field] as string[] || []).map((item, i) => (
+                                        <div key={i} className={styles.listInputRow}>
+                                            <input
+                                                type="text"
+                                                placeholder={placeholder}
+                                                value={item}
+                                                onChange={(e) => updateListField(field, i, e.target.value)}
+                                            />
+                                            <button type="button" className={styles.removeItemButton} onClick={() => removeListItem(field, i)}>×</button>
+                                        </div>
+                                    ))}
+                                    <button type="button" className={styles.addItemButton} onClick={() => addListItem(field)}>+ Add</button>
+                                </div>
+                            ))}
+
+                            <div className={styles.formActions}>
+                                <button type="submit" className={styles.primaryButton} disabled={knowledgeSaving}>
+                                    {knowledgeSaving ? 'Saving...' : 'Save Principle'}
+                                </button>
+                                <button type="button" className={styles.secondaryButton} onClick={() => { setShowKnowledgeForm(false); setEditingEntry(null); }}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    {knowledgeLoading ? (
+                        <p className={styles.empty}>Loading...</p>
+                    ) : knowledgeEntries.length === 0 && !showKnowledgeForm ? (
+                        <p className={styles.empty}>No principles yet. Click &quot;+ Add Principle&quot; to start building your training knowledge base.</p>
+                    ) : (
+                        <div className={styles.list}>
+                            {knowledgeEntries.map((entry) => (
+                                <div key={entry.id} className={styles.knowledgeItem}>
+                                    <div className={styles.itemContent}>
+                                        <h3>{entry.title}</h3>
+                                        {entry.summary && <p>{entry.summary}</p>}
+                                        {(entry.decisionRules?.filter(Boolean).length ?? 0) > 0 && (
+                                            <ul className={styles.rulePreview}>
+                                                {entry.decisionRules!.filter(Boolean).slice(0, 2).map((rule, i) => (
+                                                    <li key={i}>{rule}</li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                    <div className={styles.itemActions}>
+                                        <button
+                                            className={styles.secondaryButton}
+                                            onClick={() => { setEditingEntry({ ...entry }); setShowKnowledgeForm(true); }}
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            className={styles.dangerButton}
+                                            onClick={() => handleDeleteKnowledge(entry.id!)}
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </section>

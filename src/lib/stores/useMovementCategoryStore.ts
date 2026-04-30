@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { Timestamp } from 'firebase/firestore';
 import { MovementCategory } from '@/lib/types';
 import {
+  getDefaultCategoryConfiguration,
+  getDefaultCategoryDescription,
+} from '@/lib/movements/defaultCategoryConfigurations';
+import {
   getAllMovementCategories,
   addMovementCategory,
   updateMovementCategory,
@@ -41,7 +45,42 @@ export const useMovementCategoryStore = create<MovementCategoryStore>((set, get)
   fetchCategories: async () => {
     set({ loading: true, error: null });
     try {
-      const categories = await getAllMovementCategories();
+      let categories = await getAllMovementCategories();
+
+      const categoriesMissingDefaults = categories.filter((category) => !category.defaultConfiguration);
+      const categoriesMissingDescriptions = categories.filter(
+        (category) => !category.description?.trim() && !!getDefaultCategoryDescription(category.name)
+      );
+
+      const categoriesNeedingBackfill = new Map<string, Partial<MovementCategory>>();
+
+      if (categoriesMissingDefaults.length > 0) {
+        categoriesMissingDefaults.forEach((category) => {
+          categoriesNeedingBackfill.set(category.id, {
+            ...(categoriesNeedingBackfill.get(category.id) || {}),
+            defaultConfiguration: getDefaultCategoryConfiguration(category.name),
+          });
+        });
+      }
+
+      if (categoriesMissingDescriptions.length > 0) {
+        categoriesMissingDescriptions.forEach((category) => {
+          categoriesNeedingBackfill.set(category.id, {
+            ...(categoriesNeedingBackfill.get(category.id) || {}),
+            description: getDefaultCategoryDescription(category.name),
+          });
+        });
+      }
+
+      if (categoriesNeedingBackfill.size > 0) {
+        await Promise.all(
+          Array.from(categoriesNeedingBackfill.entries()).map(([id, updates]) =>
+            updateMovementCategory(id, updates)
+          )
+        );
+        categories = await getAllMovementCategories();
+      }
+
       set({
         categories,
         loading: false,

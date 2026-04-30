@@ -11,14 +11,12 @@ export async function GET(request: NextRequest) {
   let timeoutId: NodeJS.Timeout | undefined;
 
   try {
-    const timeoutPromise = new Promise<boolean>((_, reject) => {
+    // Fail open to "not authenticated" instead of throwing a 500 on slow auth checks.
+    const timeoutPromise = new Promise<boolean>((resolve) => {
       timeoutId = setTimeout(() => {
-        reject(new Error('Auth check timed out'));
+        resolve(false);
       }, 5000);
     });
-
-    // Handle timeout error to prevent unhandled rejection
-    timeoutPromise.catch((e) => { });
 
     // Check tokens using the abstraction adapter
     // This avoids Firebase imports in dev mode

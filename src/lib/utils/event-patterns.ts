@@ -21,6 +21,55 @@ export interface PatternMatchResult {
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+function cleanMetadataValue(value?: string): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'none') return null;
+  try {
+    return decodeURIComponent(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
+function extractParamFromDescriptionUrls(description: string, paramName: string): string | null {
+  if (!description) return null;
+
+  const urls = new Set<string>();
+
+  const hrefMatches = description.matchAll(/href=["']([^"']+)["']/gi);
+  for (const match of hrefMatches) {
+    if (match[1]) {
+      urls.add(match[1]);
+    }
+  }
+
+  const rawUrlMatches = description.matchAll(/https?:\/\/[^\s"'<>]+/gi);
+  for (const match of rawUrlMatches) {
+    if (match[0]) {
+      urls.add(match[0]);
+    }
+  }
+
+  for (const urlText of urls) {
+    const normalizedUrlText = urlText
+      .replace(/&amp;/gi, '&')
+      .replace(/&#38;/gi, '&');
+
+    try {
+      const url = new URL(normalizedUrlText);
+      const value = cleanMetadataValue(url.searchParams.get(paramName) || undefined);
+      if (value) return value;
+    } catch {
+      const looseMatch = normalizedUrlText.match(new RegExp(`(?:\\?|&|\\b)${paramName}=([^&#,\\s\\]}]+)`));
+      const looseValue = cleanMetadataValue(looseMatch?.[1]);
+      if (looseValue) return looseValue;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Get client ID from event metadata
  */
@@ -38,15 +87,22 @@ export function getEventClientId(event: GoogleCalendarEvent): string | null {
   // Check description metadata - try multiple patterns
   if (event.description) {
     // Pattern 1: [Metadata: ... client=...]
-    let clientMatch = event.description.match(/\[Metadata:.*client=([^,\s}\]]+)/);
-    if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
-      return clientMatch[1].trim();
+    let clientMatch = event.description.match(/\[Metadata:.*client=([^,\s}\]&]+)/);
+    const metadataClientId = cleanMetadataValue(clientMatch?.[1]);
+    if (metadataClientId) {
+      return metadataClientId;
     }
     
     // Pattern 2: client=... (without Metadata wrapper)
-    clientMatch = event.description.match(/client=([^,\s\n]+)/);
-    if (clientMatch && clientMatch[1] && clientMatch[1] !== 'none') {
-      return clientMatch[1].trim();
+    clientMatch = event.description.match(/(?:\?|&|\b)client=([^&#,\s\n}\]]+)/);
+    const fallbackClientId = cleanMetadataValue(clientMatch?.[1]);
+    if (fallbackClientId) {
+      return fallbackClientId;
+    }
+
+    const urlClientId = extractParamFromDescriptionUrls(event.description, 'client');
+    if (urlClientId) {
+      return urlClientId;
     }
   }
   
@@ -65,15 +121,22 @@ export function hasLinkedWorkout(event: GoogleCalendarEvent): boolean {
  */
 export function getLinkedWorkoutId(event: GoogleCalendarEvent): string | null {
   // Check direct property first
-  if (event.linkedWorkoutId) {
-    return event.linkedWorkoutId;
+  const directWorkoutId = cleanMetadataValue(event.linkedWorkoutId);
+  if (directWorkoutId) {
+    return directWorkoutId;
   }
   
   // Check description for workoutId metadata
   if (event.description) {
-    const workoutMatch = event.description.match(/workoutId=([^,\s}\]]+)/);
-    if (workoutMatch && workoutMatch[1] && workoutMatch[1] !== 'none') {
-      return workoutMatch[1].trim();
+    const workoutMatch = event.description.match(/(?:\?|&|\b)workoutId=([^&#,\s}\]]+)/);
+    const parsedWorkoutId = cleanMetadataValue(workoutMatch?.[1]);
+    if (parsedWorkoutId) {
+      return parsedWorkoutId;
+    }
+
+    const urlWorkoutId = extractParamFromDescriptionUrls(event.description, 'workoutId');
+    if (urlWorkoutId) {
+      return urlWorkoutId;
     }
   }
   

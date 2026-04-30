@@ -36,6 +36,10 @@ export interface EventUpdateParams {
   start?: { dateTime: string; timeZone: string };
   end?: { dateTime: string; timeZone: string };
   location?: string;
+  extendedProperties?: {
+    private?: Record<string, string>;
+    shared?: Record<string, string>;
+  };
 }
 
 /**
@@ -191,6 +195,22 @@ export async function updateSingleInstance(
   updates: EventUpdateParams
 ): Promise<calendar_v3.Schema$Event> {
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+  // First try patching the given event directly. This covers one-time events and
+  // recurring instances where the caller already has the instance event ID.
+  try {
+    const directResponse = await calendar.events.patch({
+      calendarId,
+      eventId: recurringEventId,
+      requestBody: updates,
+    });
+
+    if (directResponse.data) {
+      return directResponse.data;
+    }
+  } catch {
+    // Fall back to recurring master + instance lookup below.
+  }
 
   // Find the specific instance
   const startOfDay = new Date(instanceDate);
@@ -459,15 +479,22 @@ export async function getEvents(
       fields: 'items(id,summary,description,start,end,location,attendees,creator,htmlLink,extendedProperties,colorId,recurringEventId)',
     });
 
-    // Debug: Log all events with extendedProperties to find synced events
     const events = response.data.items || [];
-    const eventsWithProps = events.filter(e => e.extendedProperties);
-    if (eventsWithProps.length > 0) {
-      console.log(`[getEvents] Found ${eventsWithProps.length} events with extendedProperties:`);
-      eventsWithProps.forEach(event => {
-        console.log(`  - "${event.summary}" at ${event.start?.dateTime || event.start?.date}:`, 
-          JSON.stringify(event.extendedProperties, null, 2));
-      });
+
+    // Optional debug logging only when explicitly enabled.
+    // This avoids flooding stdout with large extendedProperties payloads on every poll.
+    if (process.env.NODE_ENV === 'development' && process.env.DEBUG_CALENDAR_EVENTS === '1') {
+      const eventsWithProps = events.filter((event) => event.extendedProperties);
+      if (eventsWithProps.length > 0) {
+        console.log(`[getEvents] ${eventsWithProps.length} events include extendedProperties`);
+        eventsWithProps.slice(0, 10).forEach((event) => {
+          const sharedKeys = Object.keys(event.extendedProperties?.shared || {});
+          const privateKeys = Object.keys(event.extendedProperties?.private || {});
+          console.log(
+            `[getEvents] "${event.summary}" at ${event.start?.dateTime || event.start?.date} | shared keys: ${sharedKeys.join(', ') || 'none'} | private keys: ${privateKeys.join(', ') || 'none'}`
+          );
+        });
+      }
     }
 
     return events;

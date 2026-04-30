@@ -122,6 +122,14 @@ import { useMovementStore } from '@/lib/stores/useMovementStore';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
+import { auth } from '@/lib/firebase/config';
+import { fetchClientWorkouts } from '@/lib/firebase/services/clientWorkouts';
+import { getClient } from '@/lib/firebase/services/clients';
+import {
+  buildWorkoutDraftFromHistory,
+  type GenerateWorkoutDraftResponse,
+  type HistoricalWorkoutForDraft,
+} from '@/lib/ai/workoutDraft';
 import { WarmupEditor } from './WarmupEditor';
 import { RoundEditor } from './RoundEditor';
 import { MovementUsageRow } from './MovementUsageRow';
@@ -155,6 +163,32 @@ const DEFAULT_TARGET_WORKLOAD: ClientWorkoutTargetWorkload = {
   usePercentage: false,
   useRPE: false,
   unilateral: false,
+};
+
+const createDefaultRounds = (): ClientWorkoutRound[] => ([
+  {
+    ordinal: 1,
+    sets: 1,
+    movementUsages: [
+      {
+        ordinal: 1,
+        movementId: '',
+        categoryId: '',
+        note: '',
+        targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
+      }
+    ]
+  }
+]);
+
+const hasMeaningfulRoundData = (rounds: ClientWorkoutRound[]): boolean => {
+  return rounds.some((round) => {
+    const hasSection = Boolean(round.sectionName?.trim() || round.workoutTypeId?.trim());
+    const hasMovement = (round.movementUsages || []).some((usage) =>
+      Boolean(usage.movementId?.trim() || usage.categoryId?.trim() || usage.note?.trim())
+    );
+    return hasSection || hasMovement;
+  });
 };
 
 interface WorkoutEditorProps {
@@ -194,6 +228,72 @@ interface WorkoutDraft {
   rounds: ClientWorkoutRound[];
   currentTemplateId?: string;
   savedAt: number;
+}
+
+interface FillDebugEvent {
+  at: string;
+  event: string;
+  payload?: Record<string, unknown>;
+}
+
+const FILL_DEBUG_STORAGE_KEY = 'pca-debug-fill-workout-editor';
+const LEGACY_AI_DEBUG_STORAGE_KEY = 'pca-debug-ai-workout-editor';
+const FILL_DEBUG_QUERY_PARAM = 'debugFillWorkoutEditor';
+const LEGACY_AI_DEBUG_QUERY_PARAM = 'debugAiWorkoutEditor';
+
+function resolveFillDebugEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const queryValue = params.get(FILL_DEBUG_QUERY_PARAM) ?? params.get(LEGACY_AI_DEBUG_QUERY_PARAM);
+
+    if (queryValue !== null) {
+      const normalized = queryValue.toLowerCase();
+      const enabled = normalized === '1' || normalized === 'true' || normalized === 'on';
+
+      if (enabled) {
+        localStorage.setItem(FILL_DEBUG_STORAGE_KEY, '1');
+        localStorage.setItem(LEGACY_AI_DEBUG_STORAGE_KEY, '1');
+      } else {
+        localStorage.removeItem(FILL_DEBUG_STORAGE_KEY);
+        localStorage.removeItem(LEGACY_AI_DEBUG_STORAGE_KEY);
+      }
+
+      return enabled;
+    }
+
+    return (
+      localStorage.getItem(FILL_DEBUG_STORAGE_KEY) === '1' ||
+      localStorage.getItem(LEGACY_AI_DEBUG_STORAGE_KEY) === '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+function appendFillDebugEvent(event: FillDebugEvent) {
+  if (typeof window === 'undefined') return;
+
+  const debugWindow = window as Window & {
+    __PCA_FILL_DEBUG_EVENTS__?: FillDebugEvent[];
+    __PCA_AI_DEBUG_EVENTS__?: FillDebugEvent[];
+  };
+  const existing = debugWindow.__PCA_FILL_DEBUG_EVENTS__ || debugWindow.__PCA_AI_DEBUG_EVENTS__ || [];
+  const next = [...existing, event];
+  debugWindow.__PCA_FILL_DEBUG_EVENTS__ = next.slice(-300);
+  debugWindow.__PCA_AI_DEBUG_EVENTS__ = next.slice(-300);
+}
+
+function emitCriticalFillDebug(event: string, payload?: Record<string, unknown>) {
+  const entry: FillDebugEvent = {
+    at: new Date().toISOString(),
+    event,
+    payload,
+  };
+
+  appendFillDebugEvent(entry);
+  console.warn('[WorkoutEditor][FILL_TRACE]', entry);
 }
 
 function saveDraft(key: string, draft: WorkoutDraft) {
@@ -269,21 +369,92 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
   const [time, setTime] = useState('');
   const [warmups, setWarmups] = useState<ClientWorkoutWarmup[]>([]);
   const [rounds, setRounds] = useState<ClientWorkoutRound[]>([{
-    ordinal: 1,
-    sets: 1,
-    movementUsages: [{
-      ordinal: 1,
-      movementId: '',
-      categoryId: '',
-      note: '',
-      targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
-    }]
+    ...createDefaultRounds()[0]
   }]);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedRounds, setExpandedRounds] = useState<Record<number, boolean>>({});
   const [currentTemplateId, setCurrentTemplateId] = useState<string | undefined>(appliedTemplateId);
   const [hasSyncedTime, setHasSyncedTime] = useState(false);
+  const [isGeneratingFillDraft, setIsGeneratingFillDraft] = useState(false);
+  const fillDebugEnabledRef = useRef(false);
+  const previousRoundsHadDataRef = useRef(false);
+
+
+  const logFillDebug = React.useCallback((event: string, payload?: Record<string, unknown>) => {
+    if (!fillDebugEnabledRef.current) return;
+
+    const entry: FillDebugEvent = {
+      at: new Date().toISOString(),
+      event,
+      payload,
+    };
+
+    appendFillDebugEvent(entry);
+    console.log('[WorkoutEditor][FILL_DEBUG]', entry);
+  }, []);
+
+  useEffect(() => {
+    fillDebugEnabledRef.current = resolveFillDebugEnabled();
+    emitCriticalFillDebug('debug_toggle_resolved', {
+      enabled: fillDebugEnabledRef.current,
+      draftKey: draftKey || null,
+      search: typeof window !== 'undefined' ? window.location.search : '',
+    });
+
+    if (fillDebugEnabledRef.current) {
+      logFillDebug('debug_enabled', {
+        path: window.location.pathname,
+        draftKey,
+      });
+    }
+  }, [draftKey, logFillDebug]);
+
+  useEffect(() => {
+    emitCriticalFillDebug('editor_mount', {
+      draftKey: draftKey || null,
+      isCreating,
+      appliedTemplateId: appliedTemplateId || null,
+      workoutId: workout?.id || null,
+      eventId: eventId || null,
+      clientId: clientId || null,
+      initialRoundsCount: initialRounds?.length || 0,
+    });
+
+    return () => {
+      emitCriticalFillDebug('editor_unmount', {
+        draftKey: draftKey || null,
+        workoutId: workout?.id || null,
+      });
+    };
+  }, [draftKey, isCreating, appliedTemplateId, workout?.id, eventId, clientId, initialRounds?.length]);
+
+  const persistDraftNow = (next?: Partial<WorkoutDraft>) => {
+    if (!draftKey) return;
+    const resolvedTitle = next?.title ?? title;
+    const resolvedNotes = next?.notes ?? notes;
+    const resolvedTime = next?.time ?? time;
+    const resolvedRounds = next?.rounds ?? rounds;
+    const resolvedTemplateId = next?.currentTemplateId ?? currentTemplateId;
+
+    saveDraft(draftKey, {
+      title: resolvedTitle,
+      notes: resolvedNotes,
+      time: resolvedTime,
+      rounds: resolvedRounds,
+      currentTemplateId: resolvedTemplateId,
+      savedAt: Date.now(),
+    });
+
+    logFillDebug('persist_draft_now', {
+      draftKey,
+      roundsCount: resolvedRounds.length,
+      hasMeaningfulRounds: hasMeaningfulRoundData(resolvedRounds),
+      titleLength: resolvedTitle.length,
+      notesLength: resolvedNotes.length,
+      templateId: resolvedTemplateId || null,
+    });
+  };
 
   // Performance logging state
   const [isLoggingMode, setIsLoggingMode] = useState(false);
@@ -405,21 +576,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           setNotes('');
           setTime('');
           setWarmups([]);
-          setRounds([
-            {
-              ordinal: 1,
-              sets: 1,
-              movementUsages: [
-                {
-                  ordinal: 1,
-                  movementId: '',
-                  categoryId: '',
-                  note: '',
-                  targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
-                }
-              ]
-            }
-          ]);
+          setRounds(createDefaultRounds());
         }
       }
       return;
@@ -437,7 +594,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         setNotes(workout.notes || '');
         setTime(workout.time || '');
         setWarmups(workout.warmups || []);
-        setRounds(workout.rounds || []);
+        setRounds(workout.rounds && workout.rounds.length > 0 ? workout.rounds : createDefaultRounds());
         setCurrentTemplateId(workout.appliedTemplateId);
         // Only set internal columns if not using external control
         if (!externalVisibleColumns) {
@@ -455,15 +612,39 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
       draftLoadedRef.current = true;
       const draft = loadDraft(draftKey);
       if (draft) {
+        emitCriticalFillDebug('draft_load_found', {
+          draftKey,
+          roundsCount: Array.isArray(draft.rounds) ? draft.rounds.length : 0,
+          hasMeaningfulRounds: Array.isArray(draft.rounds) ? hasMeaningfulRoundData(draft.rounds) : false,
+          templateId: draft.currentTemplateId || null,
+          savedAt: draft.savedAt,
+          ageMs: Date.now() - draft.savedAt,
+        });
+        logFillDebug('draft_load_found', {
+          draftKey,
+          roundsCount: Array.isArray(draft.rounds) ? draft.rounds.length : 0,
+          hasMeaningfulRounds: Array.isArray(draft.rounds) ? hasMeaningfulRoundData(draft.rounds) : false,
+          titleLength: draft.title?.length || 0,
+          notesLength: draft.notes?.length || 0,
+          templateId: draft.currentTemplateId || null,
+          savedAt: draft.savedAt,
+          ageMs: Date.now() - draft.savedAt,
+        });
         console.log('[WorkoutEditor] Loading draft for', draftKey);
         setTitle(draft.title);
         setNotes(draft.notes);
         setTime(draft.time);
-        setRounds(draft.rounds);
+        if (Array.isArray(draft.rounds) && draft.rounds.length > 0) {
+          setRounds(draft.rounds);
+        } else {
+          setRounds(createDefaultRounds());
+        }
         if (draft.currentTemplateId) {
           setCurrentTemplateId(draft.currentTemplateId);
         }
       } else {
+        emitCriticalFillDebug('draft_load_none', { draftKey });
+        logFillDebug('draft_load_none', { draftKey });
         // No draft - try to pre-fill first movement from last workout
         if (clientId && isCreating) {
           const savedFirstMovementId = localStorage.getItem(`pca-first-movement-${clientId}`);
@@ -481,6 +662,10 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                   categoryId: movement.categoryId,
                 };
                 setRounds(updatedRounds);
+                logFillDebug('first_movement_prefill_applied', {
+                  movementId: savedFirstMovementId,
+                  roundsCount: updatedRounds.length,
+                });
                 console.log('[WorkoutEditor] Pre-filled first movement:', savedFirstMovementId);
               }
             }
@@ -488,7 +673,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         }
       }
     }
-  }, [draftKey, clientId, isCreating, rounds.length]);
+  }, [draftKey, clientId, isCreating, rounds.length, logFillDebug]);
 
   // Draft saving - save draft when form changes (debounced)
   const draftTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -503,7 +688,15 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     // Debounce draft saves to avoid excessive writes
     draftTimeoutRef.current = setTimeout(() => {
       // Only save if there's actual content
-      if (title || notes || rounds.some(r => r.movementUsages?.some(u => u.movementId))) {
+      if (title || notes || hasMeaningfulRoundData(rounds)) {
+        logFillDebug('draft_autosave', {
+          draftKey,
+          roundsCount: rounds.length,
+          hasMeaningfulRounds: hasMeaningfulRoundData(rounds),
+          titleLength: title.length,
+          notesLength: notes.length,
+          templateId: currentTemplateId || null,
+        });
         saveDraft(draftKey, {
           title,
           notes,
@@ -521,7 +714,26 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         clearTimeout(draftTimeoutRef.current);
       }
     };
-  }, [draftKey, title, notes, time, rounds, currentTemplateId]);
+  }, [draftKey, title, notes, time, rounds, currentTemplateId, logFillDebug]);
+
+  useEffect(() => {
+    const hasData = hasMeaningfulRoundData(rounds);
+    if (previousRoundsHadDataRef.current && !hasData) {
+      emitCriticalFillDebug('rounds_cleared_after_data', {
+        roundsCount: rounds.length,
+        templateId: currentTemplateId || null,
+        titleLength: title.length,
+        notesLength: notes.length,
+      });
+      logFillDebug('rounds_cleared_after_data', {
+        roundsCount: rounds.length,
+        templateId: currentTemplateId || null,
+        titleLength: title.length,
+        notesLength: notes.length,
+      });
+    }
+    previousRoundsHadDataRef.current = hasData;
+  }, [rounds, currentTemplateId, title, notes, logFillDebug]);
 
   // Sync time with calendar event when eventId is present (only on initial load)
   useEffect(() => {
@@ -906,9 +1118,385 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     return Object.keys(newErrors).length === 0;
   };
 
-  // Template change handler - handles both Structure and Full Workout templates
-  const handleChangeTemplate = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const generatePrepopulatedFillDraftClientFallback = async (
+    effectiveClientId: string,
+    requestedStructureTemplateId?: string
+  ) => {
+    const [allWorkouts, client] = await Promise.all([
+      fetchClientWorkouts(effectiveClientId),
+      getClient(effectiveClientId),
+    ]);
+
+    const recentWorkouts: HistoricalWorkoutForDraft[] = allWorkouts
+      .slice()
+      .sort((a, b) => {
+        const am = typeof (a.date as any)?.toMillis === 'function' ? (a.date as any).toMillis() : 0;
+        const bm = typeof (b.date as any)?.toMillis === 'function' ? (b.date as any).toMillis() : 0;
+        return bm - am;
+      })
+      .slice(0, 12)
+      .map((workout) => ({
+        id: workout.id,
+        categoryName: workout.categoryName,
+        title: workout.title,
+        notes: workout.notes,
+        rounds: workout.rounds,
+        dateMillis:
+          typeof (workout.date as any)?.toMillis === 'function'
+            ? (workout.date as any).toMillis()
+            : undefined,
+      }));
+
+    const selectedStructure = (requestedTemplateId?: string) => {
+      const targetId = requestedTemplateId || currentTemplateId;
+      if (!targetId) return undefined;
+      return workoutStructureTemplates.find((template) => template.id === targetId);
+    };
+
+    const structure = selectedStructure(requestedStructureTemplateId);
+    const structureSections = (structure?.sections || []).map((section) => ({
+      order: section.order,
+      workoutTypeId: section.workoutTypeId,
+      workoutTypeName: section.workoutTypeName,
+      configuration: section.configuration
+        ? {
+          defaultDuration: section.configuration.defaultDuration,
+          defaultStructure: section.configuration.defaultStructure,
+          focusArea: section.configuration.focusArea,
+          aiGuidance: section.configuration.aiGuidance,
+        }
+        : undefined,
+    }));
+
+    const getSessionDurationMinutes = () => {
+      if (!eventId) return undefined;
+      const linkedEvent = events.find((e) => e.id === eventId);
+      const start = linkedEvent?.start?.dateTime ? new Date(linkedEvent.start.dateTime) : null;
+      const end = linkedEvent?.end?.dateTime ? new Date(linkedEvent.end.dateTime) : null;
+      if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return undefined;
+      }
+      const minutes = Math.round((end.getTime() - start.getTime()) / 60000);
+      return minutes > 0 ? minutes : undefined;
+    };
+
+    const sessionDurationMinutes = getSessionDurationMinutes();
+
+    const fallbackTitle = title?.trim()
+      ? title.trim()
+      : `${workout?.categoryName || 'Workout'} Draft`;
+
+    const draft = buildWorkoutDraftFromHistory({
+      categoryName: workout?.categoryName,
+      structureTemplateId: structure?.id,
+      structureSections,
+      recentWorkouts,
+      fallbackTitle,
+      categoryContextById: Object.fromEntries(
+        categories.map((c) => [
+          c.id,
+          {
+            name: c.name,
+            description: c.description,
+          },
+        ])
+      ),
+      movementContextById: Object.fromEntries(
+        movements.map((movement) => [
+          movement.id,
+          {
+            categoryId: movement.categoryId,
+            name: movement.name,
+            instructions: movement.instructions,
+            configuration: movement.configuration,
+          },
+        ])
+      ),
+      sessionDurationMinutes,
+    });
+
+    void client;
+
+    return draft;
+  };
+
+  const generatePrepopulatedFillDraft = async (requestedStructureTemplateId?: string) => {
+    const effectiveClientId = clientId || workout?.clientId;
+    if (!effectiveClientId) {
+      toastError('Select a client before using Fill.');
+      return;
+    }
+
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) {
+      toastError('You must be logged in to fill a workout.');
+      return;
+    }
+
+    const desiredTemplateId = requestedStructureTemplateId || currentTemplateId;
+
+    setIsGeneratingFillDraft(true);
+    emitCriticalFillDebug('fill_generate_start', {
+      requestedStructureTemplateId: requestedStructureTemplateId || null,
+      currentTemplateId: currentTemplateId || null,
+      desiredTemplateId: desiredTemplateId || null,
+      roundsBefore: rounds.length,
+      hasMeaningfulRoundsBefore: hasMeaningfulRoundData(rounds),
+    });
+    logFillDebug('fill_generate_start', {
+      requestedStructureTemplateId: requestedStructureTemplateId || null,
+      currentTemplateId: currentTemplateId || null,
+      desiredTemplateId: desiredTemplateId || null,
+      roundsBefore: rounds.length,
+      titleLength: title.length,
+      notesLength: notes.length,
+      hasMeaningfulRoundsBefore: hasMeaningfulRoundData(rounds),
+    });
+    try {
+      const linkedEvent = eventId ? events.find((e) => e.id === eventId) : undefined;
+      const sessionDurationMinutes = linkedEvent?.start?.dateTime && linkedEvent?.end?.dateTime
+        ? Math.max(
+          1,
+          Math.round(
+            (new Date(linkedEvent.end.dateTime).getTime() - new Date(linkedEvent.start.dateTime).getTime()) / 60000
+          )
+        )
+        : undefined;
+
+      const payload = {
+        clientId: effectiveClientId,
+        categoryName: workout?.categoryName,
+        structureTemplateId: desiredTemplateId,
+        sessionDurationMinutes,
+        currentTitle: title,
+        currentNotes: notes,
+      };
+
+      const response = await fetch('/api/fill/workouts/draft', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const rawBody = await response.text();
+      let data: unknown = null;
+      if (rawBody) {
+        try {
+          data = JSON.parse(rawBody);
+        } catch {
+          data = null;
+        }
+      }
+
+      if (!response.ok) {
+        const apiError =
+          data && typeof data === 'object' && 'error' in data
+            ? String((data as any).error)
+            : null;
+        logFillDebug('fill_generate_response_error', {
+          status: response.status,
+          apiError: apiError || null,
+        });
+        throw new Error(apiError || `Failed to fill workout (${response.status})`);
+      }
+
+      if (!data || typeof data !== 'object' || !('draft' in data)) {
+        throw new Error('Fill response was empty or invalid.');
+      }
+
+      const draftData = data as GenerateWorkoutDraftResponse;
+      const draft = draftData.draft;
+      emitCriticalFillDebug('fill_generate_response_ok', {
+        roundsFromDraft: draft.rounds?.length || 0,
+        titleProvided: Boolean(draft.title),
+        notesProvided: Boolean(draft.notes),
+        structureTemplateId: draft.structureTemplateId || null,
+      });
+      logFillDebug('fill_generate_response_ok', {
+        roundsFromDraft: draft.rounds?.length || 0,
+        titleProvided: Boolean(draft.title),
+        notesProvided: Boolean(draft.notes),
+        structureTemplateId: draft.structureTemplateId || null,
+      });
+
+      if (draft.rounds && draft.rounds.length > 0) {
+        setRounds(draft.rounds);
+      }
+      if ((!title || !title.trim()) && draft.title) {
+        setTitle(draft.title);
+      }
+      if ((!notes || !notes.trim()) && draft.notes) {
+        setNotes(draft.notes);
+      }
+      const templateIdAfterDraft = draft.structureTemplateId || desiredTemplateId;
+      if (templateIdAfterDraft) {
+        setCurrentTemplateId(templateIdAfterDraft);
+      }
+
+      persistDraftNow({
+        title: ((!title || !title.trim()) && draft.title) ? draft.title : title,
+        notes: ((!notes || !notes.trim()) && draft.notes) ? draft.notes : notes,
+        rounds: draft.rounds && draft.rounds.length > 0 ? draft.rounds : rounds,
+        currentTemplateId: templateIdAfterDraft,
+      });
+
+      emitCriticalFillDebug('fill_generate_applied', {
+        roundsApplied: draft.rounds?.length || rounds.length,
+        templateAfterApply: templateIdAfterDraft || null,
+      });
+
+      logFillDebug('fill_generate_applied', {
+        roundsApplied: draft.rounds?.length || rounds.length,
+        templateAfterApply: templateIdAfterDraft || null,
+      });
+
+      toastSuccess('Workout filled. Review and edit before saving.');
+    } catch (error) {
+      console.error('[WorkoutEditor] Failed to generate fill draft:', error);
+      emitCriticalFillDebug('fill_generate_failed_primary', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      logFillDebug('fill_generate_failed_primary', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+
+      // Fallback for local/dev environments where Admin credentials are unavailable.
+      try {
+        const fallbackDraft = await generatePrepopulatedFillDraftClientFallback(
+          effectiveClientId,
+          desiredTemplateId
+        );
+        const draft = fallbackDraft.draft;
+        emitCriticalFillDebug('fill_generate_fallback_ok', {
+          roundsFromDraft: draft.rounds?.length || 0,
+          structureTemplateId: draft.structureTemplateId || null,
+        });
+        logFillDebug('fill_generate_fallback_ok', {
+          roundsFromDraft: draft.rounds?.length || 0,
+          titleProvided: Boolean(draft.title),
+          notesProvided: Boolean(draft.notes),
+          structureTemplateId: draft.structureTemplateId || null,
+        });
+
+        if (draft.rounds && draft.rounds.length > 0) {
+          setRounds(draft.rounds);
+        }
+        if ((!title || !title.trim()) && draft.title) {
+          setTitle(draft.title);
+        }
+        if ((!notes || !notes.trim()) && draft.notes) {
+          setNotes(draft.notes);
+        }
+        const templateIdAfterFallback = draft.structureTemplateId || desiredTemplateId;
+        if (templateIdAfterFallback) {
+          setCurrentTemplateId(templateIdAfterFallback);
+        }
+
+        persistDraftNow({
+          title: ((!title || !title.trim()) && draft.title) ? draft.title : title,
+          notes: ((!notes || !notes.trim()) && draft.notes) ? draft.notes : notes,
+          rounds: draft.rounds && draft.rounds.length > 0 ? draft.rounds : rounds,
+          currentTemplateId: templateIdAfterFallback,
+        });
+
+        emitCriticalFillDebug('fill_generate_fallback_applied', {
+          roundsApplied: draft.rounds?.length || rounds.length,
+          templateAfterApply: templateIdAfterFallback || null,
+        });
+
+        logFillDebug('fill_generate_fallback_applied', {
+          roundsApplied: draft.rounds?.length || rounds.length,
+          templateAfterApply: templateIdAfterFallback || null,
+        });
+
+        toastSuccess('Workout filled (local fallback). Review and edit before saving.');
+      } catch (fallbackError) {
+        console.error('[WorkoutEditor] Fill draft fallback failed:', fallbackError);
+        emitCriticalFillDebug('fill_generate_failed_fallback', {
+          message: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+        });
+        logFillDebug('fill_generate_failed_fallback', {
+          message: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+        });
+        toastError(error instanceof Error ? error.message : 'Failed to fill workout');
+      }
+    } finally {
+      setIsGeneratingFillDraft(false);
+      logFillDebug('fill_generate_end', {
+        roundsAfter: rounds.length,
+        hasMeaningfulRoundsAfter: hasMeaningfulRoundData(rounds),
+      });
+    }
+  };
+
+  const applyStructureTemplateById = (id: string): boolean => {
+    const template = workoutStructureTemplates.find(t => t.id === id);
+    if (!template) return false;
+
+    const newRounds = template.sections
+      .sort((a, b) => a.order - b.order)
+      .map((section, index) => ({
+        ordinal: index + 1,
+        sets: 1,
+        sectionName: section.workoutTypeName,
+        sectionColor: resolveWorkoutTypeColor(workoutTypes, section.workoutTypeId, section.workoutTypeName),
+        workoutTypeId: section.workoutTypeId,
+        movementUsages: [{
+          ordinal: 1,
+          movementId: '',
+          categoryId: '',
+          note: '',
+          targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
+        }]
+      }));
+
+    setRounds(newRounds);
+    setCurrentTemplateId(id);
+    logFillDebug('structure_template_applied', {
+      templateId: id,
+      roundsCreated: newRounds.length,
+    });
+    return true;
+  };
+
+  // Template change handler - handles structure templates, full workout templates, and fill generation.
+  const handleChangeTemplate = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
+    emitCriticalFillDebug('template_change_start', {
+      value,
+      currentTemplateId: currentTemplateId || null,
+      roundsBefore: rounds.length,
+      hasMeaningfulRoundsBefore: hasMeaningfulRoundData(rounds),
+    });
+    logFillDebug('template_change_start', {
+      value,
+      currentTemplateId: currentTemplateId || null,
+      roundsBefore: rounds.length,
+      hasMeaningfulRoundsBefore: hasMeaningfulRoundData(rounds),
+    });
+
+    if (value.startsWith('structure-fill:') || value.startsWith('structure-ai:')) {
+      const id = value.replace(/^structure-(fill|ai):/, '');
+      const applied = applyStructureTemplateById(id);
+      logFillDebug('template_change_structure_fill', {
+        templateId: id,
+        structureApplied: applied,
+      });
+      if (!applied) return;
+      await generatePrepopulatedFillDraft(id);
+      return;
+    }
+
+    if (value === 'fill:prepopulated' || value === 'ai:prepopulated') {
+      logFillDebug('template_change_fill_prepopulated', {
+        currentTemplateId: currentTemplateId || null,
+      });
+      await generatePrepopulatedFillDraft(currentTemplateId);
+      return;
+    }
 
     // Check for "none" or empty
     if (!value || value === 'none') {
@@ -925,6 +1513,9 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         }]
       }]);
       setCurrentTemplateId(undefined);
+      logFillDebug('template_change_none_applied', {
+        roundsCreated: 1,
+      });
       return;
     }
 
@@ -990,32 +1581,17 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
       setRounds(newRounds);
       setCurrentTemplateId(undefined); // Clear structure ID as we loaded a full workout
+      logFillDebug('template_change_workout_applied', {
+        templateId: id,
+        roundsCreated: newRounds.length,
+      });
 
     } else {
       // Is Structure Template
-      const template = workoutStructureTemplates.find(t => t.id === id);
-      if (!template) return;
-
-      // Apply new template structure
-      const newRounds = template.sections
-        .sort((a, b) => a.order - b.order)
-        .map((section, index) => ({
-          ordinal: index + 1,
-          sets: 1,
-          sectionName: section.workoutTypeName,
-          sectionColor: resolveWorkoutTypeColor(workoutTypes, section.workoutTypeId, section.workoutTypeName),
-          workoutTypeId: section.workoutTypeId,
-          movementUsages: [{
-            ordinal: 1,
-            movementId: '',
-            categoryId: '',
-            note: '',
-            targetWorkload: { ...DEFAULT_TARGET_WORKLOAD }
-          }]
-        }));
-
-      setRounds(newRounds);
-      setCurrentTemplateId(id);
+      applyStructureTemplateById(id);
+      logFillDebug('template_change_structure_applied', {
+        templateId: id,
+      });
     }
   };
 
@@ -1204,8 +1780,35 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                 for (const u of r.movementUsages) {
                   if (u.movementId !== movementId) continue;
 
+                  const parseRepsValue = (repsValue?: string): number => {
+                    if (!repsValue) return 0;
+                    if (repsValue.includes('-')) {
+                      const [min, max] = repsValue.split('-').map(r => parseInt(r.trim()));
+                      if (!isNaN(min) && !isNaN(max)) {
+                        return Math.round((min + max) / 2);
+                      }
+                    }
+                    const parsed = parseInt(repsValue);
+                    return isNaN(parsed) ? 0 : parsed;
+                  };
+
+                  if (u.setEntries && u.setEntries.length > 1) {
+                    u.setEntries.forEach(entry => {
+                      const entryWeight = entry.weight ? parseFloat(entry.weight) : 0;
+                      const entryReps = parseRepsValue(entry.reps);
+                      const entryRpe = entry.rpe ? parseFloat(entry.rpe) : undefined;
+
+                      if (entryWeight > 0 && entryReps > 0) {
+                        weights.push(entryWeight);
+                        reps.push(entryReps);
+                        if (entryRpe !== undefined && entryRpe > 0) rpeValues.push(entryRpe);
+                      }
+                    });
+                    continue;
+                  }
+
                   const weight = u.targetWorkload.weight ? parseFloat(u.targetWorkload.weight) : 0;
-                  const rep = u.targetWorkload.reps ? parseInt(u.targetWorkload.reps) : 0;
+                  const rep = parseRepsValue(u.targetWorkload.reps);
                   const rpe = u.targetWorkload.rpe ? parseFloat(u.targetWorkload.rpe) : undefined;
 
                   if (weight > 0 && rep > 0) {
@@ -1331,7 +1934,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           st += " BW";
           if (workload.weight && workload.weight !== '0') st += ` (+${workload.weight})`;
         } else {
-          st += " " + workload.weight + (workload.weightMeasure || '');
+          st += " @" + workload.weight + (workload.weightMeasure || '');
         }
       }
       if (workload.tempo) st += " " + workload.tempo;
@@ -1350,16 +1953,40 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
       }
 
       const setText = round.sets > 1 ? "sets" : "set";
-      const headerPlain = `Round ${i + 1} (${round.sets} ${setText})`;
-      const headerRich = `<b>Round ${i + 1}</b> (${round.sets} ${setText})`;
+      const roundLabel = (round.sectionName || `Round ${i + 1}`).trim();
+      const headerPlain = `${roundLabel} (${round.sets} ${setText})`;
+      const headerRich = `<b>${roundLabel}</b> (${round.sets} ${setText})`;
 
       plain += headerPlain + "\n";
       rich += headerRich + "<br>";
 
       round.movementUsages.forEach((mu: any) => {
         const { name, details } = createDescription(mu);
-        plain += `${name} ${details}\n`;
-        rich += `${name} ${details}<br>`;
+        
+        // Only add the main line if there are no expanded set entries
+        if (!mu.setEntries || mu.setEntries.length <= 1) {
+          plain += `${name} ${details}\n`;
+          rich += `${name} ${details}<br>`;
+        } else {
+          // If expanded sets exist, just show the exercise name on its own line
+          plain += `${name}\n`;
+          rich += `${name}<br>`;
+        }
+
+        if (mu.setEntries && mu.setEntries.length > 1) {
+          mu.setEntries.forEach((setEntry: any, setIndex: number) => {
+            let setDescription = "";
+            if (setEntry.reps) setDescription += `x${setEntry.reps}`;
+            if (setEntry.weight) setDescription += ` @${setEntry.weight}${mu.targetWorkload?.weightMeasure || ''}`;
+            if (setEntry.rpe) setDescription += ` RPE${setEntry.rpe}`;
+            if (setDescription) {
+              const setLabel = `• Set ${setIndex + 1}: ${setDescription}`;
+              plain += `${setLabel}\n`;
+              rich += `${setLabel}<br>`;
+            }
+          });
+        }
+
         if (mu.note) {
           plain += `  - ${mu.note}\n`;
           rich += `  - ${mu.note}<br>`;
@@ -1539,6 +2166,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                   <Select
                     value={currentTemplateId ? `structure:${currentTemplateId}` : ""}
                     onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
+                    disabled={isGeneratingFillDraft}
                   >
                     <SelectTrigger className={`h-9 text-xs w-full px-2 text-gray-900 flex items-center ${isCreating && !currentTemplateId ? '!border-green-500 !bg-green-50' : ''}`}>
                       <SelectValue placeholder="Load Template..." />
@@ -1547,9 +2175,35 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
 
 
-                      {/* Structure Templates Group */}
+                      {/* Structure Templates + Fill Group */}
                       {workoutStructureTemplates.length > 0 && (
                         <>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">Structure Templates + Fill</div>
+                          {workoutStructureTemplates.map((template) => {
+                            const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
+                            return (
+                              <SelectItem key={`fill-${template.id}`} value={`structure-fill:${template.id}`}>
+                                <div className="flex items-center gap-2 w-full">
+                                  <Sparkles className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                                  <span className="truncate">{template.name} + Fill</span>
+                                  {abbrevList.length > 0 && (
+                                    <div className="flex items-center gap-1 ml-auto shrink-0">
+                                      {abbrevList.map((item, idx) => (
+                                        <span
+                                          key={idx}
+                                          className="inline-flex items-center justify-center rounded-md px-1 py-0.5 text-[10px] h-4 font-medium text-white border-0"
+                                          style={{ backgroundColor: item.color }}
+                                        >
+                                          {item.abbrev}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+
                           <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 mt-1 pt-1 border-t">Structure Templates</div>
                           {workoutStructureTemplates.map((template) => {
                             const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
@@ -1775,11 +2429,43 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
             <Select
               value={currentTemplateId || ''}
               onValueChange={(value) => handleChangeTemplate({ target: { value } } as React.ChangeEvent<HTMLSelectElement>)}
+              disabled={isGeneratingFillDraft}
             >
               <SelectTrigger className={`text-xs flex-1 h-7 border-0 bg-transparent shadow-none p-0 hover:bg-gray-100 rounded px-1 ${isCreating && !currentTemplateId ? '!border !border-green-500 !bg-green-50' : ''}`}>
                 <SelectValue placeholder="Select structure" />
               </SelectTrigger>
               <SelectContent>
+                {workoutStructureTemplates.length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">Structure Templates + Fill</div>
+                    {workoutStructureTemplates.map(template => {
+                      const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
+                      return (
+                        <SelectItem key={`inline-fill-${template.id}`} value={`structure-fill:${template.id}`}>
+                          <div className="flex items-center gap-2 w-full">
+                            <Sparkles className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                            <span>{template.name} + Fill</span>
+                            {abbrevList.length > 0 && (
+                              <div className="flex items-center gap-1 ml-auto">
+                                {abbrevList.map((item, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium text-white border-0"
+                                    style={{ backgroundColor: item.color }}
+                                  >
+                                    {item.abbrev}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+
+                    <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 mt-1 pt-1 border-t">Structure Templates</div>
+                  </>
+                )}
                 {workoutStructureTemplates.map(template => {
                   const abbrevList = getTemplateAbbreviationList(template, workoutTypes);
                   return (
@@ -1926,6 +2612,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
                             onRemove={removeMovementUsage}
                             canDelete={round.movementUsages.length > 1}
                             isInline={true}
+                            movementCatalog={movements}
                           />
                         ))}
                         <button

@@ -9,12 +9,17 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent
 } from '@/lib/google-calendar/api-client';
+import { removeEventWorkoutLink, upsertEventWorkoutLink } from '@/lib/firebase/services/eventWorkoutLinks';
 import { queryKeys } from '@/lib/react-query/queryKeys';
 import { getGlobalQueryClient } from '@/lib/react-query/queryClientInstance';
 
 // Cache duration in milliseconds (5 minutes - matches React Query staleTime)
 // Note: Calendar events are now primarily fetched via React Query, this is for backward compatibility
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes (increased from 30 seconds)
+const CONNECTION_CHECK_COOLDOWN_MS = 20 * 1000;
+
+let lastConnectionCheckAt = 0;
+let inFlightConnectionCheck: Promise<void> | null = null;
 
 function normalizeLocationKey(input: string): string {
   // Normalize for comparison: lowercase, trim, collapse spaces
@@ -37,10 +42,11 @@ interface CalendarStore {
   // Actions
   fetchCalendars: () => Promise<void>;
   fetchEvents: (dateRange: DateRange, force?: boolean) => Promise<void>;
+  refreshEvents: (dateRange: DateRange) => Promise<void>;
   createTestEvent: (eventInput: TestEventInput) => Promise<GoogleCalendarEvent>;
   markAsCoachingSession: (eventId: string, isCoaching: boolean) => Promise<void>;
   markAsClassSession: (eventId: string, isClass: boolean) => Promise<void>;
-  linkToWorkout: (eventId: string, workoutId: string) => Promise<void>;
+  linkToWorkout: (eventId: string, workoutId: string, clientIdOverride?: string) => Promise<void>;
   updateEvent: (eventId: string, updates: Partial<GoogleCalendarEvent>) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
   updateConfig: (updates: Partial<CalendarSyncConfig>) => void;
@@ -151,6 +157,22 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   fetchEvents: async (dateRange: DateRange, force = false) => {
     const { config, isGoogleCalendarConnected, _eventsFetchTime, _eventsFetchKey, events: existingEvents } = get();
     const cacheKey = `${dateRange.start.toISOString()}:${dateRange.end.toISOString()}`;
+
+    // DEV: Use localStorage cache if available and fresh
+    const DEV_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+    const DEV_EVENTS_CACHE_KEY = 'pca-dev-calendar-events';
+    const DEV_EVENTS_CACHE_TIME_KEY = 'pca-dev-calendar-events-time';
+    if (process.env.NODE_ENV === 'development' && !force) {
+      try {
+        const cached = localStorage.getItem(DEV_EVENTS_CACHE_KEY);
+        const cachedTime = localStorage.getItem(DEV_EVENTS_CACHE_TIME_KEY);
+        if (cached && cachedTime && Date.now() - parseInt(cachedTime, 10) < DEV_CACHE_DURATION) {
+          const events = JSON.parse(cached);
+          set({ events, loading: false, _eventsFetchTime: parseInt(cachedTime, 10), _eventsFetchKey: cacheKey });
+          return;
+        }
+      } catch {}
+    }
 
     // Skip if cache is fresh and for same date range (unless forced)
     if (!force && existingEvents.length > 0 && _eventsFetchTime && _eventsFetchKey === cacheKey && Date.now() - _eventsFetchTime < CACHE_DURATION) {
@@ -293,6 +315,13 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
       if (eventsChanged) {
         set({ events: mergedEvents, loading: false, _eventsFetchTime: Date.now(), _eventsFetchKey: cacheKey });
+        // DEV: Save to localStorage
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            localStorage.setItem(DEV_EVENTS_CACHE_KEY, JSON.stringify(mergedEvents));
+            localStorage.setItem(DEV_EVENTS_CACHE_TIME_KEY, Date.now().toString());
+          } catch {}
+        }
       } else {
         // Events didn't change, just update loading state
         set({ loading: false, _eventsFetchTime: Date.now(), _eventsFetchKey: cacheKey });
@@ -303,6 +332,10 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
         loading: false
       });
     }
+  },
+
+  refreshEvents: async (dateRange: DateRange) => {
+    await get().fetchEvents(dateRange, true);
   },
 
   createTestEvent: async (eventInput: TestEventInput) => {
@@ -404,6 +437,21 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
       const newEvent = eventData;
 
+      if (newEvent.id && newEvent.linkedWorkoutId) {
+        try {
+          const eventDate = newEvent.start?.dateTime ? new Date(newEvent.start.dateTime) : undefined;
+          await upsertEventWorkoutLink({
+            eventId: newEvent.id,
+            workoutId: newEvent.linkedWorkoutId,
+            clientId: clientId || undefined,
+            eventDate,
+            calendarId: config.selectedCalendarId || 'primary',
+          });
+        } catch (trackerError) {
+          console.error('Failed to persist event-workout tracker link:', trackerError);
+        }
+      }
+
       // Auto-create workout if client is specified AND workoutId is not already in metadata
       // (If workoutId is present, the workout was already created and we just need to link)
       if (clientId) {
@@ -459,6 +507,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
                   workout.id,
                   clientId!,
                   eventDate,
+                  categoryName || undefined,
                   eventInput.description || '',
                   'single',
                   undefined,
@@ -596,7 +645,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
     }
   },
 
-  linkToWorkout: async (eventId: string, workoutId: string) => {
+  linkToWorkout: async (eventId: string, workoutId: string, clientIdOverride?: string) => {
     console.log('[linkToWorkout] Called with eventId:', eventId, 'workoutId:', workoutId);
     set({ loading: true, error: null });
     try {
@@ -614,12 +663,35 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
       }
       console.log('[linkToWorkout] Found event:', event.summary, 'description:', event.description?.substring(0, 100));
 
-      // Get clientId from event metadata
-      const clientId = event.preConfiguredClient ||
+      // Prefer explicit clientId when linking from quick assignment flow.
+      const clientId = clientIdOverride || event.preConfiguredClient ||
         (event as any).extendedProperties?.private?.pcaClientId ||
         event.description?.match(/client=([^,\s}\]]+)/)?.[1];
 
       console.log('[linkToWorkout] clientId:', clientId);
+
+      let linkedCategoryName: string | undefined;
+      try {
+        const { getClientWorkout } = await import('@/lib/firebase/services/clientWorkouts');
+        const workout = await getClientWorkout(workoutId);
+        if (workout?.categoryName) {
+          linkedCategoryName = workout.categoryName;
+        }
+      } catch (error) {
+        console.warn('[linkToWorkout] Failed to resolve linked workout category from clientWorkouts:', error);
+      }
+
+      if (!linkedCategoryName) {
+        try {
+          const { getScheduledWorkout } = await import('@/lib/firebase/services/programs');
+          const scheduledWorkout = await getScheduledWorkout(workoutId);
+          if (scheduledWorkout?.sessionType) {
+            linkedCategoryName = scheduledWorkout.sessionType;
+          }
+        } catch (error) {
+          console.warn('[linkToWorkout] Failed to resolve linked workout category from scheduled-workouts:', error);
+        }
+      }
 
       if (!clientId) {
         console.warn('[linkToWorkout] No clientId found for event, skipping Google Calendar description update');
@@ -634,6 +706,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
               workoutId,
               clientId,
               eventDate,
+              linkedCategoryName,
               event.description,
               'single', // Update only this instance
               event.start.dateTime,
@@ -650,8 +723,18 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
         }
       }
 
-      // Note: linkedWorkoutId is already updated in Google Calendar via addWorkoutLinksToEvent above
-      // No need to update Firebase - Google Calendar is the source of truth
+      try {
+        await upsertEventWorkoutLink({
+          eventId,
+          workoutId,
+          clientId,
+          categoryName: linkedCategoryName,
+          eventDate: event.start?.dateTime ? new Date(event.start.dateTime) : undefined,
+          calendarId: config.selectedCalendarId || 'primary',
+        });
+      } catch (trackerError) {
+        console.error('[linkToWorkout] Failed to persist tracker link:', trackerError);
+      }
 
       // Update in local state
       const updatedEvents = events.map(e =>
@@ -659,6 +742,12 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
       );
 
       set({ events: updatedEvents, loading: false });
+
+      // Ensure pages using React Query calendar hooks see fresh linked metadata immediately.
+      const queryClient = getGlobalQueryClient();
+      if (queryClient) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
+      }
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to link workout',
@@ -758,6 +847,12 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
       // Remove from local state
       const updatedEvents = events.filter(event => event.id !== eventId);
+
+      try {
+        await removeEventWorkoutLink(eventId);
+      } catch (trackerError) {
+        console.error('Failed to clear event-workout tracker link:', trackerError);
+      }
 
       set({ events: updatedEvents, loading: false });
     } catch (error) {
@@ -864,20 +959,27 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   clearError: () => set({ error: null }),
 
   checkGoogleCalendarConnection: async () => {
-    try {
-      console.log('[CalendarStore] Starting checkGoogleCalendarConnection...');
+    const now = Date.now();
 
+    if (inFlightConnectionCheck) {
+      return inFlightConnectionCheck;
+    }
+
+    if (now - lastConnectionCheckAt < CONNECTION_CHECK_COOLDOWN_MS) {
+      return;
+    }
+
+    lastConnectionCheckAt = now;
+
+    inFlightConnectionCheck = (async () => {
+    try {
       // Use helper to get token with auth wait
       const idToken = await getFirebaseIdToken();
-      console.log('[CalendarStore] ID Token retrieved:', !!idToken, idToken ? '(length: ' + idToken.length + ')' : '(undefined)');
 
       // First check if tokens exist
-      console.log('[CalendarStore] Calling checkGoogleCalendarAuth...');
       const hasTokens = await checkGoogleCalendarAuth(idToken);
-      console.log('[CalendarStore] checkGoogleCalendarAuth result:', hasTokens);
 
       if (!hasTokens) {
-        console.warn('[CalendarStore] Connection check failed: No tokens found.');
         set({ isGoogleCalendarConnected: false });
         return;
       }
@@ -890,18 +992,22 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
         const end = new Date(now);
         end.setDate(end.getDate() + 1); // 1 day range for quick check
 
-        console.log('[CalendarStore] Tokens exist, attempting to fetch events to verify scopes...');
-        await fetchCalendarEvents(start, end, 'primary', idToken);
-        console.log('[CalendarStore] Event fetch successful. Connection verified.');
+        const calendarId = get().config.selectedCalendarId || 'primary';
+        await fetchCalendarEvents(start, end, calendarId, idToken);
         set({ isGoogleCalendarConnected: true });
       } catch (error) {
-        console.warn('[CalendarStore] Google Calendar token check failed (Event Fetch Error):', error);
+        console.warn('[CalendarStore] Google Calendar token check failed:', error);
         set({ isGoogleCalendarConnected: false });
       }
     } catch (error) {
       console.error('[CalendarStore] Error checking Google Calendar connection:', error);
       set({ isGoogleCalendarConnected: false });
+    } finally {
+      inFlightConnectionCheck = null;
     }
+    })();
+
+    return inFlightConnectionCheck;
   },
 
   // Getters

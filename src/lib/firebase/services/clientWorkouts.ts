@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db, getDb, auth } from '../config';
 import { resolveActiveAccountId } from './memberships';
+import { removeEventWorkoutLinksByWorkoutId } from './eventWorkoutLinks';
 import type {
   ClientWorkout,
   ClientWorkoutWarmup,
@@ -22,6 +23,32 @@ import type {
 } from '@/lib/types';
 
 const COLLECTION_NAME = 'clientWorkouts';
+
+// Helper function to recursively remove undefined values from objects
+function cleanUndefinedValues(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return undefined;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanUndefinedValues(item)).filter(item => item !== undefined);
+  }
+  
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const key in obj) {
+      const value = obj[key];
+      const cleanedValue = cleanUndefinedValues(value);
+      // Only include the key if the value is not undefined
+      if (cleanedValue !== undefined) {
+        cleaned[key] = cleanedValue;
+      }
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  }
+  
+  return obj;
+}
 
 // Helper to get current account ID
 async function getAccountId(): Promise<string> {
@@ -144,8 +171,9 @@ export async function updateClientWorkout(
   updates: Partial<ClientWorkout>
 ): Promise<void> {
   const docRef = doc(getDb(), COLLECTION_NAME, id);
+  const cleanedUpdates = cleanUndefinedValues(updates);
   await updateDoc(docRef, {
-    ...updates,
+    ...cleanedUpdates,
     updatedAt: Timestamp.now(),
   });
 }
@@ -154,6 +182,12 @@ export async function updateClientWorkout(
  * Delete a client workout
  */
 export async function deleteClientWorkout(id: string): Promise<void> {
+  try {
+    await removeEventWorkoutLinksByWorkoutId(id);
+  } catch (error) {
+    console.warn('Failed to clear event-workout links for deleted workout:', id, error);
+  }
+
   const docRef = doc(getDb(), COLLECTION_NAME, id);
   await deleteDoc(docRef);
 }
@@ -202,13 +236,13 @@ export async function copyTemplateToClientWorkout(
     })),
   }));
 
-  await updateDoc(docRef, {
+  await updateDoc(docRef, cleanUndefinedValues({
     title: template.name,
     rounds,
     warmups: [], // Templates don't have warmups currently
     isModified: true,
     updatedAt: Timestamp.now(),
-  });
+  }));
 }
 
 /**

@@ -45,6 +45,10 @@ export interface UpdateEventParams {
     startTime?: string;
     endTime?: string;
     location?: string;
+    extendedProperties?: {
+      private?: Record<string, string>;
+      shared?: Record<string, string>;
+    };
   };
   calendarId?: string;
 }
@@ -105,8 +109,14 @@ async function buildAuthHeaders(base: HeadersInit = {}, idToken?: string): Promi
 export async function initiateGoogleAuth(idToken?: string): Promise<void> {
   const headers = await buildAuthHeaders({ 'Content-Type': 'application/json' }, idToken);
 
+  let authEndpoint = '/api/auth/google';
+  if (typeof window !== 'undefined') {
+    const redirectUri = `${window.location.origin}/api/auth/google/callback`;
+    authEndpoint = `/api/auth/google?redirectUri=${encodeURIComponent(redirectUri)}`;
+  }
+
   // We use POST now to securely pass the idToken in headers
-  const response = await fetch('/api/auth/google', {
+  const response = await fetch(authEndpoint, {
     method: 'POST',
     headers,
   });
@@ -264,10 +274,22 @@ export async function updateCalendarEvent(
 ): Promise<any> {
   const headers = await buildAuthHeaders({ 'Content-Type': 'application/json' }, idToken);
 
+  // API route expects `mode`, while callers use `updateType`.
+  const mode =
+    params.updateType === 'thisAndFollowing'
+      ? 'future'
+      : params.updateType || 'single';
+
   const response = await fetch('/api/calendar/events/update', {
     method: 'POST',
     headers,
-    body: JSON.stringify(params),
+    body: JSON.stringify({
+      eventId: params.eventId,
+      mode,
+      instanceDate: params.instanceDate,
+      updates: params.updates,
+      calendarId: params.calendarId,
+    }),
   });
 
   if (!response.ok) {
@@ -377,6 +399,7 @@ export async function addWorkoutLinksToEvent(
   workoutId: string,
   clientId: string,
   eventDate: string | Date,
+  categoryName?: string,
   existingDescription?: string,
   updateType: 'single' | 'all' = 'single',
   instanceDate?: string,
@@ -414,6 +437,13 @@ export async function addWorkoutLinksToEvent(
     updateType,
     updates: {
       description: updatedDescription,
+      extendedProperties: {
+        private: {
+          pcaClientId: clientId,
+          pcaWorkoutId: workoutId,
+          ...(categoryName ? { pcaCategory: categoryName } : {}),
+        },
+      },
     },
     calendarId,
   }, idToken);

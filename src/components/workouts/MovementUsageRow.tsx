@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ClientWorkoutMovementUsage, MovementConfiguration } from '@/lib/types';
-import { useMovements, useMovementsByCategory } from '@/hooks/queries/useMovements';
+import { ClientWorkoutMovementUsage, Movement, MovementConfiguration } from '@/lib/types';
+import { useMovement, useMovements, useMovementsByCategory } from '@/hooks/queries/useMovements';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ interface MovementUsageRowProps {
   onRemove: (roundIndex: number, usageIndex: number) => void;
   canDelete: boolean;
   isInline?: boolean;
+  movementCatalog?: Movement[];
 }
 
 export function MovementUsageRow({
@@ -25,7 +26,8 @@ export function MovementUsageRow({
   onUpdate,
   onRemove,
   canDelete,
-  isInline = false
+  isInline = false,
+  movementCatalog = [],
 }: MovementUsageRowProps) {
   // Lazy load movements - use category-specific query when category is selected
   // This is more efficient than fetching all movements and filtering
@@ -33,10 +35,18 @@ export function MovementUsageRow({
 
   // If category is selected, fetch only movements for that category
   // If movementId is set but no category, fetch all movements to find the movement
-  const needsAllMovements = !usage.categoryId && !!usage.movementId;
+  const needsAllMovements = !!usage.movementId;
   const { data: allMovements = [] } = useMovements(
     true, // includeCategory
     needsAllMovements // Only fetch all if we need to find a movement without category
+  );
+
+  const { data: movementById } = useMovement(
+    usage.movementId || null,
+    true,
+    {
+      enabled: !!usage.movementId,
+    }
   );
 
   const { data: categoryMovements = [], isLoading: movementsLoading } = useMovementsByCategory(
@@ -51,7 +61,23 @@ export function MovementUsageRow({
   const movements = usage.categoryId ? categoryMovements : allMovements;
 
   // Filtered movements (already filtered by category query, but keep for compatibility)
-  const filteredMovements = movements;
+  const selectedMovementFallback =
+    movementById ||
+    allMovements.find(m => m.id === usage.movementId) ||
+    movementCatalog.find(m => m.id === usage.movementId) ||
+    null;
+
+  const catalogMovements =
+    movementCatalog.filter((movement) =>
+      usage.categoryId ? movement.categoryId === usage.categoryId : true
+    );
+
+  const filteredMovements =
+    selectedMovementFallback && ![...movements, ...catalogMovements].some(m => m.id === selectedMovementFallback.id)
+      ? [selectedMovementFallback, ...movements, ...catalogMovements]
+      : [...movements, ...catalogMovements].filter(
+          (movement, index, list) => list.findIndex((item) => item.id === movement.id) === index
+        );
 
   // Clear movement when category changes
   useEffect(() => {
@@ -70,53 +96,116 @@ export function MovementUsageRow({
   }, [usage.categoryId, usage.movementId, movements, roundIndex, usageIndex, onUpdate]);
 
   // Get selected movement configuration
-  const selectedMovement = movements.find(m => m.id === usage.movementId);
+  const selectedMovement =
+    movements.find(m => m.id === usage.movementId) || selectedMovementFallback || undefined;
   const configuration = selectedMovement?.configuration;
+
+  useEffect(() => {
+    if (!selectedMovement?.categoryId) return;
+    if (selectedMovement.categoryId === usage.categoryId) return;
+
+    onUpdate(roundIndex, usageIndex, 'categoryId', selectedMovement.categoryId);
+  }, [
+    selectedMovement?.categoryId,
+    usage.categoryId,
+    roundIndex,
+    usageIndex,
+    onUpdate,
+  ]);
 
   // Get selected category for color
   const selectedCategory = categories.find(c => c.id === usage.categoryId);
   const categoryColor = selectedCategory?.color || '#ffffff';
 
+  const workload = usage.targetWorkload || {};
+  const workloadSummary = [
+    workload.reps ? `x${workload.reps}${selectedMovement?.configuration?.unilateral ? 'ea' : ''}` : '',
+    workload.weight || workload.weightMeasure === 'bw'
+      ? workload.weightMeasure === 'bw'
+        ? workload.weight && workload.weight !== '0'
+          ? `BW (+${workload.weight})`
+          : 'BW'
+        : `@${workload.weight}${workload.weightMeasure || ''}`
+      : '',
+    workload.tempo ? `${workload.tempo}` : '',
+    workload.time ? `${workload.time}${workload.timeMeasure || 's'}` : '',
+    workload.percentage ? `${workload.percentage}%` : '',
+    workload.rpe ? `RPE ${workload.rpe}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   if (isInline) {
-    // Compact inline view for week view - category only
+    // Compact inline view still needs to show the populated movement and workload summary.
     return (
-      <div className="flex items-center gap-1 text-xs">
-        <GripVertical className="w-3 h-3 text-gray-400 flex-shrink-0" />
+      <div className="space-y-1 rounded border border-gray-200/80 bg-white px-1 py-1 text-xs">
+        <div className="flex items-center gap-1">
+          <GripVertical className="w-3 h-3 text-gray-400 flex-shrink-0" />
 
-        {/* Category Select with colored background */}
-        <select
-          value={usage.categoryId}
-          onChange={(e) => onUpdate(roundIndex, usageIndex, 'categoryId', e.target.value)}
-          className="text-xs border rounded p-0.5 flex-1 min-w-0 font-medium"
-          style={{
-            backgroundColor: usage.categoryId ? categoryColor : '#ffffff',
-            color: usage.categoryId ? '#ffffff' : '#000000'
-          }}
-        >
-          <option value="" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
-            Category
-          </option>
-          {categories.map(cat => (
-            <option
-              key={cat.id}
-              value={cat.id}
-              style={{ backgroundColor: cat.color, color: '#ffffff' }}
-            >
-              {cat.name}
-            </option>
-          ))}
-        </select>
-
-        {canDelete && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => onRemove(roundIndex, usageIndex)}
-            className="h-4 w-4 p-0 text-gray-400 hover:text-red-500 flex-shrink-0"
+          <select
+            value={usage.categoryId}
+            onChange={(e) => onUpdate(roundIndex, usageIndex, 'categoryId', e.target.value)}
+            className="text-xs border rounded p-0.5 w-24 min-w-0 font-medium"
+            style={{
+              backgroundColor: usage.categoryId ? categoryColor : '#ffffff',
+              color: usage.categoryId ? '#ffffff' : '#000000'
+            }}
           >
-            <Trash2 className="w-2 h-2" />
-          </Button>
+            <option value="" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
+              Category
+            </option>
+            {categories.map(cat => (
+              <option
+                key={cat.id}
+                value={cat.id}
+                style={{ backgroundColor: cat.color, color: '#ffffff' }}
+              >
+                {cat.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={usage.movementId}
+            onChange={(e) => onUpdate(roundIndex, usageIndex, 'movementId', e.target.value)}
+            className="text-xs border rounded p-0.5 flex-1 min-w-0"
+            disabled={(!usage.categoryId && !usage.movementId) || movementsLoading}
+          >
+            <option value="">
+              {movementsLoading ? 'Loading...' : 'Select Movement'}
+            </option>
+            {filteredMovements.map(mov => (
+              <option key={mov.id} value={mov.id}>
+                {mov.name}
+              </option>
+            ))}
+          </select>
+
+          {canDelete && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onRemove(roundIndex, usageIndex)}
+              className="h-4 w-4 p-0 text-gray-400 hover:text-red-500 flex-shrink-0"
+            >
+              <Trash2 className="w-2 h-2" />
+            </Button>
+          )}
+        </div>
+
+        {(workloadSummary || usage.note) && (
+          <div className="pl-4 text-[11px] text-gray-600">
+            {workloadSummary}
+            {workloadSummary && usage.note ? ' • ' : ''}
+            {usage.note || ''}
+          </div>
+        )}
+
+        {usage.movementId && !selectedMovement && (
+          <div className="pl-4 text-[11px] text-amber-600">
+            Loading movement details...
+          </div>
         )}
       </div>
     );

@@ -6,7 +6,9 @@ import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import { Client } from '@/lib/types';
 import { format } from 'date-fns';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
+import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { getAppTimezone } from '@/lib/utils/timezone';
+import { getLinkedWorkoutId, getEventClientId, getEventCategory } from '@/lib/utils/event-patterns';
 import { logger } from '@/lib/utils/logger';
 
 interface DayEventListProps {
@@ -28,6 +30,11 @@ export function DayEventList({
 }: DayEventListProps) {
   // Track if we're mounted on client to avoid hydration issues with dates
   const [mounted, setMounted] = useState(false);
+  const [resolvedWorkoutIds, setResolvedWorkoutIds] = useState<Record<string, string>>({});
+  const [resolvedWorkoutColors, setResolvedWorkoutColors] = useState<Record<string, string>>({});
+  const configWorkoutCategories = useConfigurationStore(state => state.workoutCategories);
+  const calendarConfig = useCalendarStore(state => state.config);
+  const workoutLookupKeyRef = React.useRef<string>('');
   
   useEffect(() => {
     setMounted(true);
@@ -39,6 +46,57 @@ export function DayEventList({
   // Use the provided date, with a fallback to today
   // Note: Both parent pages pass `selectedDate || calendarDate`, so this fallback should rarely be needed
   const safeSelectedDate = selectedDate || new Date();
+
+  const normalizeCategoryKey = (value?: string): string => {
+    return (value || '')
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/[^a-z0-9 ]/g, '');
+  };
+
+  const getConfiguredWorkoutCategoryColor = (categoryName?: string): string | null => {
+    if (!categoryName) return null;
+
+    const direct = configWorkoutCategories.find(
+      c => c.name.toLowerCase().trim() === categoryName.toLowerCase().trim()
+    );
+    if (direct?.color) {
+      return direct.color;
+    }
+
+    const normalizedInput = normalizeCategoryKey(categoryName);
+    if (!normalizedInput) return null;
+
+    const normalized = configWorkoutCategories.find(
+      c => normalizeCategoryKey(c.name) === normalizedInput
+    );
+    return normalized?.color || null;
+  };
+
+  const getEventWorkoutId = (event: GoogleCalendarEvent): string | null => {
+    const fromPattern = getLinkedWorkoutId(event);
+    if (fromPattern) return fromPattern;
+
+    const fromExtended = (event as any).extendedProperties?.private?.pcaWorkoutId;
+    if (fromExtended && fromExtended !== 'none') {
+      return String(fromExtended).trim();
+    }
+
+    return null;
+  };
+
+  const getEventWorkoutCategory = (event: GoogleCalendarEvent): string | null => {
+    const fromPattern = getEventCategory(event) || event.preConfiguredCategory;
+    if (fromPattern) return fromPattern;
+
+    const fromExtended = (event as any).extendedProperties?.private?.pcaCategory;
+    if (fromExtended && fromExtended !== 'none') {
+      return String(fromExtended).trim();
+    }
+
+    return null;
+  };
 
   // Get events for the selected date with deduplication
   // Calculate directly without useMemo to avoid dependency issues
@@ -118,6 +176,109 @@ export function DayEventList({
     return timeA - timeB;
   });
 
+  // Infer linked workouts from backend (client + selected day) for events where
+  // Google event metadata has not propagated yet.
+  useEffect(() => {
+    const categoryKey = configWorkoutCategories
+      .map(c => `${c.name}:${c.color}`)
+      .sort()
+      .join('|');
+
+    const lookupKey = `${format(safeSelectedDate, 'yyyy-MM-dd')}|${dayEvents
+      .map(e => `${e.id}:${getEventClientId(e) || ''}:${getEventWorkoutId(e) || ''}`)
+      .join('|')}|${categoryKey}`;
+
+    if (workoutLookupKeyRef.current === lookupKey) {
+      return;
+    }
+
+    const inferLinks = async () => {
+      const nextMap: Record<string, string> = {};
+      const nextColorMap: Record<string, string> = {};
+
+      const unresolvedEventIds = dayEvents
+        .filter(event => !getEventWorkoutId(event))
+        .map(event => event.id);
+
+      if (unresolvedEventIds.length > 0) {
+        try {
+          const { getEventWorkoutLinksByEventIds } = await import('@/lib/firebase/services/eventWorkoutLinks');
+          const trackerLinks = await getEventWorkoutLinksByEventIds(unresolvedEventIds);
+
+          for (const eventId of unresolvedEventIds) {
+            const link = trackerLinks[eventId];
+            if (link?.workoutId) {
+              nextMap[eventId] = link.workoutId;
+            }
+          }
+        } catch {
+          // If tracker read fails, continue with legacy fallback behavior.
+        }
+      }
+
+      // Prime colors from event category metadata for all currently visible events.
+      for (const event of dayEvents) {
+        const resolvedCategory = getEventWorkoutCategory(event);
+        const colorFromEventCategory = getConfiguredWorkoutCategoryColor(resolvedCategory || undefined);
+        if (colorFromEventCategory) {
+          nextColorMap[event.id] = colorFromEventCategory;
+        }
+      }
+
+      // Final fallback for color: resolve from linked workout document by workoutId.
+      // This covers events where link exists but event metadata lacks category.
+      const eventWorkoutPairs = dayEvents
+        .map(event => ({
+          eventId: event.id,
+          workoutId: getEventWorkoutId(event) || nextMap[event.id],
+        }))
+        .filter(pair => !!pair.workoutId && !nextColorMap[pair.eventId]);
+
+      if (eventWorkoutPairs.length > 0) {
+        try {
+          const { getClientWorkout } = await import('@/lib/firebase/services/clientWorkouts');
+          const { getScheduledWorkout } = await import('@/lib/firebase/services/programs');
+          const workoutColorCache = new Map<string, string | null>();
+
+          for (const pair of eventWorkoutPairs) {
+            const workoutId = pair.workoutId as string;
+
+            if (!workoutColorCache.has(workoutId)) {
+              const clientWorkout = await getClientWorkout(workoutId);
+              let workoutCategoryName = clientWorkout?.categoryName;
+
+              // Legacy/alternate flows may store linked workouts in scheduled-workouts.
+              if (!workoutCategoryName) {
+                const scheduledWorkout = await getScheduledWorkout(workoutId);
+                workoutCategoryName = scheduledWorkout?.sessionType;
+              }
+
+              const workoutColor = getConfiguredWorkoutCategoryColor(workoutCategoryName || undefined);
+              workoutColorCache.set(workoutId, workoutColor);
+            }
+
+            const color = workoutColorCache.get(workoutId);
+            if (color) {
+              nextColorMap[pair.eventId] = color;
+            }
+          }
+        } catch {
+          // Keep existing fallback behavior when workout lookup fails.
+        }
+      }
+
+      setResolvedWorkoutIds(nextMap);
+      setResolvedWorkoutColors(nextColorMap);
+      workoutLookupKeyRef.current = lookupKey;
+    };
+
+    inferLinks().catch(() => {
+      // Keep key unchanged on failure so next render can retry lookup.
+    });
+  }, [dayEvents, safeSelectedDate, clients, configWorkoutCategories]);
+
+
+
   // Helper to get client ID from event
   const getClientId = (event: GoogleCalendarEvent): string | null => {
     if (event.preConfiguredClient) {
@@ -161,11 +322,18 @@ export function DayEventList({
   };
 
   // Helper to get category color
-  const getCategoryColor = (event: GoogleCalendarEvent): string => {
-    // Check if this is a class session
-    if (event.isClassSession) {
-      return '#a855f7'; // Purple for class sessions
-    }
+  const getEventDetectionColor = (event: GoogleCalendarEvent): string => {
+    const resolveConfiguredColor = (colorName?: string): string | null => {
+      if (!colorName) return null;
+      const colorMap: Record<string, string> = {
+        blue: '#3b82f6',
+        purple: '#a855f7',
+        green: '#22c55e',
+        orange: '#f97316',
+        pink: '#ec4899',
+      };
+      return colorMap[colorName] || colorName;
+    };
 
     // Check if this is a coaching session (has client ID)
     const hasClient = event.preConfiguredClient || 
@@ -174,23 +342,49 @@ export function DayEventList({
     
     const isCoaching = hasClient || event.isCoachingSession;
     
-    // Priority 1: If event has a workout category from a period, use that color
-    // (Note: We'd need workoutCategories from store to get the actual color,
-    // but for now we'll use orange for coaching sessions with categories)
-    if (event.preConfiguredCategory) {
-      // If it's a coaching session with a category, we could look up the color
-      // For now, keep it orange if it's coaching, otherwise use default
-      if (isCoaching) {
-        return '#f97316'; // Keep orange for coaching sessions
+    // Priority 1: Resolve category from event metadata/patterns and map to configured color.
+    const resolvedCategory = getEventCategory(event) || event.preConfiguredCategory;
+    if (resolvedCategory) {
+      const category = configWorkoutCategories.find(
+        c => c.name.toLowerCase() === resolvedCategory.toLowerCase()
+      );
+      if (category?.color) {
+        return category.color;
       }
-      return '#3b82f6'; // Blue for non-coaching events with category
+    }
+
+    // Priority 2: Class session color from calendar config.
+    if (event.isClassSession) {
+      return resolveConfiguredColor(calendarConfig.classColor) || '#a855f7';
     }
     
-    // Priority 2: Default colors based on event type
+    // Priority 3: Coaching session color from calendar config.
     if (isCoaching) {
-      return '#f97316'; // Orange for coaching sessions
+      return resolveConfiguredColor(calendarConfig.coachingColor) || '#f97316';
     }
+
+    // Priority 4: Generic default for personal/other events.
     return '#3b82f6'; // Blue for other events
+  };
+
+  const getWorkoutCategoryCircleColor = (
+    event: GoogleCalendarEvent,
+    eventId: string,
+    eventDetectionColor: string
+  ): string | null => {
+    const resolvedCategory = getEventWorkoutCategory(event);
+    if (resolvedCategory) {
+      const color = getConfiguredWorkoutCategoryColor(resolvedCategory);
+      if (color) {
+        return color;
+      }
+
+      // Category exists but did not map to a configured color. Use event color as fallback
+      // so categorized rows do not appear as unassigned gray.
+      return eventDetectionColor;
+    }
+
+    return resolvedWorkoutColors[eventId] || null;
   };
 
   return (
@@ -217,23 +411,29 @@ export function DayEventList({
             {sortedEvents.map((event) => {
               const eventTime = new Date(event.start.dateTime);
               const clientName = getClientName(event);
-              const categoryColor = getCategoryColor(event);
-              const eventClientId = getClientId(event);
-              const hasClientAssigned = !!eventClientId;
-              const hasWorkoutLinked = !!event.linkedWorkoutId;
+              const eventDetectionColor = getEventDetectionColor(event);
+              const linkedWorkoutId = getEventWorkoutId(event);
+              const resolvedWorkoutId = linkedWorkoutId || resolvedWorkoutIds[event.id];
+              const workoutCategoryColor = getWorkoutCategoryCircleColor(event, event.id, eventDetectionColor);
+              
+              // All event clicks go to the parent handler (dashboard/programs)
+              // which has the routing logic for builder/dialog
+              const handleEventContainerClick = () => {
+                onEventClick?.(event);
+              };
               
               return (
                 <div
                   key={event.id}
                   className="p-2 rounded border cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => onEventClick?.(event)}
+                  onClick={handleEventContainerClick}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <div
                           className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: categoryColor }}
+                          style={{ backgroundColor: eventDetectionColor }}
                         />
                         <span className="text-sm font-medium truncate">
                           {clientName}
@@ -252,15 +452,16 @@ export function DayEventList({
                         })()}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {/* Status icons - same as calendar view */}
-                      {hasWorkoutLinked ? (
-                        <span title="Workout assigned" className="text-sm">💪</span>
-                      ) : hasClientAssigned ? (
-                        <span title="Client assigned (no workout yet)" className="text-sm">👤</span>
-                      ) : (
-                        <span title="Unassigned - click to assign client" className="text-gray-400 text-sm">○</span>
-                      )}
+                    <div className="flex-shrink-0 flex items-center gap-1">
+                      {/* Workout status marker uses the same dot styling as the left event marker; only color source differs. */}
+                      <div
+                        title={workoutCategoryColor ? 'Workout category detected' : 'No workout category detected'}
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{
+                          backgroundColor: workoutCategoryColor || '#d1d5db',
+                        }}
+                        role="button"
+                      />
                     </div>
                   </div>
                 </div>

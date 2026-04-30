@@ -3,9 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, MoreVertical } from 'lucide-react';
+import { MoreVertical } from 'lucide-react';
 import { RepWheelPicker } from './RepWheelPicker';
 import { RPEWheelPicker } from './RPEWheelPicker';
 import { CategoryWheelPicker } from './CategoryWheelPicker';
@@ -13,15 +11,16 @@ import { MovementWheelPicker } from './MovementWheelPicker';
 import { DistanceUnitPicker } from './DistanceUnitPicker';
 import {
   ClientWorkoutMovementUsage,
+  ClientWorkoutTargetWorkload,
   Movement,
-  MovementCategory
+  MovementCategory,
+  WorkoutSetEntry
 } from '@/lib/types';
 import { getRecentExercisePerformance } from '@/lib/firebase/services/clients';
 import { calculateWeightFromOneRepMax, calculateOneRepMax } from '@/lib/utils/rpe-calculator';
 
 interface InlineMovementEditorProps {
   usage: ClientWorkoutMovementUsage;
-  roundIndex: number;
   usageIndex: number;
   movements: Movement[];
   categories: MovementCategory[];
@@ -34,6 +33,7 @@ interface InlineMovementEditorProps {
   onDragEnd?: () => void;
   isDragging?: boolean;
   isDropTarget?: boolean;
+  roundSets?: number;
   gridTemplateColumns?: string; // Unified grid template for table-style alignment
   unifiedEnabledFields?: { // Which fields exist in the unified grid (for table alignment)
     reps?: boolean;
@@ -50,7 +50,6 @@ interface InlineMovementEditorProps {
 
 export function InlineMovementEditor({
   usage,
-  roundIndex,
   usageIndex,
   movements,
   categories,
@@ -63,6 +62,7 @@ export function InlineMovementEditor({
   onDragEnd,
   isDragging,
   isDropTarget,
+  roundSets = 1,
   gridTemplateColumns,
   unifiedEnabledFields,
   sectionColor,
@@ -73,13 +73,33 @@ export function InlineMovementEditor({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [showNotes, setShowNotes] = useState(!!usage.note);
   const contextMenuRef = useRef<HTMLButtonElement>(null);
+  const setExpansionEnabled = process.env.NEXT_PUBLIC_ENABLE_WORKOUT_SET_EXPANSION === 'true';
+
+  const hasExpandedSetEntries = (usage.setEntries?.length || 0) > 1;
+  const baseSetEntry = (): WorkoutSetEntry => ({
+    reps: usage.targetWorkload.reps,
+    weight: usage.targetWorkload.weight,
+    rpe: usage.targetWorkload.rpe
+  });
 
   // Get movement and category info
   const selectedMovement = movements.find(m => m.id === usage.movementId);
-  const selectedCategory = categories.find(c => c.id === usage.categoryId);
-  const configuration = selectedMovement?.configuration;
 
-  const filteredMovements = movements.filter(m => m.categoryId === usage.categoryId);
+  const categoryMovements = movements.filter(m => m.categoryId === usage.categoryId);
+  const filteredMovements = selectedMovement && !categoryMovements.some(m => m.id === selectedMovement.id)
+    ? [selectedMovement, ...categoryMovements]
+    : categoryMovements;
+
+  useEffect(() => {
+    if (!selectedMovement?.categoryId) return;
+    if (selectedMovement.categoryId === usage.categoryId) return;
+
+    // Keep a filled movement visible/editable even if its category changed in the library.
+    onUpdate({
+      ...usage,
+      categoryId: selectedMovement.categoryId,
+    });
+  }, [selectedMovement?.categoryId, usage.categoryId, usage, onUpdate]);
 
   // Auto-populate weight/reps from recent performance when movement is selected
   const previousMovementIdRef = useRef<string | undefined>(usage.movementId);
@@ -95,6 +115,9 @@ export function InlineMovementEditor({
     if (!clientId || !usage.movementId) return;
     const supportsWeight = selectedMovement?.configuration?.useWeight ?? true;
     if (!supportsWeight) return;
+
+    // In expanded set mode, coaches control per-set values directly
+    if (hasExpandedSetEntries) return;
 
     // Only process if reps are set
     const repsValue = usage.targetWorkload.reps;
@@ -194,7 +217,8 @@ export function InlineMovementEditor({
         console.error('Error calculating weight from 1RM:', error);
         // Silent fail - don't interrupt user experience
       });
-  }, [usage.targetWorkload.reps, clientId, usage.movementId]); // Trigger when reps change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usage.targetWorkload.reps, clientId, usage.movementId, hasExpandedSetEntries]); // Trigger when reps change
 
   useEffect(() => {
     // Only auto-populate when movementId changes (newly selected)
@@ -261,6 +285,7 @@ export function InlineMovementEditor({
           });
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usage.movementId, clientId]); // Only run when movement or client changes
 
   // Debug logging
@@ -282,16 +307,29 @@ export function InlineMovementEditor({
     }
   }, [showContextMenu]);
 
-  const updateField = (field: string, value: any) => {
+  const updateField = (field: string, value: unknown) => {
     if (field.startsWith('targetWorkload.')) {
       const workloadField = field.replace('targetWorkload.', '');
-      const updated = {
+      const updated: ClientWorkoutMovementUsage = {
         ...usage,
         targetWorkload: {
           ...usage.targetWorkload,
           [workloadField]: value
         }
       };
+
+      if (updated.setEntries && updated.setEntries.length > 0) {
+        const nextEntries = [...updated.setEntries];
+        const normalizedValue = value === null || value === undefined || value === '' ? undefined : String(value);
+        nextEntries[0] = {
+          ...nextEntries[0],
+          ...(workloadField === 'reps' ? { reps: normalizedValue } : {}),
+          ...(workloadField === 'weight' ? { weight: normalizedValue } : {}),
+          ...(workloadField === 'rpe' ? { rpe: normalizedValue } : {})
+        };
+        updated.setEntries = nextEntries;
+      }
+
       console.log('[InlineMovementEditor] updateField calling onUpdate:', { field, value, workloadField, updatedWeight: updated.targetWorkload.weight });
       onUpdate(updated);
     } else {
@@ -300,6 +338,96 @@ export function InlineMovementEditor({
         [field]: value
       });
     }
+  };
+
+  const handleExpandSets = () => {
+    const targetSets = Math.max(1, roundSets);
+    if (targetSets <= 1) return;
+
+    // If entries already exist with the correct count, preserve them
+    if (usage.setEntries && usage.setEntries.length === targetSets) {
+      setShowContextMenu(false);
+      return;
+    }
+
+    const source = baseSetEntry();
+    // Filter out undefined values from the source entry
+    const cleanSource: WorkoutSetEntry = {};
+    if (source.reps !== undefined) cleanSource.reps = source.reps;
+    if (source.weight !== undefined) cleanSource.weight = source.weight;
+    if (source.rpe !== undefined) cleanSource.rpe = source.rpe;
+
+    const nextEntries: WorkoutSetEntry[] = Array.from({ length: targetSets }, () => ({
+      ...cleanSource
+    }));
+
+    onUpdate({
+      ...usage,
+      setEntries: nextEntries
+    });
+    setShowContextMenu(false);
+  };
+
+  const handleCollapseSets = () => {
+    onUpdate({
+      ...usage,
+      setEntries: undefined
+    });
+    setShowContextMenu(false);
+  };
+
+  const updateSetEntryField = (setIndex: number, field: keyof WorkoutSetEntry, value: string | undefined) => {
+    const existing = usage.setEntries && usage.setEntries.length > 0 ? usage.setEntries : [baseSetEntry()];
+    const nextEntries = [...existing];
+    
+    // Handle type conversion for numeric fields
+    let typedValue: string | number | undefined = value || undefined;
+    if (field === 'distance' || field === 'percentage') {
+      typedValue = value ? parseFloat(value) : undefined;
+    }
+    
+    // Only update the field if it has a value; otherwise delete it
+    const updatedEntry: Partial<WorkoutSetEntry> = {};
+    const currentEntry = nextEntries[setIndex];
+    
+    // Copy all fields from current entry
+    if (currentEntry.reps !== undefined) updatedEntry.reps = currentEntry.reps;
+    if (currentEntry.tempo !== undefined) updatedEntry.tempo = currentEntry.tempo;
+    if (currentEntry.time !== undefined) updatedEntry.time = currentEntry.time;
+    if (currentEntry.weight !== undefined) updatedEntry.weight = currentEntry.weight;
+    if (currentEntry.distance !== undefined) updatedEntry.distance = currentEntry.distance;
+    if (currentEntry.pace !== undefined) updatedEntry.pace = currentEntry.pace;
+    if (currentEntry.percentage !== undefined) updatedEntry.percentage = currentEntry.percentage;
+    if (currentEntry.rpe !== undefined) updatedEntry.rpe = currentEntry.rpe;
+    
+    // Update or delete the specific field
+    if (typedValue !== undefined) {
+      (updatedEntry as Record<string, string | number>)[field] = typedValue;
+    } else {
+      delete (updatedEntry as Record<string, string | number | undefined>)[field];
+    }
+    nextEntries[setIndex] = updatedEntry as WorkoutSetEntry;
+
+    const updated: ClientWorkoutMovementUsage = {
+      ...usage,
+      setEntries: nextEntries
+    };
+
+    if (setIndex === 0) {
+      // Sync the first set entry with targetWorkload
+      if (field === 'reps' || field === 'weight' || field === 'rpe' || field === 'tempo' || field === 'time' || field === 'distance' || field === 'percentage') {
+        const targetWorkloadUpdate: Partial<ClientWorkoutTargetWorkload> = {
+          [field]: typedValue
+        };
+        
+        updated.targetWorkload = {
+          ...updated.targetWorkload,
+          ...targetWorkloadUpdate
+        };
+      }
+    }
+
+    onUpdate(updated);
   };
 
   // Ensure default values are set for dropdowns
@@ -328,22 +456,22 @@ export function InlineMovementEditor({
 
   // Determine which columns exist in the unified grid (for table alignment)
   // If unifiedEnabledFields is provided, use it; otherwise fall back to this movement's config
-  const gridHasReps = unifiedEnabledFields?.reps ?? (selectedMovement?.configuration?.useReps ?? false);
-  const gridHasWeight = unifiedEnabledFields?.weight ?? (selectedMovement?.configuration?.useWeight ?? false);
-  const gridHasTempo = unifiedEnabledFields?.tempo ?? (selectedMovement?.configuration?.useTempo ?? false);
-  const gridHasTime = unifiedEnabledFields?.time ?? (selectedMovement?.configuration?.useTime ?? false);
-  const gridHasDistance = unifiedEnabledFields?.distance ?? (selectedMovement?.configuration?.useDistance ?? false);
-  const gridHasRPE = unifiedEnabledFields?.rpe ?? (selectedMovement?.configuration?.useRPE ?? false);
-  const gridHasPercentage = unifiedEnabledFields?.percentage ?? (selectedMovement?.configuration?.usePercentage ?? false);
+  const gridHasReps = unifiedEnabledFields?.reps ?? ((selectedMovement?.configuration?.useReps ?? usage.targetWorkload.useReps) || Boolean(usage.targetWorkload.reps));
+  const gridHasWeight = unifiedEnabledFields?.weight ?? ((selectedMovement?.configuration?.useWeight ?? usage.targetWorkload.useWeight) || Boolean(usage.targetWorkload.weight));
+  const gridHasTempo = unifiedEnabledFields?.tempo ?? ((selectedMovement?.configuration?.useTempo ?? usage.targetWorkload.useTempo) || Boolean(usage.targetWorkload.tempo));
+  const gridHasTime = unifiedEnabledFields?.time ?? ((selectedMovement?.configuration?.useTime ?? usage.targetWorkload.useTime) || Boolean(usage.targetWorkload.time));
+  const gridHasDistance = unifiedEnabledFields?.distance ?? ((selectedMovement?.configuration?.useDistance ?? usage.targetWorkload.useDistance) || typeof usage.targetWorkload.distance === 'number');
+  const gridHasRPE = unifiedEnabledFields?.rpe ?? ((selectedMovement?.configuration?.useRPE ?? usage.targetWorkload.useRPE) || Boolean(usage.targetWorkload.rpe));
+  const gridHasPercentage = unifiedEnabledFields?.percentage ?? ((selectedMovement?.configuration?.usePercentage ?? usage.targetWorkload.usePercentage) || typeof usage.targetWorkload.percentage === 'number');
 
   // Check if this specific movement supports each field
-  const movementSupportsReps = selectedMovement?.configuration?.useReps ?? false;
-  const movementSupportsWeight = selectedMovement?.configuration?.useWeight ?? false;
-  const movementSupportsTempo = selectedMovement?.configuration?.useTempo ?? false;
-  const movementSupportsTime = selectedMovement?.configuration?.useTime ?? false;
-  const movementSupportsDistance = selectedMovement?.configuration?.useDistance ?? false;
-  const movementSupportsRPE = selectedMovement?.configuration?.useRPE ?? false;
-  const movementSupportsPercentage = selectedMovement?.configuration?.usePercentage ?? false;
+  const movementSupportsReps = (selectedMovement?.configuration?.useReps ?? usage.targetWorkload.useReps) || Boolean(usage.targetWorkload.reps);
+  const movementSupportsWeight = (selectedMovement?.configuration?.useWeight ?? usage.targetWorkload.useWeight) || Boolean(usage.targetWorkload.weight);
+  const movementSupportsTempo = (selectedMovement?.configuration?.useTempo ?? usage.targetWorkload.useTempo) || Boolean(usage.targetWorkload.tempo);
+  const movementSupportsTime = (selectedMovement?.configuration?.useTime ?? usage.targetWorkload.useTime) || Boolean(usage.targetWorkload.time);
+  const movementSupportsDistance = (selectedMovement?.configuration?.useDistance ?? usage.targetWorkload.useDistance) || typeof usage.targetWorkload.distance === 'number';
+  const movementSupportsRPE = (selectedMovement?.configuration?.useRPE ?? usage.targetWorkload.useRPE) || Boolean(usage.targetWorkload.rpe);
+  const movementSupportsPercentage = (selectedMovement?.configuration?.usePercentage ?? usage.targetWorkload.usePercentage) || typeof usage.targetWorkload.percentage === 'number';
 
   const rowBackgroundColor = sectionColor ? `${sectionColor}15` : 'transparent'; // 15 = ~8% opacity
 
@@ -398,7 +526,8 @@ export function InlineMovementEditor({
                 ...usage,
                 categoryId,
                 movementId: '', // Reset movement selection
-                targetWorkload: resetWorkload // Reset workload data
+                targetWorkload: resetWorkload, // Reset workload data
+                setEntries: undefined
               });
             }}
             categories={categories}
@@ -433,7 +562,7 @@ export function InlineMovementEditor({
               <RepWheelPicker
                 value={usage.targetWorkload.reps ? parseInt(usage.targetWorkload.reps) || null : null}
                 onChange={(value) => updateField('targetWorkload.reps', value.toString())}
-                placeholder={selectedMovement?.configuration.unilateral ? "ea" : "Reps"}
+                placeholder={selectedMovement?.configuration.unilateral || usage.targetWorkload.unilateral ? "ea" : "Reps"}
               />
             ) : null}
           </div>
@@ -565,8 +694,32 @@ export function InlineMovementEditor({
           </Button>
 
           {showContextMenu && (
-            <div className="absolute right-0 top-full z-[9999] mt-1 w-32 origin-top-right rounded-md bg-white py-2 shadow-xl ring-1 ring-gray-900/5 focus:outline-none"
+            <div className="absolute right-0 top-full z-[9999] mt-1 w-40 origin-top-right rounded-md bg-white py-2 shadow-xl ring-1 ring-gray-900/5 focus:outline-none"
               onMouseDown={(e) => e.stopPropagation()}>
+              {setExpansionEnabled && roundSets > 1 && !hasExpandedSetEntries && (
+                <button
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handleExpandSets();
+                  }}
+                  className="w-full text-left px-3 py-1 text-sm leading-6 text-gray-900 hover:bg-gray-50"
+                >
+                  Expand sets
+                </button>
+              )}
+              {setExpansionEnabled && roundSets > 1 && hasExpandedSetEntries && (
+                <button
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handleCollapseSets();
+                  }}
+                  className="w-full text-left px-3 py-1 text-sm leading-6 text-gray-900 hover:bg-gray-50"
+                >
+                  Collapse sets
+                </button>
+              )}
               {!showNotes && (
                 <button
                   onMouseDown={(e) => {
@@ -586,14 +739,28 @@ export function InlineMovementEditor({
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
-                    console.log('Remove Note clicked');
+                    console.log('Hide Note clicked');
                     setShowNotes(false);
-                    updateField('note', '');
                     setShowContextMenu(false);
                   }}
                   className="w-full text-left px-3 py-1 text-sm leading-6 text-gray-900 hover:bg-gray-50"
                 >
-                  Remove Note
+                  Hide Note
+                              {showNotes && usage.note && (
+                                <button
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    console.log('Delete Note clicked');
+                                    updateField('note', '');
+                                    setShowNotes(false);
+                                    setShowContextMenu(false);
+                                  }}
+                                  className="w-full text-left px-3 py-1 text-sm leading-6 text-red-600 hover:bg-red-50"
+                                >
+                                  Delete Note
+                                </button>
+                              )}
                 </button>
               )}
               {canDelete && (
@@ -616,6 +783,171 @@ export function InlineMovementEditor({
           )}
         </div>
       </div>
+
+      {setExpansionEnabled && hasExpandedSetEntries && (
+        <div>
+          {(usage.setEntries || []).slice(1).map((setEntry, setIndex) => {
+            const expandedSetIndex = setIndex + 1; // Actual index in setEntries array
+            return (
+              <div
+                key={`set-row-${expandedSetIndex}`}
+                className={`grid items-center text-sm border-l-4 relative ${
+                  'hover:bg-gray-50'
+                }`}
+                style={{
+                  gridTemplateColumns: gridColumns,
+                  backgroundColor: rowBackgroundColor,
+                  borderLeftColor: sectionColor || 'transparent',
+                }}
+              >
+                {/* Set Label */}
+                <div className="flex items-center gap-2 min-w-0 px-1 py-0.5">
+                </div>
+
+                {/* Tempo Column */}
+                {gridHasTempo && (
+                  <div className="px-1 py-0.5">
+                    {movementSupportsTempo ? (
+                      <Input
+                        placeholder="Tempo"
+                        value={setEntry.tempo || ''}
+                        onChange={(e) => updateSetEntryField(expandedSetIndex, 'tempo', e.target.value)}
+                        className="h-6 min-h-[24px] max-h-[24px] w-full text-base bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300 text-gray-900"
+                      />
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Reps Column */}
+                {gridHasReps && (
+                  <div className="px-1 py-0.5">
+                    {movementSupportsReps ? (
+                      <Input
+                        placeholder="Reps"
+                        value={setEntry.reps || ''}
+                        onChange={(e) => updateSetEntryField(expandedSetIndex, 'reps', e.target.value)}
+                        className="h-6 min-h-[24px] max-h-[24px] w-full text-base text-center bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300 text-gray-900"
+                      />
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Weight Column */}
+                {gridHasWeight && (
+                  <div className="px-0 py-0.5">
+                    {movementSupportsWeight ? (
+                      <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
+                        <Input
+                          type="number"
+                          placeholder="Wt"
+                          value={setEntry.weight?.toString() || ''}
+                          onChange={(e) => updateSetEntryField(expandedSetIndex, 'weight', e.target.value)}
+                          className="h-6 min-h-[24px] max-h-[24px] flex-1 min-w-0 w-auto text-base text-right border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
+                        />
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          disabled
+                          className="h-6 min-h-[24px] max-h-[24px] w-[20px] text-xs font-medium border-0 rounded-none bg-white px-0 py-0 text-center tracking-tighter text-gray-400"
+                        >
+                          {weightMeasure}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Time Column */}
+                {gridHasTime && (
+                  <div className="px-1 py-0.5">
+                    {movementSupportsTime ? (
+                      <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
+                        <Input
+                          type="text"
+                          placeholder="Time"
+                          value={setEntry.time?.toString() || ''}
+                          onChange={(e) => updateSetEntryField(expandedSetIndex, 'time', e.target.value)}
+                          className="h-6 min-h-[24px] max-h-[24px] flex-1 min-w-0 text-base bg-white px-1 py-0 border-0 rounded-none shadow-none placeholder:text-gray-300 text-gray-900"
+                        />
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          disabled
+                          className="h-6 min-h-[24px] max-h-[24px] w-[20px] text-xs font-medium border-0 rounded-none bg-white px-0 py-0 text-center tracking-tighter text-gray-400"
+                        >
+                          {timeMeasure}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Distance Column */}
+                {gridHasDistance && (
+                  <div className="px-0 py-0.5">
+                    {movementSupportsDistance ? (
+                      <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
+                        <Input
+                          type="number"
+                          placeholder="Dist"
+                          value={setEntry.distance?.toString() || ''}
+                          onChange={(e) => updateSetEntryField(expandedSetIndex, 'distance', e.target.value)}
+                          className="h-6 min-h-[24px] max-h-[24px] flex-1 min-w-0 w-auto text-base text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          disabled
+                          className="h-6 min-h-[24px] max-h-[24px] w-[20px] text-xs font-medium border-0 rounded-none bg-white px-0 py-0 text-center tracking-tighter text-gray-400"
+                        >
+                          {distanceMeasure}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Percentage Column */}
+                {gridHasPercentage && (
+                  <div className="px-1 py-0.5">
+                    {movementSupportsPercentage ? (
+                      <div className="flex items-center bg-white border border-gray-300 overflow-hidden h-6 min-h-[24px] max-h-[24px] shadow-sm rounded-md">
+                        <Input
+                          type="number"
+                          placeholder="%"
+                          value={setEntry.percentage?.toString() || ''}
+                          onChange={(e) => updateSetEntryField(expandedSetIndex, 'percentage', e.target.value)}
+                          className="h-6 min-h-[24px] max-h-[24px] flex-1 min-w-0 w-auto text-base text-left border-0 rounded-none px-0.5 py-0 focus:ring-0 placeholder:text-gray-300 text-gray-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <span className="h-6 min-h-[24px] max-h-[24px] w-[20px] text-sm flex items-center justify-center bg-white">%</span>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* RPE Column */}
+                {gridHasRPE && (
+                  <div className="px-0 py-0.5">
+                    {movementSupportsRPE ? (
+                      <Input
+                        placeholder="RPE"
+                        value={setEntry.rpe || ''}
+                        onChange={(e) => updateSetEntryField(expandedSetIndex, 'rpe', e.target.value)}
+                        className="h-6 min-h-[24px] max-h-[24px] w-full text-base bg-white px-1 py-0 border border-gray-300 rounded-md shadow-sm placeholder:text-gray-300 text-gray-900"
+                      />
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Set Label - Right aligned where menu would be */}
+                <div className="px-0 py-0.5 flex items-center justify-center">
+                  <span className="text-xs text-gray-500 font-medium whitespace-nowrap">Set {expandedSetIndex + 1}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Notes Section - Integrated into the row look */}
       {showNotes && (

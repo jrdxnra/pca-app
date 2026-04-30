@@ -50,28 +50,52 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   // Actions
   fetchDashboardData: async () => {
     set({ loading: true, error: null });
-    try {
-      // Fetch all dashboard data in parallel
-      const [stats, recentActivity, upcomingSessions, clientProgress] = await Promise.all([
-        getDashboardStats(),
-        getRecentActivity(),
-        getUpcomingSessions(),
-        getClientProgressSummary(),
-      ]);
+    const assignError = (error: unknown, fallbackMessage: string) => {
+      set((state) => ({
+        error: state.error || (error instanceof Error ? error.message : fallbackMessage),
+      }));
+    };
 
-      set({
-        stats,
-        recentActivity,
-        upcomingSessions,
-        clientProgress,
-        loading: false,
+    const statsPromise = getDashboardStats()
+      .then((stats) => {
+        set({ stats });
+      })
+      .catch((error) => {
+        assignError(error, 'Failed to fetch dashboard stats');
       });
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to fetch dashboard data',
-        loading: false,
+
+    const recentActivityPromise = getRecentActivity()
+      .then((recentActivity) => {
+        set({ recentActivity });
+      })
+      .catch((error) => {
+        assignError(error, 'Failed to fetch recent activity');
       });
-    }
+
+    const upcomingSessionsPromise = getUpcomingSessions()
+      .then((upcomingSessions) => {
+        set({ upcomingSessions });
+      })
+      .catch((error) => {
+        assignError(error, 'Failed to fetch upcoming sessions');
+      });
+
+    const clientProgressPromise = getClientProgressSummary()
+      .then((clientProgress) => {
+        set({ clientProgress });
+      })
+      .catch((error) => {
+        assignError(error, 'Failed to fetch client progress');
+      });
+
+    await Promise.allSettled([
+      statsPromise,
+      recentActivityPromise,
+      upcomingSessionsPromise,
+      clientProgressPromise,
+    ]);
+
+    set({ loading: false });
   },
 
   fetchStats: async () => {

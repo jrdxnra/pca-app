@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Settings, Palette, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
@@ -32,6 +33,7 @@ import { MovementConfigurationToggle } from './MovementConfigurationToggle';
 // Form validation schema
 const categorySchema = z.object({
   name: z.string().min(1, 'Category name is required').max(64, 'Name must be less than 65 characters'),
+  description: z.string().optional(),
   color: z.string().regex(/^#[0-9A-F]{6}$/i, 'Must be a valid hex color'),
   defaultConfiguration: z.object({
     useReps: z.boolean(),
@@ -84,6 +86,7 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
     resolver: zodResolver(categorySchema),
     defaultValues: {
       name: category.name,
+      description: category.description || '',
       color: category.color,
       defaultConfiguration: { ...fallbackConfig, ...(category.defaultConfiguration || {}) },
     },
@@ -93,11 +96,12 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
   useEffect(() => {
     form.reset({
       name: category.name,
+      description: category.description || '',
       color: category.color,
       defaultConfiguration: { ...fallbackConfig, ...(category.defaultConfiguration || {}) },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category.id, category.name, category.color]);
+  }, [category.id, category.name, category.description, category.color]);
 
   const onSubmit = async (data: CategoryFormData) => {
     try {
@@ -143,51 +147,72 @@ export function EditCategoryDialog({ category, trigger }: EditCategoryDialogProp
         {!showDeleteConfirm ? (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Category Name */}
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.9fr)] md:items-start">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Squat, Horizontal Push" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        Choose a descriptive name for this movement category.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="color"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category Color *</FormLabel>
+                      <div className="flex items-center gap-4">
+                        <FormControl>
+                          <input
+                            type="color"
+                            {...field}
+                            className="w-12 h-12 rounded-lg border-2 border-gray-300 cursor-pointer"
+                            style={{ backgroundColor: field.value }}
+                          />
+                        </FormControl>
+                        <div className="flex-1">
+                          <Input
+                            {...field}
+                            placeholder="#8B5CF6"
+                            className="font-mono text-sm"
+                          />
+                          <FormDescription>
+                            This color will be used in workout builders and movement displays.
+                          </FormDescription>
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
               <FormField
                 control={form.control}
-                name="name"
+                name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name *</FormLabel>
+                    <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Squat, Horizontal Push" {...field} />
+                      <Textarea
+                        placeholder="Add coaching context, how this category is used, or what belongs here"
+                        className="min-h-[126px]"
+                        {...field}
+                      />
                     </FormControl>
                     <FormDescription>
-                      Choose a descriptive name for this movement category
+                      Optional category guidance for your movement library.
                     </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Category Color */}
-              <FormField
-                control={form.control}
-                name="color"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category Color *</FormLabel>
-                    <div className="flex items-center gap-4">
-                      <FormControl>
-                        <input
-                          type="color"
-                          {...field}
-                          className="w-12 h-12 rounded-lg border-2 border-gray-300 cursor-pointer"
-                          style={{ backgroundColor: field.value }}
-                        />
-                      </FormControl>
-                      <div className="flex-1">
-                        <Input
-                          {...field}
-                          placeholder="#8B5CF6"
-                          className="font-mono text-sm"
-                        />
-                        <FormDescription>
-                          This color will be used in workout builders and movement displays
-                        </FormDescription>
-                      </div>
-                    </div>
                     <FormMessage />
                   </FormItem>
                 )}

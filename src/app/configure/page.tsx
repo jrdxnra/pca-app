@@ -90,6 +90,7 @@ interface Period {
   name: string;
   color: string;
   focus: string;
+  description?: string;
   order?: number;
 }
 
@@ -214,6 +215,431 @@ function getWorkoutDaysSummary(template: WeekTemplate): string {
   });
 
   return parts.join(', ') || 'No workouts';
+}
+
+function inferRoundCategoryHints(sectionName?: string, focusArea?: string, defaultStructure?: string): string[] {
+  const text = `${sectionName || ''} ${focusArea || ''} ${defaultStructure || ''}`.toLowerCase();
+
+  if (/(cool\s?down|recovery|stretch|breath|mobility)/.test(text)) {
+    return ['Mobility', 'Recovery', 'Stretching'];
+  }
+
+  if (/(warm\s?-?up|prep|activation|movement prep|ballistic)/.test(text)) {
+    return ['Prep', 'Warm-Up', 'Activation', 'Mobility'];
+  }
+
+  if (/(strength|main lift|squat|hinge|push|pull|power)/.test(text)) {
+    return ['Strength', 'Power', 'Primary Lifts'];
+  }
+
+  if (/(condition|metcon|esd|engine|cardio|amrap|emom|circuit|interval)/.test(text)) {
+    return ['Conditioning', 'Cardio', 'Work Capacity'];
+  }
+
+  if (/(accessory|hypertrophy|bodybuilding|assist)/.test(text)) {
+    return ['Accessory', 'Hypertrophy', 'Stability'];
+  }
+
+  return ['Strength', 'Conditioning', 'Mobility'];
+}
+
+function buildRoundGuidance(section: {
+  workoutTypeName?: string;
+  configuration?: {
+    focusArea?: string;
+    defaultStructure?: string;
+  };
+}): string {
+  const categories = inferRoundCategoryHints(
+    section.workoutTypeName,
+    section.configuration?.focusArea,
+    section.configuration?.defaultStructure
+  );
+
+  const focus = section.configuration?.focusArea?.trim();
+  const structure = section.configuration?.defaultStructure;
+
+  const parts = [
+    focus ? `Intent: ${focus}.` : undefined,
+    `Relevant categories: ${categories.join(', ')}.`,
+    structure ? `Preferred structure: ${structure}.` : undefined,
+    section.workoutTypeName ? `Keep movement selection aligned to ${section.workoutTypeName}.` : undefined,
+  ].filter(Boolean);
+
+  return parts.join(' ');
+}
+
+function isLegacyAutoTemplateDescription(description?: string): boolean {
+  if (!description) return false;
+
+  const normalized = description.trim();
+  const lower = normalized.toLowerCase();
+  return (
+    normalized === 'Workout structure template with configurable rounds and AI guidance.' ||
+    (normalized.startsWith('Session flow: ') &&
+      normalized.includes('Use this template to keep round intent and movement categories consistent.')) ||
+    lower.includes('structured session template with configurable rounds')
+  );
+}
+
+function getPresetTemplateDescription(name?: string): string | undefined {
+  const key = normalizePeriodName(name);
+
+  const presets: Record<string, string> = {
+    exos:
+      'A comprehensive athletic session targeting the full spectrum of performance. We open with Pillar Prep to prime the nervous system and core, transition into high-fidelity Movement Skills, and anchor the session with tiered Strength blocks before finishing with aerobic or anaerobic ESD output.',
+    exostheperformancestandard:
+      'A comprehensive athletic session targeting the full spectrum of performance. We open with Pillar Prep to prime the nervous system and core, transition into high-fidelity Movement Skills, and anchor the session with tiered Strength blocks before finishing with aerobic or anaerobic ESD output.',
+    thebig3:
+      'Focused on the mastery of the Squat, Bench, and Deadlift. This flow prioritizes maximal force production in the Primary lift, followed by Secondary variations to address technical breakdown, and finishes with Accessory work to build structural balance and hypertrophy.',
+    thebig3powerliftingfoundation:
+      'Focused on the mastery of the Squat, Bench, and Deadlift. This flow prioritizes maximal force production in the Primary lift, followed by Secondary variations to address technical breakdown, and finishes with Accessory work to build structural balance and hypertrophy.',
+    metabolicresistance:
+      'Designed to maximize caloric burn and muscular endurance without sacrificing movement quality. By sandwiching Strength and ESD between movement prep and a high-intensity Finisher, this flow keeps the heart rate elevated while challenging postural integrity under fatigue.',
+    speedagility:
+      'A CNS-heavy session focused on displacement and reactive power. Following explosive ballistics and movement prep, we prioritize Energy System Development (ESD) while the athlete is fresh to ensure max velocity, closing with moderate strength work to reinforce the brakes.',
+    speedandagility:
+      'A CNS-heavy session focused on displacement and reactive power. Following explosive ballistics and movement prep, we prioritize Energy System Development (ESD) while the athlete is fresh to ensure max velocity, closing with moderate strength work to reinforce the brakes.',
+    powerdevelopment:
+      'A session dedicated to Rate of Force Development (RFD). This flow moves from low-level ballistics to high-impact Plyometrics, teaching the athlete to absorb and redirect force efficiently, followed by a primary strength block to provide the necessary horsepower.',
+    cardio:
+      'A dedicated energy system session utilizing time-based variables. Moving from a general warm-up into AMRAP and EMOM protocols, the goal is to sustain specific intensities and improve recovery cycles between bouts of high output.',
+    activerecovery:
+      'A low-intensity session focused on restoration and joint health. We utilize Pillar Prep and Movement Skill to address nagging stiff spots, followed by Pre-Hab to shore up weak links and a dedicated Cool Down to downregulate the nervous system.',
+  };
+
+  return presets[key];
+}
+
+function shouldRewriteTemplateDescription(description?: string, templateName?: string): boolean {
+  const preset = getPresetTemplateDescription(templateName);
+  if (preset && description?.trim() !== preset) return true;
+
+  if (!description?.trim()) return true;
+  if (isLegacyAutoTemplateDescription(description)) return true;
+
+  const text = description.trim();
+  const lower = text.toLowerCase();
+
+  // Rewrite prior generic formats that do not provide a whole-session picture.
+  if (lower.startsWith('session flow:') && !lower.includes('round-by-round blueprint:')) {
+    return true;
+  }
+
+  if (text.length < 140) {
+    return true;
+  }
+
+  return false;
+}
+
+function normalizePeriodName(name?: string): string {
+  return (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function getPresetPeriodDescription(name?: string): string | undefined {
+  const key = normalizePeriodName(name);
+
+  const presets: Record<string, string> = {
+    basebuilding:
+      'Objective: establish a broad aerobic and structural foundation. Programming emphasizes high-volume, low-to-moderate intensity work to build work capacity and joint integrity so the athlete can tolerate more specialized training later.',
+    generalpreparation:
+      'Objective: establish a broad aerobic and structural foundation. Programming emphasizes high-volume, low-to-moderate intensity work to build work capacity and joint integrity so the athlete can tolerate more specialized training later.',
+    basebuildinggeneralpreparation:
+      'Objective: establish a broad aerobic and structural foundation. Programming emphasizes high-volume, low-to-moderate intensity work to build work capacity and joint integrity so the athlete can tolerate more specialized training later.',
+    strengthphase:
+      'Objective: improve maximal strength through higher-intensity compound lifts and lower total volume. Success is measured by increased absolute load capacity and stronger high-threshold motor unit recruitment.',
+    maximalstrength:
+      'Objective: improve maximal strength through higher-intensity compound lifts and lower total volume. Success is measured by increased absolute load capacity and stronger high-threshold motor unit recruitment.',
+    peaking:
+      'Objective: maximize competition readiness through high specificity and fatigue management. Volume is tapered aggressively while intensity stays high so performance can peak with sharp technique and full recovery.',
+    competitionprep:
+      'Objective: maximize competition readiness through high specificity and fatigue management. Volume is tapered aggressively while intensity stays high so performance can peak with sharp technique and full recovery.',
+    gpp:
+      'Objective: improve versatility and recovery with broad, non-specific movement exposure across planes and energy systems. This phase addresses imbalances, reduces burnout risk, and maintains a resilient athletic base.',
+    generalphysicalpreparation:
+      'Objective: improve versatility and recovery with broad, non-specific movement exposure across planes and energy systems. This phase addresses imbalances, reduces burnout risk, and maintains a resilient athletic base.',
+    spp:
+      'Objective: bridge general fitness to sport performance by matching the metabolic and biomechanical demands of competition. Assistance work is selected for direct transfer to competition-style movement execution.',
+    specificphysicalpreparation:
+      'Objective: bridge general fitness to sport performance by matching the metabolic and biomechanical demands of competition. Assistance work is selected for direct transfer to competition-style movement execution.',
+    hypertrophy:
+      'Objective: increase muscle cross-sectional area via higher rep ranges and increased set volume. Mechanical tension and metabolic stress are prioritized to build tissue capacity for later force-focused phases.',
+    hypertrophyphase:
+      'Objective: increase muscle cross-sectional area via higher rep ranges and increased set volume. Mechanical tension and metabolic stress are prioritized to build tissue capacity for later force-focused phases.',
+    musclegrowth:
+      'Objective: increase muscle cross-sectional area via higher rep ranges and increased set volume. Mechanical tension and metabolic stress are prioritized to build tissue capacity for later force-focused phases.',
+    power:
+      'Objective: improve velocity and rate of force development. Programming uses moderate loads moved with maximal intent, plyometrics, and explosive variations to convert strength into usable sport speed.',
+    powerphase:
+      'Objective: improve velocity and rate of force development. Programming uses moderate loads moved with maximal intent, plyometrics, and explosive variations to convert strength into usable sport speed.',
+    velocityrfd:
+      'Objective: improve velocity and rate of force development. Programming uses moderate loads moved with maximal intent, plyometrics, and explosive variations to convert strength into usable sport speed.',
+    maintenance:
+      'Objective: preserve strength, size, and movement quality with minimum effective dose. Volume is reduced while intensity is maintained enough to limit detraining during competition season or high life stress.',
+    sustainingqualities:
+      'Objective: preserve strength, size, and movement quality with minimum effective dose. Volume is reduced while intensity is maintained enough to limit detraining during competition season or high life stress.',
+    accumulation:
+      'Objective: create a high-volume overload through progressive tonnage and time under tension. This high-fatigue block pushes recovery limits to drive supercompensation before a deload or intensification phase.',
+    volumeloading:
+      'Objective: create a high-volume overload through progressive tonnage and time under tension. This high-fatigue block pushes recovery limits to drive supercompensation before a deload or intensification phase.',
+  };
+
+  return presets[key];
+}
+
+function shouldRewritePeriodDescription(period: Pick<Period, 'name' | 'description'>): boolean {
+  const description = period.description?.trim();
+  const preset = getPresetPeriodDescription(period.name);
+
+  if (!description) return true;
+
+  // If we have a canonical preset for this phase name, rewrite until it matches.
+  if (preset && description !== preset) return true;
+
+  const lower = description.toLowerCase();
+
+  // Catch earlier generic generations and short descriptions.
+  if (lower.includes('use this period to group related week templates')) return true;
+  if (lower.startsWith('training phase for ') && lower.includes('define the main adaptation target')) return true;
+  if (lower.startsWith('phase intent:') && lower.includes('program week templates in')) return true;
+  if (description.length < 130) return true;
+
+  return false;
+}
+
+function buildTemplateDescriptionWithContext(
+  template: WorkoutStructureTemplate,
+  availableWorkoutTypes: WorkoutType[]
+): string {
+  const preset = getPresetTemplateDescription(template.name);
+  if (preset) {
+    return preset;
+  }
+
+  const sortedSections = (template.sections || []).slice().sort((a, b) => a.order - b.order);
+  const flowParts = sortedSections.map((section) => section.workoutTypeName).filter(Boolean);
+  const flow = flowParts.join(' -> ');
+
+  if (flowParts.length === 0) {
+    return 'Structured session template with configurable rounds, intent, and movement guidance.';
+  }
+
+  const workoutTypeDescriptionMap = Object.fromEntries(
+    (availableWorkoutTypes || [])
+      .filter((workoutType) => Boolean(workoutType.name?.trim()))
+      .map((workoutType) => [
+        workoutType.name.trim().toLowerCase(),
+        (workoutType.description || '').trim(),
+      ])
+  );
+
+  const allCategoryHints = sortedSections
+    .flatMap((section) =>
+      inferRoundCategoryHints(
+        section.workoutTypeName,
+        section.configuration?.focusArea,
+        section.configuration?.defaultStructure
+      )
+    )
+    .filter(Boolean);
+
+  const uniqueCategoryHints = Array.from(new Set(allCategoryHints)).slice(0, 5);
+
+  const structureModes = Array.from(
+    new Set(
+      sortedSections
+        .map((section) => section.configuration?.defaultStructure)
+        .filter(
+          (mode): mode is 'straight-sets' | 'supersets' | 'circuits' | 'amrap' | 'emom' | 'intervals' =>
+            Boolean(mode)
+        )
+    )
+  );
+
+  const totalDurationMinutes = sortedSections.reduce((sum, section) => {
+    const minutes = section.configuration?.defaultDuration;
+    return sum + (typeof minutes === 'number' && minutes > 0 ? minutes : 0);
+  }, 0);
+
+  const roundHighlights = sortedSections
+    .slice(0, 4)
+    .map((section) => {
+      const focus = section.configuration?.focusArea?.trim();
+      const typeDescription = workoutTypeDescriptionMap[(section.workoutTypeName || '').toLowerCase()];
+      const structure = section.configuration?.defaultStructure;
+      const duration = section.configuration?.defaultDuration;
+      const categories = inferRoundCategoryHints(section.workoutTypeName, focus, structure).slice(0, 2).join('/');
+      const emphasis = focus || typeDescription || categories;
+      const formatCue = [duration ? `${duration}m` : undefined, structure].filter(Boolean).join(', ');
+      return emphasis
+        ? `${section.workoutTypeName} (${emphasis}${formatCue ? `; ${formatCue}` : ''})`
+        : `${section.workoutTypeName}${formatCue ? ` (${formatCue})` : ''}`;
+    })
+    .join(' -> ');
+
+  const openingBlock = sortedSections[0]?.workoutTypeName;
+  const closingBlock = sortedSections[sortedSections.length - 1]?.workoutTypeName;
+
+  const pieces = [
+    `Session flow: ${flow}.`,
+    openingBlock && closingBlock
+      ? `Designed to open with ${openingBlock} and finish with ${closingBlock} so the session has a clear ramp and landing.`
+      : undefined,
+    uniqueCategoryHints.length > 0
+      ? `Movement emphasis: ${uniqueCategoryHints.join(', ')}.`
+      : undefined,
+    structureModes.length > 0
+      ? `Primary structures: ${structureModes.join(', ')}.`
+      : undefined,
+    totalDurationMinutes > 0
+      ? `Estimated working time across sections: ~${totalDurationMinutes} minutes.`
+      : undefined,
+    roundHighlights ? `Round-by-round blueprint: ${roundHighlights}.` : undefined,
+  ].filter(Boolean);
+
+  return pieces.join(' ');
+}
+
+function buildPeriodDescription(period: Pick<Period, 'name' | 'focus'>): string {
+  const preset = getPresetPeriodDescription(period.name);
+  if (preset) {
+    return preset;
+  }
+
+  const periodName = period.name?.trim() || 'this phase';
+  const focus = period.focus?.trim();
+
+  if (focus) {
+    return `Phase goal for ${periodName}: ${focus}. Weekly programming should bias exercise selection, set/rep exposure, and intensity toward this goal, then layer assistance work to support weak links. Use weekly check-ins to track readiness, performance trend, and tolerance so loading can be progressed, held, or deloaded with intent.`;
+  }
+
+  return `Training phase: ${periodName}. Define one primary adaptation target for this block, then align week templates so session stress and movement choices reinforce that target. Review week-over-week output, recovery, and adherence to decide progression pace and when to transition to the next phase.`;
+}
+
+function buildWorkoutTypeDescription(workoutType: Pick<WorkoutType, 'name'>): string {
+  const name = workoutType.name?.trim() || 'Workout Type';
+  const key = normalizePeriodName(name);
+
+  const presets: Record<string, string> = {
+    ppmbballistics:
+      'High-velocity drills designed to ignite the core and prime the nervous system for explosive movement.',
+    movementprep:
+      'Dynamic patterning and mobility work tailored to the specific biomechanical demands of the session.',
+    strength1:
+      'The main lift of the day; prioritizes maximal force production and technical proficiency under high loads.',
+    strength2:
+      'Supplemental movements designed to reinforce the primary lift and build structural volume.',
+    esd:
+      'Target-specific conditioning protocols used to improve aerobic capacity or anaerobic power.',
+    prehab:
+      'Corrective exercises targeting weak links like joint stability and tissue quality to ensure long-term durability.',
+    accessory:
+      'Focused work on isolated muscle groups to improve balance, shore up weaknesses, and drive hypertrophy.',
+    amrap:
+      'As Many Reps As Possible. A high-density block focusing on maximum work capacity within a set time limit.',
+    emom:
+      'Every Minute On the Minute. A protocol for managing work-to-rest ratios and practicing movement under mounting fatigue.',
+    e2om:
+      'Every 2 Minutes On the Minute. A protocol for managing work-to-rest ratios and movement quality under accumulating fatigue.',
+    rft:
+      'Rounds For Time. A task-oriented conditioning block where the goal is to complete prescribed volume as quickly as possible.',
+    tabata:
+      'A high-intensity interval protocol (20s Work / 10s Rest) designed to drive peak metabolic distress.',
+    chipper:
+      'A high-volume, one-way list of movements that tests mental grit and physical endurance.',
+    ladder:
+      'A rep scheme that scales up or down to allow high volume accumulation while managing technical breakdown.',
+    finisher:
+      'A terminal high-effort block designed to maximize metabolic stress and empty the tank.',
+    forquality:
+      'A non-competitive block prioritizing perfect execution, tempo, and mind-muscle connection over speed or load.',
+    linear:
+      'Work focused on single-direction force, typically emphasizing straight-line speed or vertical displacement.',
+    multi:
+      'Multi-directional movement patterns involving lateral, rotational, and change-of-direction demands.',
+    plyometrics:
+      'High-impact drills focusing on the stretch-shortening cycle to improve reactive power and elasticity.',
+    hinge:
+      'Lower-body emphasis prioritizing posterior-chain dominance through hinge patterns and hip extension force.',
+    squat:
+      'Lower-body emphasis prioritizing anterior-chain loading and squat mechanics under control and intent.',
+    push:
+      'Upper-body organization around push-dominant patterns to build pressing strength and structural balance.',
+    pull:
+      'Upper-body organization around pull-dominant patterns to build back strength, scapular control, and balance.',
+    chestback:
+      'A high-intensity superset approach focusing on antagonistic muscle groups for balanced torso development.',
+    sharms:
+      'Targeted isolation of the shoulder girdle and arms to drive hypertrophy and local muscular endurance.',
+    cooldown:
+      'A downregulation phase using low-intensity movement and mobility to shift the body into a recovery-dominant state.',
+    amrap10:
+      'A fixed-duration metabolic window (10 minutes) used to measure and track anaerobic work capacity over time.',
+    amrap12:
+      'A fixed-duration metabolic window (12 minutes) used to measure and track anaerobic work capacity over time.',
+  };
+
+  if (presets[key]) {
+    return presets[key];
+  }
+
+  const text = name.toLowerCase();
+
+  if (/(warm\s?-?up|prep|activation)/.test(text)) {
+    return 'Prepares tissues and movement patterns for the main session with progressive intensity.';
+  }
+
+  if (/(strength|main|primary|lift|power)/.test(text)) {
+    return 'Primary strength or power block focused on quality reps, intent, and progressive overload.';
+  }
+
+  if (/(condition|metcon|engine|cardio|esd|amrap|emom|interval)/.test(text)) {
+    return 'Conditioning block to build work capacity, pacing control, and aerobic/anaerobic fitness.';
+  }
+
+  if (/(accessory|hypertrophy|assist)/.test(text)) {
+    return 'Accessory work to improve muscular balance, tissue tolerance, and targeted hypertrophy.';
+  }
+
+  if (/(cool\s?down|recovery|mobility|stretch)/.test(text)) {
+    return 'Cooldown and recovery block to downregulate, restore mobility, and support session-to-session readiness.';
+  }
+
+  return `${name} phase used to organize session intent, movement focus, and loading strategy.`;
+}
+
+function shouldRewriteWorkoutTypeDescription(workoutType: Pick<WorkoutType, 'name' | 'description'>): boolean {
+  const nextDescription = buildWorkoutTypeDescription(workoutType);
+  const current = workoutType.description?.trim();
+  const key = normalizePeriodName(workoutType.name);
+  const hasPresetKey = [
+    'ppmbballistics', 'movementprep', 'strength1', 'strength2', 'esd', 'prehab', 'accessory',
+    'amrap', 'emom', 'e2om', 'rft', 'tabata', 'chipper', 'ladder', 'finisher', 'forquality',
+    'linear', 'multi', 'plyometrics', 'hinge', 'squat', 'push', 'pull', 'chestback', 'sharms',
+    'cooldown', 'amrap10', 'amrap12'
+  ].includes(key);
+
+  if (!current) return true;
+
+  // For known taxonomy blocks, keep them aligned with canonical copy.
+  if (hasPresetKey && current !== nextDescription) return true;
+
+  if (current !== nextDescription) {
+    const lower = current.toLowerCase();
+    if (lower.includes('phase used to organize session intent, movement focus, and loading strategy')) {
+      return true;
+    }
+
+    // Respect custom manual descriptions unless they are generic legacy text.
+    if (current.length > 40) {
+      return false;
+    }
+
+    return true;
+  }
+
+  return false;
 }
 
 // Sortable Item Component
@@ -377,6 +803,9 @@ export default function ConfigurePage() {
   const { needsSetup: needsSetupHub, isLoading: onboardingLoading } = useSetupHubProgress(calendarReady, hasClients);
   const celebrationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const checklistCompleteRef = useRef(false);
+  const hasInitializedChecklistStateRef = useRef(false);
+  const hasBackfilledInitialDescriptionsRef = useRef(false);
+  const isBackfillingInitialDescriptionsRef = useRef(false);
   const confettiColors = ['#6366F1', '#10B981', '#FBBF24', '#F472B6'];
 
   // Sync local state with store state when it changes
@@ -564,6 +993,18 @@ export default function ConfigurePage() {
   const checklistComplete = totalChecklistSteps > 0 && completedChecklistSteps === totalChecklistSteps;
 
   useEffect(() => {
+    // Wait until setup-related data has finished loading so we don't treat initial hydration
+    // as a "new completion" for users who completed setup long ago.
+    if (onboardingLoading || configLoading) {
+      return;
+    }
+
+    if (!hasInitializedChecklistStateRef.current) {
+      checklistCompleteRef.current = checklistComplete;
+      hasInitializedChecklistStateRef.current = true;
+      return;
+    }
+
     if (checklistComplete && !checklistCompleteRef.current) {
       setShowCelebration(true);
       if (celebrationTimeoutRef.current) {
@@ -575,6 +1016,7 @@ export default function ConfigurePage() {
     } else if (!checklistComplete && checklistCompleteRef.current) {
       setShowCelebration(false);
     }
+
     checklistCompleteRef.current = checklistComplete;
 
     return () => {
@@ -582,7 +1024,7 @@ export default function ConfigurePage() {
         clearTimeout(celebrationTimeoutRef.current);
       }
     };
-  }, [checklistComplete]);
+  }, [checklistComplete, onboardingLoading, configLoading]);
 
   // Location management state
   const [uniqueLocations, setUniqueLocations] = useState<string[]>([]);
@@ -659,6 +1101,8 @@ export default function ConfigurePage() {
         window.history.replaceState({ path: newUrl }, '', newUrl);
       } else if (hasError) {
         console.error('OAuth error:', hasError);
+        const decodedError = decodeURIComponent(hasError);
+        toastError(`Google Calendar connection failed: ${decodedError}`);
         // Clean URL
         const newUrl = window.location.pathname;
         window.history.replaceState({ path: newUrl }, '', newUrl);
@@ -697,6 +1141,100 @@ export default function ConfigurePage() {
       }
     }
   }, [fetchAllConfig, fetchCalendars, fetchClients, fetchBusinessHours, fetchMovements]);
+
+  // One-time starter backfill: add first-pass descriptions/context for existing periods/templates
+  useEffect(() => {
+    if (hasBackfilledInitialDescriptionsRef.current || isBackfillingInitialDescriptionsRef.current) {
+      return;
+    }
+
+    if (periods.length === 0 && workoutStructureTemplates.length === 0 && workoutTypes.length === 0) {
+      return;
+    }
+
+    const periodsNeedingDescriptionRewrite = periods.filter((period) =>
+      shouldRewritePeriodDescription(period)
+    );
+    const templatesNeedingUpdate = workoutStructureTemplates.filter((template) => {
+      const missingOrWeakTemplateDescription = shouldRewriteTemplateDescription(template.description, template.name);
+      const missingSectionGuidance = (template.sections || []).some(
+        (section) => !section.configuration?.aiGuidance?.trim()
+      );
+      return missingOrWeakTemplateDescription || missingSectionGuidance;
+    });
+
+    const workoutTypesMissingDescription = workoutTypes.filter(
+      (workoutType) => shouldRewriteWorkoutTypeDescription(workoutType)
+    );
+
+    if (
+      periodsNeedingDescriptionRewrite.length === 0 &&
+      templatesNeedingUpdate.length === 0 &&
+      workoutTypesMissingDescription.length === 0
+    ) {
+      hasBackfilledInitialDescriptionsRef.current = true;
+      return;
+    }
+
+    isBackfillingInitialDescriptionsRef.current = true;
+
+    (async () => {
+      try {
+        let periodUpdates = 0;
+        let templateUpdates = 0;
+        let workoutTypeUpdates = 0;
+
+        for (const period of periodsNeedingDescriptionRewrite) {
+          await updatePeriod(period.id, { description: buildPeriodDescription(period) });
+          periodUpdates += 1;
+        }
+
+        for (const template of templatesNeedingUpdate) {
+          const nextDescription =
+            shouldRewriteTemplateDescription(template.description, template.name)
+              ? buildTemplateDescriptionWithContext(template, workoutTypes)
+              : template.description;
+          const nextSections = (template.sections || []).map((section) => {
+            const hasGuidance = Boolean(section.configuration?.aiGuidance?.trim());
+            if (hasGuidance) return section;
+
+            return {
+              ...section,
+              configuration: {
+                ...(section.configuration || {}),
+                aiGuidance: buildRoundGuidance(section),
+              },
+            };
+          });
+
+          await updateWorkoutStructureTemplate(template.id, {
+            description: nextDescription,
+            sections: nextSections,
+          });
+          templateUpdates += 1;
+        }
+
+        for (const workoutType of workoutTypesMissingDescription) {
+          await updateWorkoutType(workoutType.id, {
+            description: buildWorkoutTypeDescription(workoutType),
+          });
+          workoutTypeUpdates += 1;
+        }
+
+        if (periodUpdates > 0 || templateUpdates > 0 || workoutTypeUpdates > 0) {
+          toastSuccess(
+            `Added starter descriptions/context (${periodUpdates} period${periodUpdates === 1 ? '' : 's'}, ${templateUpdates} template${templateUpdates === 1 ? '' : 's'}, ${workoutTypeUpdates} workout type${workoutTypeUpdates === 1 ? '' : 's'}).`
+          );
+        }
+      } catch (error) {
+        console.error('Error backfilling starter descriptions/context:', error);
+        toastError('Failed to add starter descriptions/context');
+      } finally {
+        hasBackfilledInitialDescriptionsRef.current = true;
+        isBackfillingInitialDescriptionsRef.current = false;
+      }
+    })();
+  }, [periods, workoutStructureTemplates, workoutTypes, updatePeriod, updateWorkoutStructureTemplate, updateWorkoutType]);
 
   // Fetch unique locations from calendar events
   useEffect(() => {
@@ -893,6 +1431,7 @@ export default function ConfigurePage() {
       name: '',
       color: '#3b82f6',
       focus: '',
+      description: '',
       order: periods.length
     });
     setShowNewPeriodForm(true);
@@ -908,19 +1447,23 @@ export default function ConfigurePage() {
       try {
         if (editingPeriod.id.startsWith('temp_')) {
           // New period
+          const description = editingPeriod.description?.trim() || buildPeriodDescription(editingPeriod);
           await addPeriod({
             name: editingPeriod.name,
             color: editingPeriod.color,
             focus: editingPeriod.focus,
+            description,
             order: editingPeriod.order || 0
           });
           setShowNewPeriodForm(false);
         } else {
           // Update existing
+          const description = editingPeriod.description?.trim() || buildPeriodDescription(editingPeriod);
           await updatePeriod(editingPeriod.id, {
             name: editingPeriod.name,
             color: editingPeriod.color,
             focus: editingPeriod.focus,
+            description,
             order: editingPeriod.order
           });
           setEditingPeriodId(null);
@@ -1113,12 +1656,14 @@ export default function ConfigurePage() {
   const handleSaveWorkoutType = async () => {
     if (editingWorkoutType) {
       try {
+        const description = editingWorkoutType.description?.trim() || buildWorkoutTypeDescription(editingWorkoutType);
+
         if (editingWorkoutType.id.startsWith('temp_')) {
           // New workout type
           await addWorkoutType({
             name: editingWorkoutType.name,
             color: editingWorkoutType.color,
-            description: editingWorkoutType.description,
+            description,
             order: editingWorkoutType.order || 0
           });
           setShowNewWorkoutTypeForm(false);
@@ -1127,7 +1672,7 @@ export default function ConfigurePage() {
           await updateWorkoutType(editingWorkoutType.id, {
             name: editingWorkoutType.name,
             color: editingWorkoutType.color,
-            description: editingWorkoutType.description,
+            description,
             order: editingWorkoutType.order
           });
           setEditingWorkoutTypeId(null);
@@ -1455,6 +2000,11 @@ export default function ConfigurePage() {
                           onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, focus: e.target.value } : null)}
                         />
                       </div>
+                      <Input
+                        placeholder="Description"
+                        value={editingPeriod.description || ''}
+                        onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, description: e.target.value } : null)}
+                      />
                       <div className="flex items-center gap-4">
                         <label className="text-sm font-medium">Color:</label>
                         <div className="flex gap-2">
@@ -1507,6 +2057,11 @@ export default function ConfigurePage() {
                                   onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, focus: e.target.value } : null)}
                                 />
                               </div>
+                              <Input
+                                placeholder="Description"
+                                value={editingPeriod.description || ''}
+                                onChange={(e) => setEditingPeriod(prev => prev ? { ...prev, description: e.target.value } : null)}
+                              />
                               <div className="flex items-center gap-4">
                                 <label className="text-sm font-medium">Color:</label>
                                 <div className="flex gap-2">
@@ -3045,10 +3600,37 @@ export default function ConfigurePage() {
         template={editingWorkoutStructureTemplate || undefined}
         workoutTypes={workoutTypes}
         onSave={(templateData) => {
+          const sectionsWithGuidance = (templateData.sections || []).map((section) => {
+            const hasGuidance = Boolean(section.configuration?.aiGuidance?.trim());
+            if (hasGuidance) return section;
+
+            return {
+              ...section,
+              configuration: {
+                ...(section.configuration || {}),
+                aiGuidance: buildRoundGuidance(section),
+              },
+            };
+          });
+
+          const normalizedTemplateData = {
+            ...templateData,
+            description: templateData.description?.trim() || buildTemplateDescriptionWithContext({
+              ...(editingWorkoutStructureTemplate || {
+                id: 'temp',
+                createdAt: new Date() as any,
+                updatedAt: new Date() as any,
+              }),
+              ...templateData,
+              sections: sectionsWithGuidance,
+            } as WorkoutStructureTemplate, workoutTypes),
+            sections: sectionsWithGuidance,
+          };
+
           if (editingWorkoutStructureTemplate) {
-            updateWorkoutStructureTemplate(editingWorkoutStructureTemplate.id, templateData);
+            updateWorkoutStructureTemplate(editingWorkoutStructureTemplate.id, normalizedTemplateData);
           } else {
-            addWorkoutStructureTemplate(templateData);
+            addWorkoutStructureTemplate(normalizedTemplateData);
           }
           setEditingWorkoutStructureTemplate(null);
           setShowWorkoutStructureTemplateForm(false);

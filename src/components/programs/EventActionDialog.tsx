@@ -105,9 +105,10 @@ export function EventActionDialog({
     }
   }, [open, effectiveFetchEvents, event.start?.dateTime]);
 
-  // Check if event already has a client
-  const existingClientId = clientId || getEventClientId(event);
-  const hasClient = !!existingClientId;
+  // True assignment state comes from event metadata, not the selected client filter.
+  const assignedClientId = getEventClientId(event);
+  const existingClientId = assignedClientId;
+  const hasClient = !!assignedClientId;
 
   // Extract attendee names for display
   const getAttendeeNames = (): string => {
@@ -200,19 +201,23 @@ export function EventActionDialog({
   const [extendedEvents, setExtendedEvents] = useState<GoogleCalendarEvent[]>([]); // Events fetched with extended range
   const [isFetchingExtendedEvents, setIsFetchingExtendedEvents] = useState(false);
 
-  // Pre-populate client dropdown when dialog opens if event already has a client
+  // Pre-populate client dropdown when dialog opens.
+  // Priority: actual event assignment, then current selected client filter.
   useEffect(() => {
-    if (open && existingClientId && !selectedClientId) {
-      setSelectedClientId(existingClientId);
+    if (open && !selectedClientId) {
+      if (existingClientId) {
+        setSelectedClientId(existingClientId);
+      } else if (clientId) {
+        setSelectedClientId(clientId);
+      }
     }
-  }, [open, existingClientId, selectedClientId]);
+  }, [open, existingClientId, clientId, selectedClientId]);
 
   // Check if event already has a category
   const existingCategory = getEventCategory(event);
 
-  // Get linked workout ID (checks both direct property and description metadata)
+  // Get linked workout ID (checks direct property and description metadata)
   const linkedWorkoutId = getLinkedWorkoutId(event);
-  const hasWorkout = !!linkedWorkoutId;
 
   // Get client name for display
   const getClientName = (id: string) => {
@@ -957,7 +962,7 @@ export function EventActionDialog({
             )}
 
             {/* Client assigned but no workout - Show category selection and create */}
-            {hasClient && !event.linkedWorkoutId && (
+            {hasClient && !linkedWorkoutId && (
               <>
                 <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
@@ -1006,7 +1011,7 @@ export function EventActionDialog({
             )}
 
             {/* Workout already linked - Show view/edit options */}
-            {event.linkedWorkoutId && (
+            {linkedWorkoutId && (
               <>
                 <Button
                   onClick={handleViewWorkout}

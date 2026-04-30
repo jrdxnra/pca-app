@@ -286,7 +286,12 @@ export default function MovementsPage() {
                           )}
                         </CardTitle>
                         <CardDescription>
-                          {movements.length} movement{movements.length !== 1 ? 's' : ''}
+                          <span className="block">
+                            {movements.length} movement{movements.length !== 1 ? 's' : ''}
+                          </span>
+                          {selectedCategory.description?.trim() ? (
+                            <span className="block mt-1 line-clamp-2">{selectedCategory.description}</span>
+                          ) : null}
                         </CardDescription>
                       </div>
                     </div>

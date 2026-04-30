@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import {
     getAuth,
     GoogleAuthProvider,
+    browserLocalPersistence,
+    setPersistence,
     signInWithPopup,
     onAuthStateChanged
 } from 'firebase/auth';
@@ -38,6 +40,7 @@ export default function LoginPage() {
         setIsLoading(true);
         try {
             const auth = getAuth(app);
+            await setPersistence(auth, browserLocalPersistence);
             const provider = new GoogleAuthProvider();
 
             // CRITICAL: Request Calendar scopes here to enable "One Click" flow

@@ -190,26 +190,57 @@ export function RoundEditor({
 
     round.movementUsages.forEach(usage => {
       const movement = movements.find(m => m.id === usage.movementId);
+      const workload = usage.targetWorkload || {};
+
+      const hasReps = workload.useReps || Boolean(workload.reps);
+      const hasWeight = workload.useWeight || Boolean(workload.weight);
+      const hasTime = workload.useTime || Boolean(workload.time);
+      const hasTempo = workload.useTempo || Boolean(workload.tempo);
+      const hasDistance = workload.useDistance || typeof workload.distance === 'number';
+      const hasRpe = workload.useRPE || Boolean(workload.rpe);
+      const hasPercentage = workload.usePercentage || typeof workload.percentage === 'number';
+
       if (movement?.configuration) {
         // Common columns (always show if movement supports them)
-        if (movement.configuration.useReps) enabledFields.add('reps');
-        if (movement.configuration.useWeight) enabledFields.add('weight');
-        if (movement.configuration.useTime) enabledFields.add('time');
+        if (movement.configuration.useReps || hasReps) enabledFields.add('reps');
+        if (movement.configuration.useWeight || hasWeight) enabledFields.add('weight');
+        if (movement.configuration.useTime || hasTime) enabledFields.add('time');
 
         // Less common columns (show only if visibility is enabled)
-        if (movement.configuration.useTempo) {
+        if (movement.configuration.useTempo || hasTempo) {
           availableFields.add('tempo');
           if (visibleColumns?.tempo) enabledFields.add('tempo');
         }
-        if (movement.configuration.useDistance) {
+        if (movement.configuration.useDistance || hasDistance) {
           availableFields.add('distance');
           if (visibleColumns?.distance) enabledFields.add('distance');
         }
-        if (movement.configuration.useRPE) {
+        if (movement.configuration.useRPE || hasRpe) {
           availableFields.add('rpe');
           if (visibleColumns?.rpe) enabledFields.add('rpe');
         }
-        if (movement.configuration.usePercentage) {
+        if (movement.configuration.usePercentage || hasPercentage) {
+          availableFields.add('percentage');
+          if (visibleColumns?.percentage) enabledFields.add('percentage');
+        }
+      } else {
+        // If movement metadata is unavailable, still show columns based on existing workload data.
+        if (hasReps) enabledFields.add('reps');
+        if (hasWeight) enabledFields.add('weight');
+        if (hasTime) enabledFields.add('time');
+        if (hasTempo) {
+          availableFields.add('tempo');
+          if (visibleColumns?.tempo) enabledFields.add('tempo');
+        }
+        if (hasDistance) {
+          availableFields.add('distance');
+          if (visibleColumns?.distance) enabledFields.add('distance');
+        }
+        if (hasRpe) {
+          availableFields.add('rpe');
+          if (visibleColumns?.rpe) enabledFields.add('rpe');
+        }
+        if (hasPercentage) {
           availableFields.add('percentage');
           if (visibleColumns?.percentage) enabledFields.add('percentage');
         }
@@ -329,7 +360,6 @@ export function RoundEditor({
               <InlineMovementEditor
                 key={usageIndex}
                 usage={usage}
-                roundIndex={index}
                 usageIndex={usageIndex}
                 movements={movements}
                 categories={categories}
@@ -348,6 +378,7 @@ export function RoundEditor({
                 onDragEnd={handleMovementDragEnd}
                 isDragging={draggingMovementIndex === usageIndex}
                 isDropTarget={dropMovementIndex === usageIndex && draggingMovementIndex !== usageIndex}
+                roundSets={round.sets}
                 gridTemplateColumns={unifiedGridTemplate}
                 unifiedEnabledFields={{
                   reps: unifiedEnabledFields.has('reps'),

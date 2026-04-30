@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toastError, toastInfo, toastSuccess } from '@/components/ui/toaster';
 import { MovementCategory } from '@/lib/types';
+import { getDefaultCategoryConfiguration } from '@/lib/movements/defaultCategoryConfigurations';
 import { addMovement, getAllMovements, updateMovement } from '@/lib/firebase/services/movements';
 import { addMovementCategory, getAllMovementCategories } from '@/lib/firebase/services/movementCategories';
 
@@ -68,7 +69,35 @@ const DEFAULT_CATEGORY_COLORS = [
 ];
 
 function normalizeName(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/\+/g, ' plus ')
+    .replace(/\bdb\b/g, 'dumbbell')
+    .replace(/\bbb\b/g, 'barbell')
+    .replace(/\bkb\b/g, 'kettlebell')
+    .replace(/\bbw\b/g, 'bodyweight')
+    .replace(/\boh\b/g, 'overhead')
+    .replace(/\bpushups\b/g, 'push up')
+    .replace(/\bpush-ups\b/g, 'push up')
+    .replace(/\bpushup\b/g, 'push up')
+    .replace(/\bpullups\b/g, 'pull up')
+    .replace(/\bpull-ups\b/g, 'pull up')
+    .replace(/\bpullup\b/g, 'pull up')
+    .replace(/\bchinups\b/g, 'chin up')
+    .replace(/\bchin-ups\b/g, 'chin up')
+    .replace(/\bchinup\b/g, 'chin up')
+    .replace(/\bsit-ups\b/g, 'sit up')
+    .replace(/\bsitups\b/g, 'sit up')
+    .replace(/\bv-ups\b/g, 'v up')
+    .replace(/\bvups\b/g, 'v up')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((word) => normalizeTokenWord(word))
+    .join(' ')
+    .trim();
 }
 
 function normalizeTokenWord(word: string): string {
@@ -564,6 +593,7 @@ export function BulkMovementUploadDialog({ categories, onImportComplete }: BulkM
             await addMovementCategory({
               name: categoryName,
               color: pickDefaultCategoryColor(categoryName),
+              defaultConfiguration: getDefaultCategoryConfiguration(categoryName),
               importHighlight: buildCategoryNewHighlight(),
             });
           }

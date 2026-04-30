@@ -3,14 +3,17 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { Navigation, ProfileMenu } from './Navigation';
 import { CalendarClock, Loader2 } from 'lucide-react';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
+import { queryKeys } from '@/lib/react-query/queryKeys';
 import { toastSuccess, toastError } from '@/components/ui/toaster';
 
 export function Header() {
   const router = useRouter();
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
   const { fetchEvents, isGoogleCalendarConnected, checkGoogleCalendarConnection } = useCalendarStore();
 
@@ -49,6 +52,17 @@ export function Header() {
       endDate.setHours(23, 59, 59, 999);
 
       await fetchEvents({ start: startDate, end: endDate }, true); // force refresh
+
+      // Force calendar queries to refresh immediately for mounted pages.
+      // Invalidation alone can delay visible updates until next render cycle.
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.calendarEvents.all,
+        refetchType: 'all',
+      });
+      await queryClient.refetchQueries({
+        queryKey: queryKeys.calendarEvents.all,
+        type: 'active',
+      });
 
       // Re-check connection status after sync to catch any auth errors
       await checkGoogleCalendarConnection();

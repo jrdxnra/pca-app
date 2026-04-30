@@ -34,6 +34,7 @@ import { MovementConfigurationToggle } from './MovementConfigurationToggle';
 // Form validation schema
 const movementSchema = z.object({
   name: z.string().min(1, 'Movement name is required').max(100, 'Name must be less than 100 characters'),
+  instructions: z.string().optional(),
   links: z.string().optional(), // Will be split into array
   configuration: z.object({
     useReps: z.boolean(),
@@ -88,6 +89,7 @@ export function AddMovementDialog({ categoryId, trigger }: AddMovementDialogProp
     resolver: zodResolver(movementSchema),
     defaultValues: {
       name: '',
+      instructions: '',
       links: '',
       configuration: category?.defaultConfiguration || fallbackConfig,
     },
@@ -120,6 +122,7 @@ export function AddMovementDialog({ categoryId, trigger }: AddMovementDialogProp
         categoryId,
         links,
         configuration: data.configuration,
+        instructions: data.instructions?.trim() || '',
       };
 
       await addMovement(movementData);
@@ -168,6 +171,27 @@ export function AddMovementDialog({ categoryId, trigger }: AddMovementDialogProp
                   </FormControl>
                   <FormDescription>
                     Enter the name of the exercise or movement
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="instructions"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Add coaching notes, movement intent, or technique cues"
+                      className="min-h-[100px]"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Optional description for coaching context and future editing.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

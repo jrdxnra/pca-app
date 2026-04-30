@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { auth } from '@/lib/firebase/config';
-import { onAuthStateChanged } from 'firebase/auth';
+import { browserLocalPersistence, onAuthStateChanged, setPersistence } from 'firebase/auth';
 
 /**
  * Component that listens for auth changes and ensures the user has 
@@ -14,6 +14,11 @@ export function AuthRefreshListener({ children }: { children: React.ReactNode })
 
     useEffect(() => {
         let isMounted = true;
+
+        // Persist auth state across browser restarts/tabs until explicit sign-out.
+        setPersistence(auth, browserLocalPersistence).catch((error) => {
+            console.warn('Failed to set local auth persistence:', error);
+        });
 
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (!isMounted) return;
@@ -42,11 +47,14 @@ export function AuthRefreshListener({ children }: { children: React.ReactNode })
 
                 if (!response.ok) {
                     const errorBody = await response.json().catch(() => ({}));
-                    throw new Error(errorBody.error || 'Failed to provision account');
+                    console.warn('Account provisioning returned non-OK response:', {
+                        status: response.status,
+                        error: errorBody.error || 'Failed to provision account',
+                    });
                 }
             } catch (error) {
-                console.error('Error provisioning account via API:', error);
-                hasProvisionedRef.current = false;
+                // Provisioning is best-effort; auth/session should continue even when provisioning fails.
+                console.warn('Error provisioning account via API (continuing without blocking):', error);
             } finally {
                 if (isMounted) {
                     setProvisioning(false);

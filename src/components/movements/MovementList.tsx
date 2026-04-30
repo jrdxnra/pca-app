@@ -135,55 +135,73 @@ function SortableMovementItem({
           {/* Expanded Edit Content */}
           {isExpanded && currentEditData && (
             <div className="border-t p-3 space-y-3 bg-muted/20">
-              {/* Movement Name */}
-              <div>
-                <label className="text-sm font-medium mb-1 block">Movement Name:</label>
-                <Input
-                  value={currentEditData.name}
-                  onChange={(e) => onUpdateEditField(movement.id, 'name', e.target.value)}
-                  className="text-sm"
-                  placeholder="Movement name"
-                />
-              </div>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] md:items-stretch">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Movement Name:</label>
+                    <Input
+                      value={currentEditData.name}
+                      onChange={(e) => onUpdateEditField(movement.id, 'name', e.target.value)}
+                      className="text-sm"
+                      placeholder="Movement name"
+                    />
+                  </div>
 
-              {/* Links */}
-              <div>
-                <label className="text-sm font-medium mb-1 block">Links:</label>
-                <div className="space-y-2">
-                  {(currentEditData.links || []).map((link: string, linkIndex: number) => (
-                    <div key={linkIndex} className="flex gap-2">
-                      <Input
-                        value={link}
-                        onChange={(e) => {
-                          const newLinks = [...(currentEditData.links || [])];
-                          newLinks[linkIndex] = e.target.value;
-                          onUpdateEditField(movement.id, 'links', newLinks);
-                        }}
-                        placeholder="https://example.com/video"
-                        className="text-sm"
-                      />
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <label className="text-sm font-medium">Links:</label>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const newLinks = (currentEditData.links || []).filter((_unused: any, i: number) => i !== linkIndex);
+                          const newLinks = [...(currentEditData.links || []), ''];
                           onUpdateEditField(movement.id, 'links', newLinks);
                         }}
                       >
-                        Remove
+                        Add Link
                       </Button>
                     </div>
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const newLinks = [...(currentEditData.links || []), ''];
-                      onUpdateEditField(movement.id, 'links', newLinks);
-                    }}
-                  >
-                    Add Link
-                  </Button>
+                    <div className="space-y-2">
+                      {(currentEditData.links || []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No links yet.</p>
+                      ) : (
+                        (currentEditData.links || []).map((link: string, linkIndex: number) => (
+                          <div key={linkIndex} className="flex gap-2">
+                            <Input
+                              value={link}
+                              onChange={(e) => {
+                                const newLinks = [...(currentEditData.links || [])];
+                                newLinks[linkIndex] = e.target.value;
+                                onUpdateEditField(movement.id, 'links', newLinks);
+                              }}
+                              placeholder="https://example.com/video"
+                              className="text-sm"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const newLinks = (currentEditData.links || []).filter((_unused: any, i: number) => i !== linkIndex);
+                                onUpdateEditField(movement.id, 'links', newLinks);
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col">
+                  <label className="text-sm font-medium mb-1 block">Description:</label>
+                  <Textarea
+                    value={currentEditData.instructions || ''}
+                    onChange={(e) => onUpdateEditField(movement.id, 'instructions', e.target.value)}
+                    className="text-sm min-h-[140px] h-full"
+                    placeholder="Add coaching notes, movement intent, or technique cues"
+                  />
                 </div>
               </div>
 
@@ -462,7 +480,8 @@ export const MovementList = React.memo(function MovementList({ movements, catego
           [movementId]: {
             name: movement.name,
             configuration: { ...movement.configuration },
-            links: movement.links || []
+            links: movement.links || [],
+            instructions: movement.instructions || ''
           }
         }));
         setHasChanges(prev => ({
@@ -499,7 +518,8 @@ export const MovementList = React.memo(function MovementList({ movements, catego
       const updateData: any = {
         name: currentEditData.name,
         configuration: currentEditData.configuration,
-        links: currentEditData.links
+        links: currentEditData.links,
+        instructions: currentEditData.instructions || ''
       };
 
       await editMovement(movementId, updateData);

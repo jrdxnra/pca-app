@@ -27,9 +27,12 @@ export function createOAuth2Client(redirectUri?: string): OAuth2Client {
     throw new Error('Google OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in environment variables.');
   }
 
-  console.log('[OAuth] Using redirect URI:', finalRedirectUri);
-  console.log('[OAuth] Client ID:', clientId?.substring(0, 20) + '...');
-  console.log('[OAuth] Has client secret:', !!clientSecret);
+  const debugOAuthLogs = process.env.NODE_ENV === 'development' && process.env.DEBUG_OAUTH_LOGS === '1';
+  if (debugOAuthLogs) {
+    console.log('[OAuth] Using redirect URI:', finalRedirectUri);
+    console.log('[OAuth] Client ID:', clientId?.substring(0, 20) + '...');
+    console.log('[OAuth] Has client secret:', !!clientSecret);
+  }
 
   const oauth2Client = new google.auth.OAuth2({
     clientId,
@@ -55,26 +58,30 @@ export function getAuthUrl(redirectUri?: string, state?: string): string {
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline', // Required to get refresh token
     scope: scopes,
-    prompt: 'consent', // Force consent screen to get refresh token
+    prompt: 'consent select_account', // Force consent and account picker to maximize refresh-token issuance
+    include_granted_scopes: true,
     state: state, // Pass optional state parameter
     // Note: refresh tokens don't expire unless revoked by user
     // This ensures the connection lasts indefinitely as long as user doesn't revoke
   });
 
-  // Extract and decode the redirect_uri from the generated URL for debugging
-  const redirectUriMatch = authUrl.match(/redirect_uri=([^&]+)/);
-  if (redirectUriMatch) {
-    const encodedRedirectUri = redirectUriMatch[1];
-    const decodedRedirectUri = decodeURIComponent(encodedRedirectUri);
-    console.log('[OAuth] Encoded redirect_uri in auth URL:', encodedRedirectUri);
-    console.log('[OAuth] Decoded redirect_uri in auth URL:', decodedRedirectUri);
-    console.log('[OAuth] Expected redirect_uri:', redirectUri || 'using default');
+  const debugOAuthLogs = process.env.NODE_ENV === 'development' && process.env.DEBUG_OAUTH_LOGS === '1';
+  if (debugOAuthLogs) {
+    // Extract and decode the redirect_uri from the generated URL for debugging
+    const redirectUriMatch = authUrl.match(/redirect_uri=([^&]+)/);
+    if (redirectUriMatch) {
+      const encodedRedirectUri = redirectUriMatch[1];
+      const decodedRedirectUri = decodeURIComponent(encodedRedirectUri);
+      console.log('[OAuth] Encoded redirect_uri in auth URL:', encodedRedirectUri);
+      console.log('[OAuth] Decoded redirect_uri in auth URL:', decodedRedirectUri);
+      console.log('[OAuth] Expected redirect_uri:', redirectUri || 'using default');
 
-    // Check for common mismatches
-    if (decodedRedirectUri !== (redirectUri || process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback')) {
-      console.error('[OAuth] MISMATCH DETECTED!');
-      console.error('[OAuth] Expected:', redirectUri || process.env.GOOGLE_REDIRECT_URI);
-      console.error('[OAuth] Actual in URL:', decodedRedirectUri);
+      // Check for common mismatches
+      if (decodedRedirectUri !== (redirectUri || process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback')) {
+        console.error('[OAuth] MISMATCH DETECTED!');
+        console.error('[OAuth] Expected:', redirectUri || process.env.GOOGLE_REDIRECT_URI);
+        console.error('[OAuth] Actual in URL:', decodedRedirectUri);
+      }
     }
   }
 
@@ -91,21 +98,28 @@ export async function getTokensFromCode(code: string, redirectUri?: string): Pro
   refresh_token: string | null;
   expiry_date: number | null;
 }> {
-  console.log('[getTokensFromCode] Starting token exchange');
-  console.log('[getTokensFromCode] Code:', code?.substring(0, 20) + '...');
-  console.log('[getTokensFromCode] Redirect URI:', redirectUri);
+  const debugOAuthLogs = process.env.NODE_ENV === 'development' && process.env.DEBUG_OAUTH_LOGS === '1';
+  if (debugOAuthLogs) {
+    console.log('[getTokensFromCode] Starting token exchange');
+    console.log('[getTokensFromCode] Code:', code?.substring(0, 20) + '...');
+    console.log('[getTokensFromCode] Redirect URI:', redirectUri);
+  }
 
   try {
     const oauth2Client = createOAuth2Client(redirectUri);
-    console.log('[getTokensFromCode] OAuth2 client created');
+    if (debugOAuthLogs) {
+      console.log('[getTokensFromCode] OAuth2 client created');
+    }
 
     const { tokens } = await oauth2Client.getToken(code);
-    console.log('[getTokensFromCode] Tokens received:', {
-      hasAccessToken: !!tokens.access_token,
-      hasRefreshToken: !!tokens.refresh_token,
-      hasExpiryDate: !!tokens.expiry_date,
-      expiryDate: tokens.expiry_date,
-    });
+    if (debugOAuthLogs) {
+      console.log('[getTokensFromCode] Tokens received:', {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        hasExpiryDate: !!tokens.expiry_date,
+        expiryDate: tokens.expiry_date,
+      });
+    }
 
     const result = {
       access_token: tokens.access_token!,
@@ -113,7 +127,9 @@ export async function getTokensFromCode(code: string, redirectUri?: string): Pro
       expiry_date: tokens.expiry_date || null,
     };
 
-    console.log('[getTokensFromCode] Token exchange successful');
+    if (debugOAuthLogs) {
+      console.log('[getTokensFromCode] Token exchange successful');
+    }
     return result;
   } catch (error) {
     console.error('[getTokensFromCode] Token exchange failed:', error);

@@ -161,7 +161,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
   // Use length for stable dependency instead of array reference to prevent React error #310
   const eventsLength = calendarEvents.length;
 
-  console.log('[TwoColumnWeekView] Calendar events stats:', {
+  logger.debug('[TwoColumnWeekView] Calendar events stats:', {
     totalEvents: allEventsLength,
     filteredEvents: calendarEvents.length,
     selectedClient,
@@ -181,7 +181,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
     }
   });
 
-  console.log('[TwoColumnWeekView] Event split:', {
+  logger.debug('[TwoColumnWeekView] Event split:', {
     allDayEvents: allDayEvents.length,
     timedEvents: timedEvents.length
   });

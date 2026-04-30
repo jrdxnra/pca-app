@@ -3,6 +3,7 @@ import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
 import { ClientProgram, ClientProgramPeriod } from '@/lib/types';
 // Firebase calendarEvents collection is deprecated - all events are in Google Calendar
 import { createClientWorkout, deleteClientWorkout } from './clientWorkouts';
+import { removeEventWorkoutLink, upsertEventWorkoutLink } from './eventWorkoutLinks';
 import { incrementSessionCount, decrementSessionCount } from './clients';
 import { safeToDate, isDateInRange } from '@/lib/utils/dateHelpers';
 import { getEventCategory, hasLinkedWorkout, getLinkedWorkoutId } from '@/lib/utils/event-patterns';
@@ -187,6 +188,18 @@ export async function assignClientToEvent(
       isModified: false,
       createdBy: 'system'
     });
+
+    try {
+      await upsertEventWorkoutLink({
+        eventId: event.id,
+        workoutId: workout.id,
+        clientId,
+        eventDate,
+        calendarId: 'primary',
+      });
+    } catch (trackerError) {
+      console.error('Failed to persist event-workout tracker link:', trackerError);
+    }
 
     // Build updated description with metadata
     const updatedDescription = buildUpdatedDescription(
@@ -384,6 +397,12 @@ export async function unassignClientFromEvent(
       }
     } else {
       console.warn('⚠️ [unassignClientFromEvent] Event is not a Google Calendar event. Cannot update.');
+    }
+
+    try {
+      await removeEventWorkoutLink(event.id);
+    } catch (trackerError) {
+      console.error('Failed to clear event-workout tracker link:', trackerError);
     }
 
     // Note: Firebase calendarEvents collection is deprecated - all events are in Google Calendar

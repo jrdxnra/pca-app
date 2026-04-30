@@ -65,6 +65,7 @@ export interface Period {
   name: string;
   color: string;
   focus: string;
+  description?: string;
   order?: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -165,6 +166,7 @@ export interface TargetWorkload extends MovementConfiguration {
 export interface MovementCategory {
   id: string;
   name: string;
+  description?: string;
   color: string; // Hex color code
   order?: number;
   linkedWorkoutStructureTemplateId?: string; // Link to template
@@ -550,6 +552,7 @@ export interface WorkoutTypeConfiguration {
   useTime?: boolean;
   workRestRatio?: string; // e.g., "1:1", "2:1"
   focusArea?: string; // e.g., "Dynamic warm-up", "Mobility & activation"
+  aiGuidance?: string; // Free-form coach intent to steer AI generation for this section
 }
 
 export interface WorkoutStructureTemplateSection {

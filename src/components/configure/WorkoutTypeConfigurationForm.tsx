@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WorkoutTypeConfiguration } from '@/lib/types';
 
@@ -162,6 +163,19 @@ export function WorkoutTypeConfigurationForm({
             className="text-xs"
           />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs font-medium">AI Guidance</Label>
+        <Textarea
+          placeholder="Coach intent for this section (e.g., low-impact cooldown, keep HR under control, prioritize unilateral stability)."
+          value={configuration.aiGuidance || ''}
+          onChange={(e) => updateConfig({
+            aiGuidance: e.target.value
+          })}
+          disabled={disabled}
+          className="text-xs min-h-[84px]"
+        />
       </div>
 
       {/* Toggle Options */}

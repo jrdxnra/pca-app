@@ -15,6 +15,10 @@ import {
 import { db, getDb, auth } from '../config';
 import { resolveActiveAccountId } from './memberships';
 import { MovementCategory } from '@/lib/types';
+import {
+  getDefaultCategoryConfiguration,
+  getDefaultCategoryDescription,
+} from '@/lib/movements/defaultCategoryConfigurations';
 
 const COLLECTION_NAME = 'movement-categories';
 
@@ -201,7 +205,11 @@ export async function initializeDefaultCategories(): Promise<void> {
 
     // Add all categories
     const promises = defaultCategories.map(category =>
-      addMovementCategory(category)
+      addMovementCategory({
+        ...category,
+        description: getDefaultCategoryDescription(category.name),
+        defaultConfiguration: getDefaultCategoryConfiguration(category.name),
+      })
     );
 
     await Promise.all(promises);

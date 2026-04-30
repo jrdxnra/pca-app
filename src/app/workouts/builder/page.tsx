@@ -2279,7 +2279,7 @@ export default function BuilderPage() {
 
                 // Debug log
                 if (weekEditingWorkouts.length > 0 || weekCreatingWorkouts.length > 0) {
-                  console.log(`Week ${displayWeekNumber} hasActiveEditors:`, hasActiveEditors, {
+                  logger.debug(`Week ${displayWeekNumber} hasActiveEditors:`, hasActiveEditors, {
                     editing: weekEditingWorkouts.length,
                     creating: weekCreatingWorkouts.length,
                     openDates: weekOpenDates.length

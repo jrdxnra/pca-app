@@ -28,17 +28,13 @@ import Link from 'next/link';
 import { DayEventList } from '@/components/programs/DayEventList';
 import { MiniCalendarTooltip } from '@/components/programs/MiniCalendarTooltip';
 import { GoogleCalendarEvent } from '@/lib/google-calendar/types';
-import { getEventCategory } from '@/lib/utils/event-patterns';
+import { getEventCategory, getEventClientId, getLinkedWorkoutId } from '@/lib/utils/event-patterns';
 import { useCalendarEvents } from '@/hooks/queries/useCalendarEvents';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 
 export default function DashboardPage() {
   const {
-    stats,
     recentActivity,
-    upcomingSessions,
-    clientProgress,
-    loading,
     error,
     fetchDashboardData,
     clearError,
@@ -109,15 +105,163 @@ export default function DashboardPage() {
     window.open(`https://calendar.google.com/calendar/u/0/r/week/${year}/${month}/${day}`, '_blank');
   };
 
-  // Handle event click
-  const handleScheduleEventClick = (event: GoogleCalendarEvent) => {
-    // Navigate to builder for clicked event
+  // Handle event click - prefer linked workout; fallback to same-day workout lookup.
+  const handleScheduleEventClick = async (event: GoogleCalendarEvent) => {
+    type CandidateWorkout = { id: string; time?: string; categoryName?: string };
     const eventDate = new Date(event.start.dateTime);
     const dateParam = format(eventDate, 'yyyy-MM-dd');
-    const clientId = event.preConfiguredClient ||
-      event.description?.match(/client=([^,\s\]]+)/)?.[1];
-    const clientParam = clientId ? `client=${clientId}&` : '';
-    window.location.href = `/workouts/builder?${clientParam}date=${dateParam}`;
+    const eventCategory = getEventCategory(event)?.toLowerCase() || '';
+    const eventSummary = (event.summary || '').toLowerCase();
+    const eventMinutes = eventDate.getHours() * 60 + eventDate.getMinutes();
+
+    const toMinutes = (time?: string): number | null => {
+      if (!time) return null;
+      const parts = time.split(':');
+      if (parts.length < 2) return null;
+      const h = Number(parts[0]);
+      const m = Number(parts[1]);
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      return h * 60 + m;
+    };
+
+    const scoreWorkout = (workout: CandidateWorkout): number => {
+      let score = 0;
+      const wm = toMinutes(workout.time);
+      if (wm !== null) {
+        const diff = Math.abs(wm - eventMinutes);
+        score += Math.max(0, 240 - diff); // up to 4h proximity window
+      }
+
+      const wc = (workout.categoryName || '').toLowerCase();
+      if (eventCategory && wc) {
+        if (wc.includes(eventCategory) || eventCategory.includes(wc)) {
+          score += 200;
+        }
+      }
+
+      return score;
+    };
+
+    const pickBestWorkout = (workouts: CandidateWorkout[]): CandidateWorkout | null => {
+      if (!workouts.length) return null;
+      return workouts.reduce((best, current) => {
+        if (!best) return current;
+        return scoreWorkout(current) > scoreWorkout(best) ? current : best;
+      }, null as CandidateWorkout | null);
+    };
+
+    let clientIdFromEvent = getEventClientId(event);
+    let linkedWorkoutId = getLinkedWorkoutId(event);
+
+    if (!linkedWorkoutId) {
+      try {
+        const { getEventWorkoutLinkByEventId } = await import('@/lib/firebase/services/eventWorkoutLinks');
+        const trackerLink = await getEventWorkoutLinkByEventId(event.id);
+        if (trackerLink?.workoutId) {
+          linkedWorkoutId = trackerLink.workoutId;
+          if (!clientIdFromEvent && trackerLink.clientId) {
+            clientIdFromEvent = trackerLink.clientId;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to read tracker link for event:', event.id, error);
+      }
+    }
+
+    // Infer client from summary text when metadata is missing.
+    if (!clientIdFromEvent && event.summary) {
+      const summary = event.summary.toLowerCase();
+      const matchedClient = clients.find(c => summary.includes(c.name.toLowerCase()));
+      if (matchedClient) {
+        clientIdFromEvent = matchedClient.id;
+      }
+    }
+
+    // Fallback: if metadata link is missing, find workout by client+date.
+    if (!linkedWorkoutId && clientIdFromEvent) {
+      try {
+        const { fetchWorkoutsByDateRange } = await import('@/lib/firebase/services/clientWorkouts');
+        const { Timestamp } = await import('firebase/firestore');
+
+        const dayStart = new Date(eventDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(eventDate);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        const workouts = await fetchWorkoutsByDateRange(
+          clientIdFromEvent,
+          Timestamp.fromDate(dayStart),
+          Timestamp.fromDate(dayEnd)
+        );
+
+        const bestWorkout = pickBestWorkout(workouts);
+        if (bestWorkout?.id) {
+          linkedWorkoutId = bestWorkout.id;
+        }
+      } catch (error) {
+        console.error('Failed to lookup workout:', error);
+      }
+    }
+
+    // Last-resort fallback: if client metadata is still missing, probe all clients
+    // for workouts on this day and use a unique match.
+    if (!linkedWorkoutId && !clientIdFromEvent && clients.length > 0) {
+      try {
+        const { fetchWorkoutsByDateRange } = await import('@/lib/firebase/services/clientWorkouts');
+        const { Timestamp } = await import('firebase/firestore');
+
+        const dayStart = new Date(eventDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(eventDate);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        const checks = await Promise.all(
+          clients.map(async (client) => {
+            const workouts = await fetchWorkoutsByDateRange(
+              client.id,
+              Timestamp.fromDate(dayStart),
+              Timestamp.fromDate(dayEnd)
+            );
+            return { clientId: client.id, workouts };
+          })
+        );
+
+        const candidates = checks.flatMap(c => {
+          const client = clients.find(x => x.id === c.clientId);
+          const clientName = (client?.name || '').toLowerCase();
+          const clientNameBonus = clientName && eventSummary.includes(clientName) ? 300 : 0;
+          return c.workouts.map(w => ({
+            clientId: c.clientId,
+            workoutId: w.id,
+            score: scoreWorkout(w) + clientNameBonus,
+          }));
+        });
+
+        if (candidates.length > 0) {
+          const best = candidates.reduce((a, b) => (b.score > a.score ? b : a));
+          clientIdFromEvent = best.clientId;
+          linkedWorkoutId = best.workoutId;
+        }
+      } catch (error) {
+        console.error('Failed to infer workout/client from day workouts:', error);
+      }
+    }
+
+    const params = new URLSearchParams();
+    params.set('date', dateParam);
+    params.set('eventId', event.id);
+
+    if (clientIdFromEvent) {
+      params.set('client', clientIdFromEvent);
+    }
+
+    // Assigned event: open exact linked workout for editing
+    if (linkedWorkoutId) {
+      params.set('workoutId', linkedWorkoutId);
+    }
+
+    // No workout found: builder handles eventId-only flow and opens assignment dialog
+    window.location.href = `/workouts/builder?${params.toString()}`;
   };
 
   // Count today's coaching sessions (current day only - not based on calendar selection)
@@ -192,15 +336,6 @@ export default function DashboardPage() {
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300';
     }
   };
-
-  if (loading && !stats) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        <span className="ml-2">Loading dashboard...</span>
-      </div>
-    );
-  }
 
   return (
     <AuthGuard>

@@ -271,7 +271,10 @@ export async function ensureCoachAccountProvisioned({
     createdMembership = true;
   }
 
-  const { clonedMovements, clonedWorkoutConfig } = await ensureAccountLibrarySnapshot(accountId);
+  const shouldEnsureLibrarySnapshot = createdAccount || createdMembership;
+  const { clonedMovements, clonedWorkoutConfig } = shouldEnsureLibrarySnapshot
+    ? await ensureAccountLibrarySnapshot(accountId)
+    : { clonedMovements: false, clonedWorkoutConfig: false };
 
   return {
     accountId,
