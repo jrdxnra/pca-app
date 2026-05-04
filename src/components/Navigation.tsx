@@ -27,6 +27,7 @@ const mainNavigation = [
   { name: 'Builder', href: '/workouts/builder', icon: Wrench },
   { name: 'Clients', href: '/clients', icon: Users },
   { name: 'Movements', href: '/movements', icon: Activity },
+  { name: 'Planner', href: '/admin/planner', icon: Calendar },
 ];
 
 const menuNavigation = [
@@ -39,11 +40,19 @@ const menuNavigation = [
 // Main Navigation - Left aligned with logo
 export function Navigation() {
   const pathname = usePathname();
+  const isPlannerPage = pathname?.startsWith('/admin/planner');
 
   const navItems = [...mainNavigation];
 
   return (
-    <nav className="hidden md:flex items-center space-x-1 md:space-x-2 lg:space-x-4">
+    <nav
+      className={cn(
+        'items-center space-x-1 md:space-x-2 lg:space-x-4',
+        isPlannerPage
+          ? 'flex min-w-0 overflow-x-auto whitespace-nowrap'
+          : 'hidden md:flex'
+      )}
+    >
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href;

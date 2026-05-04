@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronDown, ChevronRight, Edit, Trash2, GripVertical } from 'lucide-react';
-import { WorkoutStructureTemplate } from '@/lib/types';
+import { WorkoutIntent, WorkoutStructureTemplate } from '@/lib/types';
 import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
 import { WorkoutTypeConfigurationForm } from './WorkoutTypeConfigurationForm';
 import { resolveWorkoutTypeColor } from '@/lib/workouts/workoutTypeUtils';
@@ -13,6 +13,7 @@ import { resolveWorkoutTypeColor } from '@/lib/workouts/workoutTypeUtils';
 interface WorkoutStructureTemplateCardProps {
   template: WorkoutStructureTemplate;
   workoutTypes: WorkoutType[];
+  workoutIntents: WorkoutIntent[];
   onEdit: (template: WorkoutStructureTemplate) => void;
   onDelete: (id: string) => void;
   onUpdateSection: (templateId: string, sectionIndex: number, updates: any) => void;
@@ -22,6 +23,7 @@ interface WorkoutStructureTemplateCardProps {
 export function WorkoutStructureTemplateCard({
   template,
   workoutTypes,
+  workoutIntents,
   onEdit,
   onDelete,
   onUpdateSection,
@@ -92,6 +94,7 @@ export function WorkoutStructureTemplateCard({
                     <span className="text-sm text-gray-600">Order: {section.order}</span>
                   </div>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => toggleSection(index)}
@@ -108,7 +111,23 @@ export function WorkoutStructureTemplateCard({
                 {isExpanded && (
                   <div className="border-t bg-white">
                     <WorkoutTypeConfigurationForm
+                      mode="quick"
                       configuration={section.configuration}
+                      intentOptions={workoutIntents.map((intent) => ({
+                        id: intent.id,
+                        name: intent.name,
+                        description: intent.description,
+                      }))}
+                      sectionIntentId={section.workoutIntentId}
+                      sectionIntentDescription={workoutIntents.find((intent) => intent.id === section.workoutIntentId)?.description}
+                      onSectionIntentChange={(intentId) => {
+                        const intent = workoutIntents.find((item) => item.id === intentId);
+                        onUpdateSection(template.id, index, {
+                          workoutIntentId: intent?.id,
+                          workoutIntentKey: intent?.key,
+                          workoutIntentName: intent?.name,
+                        });
+                      }}
                       onChange={(config) => onUpdateSection(template.id, index, { configuration: config })}
                     />
                   </div>

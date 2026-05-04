@@ -1154,10 +1154,18 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
     };
 
     const structure = selectedStructure(requestedStructureTemplateId);
+    const strictTemplateId = requestedStructureTemplateId || currentTemplateId;
+    if (strictTemplateId && !structure) {
+      throw new Error('Selected structure template is unavailable in local config.');
+    }
+
     const structureSections = (structure?.sections || []).map((section) => ({
       order: section.order,
       workoutTypeId: section.workoutTypeId,
       workoutTypeName: section.workoutTypeName,
+      workoutIntentId: section.workoutIntentId,
+      workoutIntentKey: section.workoutIntentKey,
+      workoutIntentName: section.workoutIntentName,
       configuration: section.configuration
         ? {
           defaultDuration: section.configuration.defaultDuration,
@@ -1296,11 +1304,24 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           data && typeof data === 'object' && 'error' in data
             ? String((data as any).error)
             : null;
+        const apiCode =
+          data && typeof data === 'object' && 'code' in data
+            ? String((data as any).code)
+            : null;
         logFillDebug('fill_generate_response_error', {
           status: response.status,
           apiError: apiError || null,
+          apiCode: apiCode || null,
         });
-        throw new Error(apiError || `Failed to fill workout (${response.status})`);
+        const responseError = new Error(apiError || `Failed to fill workout (${response.status})`) as Error & {
+          status?: number;
+          code?: string;
+        };
+        responseError.status = response.status;
+        if (apiCode) {
+          responseError.code = apiCode;
+        }
+        throw responseError;
       }
 
       if (!data || typeof data !== 'object' || !('draft' in data)) {
@@ -1309,6 +1330,17 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
 
       const draftData = data as GenerateWorkoutDraftResponse;
       const draft = draftData.draft;
+      const strategy = (draftData as any)?.source?.strategy as string | undefined;
+
+      if (desiredTemplateId) {
+        if (draft.structureTemplateId !== desiredTemplateId) {
+          throw new Error('Fill returned a draft without the requested structure template.');
+        }
+        if (strategy && strategy !== 'history-with-structure') {
+          throw new Error(`Fill returned unexpected strategy: ${strategy}`);
+        }
+      }
+
       emitCriticalFillDebug('fill_generate_response_ok', {
         roundsFromDraft: draft.rounds?.length || 0,
         titleProvided: Boolean(draft.title),
@@ -1363,6 +1395,22 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         message: error instanceof Error ? error.message : String(error),
       });
 
+      const errorStatus = typeof error === 'object' && error && 'status' in error
+        ? Number((error as any).status)
+        : undefined;
+      const errorCode = typeof error === 'object' && error && 'code' in error
+        ? String((error as any).code)
+        : undefined;
+
+      const shouldPreferLocalFallback = errorCode === 'missing_admin_credentials';
+
+      // If a specific structure template was requested and the API returned a 4xx,
+      // do not silently degrade to history fallback (this causes generic Warm Up/Round1 output).
+      if (!shouldPreferLocalFallback && desiredTemplateId && errorStatus && errorStatus >= 400 && errorStatus < 500) {
+        toastError(error instanceof Error ? error.message : 'Failed to fill workout');
+        return;
+      }
+
       // Fallback for local/dev environments where Admin credentials are unavailable.
       try {
         const fallbackDraft = await generatePrepopulatedFillDraftClientFallback(
@@ -1370,6 +1418,11 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           desiredTemplateId
         );
         const draft = fallbackDraft.draft;
+
+        if (desiredTemplateId && draft.structureTemplateId !== desiredTemplateId) {
+          throw new Error('Local fallback could not honor the requested structure template.');
+        }
+
         emitCriticalFillDebug('fill_generate_fallback_ok', {
           roundsFromDraft: draft.rounds?.length || 0,
           structureTemplateId: draft.structureTemplateId || null,
@@ -1412,7 +1465,11 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           templateAfterApply: templateIdAfterFallback || null,
         });
 
-        toastSuccess('Workout filled (local fallback). Review and edit before saving.');
+        toastSuccess(
+          shouldPreferLocalFallback
+            ? 'Workout filled locally for dev. Review and edit before saving.'
+            : 'Workout filled (local fallback). Review and edit before saving.'
+        );
       } catch (fallbackError) {
         console.error('[WorkoutEditor] Fill draft fallback failed:', fallbackError);
         emitCriticalFillDebug('fill_generate_failed_fallback', {
@@ -1938,7 +1995,13 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         }
       }
       if (workload.tempo) st += " " + workload.tempo;
-      if (workload.time) st += " " + workload.time + (workload.timeMeasure || 's');
+      if (workload.time) {
+        const timeMeasure = workload.timeMeasure || 's';
+        const normalizedTime = String(workload.time)
+          .replace(timeMeasure === 's' ? /\s*(sec|secs|second|seconds|s)$/i : /\s*(min|mins|minute|minutes|m)$/i, '')
+          .trim();
+        st += " " + normalizedTime + timeMeasure;
+      }
       if (workload.percentage) st += " " + workload.percentage + "%";
       if (workload.rpe) st += " RPE: " + workload.rpe;
 

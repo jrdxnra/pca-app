@@ -22,6 +22,7 @@ COPY . .
 
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_OPTIONS=--max-old-space-size=4096
 
 # Accept build arguments for NEXT_PUBLIC_* variables
 ARG NEXT_PUBLIC_FIREBASE_API_KEY

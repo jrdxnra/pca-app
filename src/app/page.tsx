@@ -472,9 +472,9 @@ export default function LandingPage() {
               &copy; {new Date().getFullYear()} Performance Coach Plus. All rights reserved.
             </div>
             <div className="flex items-center gap-6 text-sm font-medium text-gray-500">
-              <a href="#" className="hover:text-primary transition-colors">Privacy</a>
-              <a href="#" className="hover:text-primary transition-colors">Terms</a>
-              <a href="#" className="hover:text-primary transition-colors">Contact</a>
+              <Link href="/privacy" className="hover:text-primary transition-colors">Privacy</Link>
+              <Link href="/terms" className="hover:text-primary transition-colors">Terms</Link>
+              <a href="mailto:huntjordan@google.com" className="hover:text-primary transition-colors">Contact</a>
             </div>
           </div>
         </footer>

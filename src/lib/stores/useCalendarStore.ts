@@ -908,7 +908,6 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
     // Fire-and-forget persistence; if it fails, surface an error but keep local changes.
     try {
       // Dynamic import to avoid static dependency
-      // @ts-ignore
       const { updateCalendarSyncConfig } = await import('@/lib/firebase/services/calendarConfig');
 
       await updateCalendarSyncConfig({

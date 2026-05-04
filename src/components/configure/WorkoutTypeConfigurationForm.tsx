@@ -7,16 +7,32 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WorkoutTypeConfiguration } from '@/lib/types';
 
+interface IntentOption {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 interface WorkoutTypeConfigurationFormProps {
   configuration: WorkoutTypeConfiguration;
   onChange: (configuration: WorkoutTypeConfiguration) => void;
   disabled?: boolean;
+  mode?: 'quick' | 'full';
+  intentOptions?: IntentOption[];
+  sectionIntentId?: string;
+  onSectionIntentChange?: (intentId: string) => void;
+  sectionIntentDescription?: string;
 }
 
 export function WorkoutTypeConfigurationForm({
   configuration,
   onChange,
-  disabled = false
+  disabled = false,
+  mode = 'full',
+  intentOptions,
+  sectionIntentId,
+  onSectionIntentChange,
+  sectionIntentDescription,
 }: WorkoutTypeConfigurationFormProps) {
   const updateConfig = (updates: Partial<WorkoutTypeConfiguration>) => {
     onChange({ ...configuration, ...updates });
@@ -24,73 +40,30 @@ export function WorkoutTypeConfigurationForm({
 
   return (
     <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
-      <div className="grid grid-cols-2 gap-4">
-        {/* Rep Range */}
+      {intentOptions && onSectionIntentChange && (
         <div className="space-y-2">
-          <Label className="text-xs font-medium">Rep Range</Label>
-          <div className="flex gap-2">
-            <Input
-              type="number"
-              placeholder="Min"
-              value={configuration.defaultRepRange?.min || ''}
-              onChange={(e) => updateConfig({
-                defaultRepRange: {
-                  min: parseInt(e.target.value) || 0,
-                  max: configuration.defaultRepRange?.max || 0
-                }
-              })}
-              disabled={disabled}
-              className="text-xs"
-            />
-            <Input
-              type="number"
-              placeholder="Max"
-              value={configuration.defaultRepRange?.max || ''}
-              onChange={(e) => updateConfig({
-                defaultRepRange: {
-                  min: configuration.defaultRepRange?.min || 0,
-                  max: parseInt(e.target.value) || 0
-                }
-              })}
-              disabled={disabled}
-              className="text-xs"
-            />
-          </div>
+          <Label className="text-xs font-medium">Section Intent</Label>
+          <Select
+            value={sectionIntentId || ''}
+            onValueChange={onSectionIntentChange}
+            disabled={disabled}
+          >
+            <SelectTrigger className="text-xs">
+              <SelectValue placeholder="Select section intent" />
+            </SelectTrigger>
+            <SelectContent>
+              {intentOptions.map((intent) => (
+                <SelectItem key={intent.id} value={intent.id}>
+                  {intent.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {sectionIntentDescription && (
+            <p className="text-xs text-gray-500">{sectionIntentDescription}</p>
+          )}
         </div>
-
-        {/* Rest Period */}
-        <div className="space-y-2">
-          <Label className="text-xs font-medium">Rest Period (seconds)</Label>
-          <div className="flex gap-2">
-            <Input
-              type="number"
-              placeholder="Min"
-              value={configuration.defaultRestPeriod?.min || ''}
-              onChange={(e) => updateConfig({
-                defaultRestPeriod: {
-                  min: parseInt(e.target.value) || 0,
-                  max: configuration.defaultRestPeriod?.max || 0
-                }
-              })}
-              disabled={disabled}
-              className="text-xs"
-            />
-            <Input
-              type="number"
-              placeholder="Max"
-              value={configuration.defaultRestPeriod?.max || ''}
-              onChange={(e) => updateConfig({
-                defaultRestPeriod: {
-                  min: configuration.defaultRestPeriod?.min || 0,
-                  max: parseInt(e.target.value) || 0
-                }
-              })}
-              disabled={disabled}
-              className="text-xs"
-            />
-          </div>
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         {/* Duration */}
@@ -133,101 +106,176 @@ export function WorkoutTypeConfigurationForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        {/* Work:Rest Ratio */}
-        <div className="space-y-2">
-          <Label className="text-xs font-medium">Work:Rest Ratio</Label>
-          <Input
-            type="text"
-            placeholder="1:1"
-            value={configuration.workRestRatio || ''}
-            onChange={(e) => updateConfig({
-              workRestRatio: e.target.value
-            })}
-            disabled={disabled}
-            className="text-xs"
-          />
-        </div>
+      {mode === 'full' && (
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Rep Range */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Rep Range</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="Min"
+                  value={configuration.defaultRepRange?.min || ''}
+                  onChange={(e) => updateConfig({
+                    defaultRepRange: {
+                      min: parseInt(e.target.value) || 0,
+                      max: configuration.defaultRepRange?.max || 0
+                    }
+                  })}
+                  disabled={disabled}
+                  className="text-xs"
+                />
+                <Input
+                  type="number"
+                  placeholder="Max"
+                  value={configuration.defaultRepRange?.max || ''}
+                  onChange={(e) => updateConfig({
+                    defaultRepRange: {
+                      min: configuration.defaultRepRange?.min || 0,
+                      max: parseInt(e.target.value) || 0
+                    }
+                  })}
+                  disabled={disabled}
+                  className="text-xs"
+                />
+              </div>
+            </div>
 
-        {/* Focus Area */}
-        <div className="space-y-2">
-          <Label className="text-xs font-medium">Focus Area</Label>
-          <Input
-            type="text"
-            placeholder="e.g., Dynamic warm-up"
-            value={configuration.focusArea || ''}
-            onChange={(e) => updateConfig({
-              focusArea: e.target.value
-            })}
-            disabled={disabled}
-            className="text-xs"
-          />
-        </div>
-      </div>
+            {/* Rest Period */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Rest Period (seconds)</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="Min"
+                  value={configuration.defaultRestPeriod?.min || ''}
+                  onChange={(e) => updateConfig({
+                    defaultRestPeriod: {
+                      min: parseInt(e.target.value) || 0,
+                      max: configuration.defaultRestPeriod?.max || 0
+                    }
+                  })}
+                  disabled={disabled}
+                  className="text-xs"
+                />
+                <Input
+                  type="number"
+                  placeholder="Max"
+                  value={configuration.defaultRestPeriod?.max || ''}
+                  onChange={(e) => updateConfig({
+                    defaultRestPeriod: {
+                      min: configuration.defaultRestPeriod?.min || 0,
+                      max: parseInt(e.target.value) || 0
+                    }
+                  })}
+                  disabled={disabled}
+                  className="text-xs"
+                />
+              </div>
+            </div>
+          </div>
 
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Work:Rest Ratio</Label>
+            <Input
+              type="text"
+              placeholder="1:1"
+              value={configuration.workRestRatio || ''}
+              onChange={(e) => updateConfig({
+                workRestRatio: e.target.value
+              })}
+              disabled={disabled}
+              className="text-xs"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">DDS Guidance</Label>
+            <Textarea
+              placeholder="Coach intent for this section (e.g., low-impact cooldown, keep HR under control, prioritize unilateral stability)."
+              value={configuration.aiGuidance || ''}
+              onChange={(e) => updateConfig({
+                aiGuidance: e.target.value
+              })}
+              disabled={disabled}
+              className="text-xs min-h-[84px]"
+            />
+          </div>
+
+          {/* Toggle Options */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="useRPE"
+                checked={configuration.useRPE || false}
+                onChange={(e) => updateConfig({ useRPE: e.target.checked })}
+                disabled={disabled}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="useRPE" className="text-xs">Use RPE</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="usePercentage"
+                checked={configuration.usePercentage || false}
+                onChange={(e) => updateConfig({ usePercentage: e.target.checked })}
+                disabled={disabled}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="usePercentage" className="text-xs">Use Percentage</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="useTempo"
+                checked={configuration.useTempo || false}
+                onChange={(e) => updateConfig({ useTempo: e.target.checked })}
+                disabled={disabled}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="useTempo" className="text-xs">Use Tempo</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="useTime"
+                checked={configuration.useTime || false}
+                onChange={(e) => updateConfig({ useTime: e.target.checked })}
+                disabled={disabled}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="useTime" className="text-xs">Use Time</Label>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Focus Area */}
       <div className="space-y-2">
-        <Label className="text-xs font-medium">AI Guidance</Label>
-        <Textarea
-          placeholder="Coach intent for this section (e.g., low-impact cooldown, keep HR under control, prioritize unilateral stability)."
-          value={configuration.aiGuidance || ''}
+        <Label className="text-xs font-medium">Focus Area</Label>
+        <Input
+          type="text"
+          placeholder="e.g., Dynamic warm-up"
+          value={configuration.focusArea || ''}
           onChange={(e) => updateConfig({
-            aiGuidance: e.target.value
+            focusArea: e.target.value
           })}
           disabled={disabled}
-          className="text-xs min-h-[84px]"
+          className="text-xs"
         />
       </div>
 
-      {/* Toggle Options */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="useRPE"
-            checked={configuration.useRPE || false}
-            onChange={(e) => updateConfig({ useRPE: e.target.checked })}
-            disabled={disabled}
-            className="h-4 w-4"
-          />
-          <Label htmlFor="useRPE" className="text-xs">Use RPE</Label>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="usePercentage"
-            checked={configuration.usePercentage || false}
-            onChange={(e) => updateConfig({ usePercentage: e.target.checked })}
-            disabled={disabled}
-            className="h-4 w-4"
-          />
-          <Label htmlFor="usePercentage" className="text-xs">Use Percentage</Label>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="useTempo"
-            checked={configuration.useTempo || false}
-            onChange={(e) => updateConfig({ useTempo: e.target.checked })}
-            disabled={disabled}
-            className="h-4 w-4"
-          />
-          <Label htmlFor="useTempo" className="text-xs">Use Tempo</Label>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="useTime"
-            checked={configuration.useTime || false}
-            onChange={(e) => updateConfig({ useTime: e.target.checked })}
-            disabled={disabled}
-            className="h-4 w-4"
-          />
-          <Label htmlFor="useTime" className="text-xs">Use Time</Label>
-        </div>
-      </div>
+      {mode === 'quick' && (
+        <p className="text-xs text-gray-500">
+          Quick settings only. Open the full template editor for advanced controls.
+        </p>
+      )}
     </div>
   );
 }

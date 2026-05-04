@@ -103,6 +103,27 @@ async function buildAuthHeaders(base: HeadersInit = {}, idToken?: string): Promi
   };
 }
 
+function getOAuthRedirectOrigin(): string {
+  if (typeof window === 'undefined') {
+    return 'http://localhost:3000';
+  }
+
+  try {
+    const url = new URL(window.location.href);
+
+    // GitHub forwarded dev URLs already encode the port in the hostname.
+    // Dropping an explicit :3000 avoids malformed origins like
+    // https://<codespace>-3000.app.github.dev:3000.
+    if (url.hostname.endsWith('.app.github.dev') || url.hostname.endsWith('.preview.app.github.dev')) {
+      url.port = '';
+    }
+
+    return url.origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
 /**
  * Initiate Google OAuth flow
  */
@@ -111,8 +132,18 @@ export async function initiateGoogleAuth(idToken?: string): Promise<void> {
 
   let authEndpoint = '/api/auth/google';
   if (typeof window !== 'undefined') {
-    const redirectUri = `${window.location.origin}/api/auth/google/callback`;
-    authEndpoint = `/api/auth/google?redirectUri=${encodeURIComponent(redirectUri)}`;
+    const { auth } = await import('@/lib/firebase/config');
+    const redirectUri = `${getOAuthRedirectOrigin()}/api/auth/google/callback`;
+    const loginHint = auth.currentUser?.email || auth.currentUser?.providerData?.find((provider) => provider?.email)?.email;
+    const params = new URLSearchParams({
+      redirectUri,
+    });
+
+    if (loginHint) {
+      params.set('loginHint', loginHint);
+    }
+
+    authEndpoint = `/api/auth/google?${params.toString()}`;
   }
 
   // We use POST now to securely pass the idToken in headers

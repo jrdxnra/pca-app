@@ -1,44 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { storeTokens } from '@/lib/google-calendar/adapters/token-adapter';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirebaseAdminApp } from '@/lib/firebase/admin';
 
 export async function POST(request: NextRequest) {
+    // Deprecated: calendar tokens are now obtained via /api/auth/google callback flow.
+    // Keep this endpoint as a no-op for backward compatibility with older clients.
     try {
-        const { accessToken, refreshToken, idToken } = await request.json();
+        const body = await request.json().catch(() => ({}));
+        const hasLegacyPayload = Boolean(body?.accessToken || body?.refreshToken || body?.idToken);
 
-        if (!accessToken || !idToken) {
-            return NextResponse.json({ error: 'Missing tokens' }, { status: 400 });
+        if (hasLegacyPayload) {
+            console.warn('[SaveTokens] Deprecated endpoint called. Ignoring legacy token payload.');
         }
 
-        // Verify the user via Firebase Admin
-        const adminApp = getFirebaseAdminApp();
-        const auth = getAuth(adminApp);
-        let decodedToken;
-
-        try {
-            decodedToken = await auth.verifyIdToken(idToken);
-        } catch (error) {
-            console.error('Error verifying ID token:', error);
-            return NextResponse.json({ error: 'Invalid ID token' }, { status: 401 });
-        }
-
-        const userId = decodedToken.uid;
-        console.log(`[SaveTokens] Saving tokens for user: ${userId}`);
-
-        // Store the tokens
-        const expiryDate = Date.now() + (60 * 60 * 1000); // Default 1 hour expiry
-
-        await storeTokens({
-            accessToken,
-            refreshToken, // Might be null if user has already granted offline access previously without prompt
-            expiryDate,
-            userId
-        }, userId);
-
-        return NextResponse.json({ success: true });
+        return NextResponse.json({
+            success: true,
+            deprecated: true,
+            message: 'save-tokens is deprecated; use /api/auth/google connect flow instead.'
+        });
     } catch (error) {
-        console.error('Error saving tokens:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        console.error('Deprecated save-tokens endpoint error:', error);
+        return NextResponse.json({
+            success: true,
+            deprecated: true,
+            message: 'save-tokens is deprecated; request ignored.'
+        });
     }
 }

@@ -3,17 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0",
+    "dev": "./scripts/dev-with-fitshift.sh",
+    "dev:next": "next dev -H 0.0.0.0",
     "dev:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true next dev -H 0.0.0.0 --webpack",
     "emulators": "firebase emulators:start",
     "emulators:exec": "firebase emulators:exec",
     "build": "bash -c 'NEXT_DISABLE_WEBPACK_WORKER=1 NODE_ENV=production next build --webpack; code=$?; if [ $code -eq 143 ]; then echo \"Next build exited via SIGTERM (143) after finishing; treating as success.\"; exit 0; else exit $code; fi'",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "ci:check": "npm run typecheck && npm run lint",
     "clean:main": "./scripts/clean-dev-artifacts.sh",
     "deploy:firebase": "./deploy-firebase.sh",
     "deploy:firestore": "firebase deploy --only firestore:rules",
-    "deploy:hosting": "firebase deploy --only hosting"
+    "deploy:hosting": "firebase deploy --only hosting",
+    "seed:planner-week": "node ./scripts/seed-planner-week.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

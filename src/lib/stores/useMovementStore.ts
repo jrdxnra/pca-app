@@ -113,12 +113,27 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
   editMovement: async (id, updates) => {
     set({ loading: true, error: null });
     try {
+      const { movements, currentCategoryId } = get();
+      const existingMovement = movements.find(movement => movement.id === id);
+
+      const finalUpdates: Partial<Omit<Movement, 'id' | 'createdAt'>> = { ...updates };
+
+      // When moving to a different category, place the movement at the end of the target category.
+      if (
+        finalUpdates.categoryId &&
+        existingMovement &&
+        finalUpdates.categoryId !== existingMovement.categoryId &&
+        finalUpdates.ordinal === undefined
+      ) {
+        finalUpdates.ordinal = await getNextOrdinal(finalUpdates.categoryId);
+      }
+
       const now = new Date();
       const expiresAt = new Date(now);
       expiresAt.setDate(expiresAt.getDate() + 7);
 
       await updateMovement(id, {
-        ...updates,
+        ...finalUpdates,
         importHighlight: {
           kind: 'updated',
           source: 'manual',
@@ -128,10 +143,20 @@ export const useMovementStore = create<MovementStore>((set, get) => ({
       });
 
       // Update local state
-      const { movements } = get();
-      const updatedMovements = movements.map(movement =>
-        movement.id === id ? { ...movement, ...updates } : movement
+      let updatedMovements = movements.map(movement =>
+        movement.id === id ? { ...movement, ...finalUpdates } : movement
       );
+
+      // If this list is scoped to one category and the movement moved away, remove it from view.
+      if (
+        currentCategoryId &&
+        existingMovement &&
+        finalUpdates.categoryId &&
+        finalUpdates.categoryId !== currentCategoryId &&
+        existingMovement.categoryId === currentCategoryId
+      ) {
+        updatedMovements = updatedMovements.filter(movement => movement.id !== id);
+      }
 
       set({ movements: updatedMovements, loading: false });
     } catch (error) {

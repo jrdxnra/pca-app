@@ -17,8 +17,8 @@ NODE_ENV=development
 # Google OAuth Configuration
 # NOTE: Update GOOGLE_REDIRECT_URI after starting dev server with your Codespaces URL
 # The URL will be shown in the Ports tab (e.g., https://xxxxx-3000.preview.app.github.dev)
-GOOGLE_CLIENT_ID=220447477156-i7mis4i6nfqa5ag8ud2c0943t11ns98m.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=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
+GOOGLE_CLIENT_ID=your-google-client-id-here
+GOOGLE_CLIENT_SECRET=your-google-client-secret-here
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 ENVEOF
 

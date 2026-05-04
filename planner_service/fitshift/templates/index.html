@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fit-Shift Scheduler</title>
+    <meta
+      name="description"
+      content="Fit-Shift is a Python scheduling platform for fitness coaching operations, booking, coverage, and capacity management."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
+  </head>
+  <body data-booking-mode="{{ 'true' if booking_mode else 'false' }}" data-booking-slug="{{ selected_slug or '' }}">
+    <button class="ghost-button theme-toggle theme-toggle-floating" id="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+      <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+      <svg class="moon-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+    </button>
+
+    <button class="profile-button profile-button-floating" id="profile-button" aria-label="Open admin panel" title="Admin">
+      Admin
+    </button>
+
+    <aside class="admin-panel hidden" id="admin-panel" aria-hidden="true">
+      <div class="admin-panel-header">
+        <h2>Admin Controls</h2>
+        <button class="ghost-button" id="admin-close" type="button">Close</button>
+      </div>
+
+      <section class="admin-section admin-section-collapsible">
+        <details class="admin-collapsible" id="event-types-collapsible">
+          <summary>
+            <h3>Event Types</h3>
+            <span class="admin-caret" aria-hidden="true">▾</span>
+          </summary>
+          <div id="event-type-admin-list" class="admin-list"></div>
+          <form id="event-type-form" class="admin-form-inline admin-list-row admin-list-add-row-two">
+            <input id="event-type-name" type="text" placeholder="New event type" required />
+            <button class="primary-button" type="submit">Add type</button>
+          </form>
+        </details>
+      </section>
+
+      <section class="admin-section admin-section-collapsible">
+        <details class="admin-collapsible" id="coaches-collapsible">
+          <summary>
+            <h3>Coaches</h3>
+            <span class="admin-caret" aria-hidden="true">▾</span>
+          </summary>
+          <div id="coach-admin-list" class="admin-list"></div>
+          <form id="coach-form" class="admin-form-inline admin-list-row admin-list-add-row-two">
+            <input id="coach-name" type="text" placeholder="Coach name" required />
+            <button class="primary-button" type="submit">Add coach</button>
+          </form>
+        </details>
+      </section>
+
+      <section class="admin-section admin-section-collapsible">
+        <details class="admin-collapsible" id="locations-collapsible">
+          <summary>
+            <h3>Locations</h3>
+            <span class="admin-caret" aria-hidden="true">▾</span>
+          </summary>
+          <div id="location-admin-list" class="admin-list"></div>
+          <form id="location-form" class="admin-form-inline admin-list-row admin-list-add-row-two">
+            <input id="location-name" type="text" placeholder="Location name" required />
+            <button class="primary-button" type="submit">Add location</button>
+          </form>
+        </details>
+      </section>
+
+      <section class="admin-section admin-section-collapsible">
+        <details class="admin-collapsible" id="calendars-collapsible">
+          <summary>
+            <h3>Calendars</h3>
+            <span class="admin-caret" aria-hidden="true">▾</span>
+          </summary>
+          <div id="calendar-admin-list" class="admin-list"></div>
+          <form id="calendar-form" class="admin-form-inline admin-list-row admin-list-add-row-two">
+            <input id="calendar-name" type="text" placeholder="Calendar name" required />
+            <button class="primary-button" type="submit">Add calendar</button>
+          </form>
+        </details>
+      </section>
+
+      <section class="admin-section admin-section-collapsible">
+        <details class="admin-collapsible" id="business-hours-collapsible">
+          <summary>
+            <h3>Business Hours</h3>
+            <span class="admin-caret" aria-hidden="true">▾</span>
+          </summary>
+          <form id="business-hours-form" class="admin-form-inline business-hours-grid">
+            <div class="business-hours-header">Day</div>
+            <div class="business-hours-header">Work Day</div>
+            <div class="business-hours-header">Start</div>
+            <div class="business-hours-header">End</div>
+
+            <div>Sunday</div>
+            <input data-business-day="6" data-business-bound="enabled" type="checkbox" checked />
+            <input data-business-day="6" data-business-bound="start" type="time" required />
+            <input data-business-day="6" data-business-bound="end" type="time" required />
+
+            <div>Monday</div>
+            <input data-business-day="0" data-business-bound="enabled" type="checkbox" checked />
+            <input data-business-day="0" data-business-bound="start" type="time" required />
+            <input data-business-day="0" data-business-bound="end" type="time" required />
+
+            <div>Tuesday</div>
+            <input data-business-day="1" data-business-bound="enabled" type="checkbox" checked />
+            <input data-business-day="1" data-business-bound="start" type="time" required />
+            <input data-business-day="1" data-business-bound="end" type="time" required />
+
+            <div>Wednesday</div>
+            <input data-business-day="2" data-business-bound="enabled" type="checkbox" checked />
+            <input data-business-day="2" data-business-bound="start" type="time" required />
+            <input data-business-day="2" data-business-bound="end" type="time" required />
+
+            <div>Thursday</div>
+            <input data-business-day="3" data-business-bound="enabled" type="checkbox" checked />
+            <input data-business-day="3" data-business-bound="start" type="time" required />
+            <input data-business-day="3" data-business-bound="end" type="time" required />
+
+            <div>Friday</div>
+            <input data-business-day="4" data-business-bound="enabled" type="checkbox" checked />
+            <input data-business-day="4" data-business-bound="start" type="time" required />
+            <input data-business-day="4" data-business-bound="end" type="time" required />
+
+            <div>Saturday</div>
+            <input data-business-day="5" data-business-bound="enabled" type="checkbox" checked />
+            <input data-business-day="5" data-business-bound="start" type="time" required />
+            <input data-business-day="5" data-business-bound="end" type="time" required />
+
+            <button class="primary-button" type="submit">Save hours</button>
+          </form>
+          <p class="admin-help-text">Only these hours will be displayed on the calendar view.</p>
+        </details>
+      </section>
+    </aside>
+
+    <div class="page-shell">
+      <main class="layout-grid">
+        <section class="calendar-shell card {% if booking_mode %}is-full{% endif %}">
+          <div class="toolbar-row">
+            <div class="toolbar-filters">
+              <div class="calendar-filter">
+                <label class="calendar-select-wrap" for="calendar-filter-select">
+                  <select id="calendar-filter-select" class="calendar-select-control" aria-label="Select calendar">
+                    <option value="">All calendars</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="calendar-filter">
+                <button class="filter-icon-button filter-icon-button-funnel" type="button" id="event-type-filter-button" aria-haspopup="true" aria-expanded="false" aria-label="Open class/type filters" title="Class/type filters">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6h18"></path>
+                    <path d="M6 12h12"></path>
+                    <path d="M10 18h4"></path>
+                  </svg>
+                </button>
+                <div class="filter-menu hidden" id="event-type-filter-menu">
+                  <p class="filter-section-title">Classes and types</p>
+                  <label class="filter-option filter-option-all">
+                    <span>All classes/types</span>
+                    <input id="event-type-filter-all" type="checkbox" checked />
+                  </label>
+                  <div id="event-type-filter-options" class="filter-options"></div>
+                </div>
+              </div>
+            </div>
+            <div class="calendar-toolbar-right">
+              <section class="legend-row legend-inline" id="event-legend"></section>
+            </div>
+          </div>
+
+          <div id="calendar"></div>
+
+          <section class="coverage-panel card hidden" id="coverage-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Coverage Matrix</p>
+                <h2>Substitute and staffing view</h2>
+              </div>
+              <div>
+                <label for="coverage-date">Date</label>
+                <input id="coverage-date" type="date" />
+              </div>
+            </div>
+            <div id="coverage-results" class="coverage-grid"></div>
+          </section>
+        </section>
+
+        {% if not booking_mode %}
+        <aside class="card form-shell">
+          <div class="panel-header">
+            <div>
+              <h2>Event editor</h2>
+            </div>
+            <button class="ghost-button" type="button" id="new-event-button">New event</button>
+          </div>
+
+          <div class="message-stack">
+            <div id="form-errors" class="message error hidden"></div>
+            <div id="form-warnings" class="message warning hidden"></div>
+          </div>
+
+          <form id="event-form" class="event-form">
+            <input id="event-id" name="event_id" type="hidden" />
+
+            <label>
+              Title
+              <input id="title" name="title" type="text" required />
+            </label>
+
+            <label>
+              Event type
+              <select id="event-type" name="event_type"></select>
+            </label>
+
+            <label>
+              Calendar
+              <select id="calendar-id" name="calendar_id"></select>
+            </label>
+
+            <label>
+              Assigned coach
+              <select id="assigned-coach" name="assigned_coach_id"></select>
+            </label>
+
+            <label>
+              Location
+              <select id="location-id" name="location_id"></select>
+            </label>
+
+            <div class="form-grid two-up">
+              <label>
+                Start
+                <input id="start-at" name="start_at" type="datetime-local" required />
+              </label>
+              <label>
+                End
+                <input id="end-at" name="end_at" type="datetime-local" required />
+              </label>
+            </div>
+
+            <div class="form-grid three-up">
+              <label>
+                Client name
+                <input id="client-name" name="client_name" type="text" />
+              </label>
+              <label>
+                Client count
+                <input id="client-count" name="client_count" type="number" min="1" max="12" value="1" />
+              </label>
+              <label>
+                Capacity limit
+                <input id="capacity-limit" name="capacity_limit" type="number" min="1" max="12" value="1" />
+              </label>
+            </div>
+
+            <div class="form-grid three-up">
+              <label>
+                Status
+                <select id="status" name="status">
+                  <option value="Scheduled">Scheduled</option>
+                  <option value="Requesting">Requesting</option>
+                  <option value="Sub-Requested">Sub-Requested</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </label>
+              <label>
+                Recurrence
+                <select id="recurrence" name="recurrence">
+                  <option value="none">One-time</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </label>
+              <label>
+                Repeat weeks
+                <input id="repeat-weeks" name="repeat_weeks" type="number" min="1" max="12" value="1" />
+              </label>
+            </div>
+
+            <div class="button-row">
+              <button class="ghost-button" type="button" id="delete-button">Cancel event</button>
+              <button class="ghost-button" type="button" id="duplicate-button">Duplicate</button>
+              <button class="primary-button" type="submit">Save event</button>
+            </div>
+          </form>
+
+          <div id="duplicate-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="duplicate-modal-title">
+            <div class="modal-card">
+              <h3 id="duplicate-modal-title">Duplicate Event</h3>
+              <p class="modal-help">Pick the new start date and time. End time will keep the same duration.</p>
+              <label>
+                New start date/time
+                <input id="duplicate-start-at" type="datetime-local" required />
+              </label>
+              <div class="button-row modal-actions">
+                <button class="ghost-button" type="button" id="duplicate-cancel">Cancel</button>
+                <button class="primary-button" type="button" id="duplicate-confirm">Duplicate</button>
+              </div>
+            </div>
+          </div>
+        </aside>
+        {% else %}
+        <aside class="card booking-shell">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Booking view</p>
+              <h2>{{ coach_name }}</h2>
+            </div>
+            <a class="ghost-button back-link" href="/">Back to scheduler</a>
+          </div>
+
+          <div class="message-stack">
+            <div id="booking-errors" class="message error hidden"></div>
+            <div id="booking-warnings" class="message warning hidden"></div>
+            <div id="booking-success" class="message success hidden"></div>
+          </div>
+
+          <section>
+            <h3>Open slots</h3>
+            <div id="slot-list" class="slot-list"></div>
+          </section>
+
+          <form id="booking-form" class="event-form">
+            <input id="booking-start" type="hidden" />
+            <input id="booking-end" type="hidden" />
+            <input id="booking-location-id" type="hidden" />
+
+            <label>
+              Name
+              <input id="booking-client-name" type="text" required />
+            </label>
+
+            <label>
+              Session title
+              <input id="booking-title" type="text" value="Client Booking" required />
+            </label>
+
+            <label>
+              Session type
+              <select id="booking-event-type">
+                <option value="In Person Meeting">In Person Meeting</option>
+                <option value="Virtual Meeting">Virtual Meeting</option>
+                <option value="Self Paced Work">Self Paced Work</option>
+              </select>
+            </label>
+
+            <button class="primary-button" type="submit">Book selected slot</button>
+          </form>
+        </aside>
+        {% endif %}
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+    <script>
+      window.APP_CONFIG = {
+        bookingMode: {{ 'true' if booking_mode else 'false' }},
+        bookingSlug: {{ (selected_slug or '') | tojson }},
+      };
+    </script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

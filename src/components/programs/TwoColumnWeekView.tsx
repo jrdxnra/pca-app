@@ -966,7 +966,7 @@ export const TwoColumnWeekView = React.memo(function TwoColumnWeekView({
                                               left: 0,
                                               right: '15%',
                                               height: `${spanHeight}px`,
-                                              zIndex: 1 // Background layer
+                                              zIndex: 20 // Keep spanned events above grid cells so clicks are reliable
                                             } : {
                                               position: 'relative',
                                               minHeight: '24px',

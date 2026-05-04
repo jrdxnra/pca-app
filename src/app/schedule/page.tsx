@@ -37,6 +37,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/queryKeys';
 
 import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBuilderDialog';
+import { EventActionDialog } from '@/components/programs/EventActionDialog';
 
 // Mutations
 import { useUpdateCalendarEvent, useDeleteCalendarEvent } from '@/hooks/mutations/useCalendarMutations';
@@ -80,6 +81,10 @@ export default function SchedulePage() {
     // Batch 1: Event → Workout Flow State
     const [quickWorkoutDialogOpen, setQuickWorkoutDialogOpen] = useState(false);
     const [selectedEventForWorkout, setSelectedEventForWorkout] = useState<GoogleCalendarEvent | null>(null);
+
+    // Event action dialog state
+    const [eventActionDialogOpen, setEventActionDialogOpen] = useState(false);
+    const [selectedEventForAction, setSelectedEventForAction] = useState<GoogleCalendarEvent | null>(null);
 
     // Fetch clients
     const { data: clients = [], isLoading: clientsLoading } = useClients(false);
@@ -186,151 +191,10 @@ export default function SchedulePage() {
         return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     };
 
-    // Batch 1: Event Click Handler - Navigate directly to builder with resolved client/workout.
-    const handleEventClick = async (event: GoogleCalendarEvent) => {
-        type CandidateWorkout = { id: string; time?: string; categoryName?: string };
-
-        const eventDate = new Date(event.start.dateTime);
-        const dateParam = format(eventDate, 'yyyy-MM-dd');
-        const eventCategory = getEventCategory(event)?.toLowerCase() || '';
-        const eventSummary = (event.summary || '').toLowerCase();
-        const eventMinutes = eventDate.getHours() * 60 + eventDate.getMinutes();
-
-        const toMinutes = (time?: string): number | null => {
-            if (!time) return null;
-            const parts = time.split(':');
-            if (parts.length < 2) return null;
-            const h = Number(parts[0]);
-            const m = Number(parts[1]);
-            if (Number.isNaN(h) || Number.isNaN(m)) return null;
-            return h * 60 + m;
-        };
-
-        const scoreWorkout = (workout: CandidateWorkout): number => {
-            let score = 0;
-            const wm = toMinutes(workout.time);
-            if (wm !== null) {
-                const diff = Math.abs(wm - eventMinutes);
-                score += Math.max(0, 240 - diff);
-            }
-
-            const wc = (workout.categoryName || '').toLowerCase();
-            if (eventCategory && wc) {
-                if (wc.includes(eventCategory) || eventCategory.includes(wc)) {
-                    score += 200;
-                }
-            }
-
-            return score;
-        };
-
-        const pickBestWorkout = (workouts: CandidateWorkout[]): CandidateWorkout | null => {
-            if (!workouts.length) return null;
-            return workouts.reduce((best, current) => {
-                if (!best) return current;
-                return scoreWorkout(current) > scoreWorkout(best) ? current : best;
-            }, null as CandidateWorkout | null);
-        };
-
-        let clientIdFromEvent = getEventClientId(event) || selectedClient || null;
-        let linkedWorkoutId = getLinkedWorkoutId(event);
-
-        if (!linkedWorkoutId) {
-            try {
-                const { getEventWorkoutLinkByEventId } = await import('@/lib/firebase/services/eventWorkoutLinks');
-                const trackerLink = await getEventWorkoutLinkByEventId(event.id);
-                if (trackerLink?.workoutId) {
-                    linkedWorkoutId = trackerLink.workoutId;
-                    if (!clientIdFromEvent && trackerLink.clientId) {
-                        clientIdFromEvent = trackerLink.clientId;
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to read tracker link for event:', event.id, error);
-            }
-        }
-
-        if (!clientIdFromEvent && event.summary) {
-            const matchedClient = clients.find(c => eventSummary.includes(c.name.toLowerCase()));
-            if (matchedClient) {
-                clientIdFromEvent = matchedClient.id;
-            }
-        }
-
-        if (!linkedWorkoutId && clientIdFromEvent) {
-            try {
-                const dayStart = new Date(eventDate);
-                dayStart.setHours(0, 0, 0, 0);
-                const dayEnd = new Date(eventDate);
-                dayEnd.setHours(23, 59, 59, 999);
-
-                const dayWorkouts = await fetchWorkoutsByDateRange(
-                    clientIdFromEvent,
-                    Timestamp.fromDate(dayStart),
-                    Timestamp.fromDate(dayEnd)
-                );
-
-                const bestWorkout = pickBestWorkout(dayWorkouts);
-                if (bestWorkout?.id) {
-                    linkedWorkoutId = bestWorkout.id;
-                }
-            } catch (error) {
-                console.error('Failed to lookup workout:', error);
-            }
-        }
-
-        if (!linkedWorkoutId && !clientIdFromEvent && clients.length > 0) {
-            try {
-                const dayStart = new Date(eventDate);
-                dayStart.setHours(0, 0, 0, 0);
-                const dayEnd = new Date(eventDate);
-                dayEnd.setHours(23, 59, 59, 999);
-
-                const checks = await Promise.all(
-                    clients.map(async (client) => {
-                        const dayWorkouts = await fetchWorkoutsByDateRange(
-                            client.id,
-                            Timestamp.fromDate(dayStart),
-                            Timestamp.fromDate(dayEnd)
-                        );
-                        return { clientId: client.id, workouts: dayWorkouts };
-                    })
-                );
-
-                const candidates = checks.flatMap(c => {
-                    const client = clients.find(x => x.id === c.clientId);
-                    const clientName = (client?.name || '').toLowerCase();
-                    const clientNameBonus = clientName && eventSummary.includes(clientName) ? 300 : 0;
-                    return c.workouts.map(w => ({
-                        clientId: c.clientId,
-                        workoutId: w.id,
-                        score: scoreWorkout(w) + clientNameBonus,
-                    }));
-                });
-
-                if (candidates.length > 0) {
-                    const best = candidates.reduce((a, b) => (b.score > a.score ? b : a));
-                    clientIdFromEvent = best.clientId;
-                    linkedWorkoutId = best.workoutId;
-                }
-            } catch (error) {
-                console.error('Failed to infer workout/client from day workouts:', error);
-            }
-        }
-
-        const params = new URLSearchParams();
-        params.set('date', dateParam);
-        params.set('eventId', event.id);
-
-        if (clientIdFromEvent) {
-            params.set('client', clientIdFromEvent);
-        }
-
-        if (linkedWorkoutId) {
-            params.set('workoutId', linkedWorkoutId);
-        }
-
-        router.push(`/workouts/builder?${params.toString()}`);
+    // Event click should always open the event details/actions dialog.
+    const handleEventClick = (event: GoogleCalendarEvent) => {
+        setSelectedEventForAction(event);
+        setEventActionDialogOpen(true);
     };
 
     // Batch 1: Workout Click Handler - Navigate to workout builder
@@ -521,6 +385,23 @@ export default function SchedulePage() {
                 onAddClients={() => router.push('/clients')}
                 selectedCalendarLabel={selectedCalendarId || undefined}
             />
+
+            {/* Event Action Dialog */}
+            {selectedEventForAction && (
+                <EventActionDialog
+                    open={eventActionDialogOpen}
+                    onOpenChange={setEventActionDialogOpen}
+                    event={selectedEventForAction}
+                    clientId={selectedClient || undefined}
+                    allEvents={calendarEvents}
+                    clients={clients}
+                    clientPrograms={clientPrograms}
+                    onClientAssigned={() => {
+                        setSelectedEventForAction(null);
+                        queryClient.invalidateQueries({ queryKey: queryKeys.calendarEvents.all });
+                    }}
+                />
+            )}
 
             {/* Batch 1: Quick Workout Builder Dialog */}
             {(selectedClient || selectedEventForWorkout || selectedDateForWorkout) && (

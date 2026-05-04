@@ -450,7 +450,7 @@ export interface ClientWorkoutMovementUsage {
   setEntries?: WorkoutSetEntry[]; // Optional per-set values when coach expands a movement by round sets
 }
 
-export interface ClientWorkoutTargetWorkload extends TargetWorkload { }
+export type ClientWorkoutTargetWorkload = TargetWorkload;
 
 export interface WorkoutLog {
   id: string;
@@ -552,12 +552,15 @@ export interface WorkoutTypeConfiguration {
   useTime?: boolean;
   workRestRatio?: string; // e.g., "1:1", "2:1"
   focusArea?: string; // e.g., "Dynamic warm-up", "Mobility & activation"
-  aiGuidance?: string; // Free-form coach intent to steer AI generation for this section
+  aiGuidance?: string; // Free-form coach intent to steer DDS generation for this section
 }
 
 export interface WorkoutStructureTemplateSection {
   workoutTypeId: string; // References existing workout type
   workoutTypeName: string; // Denormalized for display
+  workoutIntentId?: string; // References workout intent definition
+  workoutIntentKey?: string; // Stable enum-like key for generator logic
+  workoutIntentName?: string; // Denormalized for display
   order: number;
   configuration: WorkoutTypeConfiguration;
 }
@@ -575,6 +578,18 @@ export interface WorkoutStructureTemplate {
 
 export interface WorkoutType {
   id: string;
+  name: string;
+  color: string;
+  description: string;
+  order?: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  createdBy?: string;
+}
+
+export interface WorkoutIntent {
+  id: string;
+  key: string;
   name: string;
   color: string;
   description: string;

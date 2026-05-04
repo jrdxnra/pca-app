@@ -2001,7 +2001,7 @@ export default function ProgramsPage() {
                                             ⚠️ Google Calendar Not Connected
                                         </p>
                                         <p className="text-xs text-yellow-700 mt-1">
-                                            Calendar events won't appear until you connect Google Calendar. Workouts will still be visible.
+                                            Calendar events won&apos;t appear until you connect Google Calendar. Workouts will still be visible.
                                         </p>
                                         <Button
                                             size="sm"
@@ -2057,7 +2057,7 @@ export default function ProgramsPage() {
                                             Google Calendar Not Connected
                                         </p>
                                         <p className="text-xs text-yellow-700 mt-1">
-                                            Calendar events won't appear until you connect Google Calendar.
+                                            Calendar events won&apos;t appear until you connect Google Calendar.
                                         </p>
                                         <Button
                                             size="sm"

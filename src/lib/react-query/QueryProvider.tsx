@@ -5,12 +5,7 @@ import { ReactNode, useState, useEffect } from 'react';
 import { setGlobalQueryClient } from './queryClientInstance';
 
 // Dynamically import devtools only in development to avoid build errors
-let ReactQueryDevtools: any = null;
-
-// Check if we're in development mode (works in both client and server)
-const isDevelopment = typeof window !== 'undefined'
-  ? (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_NODE_ENV === 'development')
-  : process.env.NODE_ENV === 'development';
+const ReactQueryDevtools: unknown = null;
 
 
 
@@ -99,15 +94,13 @@ export function QueryProvider({ children }: QueryProviderProps) {
     }
   });
 
-  // Ensure we have a valid QueryClient
-  if (!queryClient) {
-    console.error('QueryClient is null - this should not happen');
-    // Return children without provider as last resort (will cause React Query errors)
-    return <>{children}</>;
-  }
-
   // Set the global queryClient so Zustand stores can access it for cache invalidation
   useEffect(() => {
+    if (!queryClient) {
+      console.error('QueryClient is null - this should not happen');
+      return;
+    }
+
     setGlobalQueryClient(queryClient);
   }, [queryClient]);
 

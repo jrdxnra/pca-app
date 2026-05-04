@@ -1,0 +1,362 @@
+/* Planner Design System - From Flask App */
+
+:root {
+  --ink: #18211f;
+  --muted: #5a6762;
+  --bg: #f6efe2;
+  --panel: rgba(255, 251, 246, 0.78);
+  --line: rgba(24, 33, 31, 0.1);
+  --sage: #b7d2b0;
+  --moss: #346252;
+  --sun: #de8249;
+  --sky: #5282a7;
+  --plum: #9a5d7b;
+  --clay: #d38f75;
+  --shadow: 0 22px 80px rgba(24, 33, 31, 0.12);
+  --surface: rgba(255, 251, 246, 0.92);
+  --surface-strong: rgba(255, 251, 246, 0.98);
+  --calendar-grid: rgba(24, 33, 31, 0.12);
+  --calendar-muted: rgba(24, 33, 31, 0.06);
+  --calendar-slot: rgba(24, 33, 31, 0.04);
+  --button-bg: rgba(255, 251, 246, 0.9);
+  --button-bg-hover: rgba(255, 251, 246, 0.98);
+  --button-text: var(--ink);
+  --button-border: var(--line);
+  --button-shadow: 0 10px 24px rgba(24, 33, 31, 0.08);
+  --button-shadow-hover: 0 16px 30px rgba(24, 33, 31, 0.12);
+  --button-solid-bg: var(--ink);
+  --button-solid-bg-hover: #2a3632;
+  --button-solid-text: #f8f5ef;
+  --button-active-bg: var(--moss);
+  --button-active-text: #f8f5ef;
+  --control-bg: var(--surface);
+  --control-border: var(--line);
+  --control-text: var(--ink);
+  --control-placeholder: rgba(24, 33, 31, 0.5);
+}
+
+body.dark-mode {
+  --ink: #f6efe2;
+  --muted: #a8b0aa;
+  --bg: #18211f;
+  --panel: rgba(24, 33, 31, 0.78);
+  --line: rgba(255, 251, 246, 0.1);
+  --surface: rgba(31, 42, 39, 0.92);
+  --surface-strong: rgba(36, 48, 45, 0.98);
+  --calendar-grid: rgba(168, 176, 170, 0.16);
+  --calendar-muted: rgba(255, 251, 246, 0.04);
+  --calendar-slot: rgba(255, 251, 246, 0.03);
+  --button-bg: rgba(52, 69, 63, 0.94);
+  --button-bg-hover: rgba(68, 88, 81, 0.98);
+  --button-text: #f6efe2;
+  --button-border: rgba(255, 251, 246, 0.1);
+  --button-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  --button-shadow-hover: 0 18px 34px rgba(0, 0, 0, 0.24);
+  --button-solid-bg: rgba(90, 124, 108, 0.96);
+  --button-solid-bg-hover: #6b9380;
+  --button-solid-text: #f6efe2;
+  --button-active-bg: #6b9380;
+  --button-active-text: #f6efe2;
+  --control-bg: rgba(52, 69, 63, 0.9);
+  --control-border: rgba(255, 251, 246, 0.16);
+  --control-text: #f6efe2;
+  --control-placeholder: rgba(246, 239, 226, 0.58);
+}
+
+.page-shell {
+  width: min(1760px, calc(100vw - 24px));
+  margin: 0 auto;
+  height: 100vh;
+  padding: 10px 0 10px;
+  box-sizing: border-box;
+}
+
+.layout-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.82fr) minmax(385px, 0.86fr);
+  gap: 18px;
+  height: calc(100% - 8px);
+  margin-top: 8px;
+  align-items: stretch;
+}
+
+.layout-grid > * {
+  min-width: 0;
+}
+
+.calendar-shell,
+.form-shell {
+  padding: 18px;
+  overflow: hidden;
+}
+
+.calendar-shell {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.form-shell {
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.toolbar-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: nowrap;
+}
+
+.toolbar-row h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.ghost-button,
+.primary-button {
+  min-height: 44px;
+  border: 1px solid var(--button-border);
+  border-radius: 999px;
+  background: var(--button-bg);
+  color: var(--button-text);
+  box-shadow: var(--button-shadow);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  white-space: nowrap;
+}
+
+.ghost-button:hover,
+.primary-button:hover,
+.ghost-button:focus-visible,
+.primary-button:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: var(--button-shadow-hover);
+}
+
+.ghost-button:focus-visible,
+.primary-button:focus-visible {
+  outline: 2px solid rgba(82, 130, 167, 0.35);
+  outline-offset: 2px;
+}
+
+.primary-button {
+  background: var(--button-solid-bg);
+  color: var(--button-solid-text);
+}
+
+.primary-button:hover,
+.primary-button:focus-visible {
+  background: var(--button-solid-bg-hover);
+}
+
+.admin-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: min(420px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  box-shadow: 0 24px 60px rgba(24, 33, 31, 0.24);
+  z-index: 39;
+  box-sizing: border-box;
+}
+
+.admin-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.admin-panel-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.panel-header {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.panel-header .ghost-button {
+  padding: 0;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.event-form {
+  display: grid;
+  gap: 14px;
+}
+
+.event-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.event-form input,
+.event-form select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+.event-form input:focus,
+.event-form select:focus {
+  outline: 2px solid rgba(82, 130, 167, 0.35);
+  outline-offset: 2px;
+  border-color: rgba(82, 130, 167, 0.35);
+}
+
+.event-form input::placeholder {
+  color: var(--control-placeholder);
+}
+
+.button-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.button-row .primary-button,
+.button-row .ghost-button {
+  flex: 1;
+  justify-content: center;
+}
+
+.message {
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  font-size: 0.92rem;
+  margin-bottom: 14px;
+  box-sizing: border-box;
+}
+
+.message.error {
+  background: rgba(211, 143, 117, 0.18);
+  color: #7a3f2a;
+}
+
+.message.warning {
+  background: rgba(222, 130, 73, 0.16);
+  color: #7a5a2a;
+}
+
+.message.success {
+  background: rgba(183, 210, 176, 0.22);
+  color: #214b37;
+}
+
+/* Calendar Grid */
+.calendar-grid {
+  display: grid;
+  gap: 0;
+  width: 100%;
+  height: 100%;
+  font-size: 0.85rem;
+}
+
+.calendar-grid-header {
+  display: grid;
+  gap: 0;
+  border-bottom: 1px solid var(--calendar-grid);
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.calendar-grid-cell {
+  border-right: 1px solid var(--calendar-grid);
+  border-bottom: 1px solid var(--calendar-grid);
+  padding: 2px;
+  min-height: 80px;
+  overflow-y: auto;
+  background: var(--calendar-slot);
+  box-sizing: border-box;
+}
+
+.calendar-time-label {
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 600;
+  text-align: right;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+}
+
+.calendar-event-item {
+  padding: 6px 8px;
+  margin: 2px 2px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 160ms ease;
+}
+
+.calendar-event-item:hover {
+  opacity: 0.9;
+}
+
+.dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.dot-self { background: #6f8f72; }
+.dot-person { background: var(--sun); }
+.dot-virtual { background: var(--sky); }
+.dot-class { background: var(--plum); }

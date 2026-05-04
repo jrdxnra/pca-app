@@ -24,9 +24,16 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, X, ChevronDown, ChevronRight, GripVertical } from 'lucide-react';
-import { WorkoutStructureTemplate, WorkoutStructureTemplateSection } from '@/lib/types';
+import { WorkoutStructureTemplate, WorkoutStructureTemplateSection, WorkoutIntent } from '@/lib/types';
 import { WorkoutType } from '@/lib/firebase/services/workoutTypes';
 import { WorkoutTypeConfigurationForm } from './WorkoutTypeConfigurationForm';
 import { resolveWorkoutType } from '@/lib/workouts/workoutTypeUtils';
@@ -43,6 +50,7 @@ interface WorkoutStructureTemplateDialogProps {
   onOpenChange: (open: boolean) => void;
   template?: WorkoutStructureTemplate;
   workoutTypes: WorkoutType[];
+  workoutIntents: WorkoutIntent[];
   onSave: (template: Omit<WorkoutStructureTemplate, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => void;
 }
 
@@ -51,6 +59,7 @@ export function WorkoutStructureTemplateDialog({
   onOpenChange,
   template,
   workoutTypes,
+  workoutIntents,
   onSave
 }: WorkoutStructureTemplateDialogProps) {
   const [sections, setSections] = useState<WorkoutStructureTemplateSection[]>([]);
@@ -71,20 +80,25 @@ export function WorkoutStructureTemplateDialog({
         description: template.description || '',
       });
       setSections(template.sections || []);
+      setExpandedSections(new Set());
     } else {
       form.reset({
         name: '',
         description: '',
       });
       setSections([]);
+      setExpandedSections(new Set());
     }
-    setExpandedSections(new Set());
   }, [template, form]);
 
   const addWorkoutType = (workoutType: WorkoutType) => {
+    const firstIntent = workoutIntents[0];
     const newSection: WorkoutStructureTemplateSection = {
       workoutTypeId: workoutType.id,
       workoutTypeName: workoutType.name,
+      workoutIntentId: firstIntent?.id,
+      workoutIntentKey: firstIntent?.key,
+      workoutIntentName: firstIntent?.name,
       order: sections.length,
       configuration: {
         useRPE: false,
@@ -188,6 +202,7 @@ export function WorkoutStructureTemplateDialog({
                   <div className="flex flex-wrap gap-2">
                     {availableWorkoutTypes.map((workoutType) => (
                       <Button
+                        type="button"
                         key={workoutType.id}
                         variant="outline"
                         size="sm"
@@ -208,12 +223,16 @@ export function WorkoutStructureTemplateDialog({
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">Template Sections</CardTitle>
+                  <p className="text-xs text-gray-500">
+                    Expand a section row to set <span className="font-medium">Section Intent</span> and default configuration.
+                  </p>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-3">
                     {sections.map((section, index) => {
                       const isExpanded = expandedSections.has(index);
                       const workoutType = resolveWorkoutType(workoutTypes, section.workoutTypeId, section.workoutTypeName);
+                      const selectedIntent = workoutIntents.find((intent) => intent.id === section.workoutIntentId);
                       
                       return (
                         <div key={`${section.workoutTypeId}-${index}`} className="border rounded-lg">
@@ -226,10 +245,19 @@ export function WorkoutStructureTemplateDialog({
                               >
                                 {section.workoutTypeName}
                               </Badge>
+                              {selectedIntent && (
+                                <Badge
+                                  style={{ backgroundColor: selectedIntent.color || '#64748b' }}
+                                  className="text-white font-medium"
+                                >
+                                  {selectedIntent.name}
+                                </Badge>
+                              )}
                               <span className="text-sm text-gray-600">Order: {section.order}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <Button
+                                type="button"
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => toggleSection(index)}
@@ -242,6 +270,7 @@ export function WorkoutStructureTemplateDialog({
                                 )}
                               </Button>
                               <Button
+                                type="button"
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => removeSection(index)}
@@ -255,7 +284,23 @@ export function WorkoutStructureTemplateDialog({
                           {isExpanded && (
                             <div className="border-t bg-white">
                               <WorkoutTypeConfigurationForm
+                                mode="full"
                                 configuration={section.configuration}
+                                intentOptions={workoutIntents.map((intent) => ({
+                                  id: intent.id,
+                                  name: intent.name,
+                                  description: intent.description,
+                                }))}
+                                sectionIntentId={section.workoutIntentId}
+                                sectionIntentDescription={selectedIntent?.description}
+                                onSectionIntentChange={(intentId) => {
+                                  const intent = workoutIntents.find((item) => item.id === intentId);
+                                  updateSection(index, {
+                                    workoutIntentId: intent?.id,
+                                    workoutIntentKey: intent?.key,
+                                    workoutIntentName: intent?.name,
+                                  });
+                                }}
                                 onChange={(config) => updateSection(index, { configuration: config })}
                               />
                             </div>

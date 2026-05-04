@@ -67,6 +67,9 @@ export interface StructureSectionForDraft {
   workoutTypeId?: string;
   workoutTypeName?: string;
   workoutTypeDescription?: string;
+  workoutIntentId?: string;
+  workoutIntentKey?: string;
+  workoutIntentName?: string;
   order: number;
   configuration?: {
     defaultDuration?: number;
@@ -285,6 +288,10 @@ function countKeywordHits(text: string, keywords: string[]): number {
   return hits;
 }
 
+function textIncludesAny(text: string, words: string[]): boolean {
+  return words.some((word) => text.includes(word));
+}
+
 function getActualSessionsPerWeek(recentWorkouts: HistoricalWorkoutForDraft[]): number | undefined {
   const datedWorkouts = recentWorkouts.filter((workout) => typeof workout.dateMillis === 'number');
   if (datedWorkouts.length === 0) return undefined;
@@ -330,10 +337,34 @@ function getContextKeywordHints(text: string): string[] {
   return Array.from(hints);
 }
 
+function normalizeTimeValue(
+  value: unknown,
+  timeMeasure: ClientWorkoutTargetWorkload['timeMeasure'] = 's'
+): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const lowerTrimmed = trimmed.toLowerCase();
+  if (timeMeasure === 's') {
+    return lowerTrimmed.replace(/\s*(sec|secs|second|seconds|s)$/i, '').trim() || undefined;
+  }
+
+  return lowerTrimmed.replace(/\s*(min|mins|minute|minutes|m)$/i, '').trim() || undefined;
+}
+
 function cloneTargetWorkload(target?: Partial<ClientWorkoutTargetWorkload>): ClientWorkoutTargetWorkload {
+  const normalizedTime = normalizeTimeValue(target?.time, target?.timeMeasure || 's');
+
   return inferTargetWorkloadFlags({
     ...DEFAULT_TARGET_WORKLOAD,
     ...(target || {}),
+    time: normalizedTime ?? target?.time,
   });
 }
 
@@ -384,10 +415,76 @@ function inferSectionSetCount(section: StructureSectionForDraft): number {
 
   if (text.includes('warm-up') || text.includes('warm up') || text.includes('warmup')) return 1;
   if (text.includes('cooldown') || text.includes('cool down') || text.includes('recovery')) return 1;
+  if (text.includes('esd') || text.includes('conditioning') || text.includes('metcon') || text.includes('engine')) return 3;
   if (text.includes('strength') || text.includes('power') || text.includes('main')) return 3;
   if (text.includes('accessory') || text.includes('prep')) return 2;
 
   return 1;
+}
+
+function parseIntervalCadenceSeconds(section: StructureSectionForDraft): number | undefined {
+  const text = compactText([
+    section.workoutTypeName,
+    section.workoutTypeDescription,
+    section.configuration?.focusArea,
+    section.configuration?.defaultStructure,
+  ]).toLowerCase();
+
+  if (!text) return undefined;
+
+  // EMOM defaults to a 1-minute cadence.
+  if (/\bemom\b/.test(text) || /every\s*minute\s*on\s*the\s*minute/.test(text)) {
+    return 60;
+  }
+
+  // E2MOM / E3MOM style cadence.
+  const explicitCadence = text.match(/\be(\d+)mom\b/);
+  if (explicitCadence?.[1]) {
+    const minutes = Number(explicitCadence[1]);
+    if (Number.isFinite(minutes) && minutes > 0) {
+      return minutes * 60;
+    }
+  }
+
+  const phraseCadence = text.match(/every\s*(\d+)\s*minutes?\s*on\s*the\s*minute/);
+  if (phraseCadence?.[1]) {
+    const minutes = Number(phraseCadence[1]);
+    if (Number.isFinite(minutes) && minutes > 0) {
+      return minutes * 60;
+    }
+  }
+
+  return undefined;
+}
+
+type SectionIntervalFormat = 'amrap' | 'emom' | 'conditioning';
+
+function detectSectionIntervalFormat(
+  section: StructureSectionForDraft
+): { format: SectionIntervalFormat; cadenceSeconds?: number } | undefined {
+  const text = compactText([
+    section.workoutTypeName,
+    section.workoutTypeDescription,
+    section.configuration?.focusArea,
+    section.configuration?.defaultStructure,
+  ]).toLowerCase();
+
+  if (!text) return undefined;
+
+  if (/\bamrap\b/.test(text) || /as\s+many\s+(reps|rounds)\s+as\s+possible/.test(text)) {
+    return { format: 'amrap' };
+  }
+
+  const cadenceSeconds = parseIntervalCadenceSeconds(section);
+  if (cadenceSeconds) {
+    return { format: 'emom', cadenceSeconds };
+  }
+
+  if (textIncludesAny(text, ['conditioning', 'esd', 'metcon', 'circuit', 'interval', 'for time', 'rft', 'tabata'])) {
+    return { format: 'conditioning' };
+  }
+
+  return undefined;
 }
 
 function cloneRounds(rounds?: ClientWorkoutRound[]): ClientWorkoutRound[] {
@@ -491,8 +588,24 @@ function isPseudoMovement(
   }
 
   if (!movementName) return false;
-  if (movementName === 'finisher' || movementName === 'workout') return true;
-  if (movementName === 'round' || movementName === 'round1' || movementName === 'round2' || movementName === 'round3') return true;
+
+  const pseudoNames = new Set([
+    'warm up',
+    'warmup',
+    'cool down',
+    'cooldown',
+    'active recovery',
+    'recovery',
+    'finisher',
+    'workout',
+    'accessory',
+    'round',
+    'round1',
+    'round2',
+    'round3',
+  ]);
+
+  if (pseudoNames.has(movementName)) return true;
 
   return false;
 }
@@ -658,6 +771,38 @@ function buildRoundsFromStructure(
     categoryBiasKeywords?: string[];
   }
 ): ClientWorkoutRound[] {
+  type SectionProfile = 'warmup' | 'strength' | 'accessory' | 'conditioning' | 'cooldown';
+  type SectionArchetype =
+    | 'ballistics'
+    | 'prep'
+    | 'skill'
+    | 'speed'
+    | 'power'
+    | 'strength'
+    | 'hypertrophy'
+    | 'core'
+    | 'rehab'
+    | 'testing'
+    | 'conditioning'
+    | 'recovery'
+    | 'cooldown'
+    | 'plyometrics'
+    | 'amrap'
+    | 'emom'
+    | 'generic';
+
+  const normalizeIntentKey = (section: StructureSectionForDraft): string => {
+    const key = normalizeText(section.workoutIntentKey);
+    const name = normalizeText(section.workoutIntentName);
+    const intent = key || name;
+
+    if (!intent) return '';
+    if (intent === 'ballistics') return 'potentiation';
+    if (intent === 'capacity' || intent === 'cardio') return 'conditioning';
+    if (intent === 'prehab') return 'rehab';
+    return intent;
+  };
+
   const isKnownMovementId = (movementId?: string): boolean => {
     if (!movementId) return false;
     if (!movementContextById) return true;
@@ -671,9 +816,11 @@ function buildRoundsFromStructure(
   );
 
   const usedMovementIds = new Set<string>();
+  const usedMovementKeys = new Set<string>();
   const usedTemplateKeys = new Set<string>();
   const latestTargetByMovementId = new Map<string, Partial<ClientWorkoutTargetWorkload>>();
   const latestTargetByMovementName = new Map<string, Partial<ClientWorkoutTargetWorkload>>();
+  const recentMovementKeys = new Set<string>();
 
   rankedMovements.forEach((movement) => {
     if (movement.latestTargetWorkload) {
@@ -698,28 +845,70 @@ function buildRoundsFromStructure(
     return latestTargetByMovementName.get(movementNameKey);
   };
 
-  const textIncludesAny = (text: string, words: string[]): boolean => {
-    return words.some((word) => text.includes(word));
-  };
-
   const getSectionKeywords = (section: StructureSectionForDraft): string => {
-    const sectionAliases = getSectionAliasHints(section.workoutTypeName);
-
     return compactText([
       section.workoutTypeName,
       section.workoutTypeDescription,
+      section.configuration?.focusArea,
+      section.configuration?.defaultStructure,
     ]).toLowerCase();
+  };
+
+  const getMovementDedupKeyFromId = (movementId?: string): string => {
+    if (!movementId) return '';
+    const movementNameKey = normalizeText(movementContextById?.[movementId]?.name);
+    if (movementNameKey) {
+      if (/(assault bike|air bike|echo bike|spin bike|bike|rower|treadmill|ski erg|skierg)/.test(movementNameKey)) {
+        return 'family-cardio-machine';
+      }
+
+      // Treat 90/90 variants as one family to avoid repeated mobility blocks.
+      if (/\b90\s*[:\/]?\s*90\b/.test(movementNameKey)) {
+        return 'family-90-90';
+      }
+
+      // Collapse minor singular/plural and token-noise variants.
+      const canonical = movementNameKey
+        .split(' ')
+        .map((token) => {
+          if (token.length > 3 && token.endsWith('s') && !token.endsWith('ss')) {
+            return token.slice(0, -1);
+          }
+          return token;
+        })
+        .join(' ')
+        .replace(/\b(alternating|alternate|alt|rotation|rotations|rotational)\b/g, 'rot')
+        .replace(/\b(isometric|iso|hold|rollout|rollouts)\b/g, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+
+      return canonical;
+    }
+
+    return movementId;
+  };
+
+  const getMovementDedupKeyFromStat = (movement?: MovementStat): string => {
+    if (!movement) return '';
+    return getMovementDedupKeyFromId(movement.movementId);
   };
 
   const getTargetMovementCount = (section: StructureSectionForDraft): number => {
     const text = getSectionKeywords(section);
     const duration = section.configuration?.defaultDuration || 0;
     const structure = section.configuration?.defaultStructure;
+    const interval = detectSectionIntervalFormat(section);
 
     let count = 2;
 
     if (structure === 'supersets') count = 2;
-    else if (structure === 'circuits' || structure === 'amrap' || structure === 'emom' || structure === 'intervals') {
+    else if (interval?.format === 'emom') {
+      count = interval.cadenceSeconds && interval.cadenceSeconds >= 120
+        ? (duration >= 20 ? 2 : 1)
+        : (duration >= 20 ? 4 : 3);
+    } else if (interval?.format === 'amrap') {
+      count = duration >= 20 ? 4 : 3;
+    } else if (structure === 'circuits' || structure === 'amrap' || structure === 'emom' || structure === 'intervals') {
       count = duration >= 20 ? 4 : 3;
     } else if (textIncludesAny(text, ['cooldown', 'cool down', 'recovery', 'stretch', 'breath'])) count = 1;
     else if (textIncludesAny(text, ['warm-up', 'warm up', 'warmup', 'prep', 'activation', 'mobility'])) {
@@ -743,9 +932,405 @@ function buildRoundsFromStructure(
     return Math.max(1, Math.min(count, 4));
   };
 
+  const inferSectionProfile = (section: StructureSectionForDraft, sectionIndex: number): SectionProfile => {
+    const intentText = normalizeIntentKey(section);
+    const interval = detectSectionIntervalFormat(section);
+
+    if (interval) {
+      return 'conditioning';
+    }
+
+    if (intentText) {
+      if (['prep', 'potentiation', 'skill', 'speed', 'plyo'].includes(intentText)) return 'warmup';
+      if (['cooldown', 'recovery'].includes(intentText)) return 'cooldown';
+      if (['conditioning', 'amrap', 'emom'].includes(intentText)) return 'conditioning';
+      if (['strength', 'power', 'testing'].includes(intentText)) return 'strength';
+      if (['accessory', 'hypertrophy', 'core', 'rehab'].includes(intentText)) return 'accessory';
+    }
+
+    const text = getSectionKeywords(section);
+    const normalizedName = normalizeText(section.workoutTypeName);
+
+    if (textIncludesAny(text, ['amrap', 'emom'])) {
+      return 'conditioning';
+    }
+
+    if (textIncludesAny(text, ['warm-up', 'warm up', 'warmup', 'prep', 'activation', 'mobility'])) {
+      return 'warmup';
+    }
+
+    if (textIncludesAny(text, ['cooldown', 'cool down', 'recovery', 'stretch', 'breath'])) {
+      return 'cooldown';
+    }
+
+    if (textIncludesAny(text, ['conditioning', 'esd', 'metcon', 'circuit', 'finisher'])) {
+      return 'conditioning';
+    }
+
+    if (textIncludesAny(text, ['strength', 'power', 'main'])) {
+      return 'strength';
+    }
+
+    if (textIncludesAny(text, ['accessory'])) {
+      return 'accessory';
+    }
+
+    if (['r1', 'round1', 'round 1'].includes(normalizedName)) {
+      return 'strength';
+    }
+
+    if (['r2', 'round2', 'round 2', 'r3', 'round3', 'round 3'].includes(normalizedName)) {
+      return 'accessory';
+    }
+
+    if (sectionIndex === 0) return 'warmup';
+    if (sectionIndex === sections.length - 1) return 'cooldown';
+    return 'accessory';
+  };
+
+  const inferSectionArchetype = (section: StructureSectionForDraft): SectionArchetype => {
+    const intentText = normalizeIntentKey(section);
+    const interval = detectSectionIntervalFormat(section);
+
+    if (interval?.format === 'amrap') {
+      return 'amrap';
+    }
+
+    if (interval?.format === 'emom') {
+      return 'emom';
+    }
+
+    if (interval?.format === 'conditioning') {
+      return 'conditioning';
+    }
+
+    if (intentText) {
+      if (intentText === 'potentiation') return 'ballistics';
+      if (intentText === 'prep') return 'prep';
+      if (intentText === 'skill') return 'skill';
+      if (intentText === 'speed') return 'speed';
+      if (intentText === 'power') return 'power';
+      if (intentText === 'plyo') return 'plyometrics';
+      if (intentText === 'hypertrophy') return 'hypertrophy';
+      if (intentText === 'core') return 'core';
+      if (intentText === 'rehab') return 'rehab';
+      if (intentText === 'amrap') return 'amrap';
+      if (intentText === 'emom') return 'emom';
+      if (intentText === 'testing') return 'testing';
+      if (intentText === 'cooldown') return 'cooldown';
+      if (intentText === 'recovery') return 'recovery';
+      if (intentText === 'conditioning') return 'conditioning';
+      if (intentText === 'strength') return 'strength';
+      if (intentText === 'accessory') return 'generic';
+    }
+
+    const text = getSectionKeywords(section);
+
+    if (textIncludesAny(text, ['pp/mb/ballistics', 'pp mb ballistics', 'ballistics', 'med ball', 'medicine ball'])) {
+      return 'ballistics';
+    }
+
+    if (textIncludesAny(text, ['movement prep', 'prep', 'activation'])) {
+      return 'prep';
+    }
+
+    if (textIncludesAny(text, ['plyometric', 'plyometrics', 'plyo'])) {
+      return 'plyometrics';
+    }
+
+    if (textIncludesAny(text, ['amrap'])) {
+      return 'amrap';
+    }
+
+    if (textIncludesAny(text, ['emom'])) {
+      return 'emom';
+    }
+
+    if (textIncludesAny(text, ['cooldown', 'cool down', 'recovery', 'stretch', 'breath'])) {
+      return 'cooldown';
+    }
+
+    if (textIncludesAny(text, ['conditioning', 'esd', 'metcon', 'circuit', 'finisher'])) {
+      return 'conditioning';
+    }
+
+    if (textIncludesAny(text, ['strength', 'power', 'main'])) {
+      return 'strength';
+    }
+
+    return 'generic';
+  };
+
+  const getMovementProfileText = (movement: MovementStat): string => {
+    const categoryContext = categoryContextById?.[movement.latestCategoryId || ''];
+    const movementContext = movementContextById?.[movement.movementId];
+    return compactText([
+      categoryContext?.name,
+      categoryContext?.description,
+      movementContext?.name,
+      movementContext?.instructions,
+      movement.latestNote,
+    ]).toLowerCase();
+  };
+
+  const matchesSectionProfile = (movement: MovementStat, profile: SectionProfile): boolean => {
+    const text = getMovementProfileText(movement);
+
+    if (!text) return false;
+
+    if (profile === 'warmup') {
+      return textIncludesAny(text, ['warm', 'prep', 'activation', 'mobility', 'skip', 'ballistic', 'jump', 'hop', 'bound', 'toss', 'slam'])
+        && !textIncludesAny(text, [
+          'recovery',
+          'cool down',
+          'cooldown',
+          'active recovery',
+          'squat',
+          'deadlift',
+          'rdl',
+          'bench',
+          'press',
+          'row',
+          'lunge',
+          'barbell',
+          'db',
+          'dumbbell',
+          'kettlebell',
+          'lbs',
+          'kg'
+        ]);
+    }
+
+    if (profile === 'cooldown') {
+      return textIncludesAny(text, ['recovery', 'cooldown', 'cool down', 'stretch', 'breath', 'mobility'])
+        && !textIncludesAny(text, ['conditioning', 'sprint', 'rower', 'bike']);
+    }
+
+    if (profile === 'strength') {
+      return textIncludesAny(text, ['squat', 'hinge', 'deadlift', 'split squat', 'lunge', 'press', 'bench', 'row', 'pull', 'push'])
+        && !textIncludesAny(text, ['warm up', 'warmup', 'prep', 'mobility', 'stretch', 'recovery', 'skip', 'active recovery']);
+    }
+
+    if (profile === 'conditioning') {
+      return textIncludesAny(text, ['conditioning', 'engine', 'cardio', 'carry', 'sled', 'bike', 'rower', 'sprint', 'assault', 'interval'])
+        && !textIncludesAny(text, ['recovery', 'cool down', 'cooldown', 'mobility', 'stretch', 'ab wheel']);
+    }
+
+    return textIncludesAny(text, ['core', 'trunk', 'anti rot', 'rotation', 'carry', 'glute', 'hamstring', 'posterior', 'push', 'pull', 'row', 'split squat', 'lunge'])
+      && !textIncludesAny(text, ['warm up', 'warmup', 'prep', 'stretch', 'recovery', 'cooldown', 'conditioning', 'engine', 'bike', 'rower', 'assault']);
+  };
+
+  const isMovementIdCompatibleWithProfile = (movementId: string, profile: SectionProfile): boolean => {
+    const movement = rankedMovements.find((item) => item.movementId === movementId);
+    if (!movement) return false;
+    return matchesSectionProfile(movement, profile);
+  };
+
+  const usageHasLoadedPrescription = (usage?: ClientWorkoutRound['movementUsages'][number]): boolean => {
+    if (!usage) return false;
+
+    const target = hydrateTargetWorkloadFromSetEntries(usage.targetWorkload, usage.setEntries);
+    if (hasTextValue(target.weight) || typeof target.percentage === 'number') {
+      return true;
+    }
+
+    return Boolean(
+      usage.setEntries?.some((entry) => hasTextValue(entry.weight) || typeof entry.percentage === 'number')
+    );
+  };
+
+  const usageHasProgressionSetEntries = (usage?: ClientWorkoutRound['movementUsages'][number]): boolean => {
+    if (!usage?.setEntries || usage.setEntries.length <= 1) return false;
+    return true;
+  };
+
+  const roundLooksLikeStrengthTemplate = (round?: ClientWorkoutRound): boolean => {
+    if (!round) return false;
+
+    return (round.movementUsages || []).some((usage) => {
+      if (usageHasLoadedPrescription(usage) || usageHasProgressionSetEntries(usage)) {
+        return true;
+      }
+
+      return Boolean(usage.movementId && isMovementIdCompatibleWithProfile(usage.movementId, 'strength'));
+    });
+  };
+
+  const isTemplateRoundCompatibleWithSection = (
+    templateRound: ClientWorkoutRound | undefined,
+    archetype: SectionArchetype,
+    profile: SectionProfile
+  ): boolean => {
+    if (!templateRound) return false;
+
+    const usages = templateRound.movementUsages || [];
+    if (usages.length === 0) return false;
+
+    if (archetype === 'strength' || archetype === 'power' || archetype === 'testing') {
+      return true;
+    }
+
+    const anyLoaded = usages.some((usage) => usageHasLoadedPrescription(usage));
+    const anyProgression = usages.some((usage) => usageHasProgressionSetEntries(usage));
+    const anyStrengthMovement = usages.some(
+      (usage) => Boolean(usage.movementId && isMovementIdCompatibleWithProfile(usage.movementId, 'strength'))
+    );
+
+    if (archetype === 'cooldown') {
+      return !anyLoaded && !anyProgression && !anyStrengthMovement;
+    }
+
+    if (archetype === 'prep' || archetype === 'skill' || archetype === 'speed' || archetype === 'ballistics' || archetype === 'plyometrics') {
+      return !anyLoaded && !anyProgression && !roundLooksLikeStrengthTemplate(templateRound);
+    }
+
+    if (archetype === 'amrap' || archetype === 'emom') {
+      return !anyProgression && !roundLooksLikeStrengthTemplate(templateRound);
+    }
+
+    if (archetype === 'conditioning') {
+      return !anyProgression && !roundLooksLikeStrengthTemplate(templateRound);
+    }
+
+    if (archetype === 'recovery' || archetype === 'rehab') {
+      return !anyLoaded && !anyProgression && !anyStrengthMovement;
+    }
+
+    if (archetype === 'hypertrophy' || archetype === 'core') {
+      return !anyProgression;
+    }
+
+    return usages.some((usage) => Boolean(usage.movementId && isMovementIdCompatibleWithProfile(usage.movementId, profile)));
+  };
+
+  const shouldCarryTemplateSetEntries = (archetype: SectionArchetype, isStrengthSection: boolean): boolean => {
+    return (archetype === 'strength' || archetype === 'power' || archetype === 'testing') && isStrengthSection;
+  };
+
+  const getSectionDefaultWorkload = (
+    section: StructureSectionForDraft,
+    isStrengthSection: boolean
+  ): Partial<ClientWorkoutTargetWorkload> => {
+    const intent = normalizeIntentKey(section);
+    const text = getSectionKeywords(section);
+    const interval = detectSectionIntervalFormat(section);
+    const cadenceSeconds = interval?.cadenceSeconds;
+
+    if (interval?.format === 'emom' && cadenceSeconds) {
+      return { useTime: true, time: `${cadenceSeconds}s`, useRPE: true, rpe: '7-8' };
+    }
+
+    if (interval?.format === 'amrap') {
+      return { useReps: true, reps: '8-12', useRPE: true, rpe: '7-8' };
+    }
+
+    if (interval?.format === 'conditioning') {
+      return { useTime: true, time: '35-60s', useRPE: true, rpe: '7-8' };
+    }
+
+    if (intent === 'cooldown' || intent === 'recovery') {
+      return { useTime: true, time: '45-90s' };
+    }
+
+    if (intent === 'prep' || intent === 'potentiation' || intent === 'skill' || intent === 'speed' || intent === 'plyo') {
+      return { useTime: true, time: '20-40s' };
+    }
+
+    if (intent === 'emom' && cadenceSeconds) {
+      return { useTime: true, time: `${cadenceSeconds}s`, useRPE: true, rpe: '7-8' };
+    }
+
+    if (intent === 'conditioning' || intent === 'amrap' || intent === 'emom') {
+      if (cadenceSeconds) {
+        return { useTime: true, time: `${cadenceSeconds}s`, useRPE: true, rpe: '7-8' };
+      }
+
+      return { useTime: true, time: '35-60s', useRPE: true, rpe: '7-8' };
+    }
+
+    if (textIncludesAny(text, ['conditioning', 'esd', 'metcon', 'circuit', 'finisher', 'amrap', 'emom', 'e2mom', 'e3mom'])) {
+      return { useTime: true, time: '35-60s', useRPE: true, rpe: '7-8' };
+    }
+
+    if (intent === 'core') {
+      return { useTime: true, time: '30-45s', useRPE: true, rpe: '6-7' };
+    }
+
+    if (intent === 'rehab') {
+      return { useReps: true, reps: '8-12', useRPE: true, rpe: '5-6' };
+    }
+
+    if (intent === 'hypertrophy') {
+      return { useReps: true, reps: '8-15', useWeight: true, useRPE: true, rpe: '7-8' };
+    }
+
+    if (intent === 'strength' || intent === 'power' || intent === 'testing') {
+      return { useReps: true, reps: '3-6', useWeight: true, useRPE: true, rpe: '7-9' };
+    }
+
+    if (textIncludesAny(text, ['cooldown', 'cool down', 'recovery', 'stretch', 'breath'])) {
+      return { useTime: true, time: '45-60s' };
+    }
+
+    if (textIncludesAny(text, ['warm-up', 'warm up', 'warmup', 'prep', 'activation', 'mobility'])) {
+      return { useTime: true, time: '30-45s' };
+    }
+
+    if (textIncludesAny(text, ['conditioning', 'esd', 'metcon', 'circuit', 'finisher', 'amrap', 'emom'])) {
+      return { useTime: true, time: '35-45s', useRPE: true, rpe: '7-8' };
+    }
+
+    if (isStrengthSection) {
+      return { useReps: true, reps: '6-10', useWeight: true };
+    }
+
+    return { useReps: true, reps: '8-12' };
+  };
+
+  roundTemplates
+    .filter((template) => template.workoutIndex === 0)
+    .forEach((template) => {
+      (template.round.movementUsages || []).forEach((usage) => {
+        const key = getMovementDedupKeyFromId(usage.movementId);
+        if (key) {
+          recentMovementKeys.add(key);
+        }
+      });
+    });
+
   const getPreferredCategoryKeywords = (section: StructureSectionForDraft): string[] => {
+    const intent = normalizeIntentKey(section);
+    const interval = detectSectionIntervalFormat(section);
     const text = getSectionKeywords(section);
     const globalHints = getContextKeywordHints(options?.globalContextText || '');
+
+    if (interval?.format === 'amrap') {
+      return ['conditioning', 'amrap', 'repeatable', 'engine', 'sustainable pace', ...globalHints];
+    }
+
+    if (interval?.format === 'emom') {
+      return ['conditioning', 'interval', 'cadence', 'clock', 'engine', ...globalHints];
+    }
+
+    if (interval?.format === 'conditioning') {
+      return ['conditioning', 'cardio', 'engine', 'interval', ...globalHints];
+    }
+
+    if (intent === 'cooldown' || intent === 'recovery') {
+      return ['mobility', 'recovery', 'cooldown', 'stretch', 'breath', ...globalHints];
+    }
+
+    if (intent === 'prep' || intent === 'potentiation' || intent === 'skill' || intent === 'speed' || intent === 'plyo') {
+      return ['prep', 'warm', 'mobility', 'activation', 'ballistic', 'jump', 'throw', ...globalHints];
+    }
+
+    if (intent === 'strength' || intent === 'power' || intent === 'testing') {
+      return ['strength', 'power', 'squat', 'hinge', 'push', 'pull', ...globalHints];
+    }
+
+    if (intent === 'conditioning' || intent === 'amrap' || intent === 'emom') {
+      return ['conditioning', 'cardio', 'engine', 'interval', ...globalHints];
+    }
 
     if (textIncludesAny(text, ['cooldown', 'cool down', 'recovery', 'stretch', 'breath'])) {
       return ['mobility', 'recovery', 'cooldown', 'stretch', 'breath', ...globalHints];
@@ -768,7 +1353,9 @@ function buildRoundsFromStructure(
 
   const pickMovementsForSection = (
     section: StructureSectionForDraft,
-    count: number
+    count: number,
+    profile: SectionProfile,
+    archetype: SectionArchetype
   ): MovementStat[] => {
     const categoryBiasKeywords = options?.categoryBiasKeywords || [];
     const preferredKeywords = Array.from(
@@ -803,6 +1390,42 @@ function buildRoundsFromStructure(
       });
     };
 
+    const matchesSectionArchetype = (movement: MovementStat): boolean => {
+      const text = getMovementProfileText(movement);
+      if (!text) return false;
+
+      if (archetype === 'cooldown' || archetype === 'recovery') {
+        return textIncludesAny(text, ['recovery', 'cooldown', 'cool down', 'stretch', 'breath', 'mobility']) &&
+          !textIncludesAny(text, ['squat', 'deadlift', 'barbell', 'dumbbell', 'kettlebell', 'conditioning', 'bike', 'rower', 'sprint']);
+      }
+
+      if (archetype === 'prep') {
+        return textIncludesAny(text, ['prep', 'activation', 'mobility', 'warm']) &&
+          !textIncludesAny(text, ['conditioning', 'bike', 'rower', 'sprint', 'deadlift', 'back squat', 'bench']);
+      }
+
+      if (archetype === 'ballistics' || archetype === 'speed' || archetype === 'plyometrics') {
+        return textIncludesAny(text, ['ballistic', 'jump', 'hop', 'bound', 'throw', 'slam', 'sprint', 'speed', 'agility']) &&
+          !textIncludesAny(text, ['stretch', 'breath', 'cooldown', 'recovery']);
+      }
+
+      if (archetype === 'conditioning' || archetype === 'amrap' || archetype === 'emom') {
+        return textIncludesAny(text, ['conditioning', 'engine', 'cardio', 'bike', 'rower', 'assault', 'sprint', 'carry', 'interval']) &&
+          !textIncludesAny(text, ['cooldown', 'recovery', 'stretch']);
+      }
+
+      if (archetype === 'strength' || archetype === 'power' || archetype === 'testing') {
+        return textIncludesAny(text, ['squat', 'hinge', 'deadlift', 'press', 'bench', 'row', 'pull', 'push', 'clean', 'snatch']) &&
+          !textIncludesAny(text, ['stretch', 'cooldown', 'recovery']);
+      }
+
+      if (archetype === 'hypertrophy' || archetype === 'core' || archetype === 'rehab') {
+        return !textIncludesAny(text, ['assault bike', 'rower', 'sprint', 'metcon']);
+      }
+
+      return true;
+    };
+
     const scorePool = (poolSource: MovementStat[]) =>
       poolSource
       .map((movement) => {
@@ -819,11 +1442,16 @@ function buildRoundsFromStructure(
         ]);
         const categoryHits = countKeywordHits(categoryText, preferredKeywords);
         const movementHits = countKeywordHits(movementText, preferredKeywords);
+        const movementKey = getMovementDedupKeyFromStat(movement);
+        const recentPenalty = movementKey && recentMovementKeys.has(movementKey) ? 45 : 0;
+        const crossSectionPenalty = movementKey && usedMovementKeys.has(movementKey) ? 80 : 0;
         const score =
           movement.count * 100 -
           movement.latestWorkoutIndex * 5 +
           categoryHits * 10 +
-          movementHits * 5;
+          movementHits * 5 -
+          recentPenalty -
+          crossSectionPenalty;
 
         return {
           movement,
@@ -842,23 +1470,63 @@ function buildRoundsFromStructure(
 
     const filteredUnusedPool = filterByIntensity(unusedPool);
     const filteredReusePool = filterByIntensity(fallbackReusePool);
+    const intentFilteredUnusedPool = filteredUnusedPool.filter((movement) => matchesSectionArchetype(movement));
+    const intentFilteredReusePool = filteredReusePool.filter((movement) => matchesSectionArchetype(movement));
+    const profileFilteredUnusedPool = intentFilteredUnusedPool.filter((movement) => matchesSectionProfile(movement, profile));
+    const profileFilteredReusePool = intentFilteredReusePool.filter((movement) => matchesSectionProfile(movement, profile));
+    const scoredProfileUnusedPool = scorePool(profileFilteredUnusedPool);
+    const scoredProfileReusePool = scorePool(profileFilteredReusePool);
     const scoredUnusedPool = scorePool(filteredUnusedPool);
     const scoredReusePool = scorePool(filteredReusePool);
 
     const preferredPool =
       preferredKeywords.length === 0
+        ? scoredProfileUnusedPool
+        : scoredProfileUnusedPool.filter((entry) => entry.categoryHits > 0 || entry.movementHits > 0);
+
+    const preferredReusePool =
+      preferredKeywords.length === 0
+        ? scoredProfileReusePool
+        : scoredProfileReusePool.filter((entry) => entry.categoryHits > 0 || entry.movementHits > 0);
+
+    const preferredGeneralPool =
+      preferredKeywords.length === 0
         ? scoredUnusedPool
         : scoredUnusedPool.filter((entry) => entry.categoryHits > 0 || entry.movementHits > 0);
 
-    const preferredReusePool =
+    const preferredGeneralReusePool =
       preferredKeywords.length === 0
         ? scoredReusePool
         : scoredReusePool.filter((entry) => entry.categoryHits > 0 || entry.movementHits > 0);
 
     const picked: MovementStat[] = [];
+    const pickedKeys = new Set<string>();
+
+    const tryAddMovement = (
+      movement: MovementStat,
+      markGlobalUse = true,
+      allowRecentReuse = false
+    ): boolean => {
+      const movementKey = getMovementDedupKeyFromStat(movement);
+      if (!movementKey || pickedKeys.has(movementKey) || usedMovementKeys.has(movementKey)) {
+        return false;
+      }
+
+      if (!allowRecentReuse && recentMovementKeys.has(movementKey)) {
+        return false;
+      }
+
+      picked.push(movement);
+      pickedKeys.add(movementKey);
+      usedMovementKeys.add(movementKey);
+      if (markGlobalUse) {
+        usedMovementIds.add(movement.movementId);
+      }
+      return true;
+    };
+
     for (const candidate of preferredPool) {
-      picked.push(candidate.movement);
-      usedMovementIds.add(candidate.movement.movementId);
+      tryAddMovement(candidate.movement, true, false);
       if (picked.length >= count) break;
     }
 
@@ -866,7 +1534,23 @@ function buildRoundsFromStructure(
     // before introducing unrelated high-frequency options from other categories.
     if (picked.length < count) {
       for (const candidate of preferredReusePool) {
-        picked.push(candidate.movement);
+        tryAddMovement(candidate.movement, false, false);
+        if (picked.length >= count) break;
+      }
+    }
+
+    // If profile-specific candidates are sparse, relax to general preferred picks
+    // while still preserving section keyword intent.
+    if (picked.length < count) {
+      for (const candidate of preferredGeneralPool) {
+        tryAddMovement(candidate.movement, true, false);
+        if (picked.length >= count) break;
+      }
+    }
+
+    if (picked.length < count) {
+      for (const candidate of preferredGeneralReusePool) {
+        tryAddMovement(candidate.movement, false, false);
         if (picked.length >= count) break;
       }
     }
@@ -874,16 +1558,15 @@ function buildRoundsFromStructure(
     if (picked.length < count) {
       for (const candidate of scoredUnusedPool) {
         if (usedMovementIds.has(candidate.movement.movementId)) continue;
-        picked.push(candidate.movement);
-        usedMovementIds.add(candidate.movement.movementId);
+        tryAddMovement(candidate.movement, true, false);
         if (picked.length >= count) break;
       }
     }
 
-    // If history is sparse, allow reuse so we never return placeholder/unknown movements.
+    // Last resort: allow recent-family reuse only to avoid empty placeholder rounds.
     if (picked.length < count) {
       for (const candidate of scoredReusePool) {
-        picked.push(candidate.movement);
+        tryAddMovement(candidate.movement, false, true);
         if (picked.length >= count) break;
       }
     }
@@ -928,7 +1611,11 @@ function buildRoundsFromStructure(
       ])
     );
 
+    const sectionProfile = inferSectionProfile(section, sectionIndex);
+    const sectionArchetype = inferSectionArchetype(section);
+
     const scoredTemplates = roundTemplates
+      .filter((template) => isTemplateRoundCompatibleWithSection(template.round, sectionArchetype, sectionProfile))
       .map((template) => {
         const templateKey = `${template.workoutIndex}:${template.roundIndex}`;
         const templateKeywords = getRoundTemplateKeywords(template);
@@ -978,7 +1665,8 @@ function buildRoundsFromStructure(
     movement: MovementStat | undefined,
     ordinal: number,
     templateUsage?: ClientWorkoutRound['movementUsages'][number],
-    sectionFallbackWorkload?: Partial<ClientWorkoutTargetWorkload>
+    sectionFallbackWorkload?: Partial<ClientWorkoutTargetWorkload>,
+    allowProgressionCarryover = true
   ): ClientWorkoutRound['movementUsages'][number] => {
     if (movement) {
       usedMovementIds.add(movement.movementId);
@@ -997,11 +1685,24 @@ function buildRoundsFromStructure(
       sectionFallbackWorkload;
     const movementConfig = movementId ? movementContextById?.[movementId]?.configuration : undefined;
 
+    const sanitizeUsageNote = (note?: string): string | undefined => {
+      if (!note) return undefined;
+      const trimmed = note.trim();
+      if (!trimmed) return undefined;
+      if (trimmed.startsWith('-') || trimmed.startsWith('•')) return undefined;
+      const looksLikeProgression =
+        /(\d+\s*x\s*\d+\s*>\s*\d+\s*x\s*\d+)/i.test(trimmed) ||
+        /(\d+\s*(lb|lbs|kg)\s*x\s*\d+\s*>)/i.test(trimmed) ||
+        /(^|\s)\d+x\d+(\s*>|$)/i.test(trimmed);
+      if (!allowProgressionCarryover && looksLikeProgression) return undefined;
+      return trimmed;
+    };
+
     return {
       ordinal,
       movementId,
       categoryId: movement?.latestCategoryId || templateUsage?.categoryId || '',
-      note: movement?.latestNote || templateUsage?.note,
+      note: sanitizeUsageNote(movement?.latestNote) || sanitizeUsageNote(templateUsage?.note),
       targetWorkload: applyMovementConfigurationToWorkload(
         cloneTargetWorkload(sourceWorkload),
         sourceWorkload,
@@ -1016,6 +1717,8 @@ function buildRoundsFromStructure(
     .sort((a, b) => a.order - b.order)
     .map((section, sectionIndex) => {
       const template = pickTemplateForSection(section, sectionIndex);
+      const sectionProfile = inferSectionProfile(section, sectionIndex);
+      const sectionArchetype = inferSectionArchetype(section);
       const targetMovementCount = getTargetMovementCount(section);
       const templateUsages = template?.round.movementUsages || [];
       const templateFallbackWorkload = templateUsages
@@ -1024,80 +1727,172 @@ function buildRoundsFromStructure(
       // Determine if this section is strength-type (prefers reps/weight over time)
       const sectionStructure = section.configuration?.defaultStructure;
       const sectionNameLower = (section.workoutTypeName || '').toLowerCase();
+      const sectionIntentKey = normalizeIntentKey(section);
       const isStrengthSection =
         sectionStructure === 'straight-sets' ||
         sectionStructure === 'supersets' ||
+        sectionIntentKey === 'strength' ||
+        sectionIntentKey === 'power' ||
+        sectionIntentKey === 'testing' ||
+        sectionIntentKey === 'hypertrophy' ||
         sectionNameLower.includes('strength') ||
         sectionNameLower.includes('power') ||
-        sectionNameLower.includes('accessory') ||
-        sectionNameLower.includes('prep') ||
-        sectionNameLower.includes('movement prep') ||
-        sectionNameLower.includes('activation');
+        sectionNameLower.includes('accessory');
       // Fallback to global movement history if template has no meaningful workloads
       const sectionFallbackWorkload = templateFallbackWorkload || getGlobalFallbackWorkload(rankedMovements, isStrengthSection);
-      const usageCount = Math.max(templateUsages.length, targetMovementCount, 1);
-      const selected = pickMovementsForSection(section, usageCount);
+      const sectionDefaultWorkload = getSectionDefaultWorkload(section, isStrengthSection);
+      const effectiveSectionFallbackWorkload = mergeTargetWorkload(
+        sectionFallbackWorkload,
+        sectionDefaultWorkload
+      );
+      const templateUsageCount = isTemplateRoundCompatibleWithSection(template?.round, sectionArchetype, sectionProfile)
+        ? templateUsages.length
+        : 0;
+      const usageCount = Math.max(templateUsageCount, targetMovementCount, 1);
+      const selected = pickMovementsForSection(section, usageCount, sectionProfile, sectionArchetype);
+      const allowProgressionCarryover = sectionArchetype === 'strength' || sectionArchetype === 'power' || sectionArchetype === 'testing';
       let fillIndex = 0;
+      const seenUsageMovementKeys = new Set<string>();
+
+      const applyLatestTargetToUsage = (
+        usage: ClientWorkoutRound['movementUsages'][number],
+        movementId?: string,
+        fallbackTarget?: Partial<ClientWorkoutTargetWorkload>
+      ): ClientWorkoutRound['movementUsages'][number] => {
+        const latestTarget = movementId ? resolveLatestTargetForMovement(movementId) : undefined;
+        const movementConfig = movementId ? movementContextById?.[movementId]?.configuration : undefined;
+        return {
+          ...usage,
+          targetWorkload: applyMovementConfigurationToWorkload(
+            mergeTargetWorkload(usage.targetWorkload, latestTarget || fallbackTarget),
+            latestTarget || fallbackTarget,
+            movementConfig
+          ),
+        };
+      };
+
+      const takeNextUniqueFallbackUsage = (
+        ordinal: number,
+        templateUsage?: ClientWorkoutRound['movementUsages'][number]
+      ): ClientWorkoutRound['movementUsages'][number] | null => {
+        while (fillIndex < selected.length) {
+          const fallbackMovement = selected[fillIndex];
+          fillIndex += 1;
+          if (!fallbackMovement) continue;
+
+          const movementKey = getMovementDedupKeyFromStat(fallbackMovement);
+          if (!movementKey || seenUsageMovementKeys.has(movementKey)) {
+            continue;
+          }
+
+          const usage = createUsageFromMovement(
+            fallbackMovement,
+            ordinal,
+            templateUsage,
+            effectiveSectionFallbackWorkload,
+            allowProgressionCarryover
+          );
+          seenUsageMovementKeys.add(movementKey);
+          usedMovementKeys.add(movementKey);
+          return applyLatestTargetToUsage(usage, fallbackMovement.movementId, effectiveSectionFallbackWorkload);
+        }
+
+        return null;
+      };
 
       const movementUsages = Array.from({ length: usageCount }, (_, usageIndex) => {
         const templateUsage = templateUsages[usageIndex];
-        const hasTemplateMovement = Boolean(templateUsage?.movementId && isKnownMovementId(templateUsage?.movementId));
+        const hasTemplateMovement = Boolean(
+          templateUsage?.movementId &&
+          isKnownMovementId(templateUsage?.movementId) &&
+          !isPseudoMovement(templateUsage.movementId, movementContextById, categoryContextById, templateUsage.categoryId)
+        );
 
         if (hasTemplateMovement) {
+          const templateMovementId = templateUsage!.movementId;
+          const templateMovementKey = getMovementDedupKeyFromId(templateMovementId);
+
+          // Do not clone template rows that violate this section's intended profile.
+          if (!isMovementIdCompatibleWithProfile(templateMovementId, sectionProfile)) {
+            const replacement = takeNextUniqueFallbackUsage(usageIndex + 1, templateUsage);
+            if (replacement) {
+              return replacement;
+            }
+          }
+
+          if (templateMovementKey && seenUsageMovementKeys.has(templateMovementKey)) {
+            const replacement = takeNextUniqueFallbackUsage(usageIndex + 1, templateUsage);
+            return replacement;
+          }
+
+          // Avoid directly cloning the latest session movement family when alternatives exist.
+          if (templateMovementKey && recentMovementKeys.has(templateMovementKey)) {
+            const replacement = takeNextUniqueFallbackUsage(usageIndex + 1, templateUsage);
+            if (replacement) {
+              return replacement;
+            }
+          }
+
+          // Also prevent global reuse across sections when generating a single draft.
+          // This keeps auto-filled sessions from repeating the same movement block in
+          // multiple rounds unless we have no unique fallback left.
+          if (usedMovementIds.has(templateMovementId) || (templateMovementKey && usedMovementKeys.has(templateMovementKey))) {
+            const replacement = takeNextUniqueFallbackUsage(usageIndex + 1, templateUsage);
+            if (replacement) {
+              return replacement;
+            }
+          }
+
           usedMovementIds.add(templateUsage!.movementId);
+          if (templateMovementKey) {
+            usedMovementKeys.add(templateMovementKey);
+          }
           const latestTarget = resolveLatestTargetForMovement(templateUsage!.movementId);
           const cloned = cloneMovementUsage(templateUsage!, usageIndex + 1);
+          if (!shouldCarryTemplateSetEntries(sectionArchetype, isStrengthSection)) {
+            cloned.setEntries = undefined;
+            cloned.note = undefined;
+          }
           const movementConfig = movementContextById?.[templateUsage!.movementId]?.configuration;
           const mergedTarget = mergeTargetWorkload(cloned.targetWorkload, latestTarget);
           // If neither template nor history has values, fall back to section pattern
           const effectiveTarget = hasMeaningfulTargetValue(mergedTarget)
             ? mergedTarget
-            : mergeTargetWorkload(sectionFallbackWorkload, mergedTarget);
-          return {
+            : mergeTargetWorkload(effectiveSectionFallbackWorkload, mergedTarget);
+          const usage = {
             ...cloned,
             targetWorkload: applyMovementConfigurationToWorkload(
               effectiveTarget,
-              latestTarget || sectionFallbackWorkload,
+              latestTarget || effectiveSectionFallbackWorkload,
               movementConfig
             ),
           };
+
+          if (templateMovementKey) {
+            seenUsageMovementKeys.add(templateMovementKey);
+          }
+
+          return usage;
         }
 
-        const fallbackMovement = selected[fillIndex];
-        fillIndex += 1;
-        const usage = createUsageFromMovement(
-          fallbackMovement,
-          usageIndex + 1,
-          templateUsage,
-          sectionFallbackWorkload
-        );
-        const latestTarget = fallbackMovement
-          ? resolveLatestTargetForMovement(fallbackMovement.movementId)
-          : undefined;
-        const movementConfig = fallbackMovement
-          ? movementContextById?.[fallbackMovement.movementId]?.configuration
-          : undefined;
-        return {
-          ...usage,
-          targetWorkload: applyMovementConfigurationToWorkload(
-            mergeTargetWorkload(usage.targetWorkload, latestTarget),
-            latestTarget,
-            movementConfig
-          ),
-        };
-      }).filter((usage) => usage.movementId || usage.categoryId || usage.note || usage.setEntries?.length);
+        return takeNextUniqueFallbackUsage(usageIndex + 1, templateUsage);
+      }).filter((usage): usage is ClientWorkoutRound['movementUsages'][number] =>
+        Boolean(usage && (usage.movementId || usage.categoryId || usage.note || usage.setEntries?.length))
+      );
 
       const finalizedUsages = movementUsages.length > 0
         ? movementUsages
-        : [createUsageFromMovement(selected[0], 1, undefined, sectionFallbackWorkload)];
+        : [createUsageFromMovement(selected[0], 1, undefined, effectiveSectionFallbackWorkload, allowProgressionCarryover)];
 
-      const templateSets = inferRoundSetCount(template?.round);
+      const templateSets = shouldCarryTemplateSetEntries(sectionArchetype, isStrengthSection)
+        ? inferRoundSetCount(template?.round)
+        : 0;
       const sectionSets = inferSectionSetCount(section);
 
       return {
         ordinal: sectionIndex + 1,
         sets: Math.max(templateSets, sectionSets),
-        sectionName: template?.round.sectionName || section.workoutTypeName,
+        sectionName: section.workoutTypeName || template?.round.sectionName,
         sectionColor: template?.round.sectionColor,
         workoutTypeId: section.workoutTypeId,
         movementUsages: finalizedUsages,

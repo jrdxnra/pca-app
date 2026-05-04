@@ -47,12 +47,14 @@ export function createOAuth2Client(redirectUri?: string): OAuth2Client {
  * Get authorization URL for OAuth flow
  * @param redirectUri - Optional redirect URI. If not provided, uses default from env or localhost
  * @param state - Optional state parameter to preserve application state (e.g., userId)
+ * @param loginHint - Optional email hint so Google prefers the currently signed-in account
  */
-export function getAuthUrl(redirectUri?: string, state?: string): string {
+export function getAuthUrl(redirectUri?: string, state?: string, loginHint?: string): string {
   const oauth2Client = createOAuth2Client(redirectUri);
 
   const scopes = [
-    'https://www.googleapis.com/auth/calendar', // Full calendar access (read/write)
+    'https://www.googleapis.com/auth/calendar.events', // Read/write events
+    'https://www.googleapis.com/auth/calendar.calendarlist.readonly', // Read calendar list for picker
   ];
 
   const authUrl = oauth2Client.generateAuthUrl({
@@ -61,6 +63,7 @@ export function getAuthUrl(redirectUri?: string, state?: string): string {
     prompt: 'consent select_account', // Force consent and account picker to maximize refresh-token issuance
     include_granted_scopes: true,
     state: state, // Pass optional state parameter
+    ...(loginHint ? { login_hint: loginHint } : {}),
     // Note: refresh tokens don't expire unless revoked by user
     // This ensures the connection lasts indefinitely as long as user doesn't revoke
   });

@@ -99,6 +99,20 @@
       ]
     },
     {
+      "collectionGroup": "workoutIntents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "order",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "periods",
       "queryScope": "COLLECTION",
       "fields": [

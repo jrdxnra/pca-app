@@ -218,7 +218,7 @@ export function SetupHubFlow({
             </div>
             <ul className="list-disc pl-5 text-sm text-slate-600 space-y-1">
               <li>Use the secondary account only (no corporate logins).</li>
-              <li>Share the work calendar with "Make changes to events" so PCA can tag metadata.</li>
+              <li>Share the work calendar with &quot;Make changes to events&quot; so PCA can tag metadata.</li>
               <li>Pick the shared calendar in the selector—Primary will not include your sessions.</li>
             </ul>
           </div>

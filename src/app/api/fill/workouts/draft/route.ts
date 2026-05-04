@@ -22,6 +22,16 @@ const RequestSchema = z.object({
 	currentNotes: z.string().optional(),
 });
 
+function hasAdminFirestoreCredentials(): boolean {
+	return Boolean(
+		process.env.FIRESTORE_EMULATOR_HOST ||
+		process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+		process.env.FIREBASE_SERVICE_ACCOUNT ||
+		process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+		process.env.GOOGLE_CLOUD_PROJECT
+	);
+}
+
 function timestampToMillis(value: unknown): number | undefined {
 	if (!value) return undefined;
 
@@ -72,7 +82,19 @@ async function fetchStructureSections(
 	if (!templateDoc.exists) return [];
 
 	const data = templateDoc.data();
-	if (!data || data.ownerId !== accountId || !Array.isArray(data.sections)) {
+	if (!data || !Array.isArray(data.sections)) {
+		return [];
+	}
+
+	// Support both legacy and current ownership models.
+	// Some templates were saved without ownerId but with accountId, and some
+	// system/legacy templates have neither field populated.
+	const ownerId = typeof data.ownerId === 'string' ? data.ownerId.trim() : '';
+	const templateAccountId = typeof data.accountId === 'string' ? data.accountId.trim() : '';
+	const hasExplicitOwner = ownerId.length > 0 || templateAccountId.length > 0;
+	const belongsToAccount = ownerId === accountId || templateAccountId === accountId;
+
+	if (hasExplicitOwner && !belongsToAccount) {
 		return [];
 	}
 
@@ -104,6 +126,9 @@ async function fetchStructureSections(
 		workoutTypeId: section.workoutTypeId,
 		workoutTypeName: section.workoutTypeName,
 		workoutTypeDescription: section.workoutTypeId ? workoutTypeDescriptions[section.workoutTypeId] : undefined,
+		workoutIntentId: section.workoutIntentId,
+		workoutIntentKey: section.workoutIntentKey,
+		workoutIntentName: section.workoutIntentName,
 		configuration: section.configuration
 			? {
 					defaultDuration: section.configuration.defaultDuration,
@@ -252,6 +277,17 @@ async function fetchRecentWorkouts(accountId: string, clientId: string): Promise
 
 export async function POST(request: NextRequest) {
 	try {
+		if (process.env.NODE_ENV === 'development' && !hasAdminFirestoreCredentials()) {
+			return NextResponse.json(
+				{
+					error:
+						'Firebase Admin credentials are not configured for local dev. Set FIREBASE_SERVICE_ACCOUNT or FIREBASE_SERVICE_ACCOUNT_KEY, GOOGLE_APPLICATION_CREDENTIALS, or FIRESTORE_EMULATOR_HOST.',
+					code: 'missing_admin_credentials',
+				},
+				{ status: 503 }
+			);
+		}
+
 		const userId = await getAuthenticatedUser(request);
 		if (!userId) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -278,6 +314,15 @@ export async function POST(request: NextRequest) {
 			fetchMovementCategoryContextMap(accountId),
 			fetchMovementContextMap(accountId),
 		]);
+
+		// Do not silently degrade to history-clone when a specific structure template
+		// was requested but could not be resolved.
+		if (payload.structureTemplateId && structureSections.length === 0) {
+			return NextResponse.json(
+				{ error: 'Selected structure template is unavailable for this account.' },
+				{ status: 422 }
+			);
+		}
 
 		const fallbackTitle = payload.currentTitle?.trim()
 			? payload.currentTitle.trim()

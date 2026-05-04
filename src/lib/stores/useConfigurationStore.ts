@@ -24,6 +24,12 @@ import {
   deleteWorkoutType
 } from '@/lib/firebase/services/workoutTypes';
 import {
+  fetchWorkoutIntents,
+  createWorkoutIntent,
+  updateWorkoutIntent,
+  deleteWorkoutIntent
+} from '@/lib/firebase/services/workoutIntents';
+import {
   fetchWorkoutStructureTemplates,
   createWorkoutStructureTemplate,
   updateWorkoutStructureTemplate,
@@ -46,6 +52,7 @@ import {
   WeekTemplate,
   MovementCategory as WorkoutCategory,
   WorkoutType,
+  WorkoutIntent,
   BusinessHours
 } from '@/lib/types';
 
@@ -55,6 +62,7 @@ interface ConfigurationState {
   weekTemplates: WeekTemplate[];
   workoutCategories: WorkoutCategory[];
   workoutTypes: WorkoutType[];
+  workoutIntents: WorkoutIntent[];
   workoutStructureTemplates: WorkoutStructureTemplate[];
   workoutTemplates: WorkoutTemplate[]; // Full workout templates
   businessHours: BusinessHours | null;
@@ -86,6 +94,12 @@ interface ConfigurationState {
   updateWorkoutType: (id: string, updates: Partial<Omit<WorkoutType, 'id' | 'createdAt' | 'createdBy'>>) => Promise<void>;
   deleteWorkoutType: (id: string) => Promise<void>;
 
+  // Workout intent actions
+  fetchWorkoutIntents: () => Promise<void>;
+  addWorkoutIntent: (workoutIntent: Omit<WorkoutIntent, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => Promise<void>;
+  updateWorkoutIntent: (id: string, updates: Partial<Omit<WorkoutIntent, 'id' | 'createdAt' | 'createdBy'>>) => Promise<void>;
+  deleteWorkoutIntent: (id: string) => Promise<void>;
+
   // Workout structure template actions
   fetchWorkoutStructureTemplates: () => Promise<void>;
   addWorkoutStructureTemplate: (template: Omit<WorkoutStructureTemplate, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => Promise<void>;
@@ -112,6 +126,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
   weekTemplates: [],
   workoutCategories: [],
   workoutTypes: [],
+  workoutIntents: [],
   workoutStructureTemplates: [],
   workoutTemplates: [],
   businessHours: null,
@@ -369,6 +384,69 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
     }
   },
 
+  // Workout intent actions
+  fetchWorkoutIntents: async () => {
+    try {
+      set({ loading: true });
+      const workoutIntents = await fetchWorkoutIntents();
+      set({ workoutIntents, loading: false });
+    } catch (error) {
+      console.error('Error fetching workout intents:', error);
+      set({ loading: false });
+    }
+  },
+
+  addWorkoutIntent: async (workoutIntentData) => {
+    try {
+      set({ loading: true });
+      const id = await createWorkoutIntent(workoutIntentData);
+      const newWorkoutIntent: WorkoutIntent = {
+        ...workoutIntentData,
+        id,
+        createdAt: new Date() as any,
+        updatedAt: new Date() as any,
+        createdBy: 'current-user'
+      };
+      set(state => ({
+        workoutIntents: [...state.workoutIntents, newWorkoutIntent],
+        loading: false
+      }));
+    } catch (error) {
+      console.error('Error adding workout intent:', error);
+      set({ loading: false });
+    }
+  },
+
+  updateWorkoutIntent: async (id, updates) => {
+    try {
+      set({ loading: true });
+      await updateWorkoutIntent(id, updates);
+      set(state => ({
+        workoutIntents: state.workoutIntents.map(intent =>
+          intent.id === id ? { ...intent, ...updates, updatedAt: new Date() as any } : intent
+        ),
+        loading: false
+      }));
+    } catch (error) {
+      console.error('Error updating workout intent:', error);
+      set({ loading: false });
+    }
+  },
+
+  deleteWorkoutIntent: async (id) => {
+    try {
+      set({ loading: true });
+      await deleteWorkoutIntent(id);
+      set(state => ({
+        workoutIntents: state.workoutIntents.filter(intent => intent.id !== id),
+        loading: false
+      }));
+    } catch (error) {
+      console.error('Error deleting workout intent:', error);
+      set({ loading: false });
+    }
+  },
+
   // Workout structure template actions
   fetchWorkoutStructureTemplates: async () => {
     try {
@@ -540,6 +618,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
       fetchWeekTemplates,
       fetchWorkoutCategories,
       fetchWorkoutTypes,
+      fetchWorkoutIntents,
       fetchWorkoutStructureTemplates,
       fetchBusinessHours,
       fetchFullWorkoutTemplates
@@ -552,6 +631,7 @@ export const useConfigurationStore = create<ConfigurationState>((set, get) => ({
         fetchWeekTemplates(),
         fetchWorkoutCategories(),
         fetchWorkoutTypes(),
+        fetchWorkoutIntents(),
         fetchWorkoutStructureTemplates(),
         fetchFullWorkoutTemplates(),
         fetchBusinessHours()

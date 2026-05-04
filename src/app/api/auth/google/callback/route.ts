@@ -10,11 +10,19 @@ export async function GET(request: NextRequest) {
   const isCloudEnvironment = Boolean(process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT);
 
   const getSafeOrigin = () => {
-    const origin = request.nextUrl.origin;
     try {
-      const url = new URL(origin);
+      const forwardedProto = request.headers.get('x-forwarded-proto');
+      const forwardedHost = request.headers.get('x-forwarded-host');
+      const forwardedOrigin = forwardedProto && forwardedHost
+        ? `${forwardedProto}://${forwardedHost}`
+        : request.nextUrl.origin;
+
+      const url = new URL(forwardedOrigin);
       if (url.hostname === '0.0.0.0' || url.hostname === '::' || url.hostname === '[::]') {
         url.hostname = 'localhost';
+      }
+      if (url.hostname.endsWith('.app.github.dev') || url.hostname.endsWith('.preview.app.github.dev')) {
+        url.port = '';
       }
       return url.origin;
     } catch {

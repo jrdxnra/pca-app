@@ -1941,7 +1941,7 @@ export default function BuilderPage() {
 
               // Always generate 6 weeks: 1 week before, current week, and 4 weeks after
               // This ensures consistent view size regardless of period boundaries
-              let weeksToDisplay: Date[][] = [];
+              const weeksToDisplay: Date[][] = [];
               const weekStart = new Date(calendarDate);
               const dayOfWeek = weekStart.getDay();
               // Adjust to start of the week (Monday or Sunday based on locale/settings, assuming Monday here or standard getDay)

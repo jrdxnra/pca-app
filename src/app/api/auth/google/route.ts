@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUrl } from '@/lib/google-calendar/auth';
 import { getAuthenticatedUser } from '@/lib/auth/get-authenticated-user';
 
+function normalizeRedirectUri(redirectUri?: string): string | undefined {
+  if (!redirectUri) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(redirectUri);
+    if (url.hostname.endsWith('.app.github.dev') || url.hostname.endsWith('.preview.app.github.dev')) {
+      url.port = '';
+    }
+    return url.toString();
+  } catch {
+    return redirectUri;
+  }
+}
+
 /**
  * GET /api/auth/google
  * Initiates Google OAuth flow by redirecting to Google's authorization page
@@ -9,7 +25,8 @@ import { getAuthenticatedUser } from '@/lib/auth/get-authenticated-user';
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const redirectUri = searchParams.get('redirectUri') || undefined;
+    const redirectUri = normalizeRedirectUri(searchParams.get('redirectUri') || undefined);
+    const loginHint = searchParams.get('loginHint') || undefined;
     const idToken = searchParams.get('idToken');
     console.log('[OAuth Init] Received request. idToken present:', !!idToken);
 
@@ -43,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     console.log('[OAuth Init] Final userId for state:', userId);
 
-    const authUrl = getAuthUrl(redirectUri, userId);
+    const authUrl = getAuthUrl(redirectUri, userId, loginHint);
     return NextResponse.redirect(authUrl);
   } catch (error) {
     console.error('Error initiating Google OAuth:', error);
@@ -64,9 +81,10 @@ export async function POST(request: NextRequest) {
     console.log('[OAuth POST] Initiating OAuth for userId:', userId);
 
     const searchParams = request.nextUrl.searchParams;
-    const redirectUri = searchParams.get('redirectUri') || undefined;
+    const redirectUri = normalizeRedirectUri(searchParams.get('redirectUri') || undefined);
+    const loginHint = searchParams.get('loginHint') || undefined;
 
-    const authUrl = getAuthUrl(redirectUri, userId || undefined);
+    const authUrl = getAuthUrl(redirectUri, userId || undefined, loginHint);
     return NextResponse.json({ authUrl });
   } catch (error) {
     console.error('Error generating Google auth URL:', error);

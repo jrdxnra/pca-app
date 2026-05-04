@@ -6,6 +6,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   Dumbbell, 
   Trash2,
@@ -16,6 +23,7 @@ import { Movement } from '@/lib/types';
 import { AddMovementDialog } from './AddMovementDialog';
 import { MovementConfigurationToggle } from './MovementConfigurationToggle';
 import { useMovementStore } from '@/lib/stores/useMovementStore';
+import { useMovementCategoryStore } from '@/lib/stores/useMovementCategoryStore';
 import {
   DndContext,
   closestCenter,
@@ -60,6 +68,7 @@ function SortableMovementItem({
   onSaveEdit,
   onDeleteMovement,
   getConfigurationBadges,
+  categories,
 }: {
   movement: Movement;
   index: number;
@@ -73,6 +82,7 @@ function SortableMovementItem({
   onSaveEdit: (id: string) => void;
   onDeleteMovement: (id: string, name: string) => void;
   getConfigurationBadges: (config: Movement['configuration']) => string[];
+  categories: Array<{ id: string; name: string; color: string }>;
 }) {
   const {
     attributes,
@@ -145,6 +155,31 @@ function SortableMovementItem({
                       className="text-sm"
                       placeholder="Movement name"
                     />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Category:</label>
+                    <Select
+                      value={currentEditData.categoryId || movement.categoryId}
+                      onValueChange={(value) => onUpdateEditField(movement.id, 'categoryId', value)}
+                    >
+                      <SelectTrigger className="text-sm">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: category.color }}
+                              />
+                              <span>{category.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>
@@ -342,6 +377,7 @@ export const MovementList = React.memo(function MovementList({ movements, catego
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const { removeMovement, reorderMovements, editMovement } = useMovementStore();
+  const { categories } = useMovementCategoryStore();
   
   // Inline edit state for expanded movements
   const [editFormData, setEditFormData] = useState<Record<string, any>>({});
@@ -479,6 +515,7 @@ export const MovementList = React.memo(function MovementList({ movements, catego
           ...prev,
           [movementId]: {
             name: movement.name,
+            categoryId: movement.categoryId,
             configuration: { ...movement.configuration },
             links: movement.links || [],
             instructions: movement.instructions || ''
@@ -517,6 +554,7 @@ export const MovementList = React.memo(function MovementList({ movements, catego
 
       const updateData: any = {
         name: currentEditData.name,
+        categoryId: currentEditData.categoryId || movement.categoryId,
         configuration: currentEditData.configuration,
         links: currentEditData.links,
         instructions: currentEditData.instructions || ''
@@ -574,6 +612,7 @@ export const MovementList = React.memo(function MovementList({ movements, catego
                   onSaveEdit={saveEdit}
                   onDeleteMovement={handleDeleteMovement}
                   getConfigurationBadges={getConfigurationBadges}
+                  categories={categories}
                 />
               </div>
             );

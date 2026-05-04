@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
     getAuth,
     GoogleAuthProvider,
@@ -43,44 +44,10 @@ export default function LoginPage() {
             await setPersistence(auth, browserLocalPersistence);
             const provider = new GoogleAuthProvider();
 
-            // CRITICAL: Request Calendar scopes here to enable "One Click" flow
-            provider.addScope('https://www.googleapis.com/auth/calendar');
-
-            // Request offline access to get a Refresh Token (needed for background server operations)
-            provider.setCustomParameters({
-                access_type: 'offline',
-                prompt: 'consent', // Force consent prompt to ensure we get a refresh token
-            });
-
-            const result = await signInWithPopup(auth, provider);
-
-            // This gives you a Google Access Token. You can use it to access the Google API.
-            const credential = GoogleAuthProvider.credentialFromResult(result);
-            const accessToken = credential?.accessToken;
-            const user = result.user;
-
-            if (accessToken) {
-                // Get the ID token to authenticate with our backend
-                const idToken = await user.getIdToken();
-
-                // Try to get the Refresh Token (tricky with Firebase)
-                const refreshToken = (result as any)._tokenResponse?.oauthRefreshToken;
-
-                // Save tokens to our backend
-                await fetch('/api/auth/save-tokens', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        accessToken,
-                        refreshToken,
-                        idToken
-                    }),
-                });
-
-                toastSuccess('Signed in & Calendar connected!');
-            }
+            // Authentication-only login. Calendar permissions are requested later
+            // from the Configure page when the user explicitly connects Calendar.
+            await signInWithPopup(auth, provider);
+            toastSuccess('Signed in successfully. Connect Google Calendar in Configure when you are ready.');
 
             // Redirect to dashboard
             router.push('/dashboard');
@@ -254,7 +221,7 @@ export default function LoginPage() {
                             {isLoading ? (
                                 <>
                                     <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-                                    Connecting...
+                                    Signing in...
                                 </>
                             ) : (
                                 <>
@@ -292,6 +259,14 @@ export default function LoginPage() {
                     transition={{ delay: 0.8 }}
                     className="mt-8 text-center"
                 >
+                    <div className="mb-3 flex items-center justify-center gap-4 text-xs font-medium text-gray-500">
+                        <Link href="/privacy" className="hover:text-gray-700 transition-colors">
+                            Privacy Policy
+                        </Link>
+                        <Link href="/terms" className="hover:text-gray-700 transition-colors">
+                            Terms of Service
+                        </Link>
+                    </div>
                     <p className="text-gray-400 text-xs font-medium">
                         &copy; {new Date().getFullYear()} Performance Coach Plus. All rights reserved.
                     </p>

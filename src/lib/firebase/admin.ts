@@ -1,5 +1,31 @@
 import * as admin from 'firebase-admin';
 
+function readServiceAccountFromEnv(): Record<string, unknown> | null {
+    const raw = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    if (!raw) return null;
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+            return parsed as Record<string, unknown>;
+        }
+    } catch {
+        // Ignore and try base64 path below.
+    }
+
+    try {
+        const decoded = Buffer.from(raw, 'base64').toString('utf8');
+        const parsed = JSON.parse(decoded);
+        if (parsed && typeof parsed === 'object') {
+            return parsed as Record<string, unknown>;
+        }
+    } catch {
+        // Fall through.
+    }
+
+    return null;
+}
+
 if (!admin.apps.length) {
     try {
         admin.initializeApp({
@@ -27,20 +53,15 @@ export function getFirebaseAdminApp() {
                 projectId: projectId,
             };
 
-            // Check if we have a service account key in environment variables
-            if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-                try {
-                    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-                    // Some env-stored service accounts omit project_id; add it to satisfy Admin SDK
-                    if (!serviceAccount.project_id) {
-                        serviceAccount.project_id = projectId;
-                    }
-                    options.credential = admin.credential.cert(serviceAccount);
-                    console.log('[Firebase Admin] Using service account from environment');
-                } catch (e) {
-                    console.error('[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT, falling back to applicationDefault');
-                    options.credential = admin.credential.applicationDefault();
+            // Check if we have a service account key in environment variables.
+            // Support both FIREBASE_SERVICE_ACCOUNT and FIREBASE_SERVICE_ACCOUNT_KEY.
+            const serviceAccount = readServiceAccountFromEnv();
+            if (serviceAccount) {
+                if (!serviceAccount.project_id) {
+                    serviceAccount.project_id = projectId;
                 }
+                options.credential = admin.credential.cert(serviceAccount as admin.ServiceAccount);
+                console.log('[Firebase Admin] Using service account from environment');
             } else {
                 options.credential = admin.credential.applicationDefault();
             }

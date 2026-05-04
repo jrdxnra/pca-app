@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
 
-import { useState, useEffect, useRef, RefObject } from 'react';
+import { useState, useEffect, useRef, RefObject, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -109,6 +109,15 @@ interface WorkoutType {
   order?: number;
 }
 
+interface WorkoutIntent {
+  id: string;
+  key: string;
+  name: string;
+  color: string;
+  description: string;
+  order?: number;
+}
+
 interface WeekTemplate {
   id: string;
   name: string;
@@ -137,6 +146,17 @@ interface ChecklistSection {
   title: string;
   description: string;
   steps: ChecklistStep[];
+}
+
+interface PlannerEventType {
+  id: string;
+  name: string;
+  color?: string;
+}
+
+interface PlannerCalendar {
+  id: string;
+  name: string;
 }
 
 // Horizontal Day Item Component for Week Templates
@@ -243,6 +263,198 @@ function inferRoundCategoryHints(sectionName?: string, focusArea?: string, defau
   return ['Strength', 'Conditioning', 'Mobility'];
 }
 
+function inferSectionIntentKey(section: {
+  workoutTypeName?: string;
+  configuration?: {
+    focusArea?: string;
+    defaultStructure?: string;
+  };
+}): string {
+  const text = `${section.workoutTypeName || ''} ${section.configuration?.focusArea || ''} ${section.configuration?.defaultStructure || ''}`
+    .toLowerCase();
+
+  if (/(amrap)/.test(text)) return 'amrap';
+  if (/(emom|e\d+mom|every\s*\d+\s*minute\s*on\s*the\s*minute)/.test(text)) return 'emom';
+  if (/(test|assessment|benchmark|max out|1rm)/.test(text)) return 'testing';
+  if (/(rehab|prehab|corrective|return to play|physio)/.test(text)) return 'rehab';
+  if (/(cool\s?down|downreg|breathwork|recovery block)/.test(text)) return 'cooldown';
+  if (/(recovery|restore|mobility flow|reset)/.test(text)) return 'recovery';
+  if (/(movement skill|skill|technique|mechanics)/.test(text)) return 'skill';
+  if (/(warm\s?-?up|movement prep|prep|activation|pillar prep)/.test(text)) return 'prep';
+  if (/(ballistic|potentiation|primer)/.test(text)) return 'potentiation';
+  if (/(speed|accel|sprint|velocity|agility)/.test(text)) return 'speed';
+  if (/(plyo|jump|bound|hop|landing)/.test(text)) return 'plyo';
+  if (/(power|olympic|clean|snatch|throw)/.test(text)) return 'power';
+  if (/(hypertrophy|bodybuilding|volume)/.test(text)) return 'hypertrophy';
+  if (/(accessory|assist|isolation)/.test(text)) return 'accessory';
+  if (/(core|trunk|anti-rotation|anti rotation|anti-extension|anti extension)/.test(text)) return 'core';
+  if (/(condition|metcon|engine|esd|cardio|interval|finisher|circuit)/.test(text)) return 'conditioning';
+  if (/(strength|main lift|primary|secondary|squat|hinge|push|pull)/.test(text)) return 'strength';
+
+  return 'strength';
+}
+
+function resolveIntentForSection(
+  section: {
+    workoutTypeName?: string;
+    configuration?: {
+      focusArea?: string;
+      defaultStructure?: string;
+    };
+  },
+  intents: WorkoutIntent[]
+): WorkoutIntent | undefined {
+  if (!intents.length) return undefined;
+
+  const inferredKey = inferSectionIntentKey(section);
+  const byKey = intents.find((intent) => intent.key?.trim().toLowerCase() === inferredKey);
+  if (byKey) return byKey;
+
+  const aliasMap: Record<string, string[]> = {
+    potentiation: ['ballistics'],
+    conditioning: ['capacity', 'cardio'],
+    rehab: ['prehab'],
+  };
+
+  const aliases = aliasMap[inferredKey] || [];
+  const byAlias = intents.find((intent) => {
+    const key = intent.key?.trim().toLowerCase() || '';
+    const name = intent.name?.trim().toLowerCase() || '';
+    return aliases.includes(key) || aliases.includes(name);
+  });
+  if (byAlias) return byAlias;
+
+  return intents[0];
+}
+
+function buildSectionConfigDefaults(section: {
+  workoutTypeName?: string;
+  configuration?: {
+    defaultRepRange?: { min: number; max: number };
+    defaultRestPeriod?: { min: number; max: number };
+    defaultDuration?: number;
+    defaultStructure?: 'straight-sets' | 'supersets' | 'circuits' | 'amrap' | 'emom' | 'intervals';
+    useRPE?: boolean;
+    usePercentage?: boolean;
+    useTempo?: boolean;
+    useTime?: boolean;
+    workRestRatio?: string;
+    focusArea?: string;
+  };
+}) {
+  const inferredIntent = inferSectionIntentKey(section);
+  const current = section.configuration || {};
+
+  const defaults: {
+    defaultRepRange?: { min: number; max: number };
+    defaultRestPeriod?: { min: number; max: number };
+    defaultDuration?: number;
+    defaultStructure?: 'straight-sets' | 'supersets' | 'circuits' | 'amrap' | 'emom' | 'intervals';
+    useRPE?: boolean;
+    usePercentage?: boolean;
+    useTempo?: boolean;
+    useTime?: boolean;
+    workRestRatio?: string;
+    focusArea?: string;
+  } = {};
+
+  if (!current.defaultStructure) {
+    const structureByIntent: Record<string, 'straight-sets' | 'supersets' | 'circuits' | 'amrap' | 'emom' | 'intervals'> = {
+      prep: 'circuits',
+      potentiation: 'intervals',
+      skill: 'straight-sets',
+      speed: 'intervals',
+      plyo: 'intervals',
+      power: 'straight-sets',
+      strength: 'straight-sets',
+      hypertrophy: 'supersets',
+      accessory: 'supersets',
+      core: 'circuits',
+      conditioning: 'circuits',
+      amrap: 'amrap',
+      emom: 'emom',
+      testing: 'straight-sets',
+      rehab: 'straight-sets',
+      recovery: 'circuits',
+      cooldown: 'circuits',
+    };
+    defaults.defaultStructure = structureByIntent[inferredIntent] || 'straight-sets';
+  }
+
+  if (!current.focusArea?.trim()) {
+    const focusByIntent: Record<string, string> = {
+      prep: 'Dynamic warm-up and activation',
+      potentiation: 'Neural primer and explosive readiness',
+      skill: 'Movement quality and technical precision',
+      speed: 'Acceleration and velocity quality',
+      plyo: 'Reactive force and landing mechanics',
+      power: 'Explosive force production',
+      strength: 'Primary strength development',
+      hypertrophy: 'Targeted volume and tissue capacity',
+      accessory: 'Structural balance and weak-link support',
+      core: 'Bracing and trunk control',
+      conditioning: 'Energy system development',
+      amrap: 'Sustainable density and pacing',
+      emom: 'Paced repeatability under fatigue',
+      testing: 'Benchmark performance and output tracking',
+      rehab: 'Symptom-guided control and progression',
+      recovery: 'Low-intensity restoration and mobility',
+      cooldown: 'Downregulation and recovery',
+    };
+    defaults.focusArea = focusByIntent[inferredIntent] || 'Session development';
+  }
+
+  if (typeof current.defaultDuration !== 'number' || current.defaultDuration <= 0) {
+    const durationByIntent: Record<string, number> = {
+      prep: 10,
+      potentiation: 8,
+      skill: 12,
+      speed: 12,
+      plyo: 10,
+      power: 12,
+      strength: 20,
+      hypertrophy: 15,
+      accessory: 12,
+      core: 10,
+      conditioning: 15,
+      amrap: 12,
+      emom: 12,
+      testing: 15,
+      rehab: 12,
+      recovery: 10,
+      cooldown: 8,
+    };
+    defaults.defaultDuration = durationByIntent[inferredIntent] || 12;
+  }
+
+  if (!current.defaultRepRange && ['strength', 'hypertrophy', 'accessory', 'power'].includes(inferredIntent)) {
+    if (inferredIntent === 'strength') defaults.defaultRepRange = { min: 3, max: 6 };
+    if (inferredIntent === 'power') defaults.defaultRepRange = { min: 2, max: 5 };
+    if (inferredIntent === 'hypertrophy') defaults.defaultRepRange = { min: 8, max: 12 };
+    if (inferredIntent === 'accessory') defaults.defaultRepRange = { min: 10, max: 15 };
+  }
+
+  if (!current.defaultRestPeriod && ['strength', 'power', 'hypertrophy', 'accessory'].includes(inferredIntent)) {
+    if (inferredIntent === 'strength') defaults.defaultRestPeriod = { min: 90, max: 180 };
+    if (inferredIntent === 'power') defaults.defaultRestPeriod = { min: 90, max: 150 };
+    if (inferredIntent === 'hypertrophy') defaults.defaultRestPeriod = { min: 45, max: 90 };
+    if (inferredIntent === 'accessory') defaults.defaultRestPeriod = { min: 30, max: 75 };
+  }
+
+  if (!current.workRestRatio && ['potentiation', 'speed', 'plyo', 'conditioning', 'recovery', 'cooldown'].includes(inferredIntent)) {
+    defaults.workRestRatio = inferredIntent === 'conditioning' ? '1:1' : '1:2';
+  }
+
+  if (typeof current.useRPE !== 'boolean' && ['strength', 'hypertrophy', 'accessory', 'power'].includes(inferredIntent)) {
+    defaults.useRPE = true;
+  }
+  if (typeof current.useTime !== 'boolean' && ['conditioning', 'amrap', 'emom', 'recovery', 'cooldown', 'prep'].includes(inferredIntent)) {
+    defaults.useTime = true;
+  }
+
+  return defaults;
+}
+
 function buildRoundGuidance(section: {
   workoutTypeName?: string;
   configuration?: {
@@ -274,8 +486,9 @@ function isLegacyAutoTemplateDescription(description?: string): boolean {
 
   const normalized = description.trim();
   const lower = normalized.toLowerCase();
+  const genericLegacyPattern = /^workout structure template with configurable rounds and .* guidance\.?$/i;
   return (
-    normalized === 'Workout structure template with configurable rounds and AI guidance.' ||
+    genericLegacyPattern.test(normalized) ||
     (normalized.startsWith('Session flow: ') &&
       normalized.includes('Use this template to keep round intent and movement categories consistent.')) ||
     lower.includes('structured session template with configurable rounds')
@@ -537,11 +750,13 @@ function buildWorkoutTypeDescription(workoutType: Pick<WorkoutType, 'name'>): st
     accessory:
       'Focused work on isolated muscle groups to improve balance, shore up weaknesses, and drive hypertrophy.',
     amrap:
-      'As Many Reps As Possible. A high-density block focusing on maximum work capacity within a set time limit.',
+      'AMRAP (As Many Reps/Rounds As Possible). DDS cue: fixed section clock (8-20 minutes), continuous cycling through repeatable movements, and sustainable pacing over all-out sprinting. DDS format hint: format=AMRAP cadence=continuous scoring=rounds+reps. Example: AMRAP 12: 10 KB swings, 8 push-ups, 6 goblet squats.',
     emom:
-      'Every Minute On the Minute. A protocol for managing work-to-rest ratios and practicing movement under mounting fatigue.',
+      'EMOM (Every Minute On the Minute). DDS cue: each movement block runs on a strict 60-second cadence; finish assigned work inside the minute, then use remaining time to reset before the next minute. DDS format hint: format=EMOM cadence=60s workWindow=withinMinute transition=onMinute. Example: 12-minute EMOM alternating odd/even minutes.',
+    e2mom:
+      'E2MOM (Every 2 Minutes On the Minute). DDS cue: each movement block runs on a strict 120-second cadence; complete work early, recover in the remaining window, then rotate on the next 2-minute mark. DDS format hint: format=EMOM cadence=120s workWindow=withinCadence transition=every2Minutes. Example: E2MOM x 8 rounds alternating two movements.',
     e2om:
-      'Every 2 Minutes On the Minute. A protocol for managing work-to-rest ratios and movement quality under accumulating fatigue.',
+      'E2MOM (Every 2 Minutes On the Minute). DDS cue: each movement block runs on a strict 120-second cadence; complete work early, recover in the remaining window, then rotate on the next 2-minute mark. DDS format hint: format=EMOM cadence=120s workWindow=withinCadence transition=every2Minutes. Example: E2MOM x 8 rounds alternating two movements.',
     rft:
       'Rounds For Time. A task-oriented conditioning block where the goal is to complete prescribed volume as quickly as possible.',
     tabata:
@@ -615,7 +830,7 @@ function shouldRewriteWorkoutTypeDescription(workoutType: Pick<WorkoutType, 'nam
   const key = normalizePeriodName(workoutType.name);
   const hasPresetKey = [
     'ppmbballistics', 'movementprep', 'strength1', 'strength2', 'esd', 'prehab', 'accessory',
-    'amrap', 'emom', 'e2om', 'rft', 'tabata', 'chipper', 'ladder', 'finisher', 'forquality',
+    'amrap', 'emom', 'e2mom', 'e2om', 'rft', 'tabata', 'chipper', 'ladder', 'finisher', 'forquality',
     'linear', 'multi', 'plyometrics', 'hinge', 'squat', 'push', 'pull', 'chestback', 'sharms',
     'cooldown', 'amrap10', 'amrap12'
   ].includes(key);
@@ -650,7 +865,7 @@ function SortableItem({
   index,
   type
 }: {
-  item: Period | WeekTemplate | WorkoutCategory | WorkoutType;
+  item: Period | WeekTemplate | WorkoutCategory | WorkoutType | WorkoutIntent;
   onEdit: (item: any) => void;
   onDelete: (id: string) => void;
   index: number;
@@ -733,6 +948,7 @@ export default function ConfigurePage() {
     weekTemplates,
     workoutCategories,
     workoutTypes,
+    workoutIntents,
     workoutStructureTemplates,
     businessHours,
     loading: configLoading,
@@ -749,6 +965,9 @@ export default function ConfigurePage() {
     addWorkoutType,
     updateWorkoutType,
     deleteWorkoutType,
+    addWorkoutIntent,
+    updateWorkoutIntent,
+    deleteWorkoutIntent,
     addWorkoutStructureTemplate,
     updateWorkoutStructureTemplate,
     deleteWorkoutStructureTemplate,
@@ -790,12 +1009,14 @@ export default function ConfigurePage() {
   const oauthToastShownRef = useRef(false);  // Track if we've already shown the OAuth success toast
   const calendarSectionRef = useRef<HTMLDivElement | null>(null);
   const businessHoursSectionRef = useRef<HTMLDivElement | null>(null);
+  const plannerMetadataSectionRef = useRef<HTMLDivElement | null>(null);
   const locationSectionRef = useRef<HTMLDivElement | null>(null);
   const periodsSectionRef = useRef<HTMLDivElement | null>(null);
   const weekTemplatesSectionRef = useRef<HTMLDivElement | null>(null);
   const workoutCategoriesSectionRef = useRef<HTMLDivElement | null>(null);
   const workoutStructuresSectionRef = useRef<HTMLDivElement | null>(null);
   const workoutTypesSectionRef = useRef<HTMLDivElement | null>(null);
+  const workoutIntentsSectionRef = useRef<HTMLDivElement | null>(null);
   const calendarReady = Boolean(isGoogleCalendarConnected && calendarConfig.selectedCalendarId);
   const hasClients = clients.length > 0;
   const selectedCalendarSummary = calendars.find(calendar => calendar.id === calendarConfig.selectedCalendarId)?.summary;
@@ -851,22 +1072,36 @@ export default function ConfigurePage() {
   };
 
   const handleScrollToBusinessHours = () => scrollToSection('app', businessHoursSectionRef);
+  const handleScrollToPlannerMetadata = () => scrollToSection('app', plannerMetadataSectionRef);
   const handleScrollToLocation = () => scrollToSection('app', locationSectionRef);
   const handleScrollToPeriods = () => scrollToSection('workout', periodsSectionRef);
   const handleScrollToWeekTemplates = () => scrollToSection('workout', weekTemplatesSectionRef);
   const handleScrollToWorkoutCategories = () => scrollToSection('workout', workoutCategoriesSectionRef);
   const handleScrollToWorkoutStructures = () => scrollToSection('workout', workoutStructuresSectionRef);
   const handleScrollToWorkoutTypes = () => scrollToSection('workout', workoutTypesSectionRef);
+  const handleScrollToWorkoutIntents = () => scrollToSection('workout', workoutIntentsSectionRef);
   const handleGoToMovements = () => router.push('/movements');
+
+  // Planner metadata state (must be declared before derived checklist booleans)
+  const [plannerEventTypes, setPlannerEventTypes] = useState<PlannerEventType[]>([]);
+  const [plannerCalendars, setPlannerCalendars] = useState<PlannerCalendar[]>([]);
+  const [plannerMetadataLoading, setPlannerMetadataLoading] = useState(false);
+  const [plannerMetadataSaving, setPlannerMetadataSaving] = useState(false);
+  const [plannerMetadataError, setPlannerMetadataError] = useState<string | null>(null);
+  const [newPlannerEventType, setNewPlannerEventType] = useState('');
+  const [newPlannerCalendar, setNewPlannerCalendar] = useState('');
 
   const hasConfiguredBusinessHours = Boolean(
     (businessHours?.daysOfWeek?.length ?? 0) > 0 &&
     Object.keys(businessHours?.dayHours ?? {}).length > 0
   );
+  const hasPlannerEventType = plannerEventTypes.length > 0;
+  const hasPlannerCalendar = plannerCalendars.length > 0;
   const hasLocationAlias = Boolean((calendarConfig.locationAbbreviations ?? []).some(abbr => !abbr.ignored && abbr.abbreviation?.trim()));
   const hasWorkoutCategory = workoutCategories.length > 0;
   const hasMovement = (movements?.length ?? 0) > 0;
   const hasWorkoutType = workoutTypes.length > 0;
+  const hasWorkoutIntent = workoutIntents.length > 0;
   const hasWorkoutStructure = workoutStructureTemplates.length > 0;
   const hasLinkedStructure = workoutCategories.some(category => Boolean(category.linkedWorkoutStructureTemplateId));
   const hasWeekTemplate = weekTemplates.length > 0;
@@ -883,6 +1118,22 @@ export default function ConfigurePage() {
           complete: hasConfiguredBusinessHours,
           actions: [
             { label: 'Business Hours', onClick: handleScrollToBusinessHours, variant: 'default' },
+          ],
+        },
+        {
+          title: 'Create at least one event type',
+          description: 'Define a class/session type in App Calendar Settings so planning filters and color tags have a default taxonomy from day one.',
+          complete: hasPlannerEventType,
+          actions: [
+            { label: 'Event Types', onClick: handleScrollToPlannerMetadata, variant: 'default' },
+          ],
+        },
+        {
+          title: 'Create at least one planner calendar',
+          description: 'Add a planner calendar bucket so sessions have a destination calendar from the first scheduling pass.',
+          complete: hasPlannerCalendar,
+          actions: [
+            { label: 'Planner Calendars', onClick: handleScrollToPlannerMetadata, variant: 'default' },
           ],
         },
         {
@@ -949,6 +1200,20 @@ export default function ConfigurePage() {
           complete: hasLinkedStructure,
           actions: [
             { label: 'Open Categories', onClick: handleScrollToWorkoutCategories, variant: 'default' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Create your section intents',
+      description: 'Define section intent taxonomy (prep, strength, conditioning, etc.) so +Fill uses explicit section intent instead of name guessing.',
+      steps: [
+        {
+          title: 'Review workout intents',
+          description: 'Validate your workout intent list and descriptions; these are selectable on each structure template section.',
+          complete: hasWorkoutIntent,
+          actions: [
+            { label: 'Workout Intents', onClick: handleScrollToWorkoutIntents, variant: 'default' },
           ],
         },
       ],
@@ -1040,6 +1305,7 @@ export default function ConfigurePage() {
     return 'America/Los_Angeles';
   });
   const [showTimezonePrompt, setShowTimezonePrompt] = useState(false);
+  const [signedInGoogleEmail, setSignedInGoogleEmail] = useState<string | null>(null);
 
   // Keyword input states (local state to allow typing commas)
   const [coachingKeywordsInput, setCoachingKeywordsInput] = useState('');
@@ -1142,6 +1408,33 @@ export default function ConfigurePage() {
     }
   }, [fetchAllConfig, fetchCalendars, fetchClients, fetchBusinessHours, fetchMovements]);
 
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
+    const subscribeToAuth = async () => {
+      const { auth } = await import('@/lib/firebase/config');
+
+      const updateSignedInEmail = (user: { email?: string | null; providerData?: Array<{ email?: string | null }> } | null) => {
+        const providerEmail = user?.providerData?.find((provider) => provider?.email)?.email || null;
+        setSignedInGoogleEmail(user?.email || providerEmail || null);
+      };
+
+      updateSignedInEmail(auth.currentUser);
+      unsubscribe = auth.onAuthStateChanged((user) => {
+        updateSignedInEmail(user);
+      });
+    };
+
+    subscribeToAuth().catch((error) => {
+      console.error('Failed to load signed-in account email:', error);
+      setSignedInGoogleEmail(null);
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
+
   // One-time starter backfill: add first-pass descriptions/context for existing periods/templates
   useEffect(() => {
     if (hasBackfilledInitialDescriptionsRef.current || isBackfillingInitialDescriptionsRef.current) {
@@ -1160,7 +1453,14 @@ export default function ConfigurePage() {
       const missingSectionGuidance = (template.sections || []).some(
         (section) => !section.configuration?.aiGuidance?.trim()
       );
-      return missingOrWeakTemplateDescription || missingSectionGuidance;
+      const missingSectionIntent = (template.sections || []).some(
+        (section) => !section.workoutIntentId && !section.workoutIntentKey && !section.workoutIntentName
+      );
+      const missingSectionDefaults = (template.sections || []).some((section) => {
+        const config = section.configuration || {};
+        return !config.defaultStructure || !config.focusArea?.trim() || !config.defaultDuration;
+      });
+      return missingOrWeakTemplateDescription || missingSectionGuidance || missingSectionIntent || missingSectionDefaults;
     });
 
     const workoutTypesMissingDescription = workoutTypes.filter(
@@ -1196,13 +1496,27 @@ export default function ConfigurePage() {
               : template.description;
           const nextSections = (template.sections || []).map((section) => {
             const hasGuidance = Boolean(section.configuration?.aiGuidance?.trim());
-            if (hasGuidance) return section;
+            const hasIntent = Boolean(section.workoutIntentId || section.workoutIntentKey || section.workoutIntentName);
+            const matchedIntent = hasIntent ? undefined : resolveIntentForSection(section, workoutIntents);
+            const defaultConfig = buildSectionConfigDefaults(section);
+            const mergedConfig = {
+              ...(section.configuration || {}),
+              ...defaultConfig,
+            };
+
+            if (hasGuidance && hasIntent && Object.keys(defaultConfig).length === 0) return section;
 
             return {
               ...section,
+              workoutIntentId: matchedIntent?.id ?? section.workoutIntentId,
+              workoutIntentKey: matchedIntent?.key ?? section.workoutIntentKey,
+              workoutIntentName: matchedIntent?.name ?? section.workoutIntentName,
               configuration: {
-                ...(section.configuration || {}),
-                aiGuidance: buildRoundGuidance(section),
+                ...mergedConfig,
+                aiGuidance: hasGuidance ? section.configuration?.aiGuidance : buildRoundGuidance({
+                  ...section,
+                  configuration: mergedConfig,
+                }),
               },
             };
           });
@@ -1234,7 +1548,7 @@ export default function ConfigurePage() {
         isBackfillingInitialDescriptionsRef.current = false;
       }
     })();
-  }, [periods, workoutStructureTemplates, workoutTypes, updatePeriod, updateWorkoutStructureTemplate, updateWorkoutType]);
+  }, [periods, workoutStructureTemplates, workoutTypes, workoutIntents, updatePeriod, updateWorkoutStructureTemplate, updateWorkoutType]);
 
   // Fetch unique locations from calendar events
   useEffect(() => {
@@ -1389,6 +1703,7 @@ export default function ConfigurePage() {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingWorkoutTypeId, setEditingWorkoutTypeId] = useState<string | null>(null);
+  const [editingWorkoutIntentId, setEditingWorkoutIntentId] = useState<string | null>(null);
   const [editingWorkoutStructureTemplate, setEditingWorkoutStructureTemplate] = useState<WorkoutStructureTemplate | null>(null);
 
   // For new items (show form at top)
@@ -1396,6 +1711,7 @@ export default function ConfigurePage() {
   const [showNewTemplateForm, setShowNewTemplateForm] = useState(false);
   const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
   const [showNewWorkoutTypeForm, setShowNewWorkoutTypeForm] = useState(false);
+  const [showNewWorkoutIntentForm, setShowNewWorkoutIntentForm] = useState(false);
   const [showWorkoutStructureTemplateForm, setShowWorkoutStructureTemplateForm] = useState(false);
 
   // Temporary editing state for inline editing
@@ -1403,6 +1719,7 @@ export default function ConfigurePage() {
   const [editingTemplate, setEditingTemplate] = useState<WeekTemplate | null>(null);
   const [editingCategory, setEditingCategory] = useState<WorkoutCategory | null>(null);
   const [editingWorkoutType, setEditingWorkoutType] = useState<WorkoutType | null>(null);
+  const [editingWorkoutIntent, setEditingWorkoutIntent] = useState<WorkoutIntent | null>(null);
 
   // Calendar configuration state
   const [showTestEventForm, setShowTestEventForm] = useState(false);
@@ -1696,7 +2013,217 @@ export default function ConfigurePage() {
     deleteWorkoutType(id);
   };
 
+  // Workout Intent handlers
+  const toIntentKey = (value: string): string =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+  const handleAddWorkoutIntent = () => {
+    const tempId = `temp_${Date.now()}`;
+    setEditingWorkoutIntent({
+      id: tempId,
+      key: '',
+      name: '',
+      color: '#14b8a6',
+      description: '',
+      order: workoutIntents.length,
+    });
+    setShowNewWorkoutIntentForm(true);
+  };
+
+  const handleEditWorkoutIntent = (workoutIntent: WorkoutIntent) => {
+    setEditingWorkoutIntent({ ...workoutIntent });
+    setEditingWorkoutIntentId(workoutIntent.id);
+  };
+
+  const handleSaveWorkoutIntent = async () => {
+    if (!editingWorkoutIntent) return;
+
+    try {
+      const normalizedKey = toIntentKey(editingWorkoutIntent.key || editingWorkoutIntent.name);
+
+      if (!normalizedKey) {
+        toastWarning('Intent key is required');
+        return;
+      }
+
+      const duplicate = workoutIntents.find((intent) =>
+        intent.id !== editingWorkoutIntent.id && intent.key === normalizedKey
+      );
+      if (duplicate) {
+        toastWarning('Intent key must be unique');
+        return;
+      }
+
+      const payload = {
+        key: normalizedKey,
+        name: editingWorkoutIntent.name,
+        color: editingWorkoutIntent.color,
+        description: editingWorkoutIntent.description,
+        order: editingWorkoutIntent.order || 0,
+      };
+
+      if (editingWorkoutIntent.id.startsWith('temp_')) {
+        await addWorkoutIntent(payload);
+        setShowNewWorkoutIntentForm(false);
+      } else {
+        await updateWorkoutIntent(editingWorkoutIntent.id, payload);
+        setEditingWorkoutIntentId(null);
+      }
+
+      setEditingWorkoutIntent(null);
+      toastSuccess('Workout intent saved');
+    } catch (error) {
+      console.error('Error saving workout intent:', error);
+      toastError('Failed to save workout intent');
+    }
+  };
+
+  const handleCancelWorkoutIntent = () => {
+    setEditingWorkoutIntent(null);
+    setEditingWorkoutIntentId(null);
+    setShowNewWorkoutIntentForm(false);
+  };
+
+  const handleDeleteWorkoutIntent = (id: string) => {
+    deleteWorkoutIntent(id);
+  };
+
   // Calendar configuration handlers
+  const loadPlannerMetadata = useCallback(async () => {
+    setPlannerMetadataLoading(true);
+    setPlannerMetadataError(null);
+    try {
+      const response = await fetch('/api/planner/bootstrap', { cache: 'no-store' });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to load planner metadata');
+      }
+
+      const eventTypes = Array.isArray(payload?.eventTypes) ? payload.eventTypes : [];
+      const calendars = Array.isArray(payload?.calendars) ? payload.calendars : [];
+
+      setPlannerEventTypes(eventTypes);
+      setPlannerCalendars(calendars);
+    } catch (error) {
+      console.error('Failed to load planner metadata:', error);
+      setPlannerMetadataError(error instanceof Error ? error.message : 'Failed to load planner metadata');
+    } finally {
+      setPlannerMetadataLoading(false);
+    }
+  }, []);
+
+  const createPlannerEventType = async () => {
+    const name = newPlannerEventType.trim();
+    if (!name) return;
+
+    setPlannerMetadataSaving(true);
+    try {
+      const response = await fetch('/api/planner/admin/event-types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to create event type');
+      }
+
+      setNewPlannerEventType('');
+      toastSuccess('Event type created');
+      await loadPlannerMetadata();
+    } catch (error) {
+      console.error('Failed to create planner event type:', error);
+      toastError(error instanceof Error ? error.message : 'Failed to create event type');
+    } finally {
+      setPlannerMetadataSaving(false);
+    }
+  };
+
+  const createPlannerCalendar = async () => {
+    const name = newPlannerCalendar.trim();
+    if (!name) return;
+
+    setPlannerMetadataSaving(true);
+    try {
+      const response = await fetch('/api/planner/admin/calendars', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to create calendar');
+      }
+
+      setNewPlannerCalendar('');
+      toastSuccess('Planner calendar created');
+      await loadPlannerMetadata();
+    } catch (error) {
+      console.error('Failed to create planner calendar:', error);
+      toastError(error instanceof Error ? error.message : 'Failed to create planner calendar');
+    } finally {
+      setPlannerMetadataSaving(false);
+    }
+  };
+
+  const deletePlannerEventType = async (eventTypeId: string) => {
+    if (!window.confirm('Delete this event type?')) {
+      return;
+    }
+
+    setPlannerMetadataSaving(true);
+    try {
+      const response = await fetch(`/api/planner/admin/event-types?event_type_id=${encodeURIComponent(eventTypeId)}`, {
+        method: 'DELETE',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to delete event type');
+      }
+
+      toastSuccess('Event type deleted');
+      await loadPlannerMetadata();
+    } catch (error) {
+      console.error('Failed to delete planner event type:', error);
+      toastError(error instanceof Error ? error.message : 'Failed to delete event type');
+    } finally {
+      setPlannerMetadataSaving(false);
+    }
+  };
+
+  const deletePlannerCalendar = async (calendarId: string) => {
+    if (!window.confirm('Delete this planner calendar?')) {
+      return;
+    }
+
+    setPlannerMetadataSaving(true);
+    try {
+      const response = await fetch(`/api/planner/admin/calendars?calendar_id=${encodeURIComponent(calendarId)}`, {
+        method: 'DELETE',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to delete planner calendar');
+      }
+
+      toastSuccess('Planner calendar deleted');
+      await loadPlannerMetadata();
+    } catch (error) {
+      console.error('Failed to delete planner calendar:', error);
+      toastError(error instanceof Error ? error.message : 'Failed to delete planner calendar');
+    } finally {
+      setPlannerMetadataSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadPlannerMetadata();
+  }, [loadPlannerMetadata]);
+
   const handleCreateTestEvent = async () => {
     if (!testEventData.date || !testEventData.startTime || !testEventData.endTime) {
       toastWarning('Please fill in date and time fields');
@@ -1932,6 +2459,13 @@ export default function ConfigurePage() {
         // Update order for all items
         reordered.forEach((item, index) => {
           updateWorkoutType(item.id, { order: index });
+        });
+      } else if (active.id.startsWith('workoutIntent-')) {
+        const oldIndex = workoutIntents.findIndex((item) => item.id === active.id.replace('workoutIntent-', ''));
+        const newIndex = workoutIntents.findIndex((item) => item.id === over.id.replace('workoutIntent-', ''));
+        const reordered = arrayMove(workoutIntents, oldIndex, newIndex);
+        reordered.forEach((item, index) => {
+          updateWorkoutIntent(item.id, { order: index });
         });
       }
     }
@@ -2458,6 +2992,7 @@ export default function ConfigurePage() {
                       key={template.id}
                       template={template}
                       workoutTypes={workoutTypes}
+                      workoutIntents={workoutIntents}
                       onEdit={(template) => {
                         setEditingWorkoutStructureTemplate(template);
                         setShowWorkoutStructureTemplateForm(true);
@@ -2617,6 +3152,138 @@ export default function ConfigurePage() {
                   </SortableContext>
                 </DndContext>
               </div>
+
+              {/* Workout Intents Section */}
+              <div ref={workoutIntentsSectionRef}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Layers className="h-5 w-5 icon-settings" />
+                    Workout Intents
+                  </h3>
+                  <Button variant="outline" onClick={handleAddWorkoutIntent} size="sm">
+                    <Plus className="h-4 w-4 mr-1.5 icon-add" />
+                    Add Workout Intent
+                  </Button>
+                </div>
+
+                {showNewWorkoutIntentForm && editingWorkoutIntent && (
+                  <Card className="mb-4">
+                    <CardHeader className="pb-3 px-3">
+                      <CardTitle className="text-base">Add Workout Intent</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 px-3">
+                      <div className="grid grid-cols-3 gap-4">
+                        <Input
+                          placeholder="Intent name"
+                          value={editingWorkoutIntent.name}
+                          onChange={(e) => setEditingWorkoutIntent(prev => prev ? { ...prev, name: e.target.value } : null)}
+                        />
+                        <Input
+                          placeholder="Intent key (e.g. strength)"
+                          value={editingWorkoutIntent.key}
+                          onChange={(e) => setEditingWorkoutIntent(prev => prev ? { ...prev, key: e.target.value } : null)}
+                        />
+                        <Input
+                          placeholder="Description"
+                          value={editingWorkoutIntent.description}
+                          onChange={(e) => setEditingWorkoutIntent(prev => prev ? { ...prev, description: e.target.value } : null)}
+                        />
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <label className="text-sm font-medium">Color:</label>
+                        <div className="flex gap-2">
+                          {colors.map((color) => (
+                            <button
+                              key={color}
+                              className={`w-6 h-6 rounded-full border-2 ${editingWorkoutIntent.color === color ? 'border-gray-900' : 'border-gray-300'}`}
+                              style={{ backgroundColor: color }}
+                              onClick={() => setEditingWorkoutIntent(prev => prev ? { ...prev, color } : null)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-4">
+                        <Button variant="outline" onClick={handleSaveWorkoutIntent} className="flex-1">
+                          <Save className="h-4 w-4 mr-2 icon-success" />
+                          Save Workout Intent
+                        </Button>
+                        <Button variant="outline" onClick={handleCancelWorkoutIntent} className="flex-1">
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={workoutIntents.map(w => `workoutIntent-${w.id}`)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3">
+                      {workoutIntents.map((workoutIntent) => (
+                        editingWorkoutIntentId === workoutIntent.id && editingWorkoutIntent ? (
+                          <Card key={workoutIntent.id} className="py-0">
+                            <CardContent className="space-y-4 p-0 px-3 py-2">
+                              <div className="grid grid-cols-3 gap-4">
+                                <Input
+                                  placeholder="Intent name"
+                                  value={editingWorkoutIntent.name}
+                                  onChange={(e) => setEditingWorkoutIntent(prev => prev ? { ...prev, name: e.target.value } : null)}
+                                />
+                                <Input
+                                  placeholder="Intent key"
+                                  value={editingWorkoutIntent.key}
+                                  onChange={(e) => setEditingWorkoutIntent(prev => prev ? { ...prev, key: e.target.value } : null)}
+                                />
+                                <Input
+                                  placeholder="Description"
+                                  value={editingWorkoutIntent.description}
+                                  onChange={(e) => setEditingWorkoutIntent(prev => prev ? { ...prev, description: e.target.value } : null)}
+                                />
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <label className="text-sm font-medium">Color:</label>
+                                <div className="flex gap-2">
+                                  {colors.map((color) => (
+                                    <button
+                                      key={color}
+                                      className={`w-6 h-6 rounded-full border-2 ${editingWorkoutIntent.color === color ? 'border-gray-900' : 'border-gray-300'}`}
+                                      style={{ backgroundColor: color }}
+                                      onClick={() => setEditingWorkoutIntent(prev => prev ? { ...prev, color } : null)}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button variant="outline" onClick={handleSaveWorkoutIntent} className="flex-1">
+                                  <Save className="h-4 w-4 mr-2 icon-success" />
+                                  Save
+                                </Button>
+                                <Button variant="outline" onClick={handleCancelWorkoutIntent} className="flex-1">
+                                  <X className="h-4 w-4 mr-2" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          <SortableItem
+                            key={workoutIntent.id}
+                            item={workoutIntent}
+                            onEdit={handleEditWorkoutIntent}
+                            onDelete={handleDeleteWorkoutIntent}
+                            index={workoutIntents.indexOf(workoutIntent)}
+                            type="workoutIntent"
+                          />
+                        )
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
             </div>
           </div>
 
@@ -2633,7 +3300,7 @@ export default function ConfigurePage() {
               <p className="text-gray-600">Configure Google Calendar sync and test event creation.</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               {/* Google Account & Authentication */}
               <div ref={calendarSectionRef}>
                 <Card>
@@ -2767,7 +3434,7 @@ export default function ConfigurePage() {
                           Disconnect Google Calendar
                         </Button>
                         <p className="text-xs text-gray-400 mt-2">
-                          If you see sync errors, click "Test Connection" to verify, or disconnect and reconnect to refresh permissions
+                          If you see sync errors, click &quot;Test Connection&quot; to verify, or disconnect and reconnect to refresh permissions
                         </p>
                       </div>
                     </>
@@ -2778,6 +3445,19 @@ export default function ConfigurePage() {
                         <p className="text-sm text-gray-600 mb-4">
                           Connect your Google Calendar to sync coaching sessions and events.
                         </p>
+                        {signedInGoogleEmail && (
+                          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-left">
+                            <p className="text-xs font-medium uppercase tracking-wide text-blue-700">
+                              Signed-in account
+                            </p>
+                            <p className="mt-1 text-sm text-blue-900">
+                              Calendar will try to connect as <span className="font-medium">{signedInGoogleEmail}</span>.
+                            </p>
+                            <p className="mt-1 text-xs text-blue-700">
+                              If Google shows a different profile first, use the account chooser to switch before approving access.
+                            </p>
+                          </div>
+                        )}
                         <Button onClick={handleConnectGoogleCalendar}>
                           <Link className="h-4 w-4 mr-2" />
                           Connect Google Calendar
@@ -2942,9 +3622,9 @@ export default function ConfigurePage() {
               <p className="text-gray-600">Configure how the calendar displays in the app.</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               {/* Timezone Settings */}
-              <Card>
+              <Card className="lg:h-[26rem] flex flex-col">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -2956,7 +3636,7 @@ export default function ConfigurePage() {
                     </Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto">
                   {/* Timezone Status */}
                   {getBrowserTimezone() !== appTimezone ? (
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -3030,15 +3710,19 @@ export default function ConfigurePage() {
               </Card>
 
               {/* Business Hours Settings */}
-              <div ref={businessHoursSectionRef}>
-                <Card>
+              <div ref={businessHoursSectionRef} className="lg:h-[26rem]">
+                <Card className="h-full flex flex-col">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Clock className="h-5 w-5" />
                     <span>Business Hours</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-1">
+                <CardContent className="flex flex-1 min-h-0 flex-col space-y-1 overflow-y-auto">
+                  <p className="text-xs text-gray-500 pb-1">
+                    Only these hours will be displayed on the calendar view.
+                  </p>
+
                   <div className="flex items-center justify-between text-xs font-medium text-gray-600 pb-0.5 border-b">
                     <span className="w-24">Day</span>
                     <div className="flex gap-2">
@@ -3202,11 +3886,118 @@ export default function ConfigurePage() {
                       </div>
                     );
                   })}
-
-                  <p className="text-xs text-gray-500 pt-1 mt-1">
-                    Only these hours will be displayed on the calendar view.
-                  </p>
                 </CardContent>
+                </Card>
+              </div>
+
+              <div ref={plannerMetadataSectionRef} className="lg:h-[26rem]">
+                {plannerMetadataError && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+                    {plannerMetadataError}
+                  </div>
+                )}
+
+                <Card className="h-full flex flex-col">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <Settings className="h-5 w-5" />
+                        <span>Event Types</span>
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-1 min-h-0 flex-col gap-2">
+                    <div className="flex gap-2">
+                      <Input
+                        value={newPlannerEventType}
+                        onChange={(e) => setNewPlannerEventType(e.target.value)}
+                        placeholder="Add event type"
+                        className="text-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void createPlannerEventType();
+                          }
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => void createPlannerEventType()}
+                        disabled={plannerMetadataSaving || !newPlannerEventType.trim()}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                    <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-1">
+                      {plannerEventTypes.map((eventType) => (
+                        <div key={eventType.id} className="flex items-center justify-between rounded border px-3 py-2">
+                          <span className="text-sm text-gray-700">{eventType.name}</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => void deletePlannerEventType(eventType.id)}
+                            disabled={plannerMetadataSaving}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                      {!plannerMetadataLoading && plannerEventTypes.length === 0 && (
+                        <p className="text-xs text-gray-500">No event types yet.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="lg:h-[26rem]">
+                <Card className="h-full flex flex-col">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Planner Calendars</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-1 min-h-0 flex-col gap-2">
+                    <div className="flex gap-2">
+                      <Input
+                        value={newPlannerCalendar}
+                        onChange={(e) => setNewPlannerCalendar(e.target.value)}
+                        placeholder="Add planner calendar"
+                        className="text-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void createPlannerCalendar();
+                          }
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => void createPlannerCalendar()}
+                        disabled={plannerMetadataSaving || !newPlannerCalendar.trim()}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                    <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-1">
+                      {plannerCalendars.map((calendar) => (
+                        <div key={calendar.id} className="flex items-center justify-between rounded border px-3 py-2">
+                          <span className="text-sm text-gray-700">{calendar.name}</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => void deletePlannerCalendar(calendar.id)}
+                            disabled={plannerMetadataSaving}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                      {!plannerMetadataLoading && plannerCalendars.length === 0 && (
+                        <p className="text-xs text-gray-500">No planner calendars yet.</p>
+                      )}
+                    </div>
+                  </CardContent>
                 </Card>
               </div>
             </div>
@@ -3376,7 +4167,7 @@ export default function ConfigurePage() {
                           return seen.size;
                         })() === 0 ? (
                           <p className="text-sm text-gray-500 italic p-3 bg-gray-50 rounded-lg">
-                            No locations marked as N/A. Click the "N/A" button on any location above to hide it from the calendar display.
+                            No locations marked as N/A. Click the &quot;N/A&quot; button on any location above to hide it from the calendar display.
                           </p>
                         ) : (
                           /* Show ALL ignored locations from saved config - deduplicated */
@@ -3497,7 +4288,7 @@ export default function ConfigurePage() {
           <div className="mt-4 space-y-6">
             <div className="flex flex-col gap-2">
               <h2 className="text-2xl font-bold text-gray-900">Coach Setup Hub</h2>
-              <p className="text-gray-600">Complete these two checks once. After that PCA keeps your schedule synced automatically.</p>
+              <p className="text-gray-600">Complete these core checks once, then finish the checklist to align planner, locations, and workouts for your business.</p>
               <div>
                 {onboardingLoading || typeof needsSetupHub === 'undefined' ? (
                   <Badge variant="secondary" className="bg-gray-100 text-gray-600 w-fit">
@@ -3599,6 +4390,7 @@ export default function ConfigurePage() {
         onOpenChange={setShowWorkoutStructureTemplateForm}
         template={editingWorkoutStructureTemplate || undefined}
         workoutTypes={workoutTypes}
+        workoutIntents={workoutIntents}
         onSave={(templateData) => {
           const sectionsWithGuidance = (templateData.sections || []).map((section) => {
             const hasGuidance = Boolean(section.configuration?.aiGuidance?.trim());

@@ -24,7 +24,12 @@ export function Header() {
 
   // Hide global header on landing/marketing and login pages
   // NOTE: This must be AFTER all hooks to comply with Rules of Hooks
-  if (pathname === '/' || pathname === '/login') return null;
+  if (
+    pathname === '/' ||
+    pathname === '/login' ||
+    pathname === '/privacy' ||
+    pathname === '/terms'
+  ) return null;
 
   // Disable sticky header on programs/schedule pages
   const isSchedulePage = pathname?.startsWith('/programs');
@@ -94,15 +99,13 @@ export function Header() {
     <>
       <header className={`${isSchedulePage ? 'relative' : 'fixed top-0 left-0 right-0'} z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60`}>
         <div className="w-full px-4">
-          <div className="flex h-12 items-center justify-between">
+          <div className="flex h-12 items-center justify-between gap-2">
             {/* Left side - Logo and Navigation */}
-            <div className="flex items-center gap-6">
+            <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-6">
               {/* Logo */}
               <Link href="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity cursor-pointer">
-                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
-                  PC+
-                </div>
-                <span className="text-xl font-bold hidden md:inline">Performance Coach +</span>
+                <img src="/performance-coach-plus-logo.png" alt="PC+" className="h-8 w-8 rounded-md" />
+                <span className="text-xl font-bold max-md:hidden">Performance Coach +</span>
               </Link>
 
               {/* Main Navigation - Left aligned */}
