@@ -1,0 +1,35 @@
+steps:
+  # Build the Docker image for planner_service
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '-f'
+      - 'planner_service/Dockerfile'
+      - '-t'
+      - 'gcr.io/${PROJECT_ID}/pca-planner-service:latest'
+      - '.'
+
+  # Push the image to Container Registry
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - 'gcr.io/${PROJECT_ID}/pca-planner-service:latest'
+
+  # Deploy to Cloud Run using gcloud
+  - name: gcr.io/cloud-builders/gcloud
+    args:
+      - run
+      - deploy
+      - pca-planner-service
+      - '--image=gcr.io/${PROJECT_ID}/pca-planner-service:latest'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--timeout=3600'
+
+images:
+  - 'gcr.io/${PROJECT_ID}/pca-planner-service:latest'
+
+timeout: 1800s
