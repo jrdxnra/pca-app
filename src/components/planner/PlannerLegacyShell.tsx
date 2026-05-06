@@ -265,7 +265,7 @@ export default function PlannerLegacyShell() {
         () => Boolean((window as any).FullCalendar?.Calendar)
       ),
       loadPlannerScript(
-        '/planner/app.js?v=20260504-final12',
+        '/planner/app.js?v=20260506-final13',
         'planner-runtime',
         () => typeof (window as any).__PCA_PLANNER_BOOT__ === 'function'
       ),

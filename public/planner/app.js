@@ -468,8 +468,8 @@ function computeBusinessSlotRange(week) {
   const ends = enabledDays.map((day) => timeToMinutes(week[day]?.end)).filter((value) => Number.isFinite(value));
   const earliest = starts.length ? Math.min(...starts) : timeToMinutes("06:00");
   const latest = ends.length ? Math.max(...ends) : timeToMinutes("21:00");
-  const start = minutesToTime(earliest - 60);
-  const end = minutesToTime(latest + 60);
+  const start = minutesToTime(earliest);
+  const end = minutesToTime(latest);
   return { start, end };
 }
 
