@@ -1,13 +1,13 @@
 steps:
-  # Build the Docker image for planner_service
+  # Build the Docker image for planner_service (with planner_service dir as context)
   - name: gcr.io/cloud-builders/docker
     args:
       - build
       - '-f'
-      - 'planner_service/Dockerfile'
+      - 'Dockerfile'
       - '-t'
       - 'gcr.io/${PROJECT_ID}/pca-planner-service:latest'
-      - '.'
+      - 'planner_service/'
 
   # Push the image to Container Registry
   - name: gcr.io/cloud-builders/docker
