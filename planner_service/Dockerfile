@@ -2,9 +2,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Copy planner_service files into /app
-# (this Dockerfile is located in planner_service/ but we're building from repo root)
-COPY planner_service/ .
+# Copy only the necessary files from planner_service (not node_modules or instance dir)
+# setuptools gets confused if multiple packages are discovered
+COPY planner_service/fitshift ./fitshift/
+COPY planner_service/pyproject.toml ./
+COPY planner_service/README.md ./
 
 # Install dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
