@@ -6,7 +6,7 @@ WORKDIR /app
 COPY . .
 
 # Install Flask and then the local fitshift package in editable mode
-RUN pip install --no-cache-dir Flask>=3.0,<4.0 && \
+RUN pip install --no-cache-dir 'Flask>=3.0,<4.0' && \
     pip install --no-cache-dir -e .
 
 # Set environment variables
