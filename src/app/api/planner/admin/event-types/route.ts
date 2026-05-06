@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const FITSHIFT_API = process.env.FITSHIFT_API_URL || 'http://localhost:4173';
+const FITSHIFT_API = process.env.FITSHIFT_API_URL || 'http://pca-planner-service-awu2h3ecyq-uc.a.run.app';
 
 export async function POST(request: NextRequest) {
   try {

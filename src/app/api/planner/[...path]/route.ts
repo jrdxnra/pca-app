@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const FLASK_BASE = process.env.FITSHIFT_API_URL || 'http://localhost:4173';
+const FLASK_BASE = process.env.FITSHIFT_API_URL || 'http://pca-planner-service-awu2h3ecyq-uc.a.run.app';
 
 function buildTargetUrl(request: NextRequest, path: string[]) {
   const url = new URL(request.url);

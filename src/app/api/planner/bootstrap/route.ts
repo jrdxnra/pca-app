@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const FITSHIFT_API = process.env.FITSHIFT_API_URL || 'https://pca-planner-service-PLACEHOLDER.us-central1.run.app';
+const FITSHIFT_API = process.env.FITSHIFT_API_URL || 'https://pca-planner-service-awu2h3ecyq-uc.a.run.app';
 
 // Minimal default bootstrap data for when planner service is unavailable
 const DEFAULT_BOOTSTRAP = {
