@@ -2,11 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Copy all planner_service files to /app (this Dockerfile is in planner_service dir as context)
-COPY . .
+# Copy planner_service files into /app
+# (this Dockerfile is located in planner_service/ but we're building from repo root)
+COPY planner_service/ .
 
-# Install Flask and then the local fitshift package in editable mode
-RUN pip install --no-cache-dir 'Flask>=3.0,<4.0' && \
+# Install dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir 'Flask>=3.0,<4.0' && \
     pip install --no-cache-dir -e .
 
 # Set environment variables
