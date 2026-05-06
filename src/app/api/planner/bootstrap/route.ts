@@ -12,8 +12,17 @@ const DEFAULT_BOOTSTRAP = {
   locations: [],
   users: [],
   settings: {
-    showWeekends: true,
-    businessHoursWeek: ['09:00 AM', '05:00 PM'],
+    showWeekends: false,
+    plannerMode: 'live',
+    businessHoursWeek: {
+      '0': { enabled: true, start: '10:00', end: '19:00' },
+      '1': { enabled: true, start: '10:00', end: '19:00' },
+      '2': { enabled: true, start: '10:00', end: '19:00' },
+      '3': { enabled: true, start: '10:00', end: '19:00' },
+      '4': { enabled: true, start: '10:00', end: '19:00' },
+      '5': { enabled: false, start: '07:00', end: '20:00' },
+      '6': { enabled: false, start: '07:00', end: '20:00' },
+    },
   },
 };
 

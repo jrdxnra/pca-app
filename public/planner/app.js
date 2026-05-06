@@ -8,7 +8,10 @@ const state = {
   selectedSlotElement: null,
   selectedEventTypes: [],
   availableFilterEventTypes: [],
+  plannerMode: "live",
 };
+
+const TEMPLATE_WEEK_ANCHOR = "2026-05-04";
 
 const API_BASE = window.APP_CONFIG?.apiBase || "";
 
@@ -41,6 +44,7 @@ function cacheElements() {
     plannerViewControls: document.querySelector("#planner-view-controls"),
     plannerWeekRange: document.querySelector("#planner-week-range"),
     plannerWeekendsToggleInput: document.querySelector("#planner-weekends-toggle-input"),
+    plannerModeSelect: document.querySelector("#planner-mode-select"),
     eventTypeAdminList: document.querySelector("#event-type-admin-list"),
     coachAdminList: document.querySelector("#coach-admin-list"),
     locationAdminList: document.querySelector("#location-admin-list"),
@@ -121,6 +125,22 @@ function bindPlannerHeaderControlHandlers() {
 
 function renderPlannerHeaderControls() {
   if (!elements.plannerCalendarControls || !elements.plannerViewControls || !state.calendar) {
+    return;
+  }
+
+  if (isStaticPlannerMode()) {
+    elements.plannerCalendarControls.innerHTML = "";
+    elements.plannerViewControls.innerHTML = `
+      <div class="fc-button-group">
+        <button
+          type="button"
+          class="fc-timeGridWeek-button fc-button fc-button-primary fc-button-active"
+          aria-pressed="true"
+          disabled
+        >Template</button>
+      </div>
+    `;
+    bindPlannerHeaderControlHandlers();
     return;
   }
 
@@ -397,10 +417,64 @@ function populateBootstrap() {
   renderCalendarAdminList();
 
   hydrateBusinessHourInputs();
+  syncPlannerModeControl();
 }
 
 function showWeekendsEnabled() {
   return Boolean(state.bootstrap?.settings?.showWeekends);
+}
+
+function plannerMode() {
+  const mode = String(state.bootstrap?.settings?.plannerMode || "live").toLowerCase();
+  return mode === "static" ? "static" : "live";
+}
+
+function isStaticPlannerMode() {
+  return plannerMode() === "static";
+}
+
+function templateWeekStartDate() {
+  return new Date(`${TEMPLATE_WEEK_ANCHOR}T00:00`);
+}
+
+function templateWeekRange() {
+  const start = templateWeekStartDate();
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  return { start, end };
+}
+
+function mapDateToTemplateWeek(dateValue) {
+  const source = new Date(dateValue);
+  if (!Number.isFinite(source.getTime())) {
+    return source;
+  }
+
+  const start = templateWeekStartDate();
+  const mapped = new Date(start);
+  const jsDay = source.getDay();
+  const mondayIndex = jsDay === 0 ? 6 : jsDay - 1;
+  mapped.setDate(start.getDate() + mondayIndex);
+  mapped.setHours(source.getHours(), source.getMinutes(), 0, 0);
+  return mapped;
+}
+
+function mapDateTimeLocalToTemplateWeek(value) {
+  if (!value) {
+    return value;
+  }
+  const mapped = mapDateToTemplateWeek(value);
+  if (!Number.isFinite(mapped.getTime())) {
+    return value;
+  }
+  return formatDateTimeLocal(mapped);
+}
+
+function syncPlannerModeControl() {
+  if (!elements.plannerModeSelect) {
+    return;
+  }
+  elements.plannerModeSelect.value = plannerMode();
 }
 
 function syncWeekendsToggleButton() {
@@ -419,6 +493,11 @@ function formatRangeDate(value) {
 
 function syncWeekRangeLabel(info) {
   if (!elements.plannerWeekRange) {
+    return;
+  }
+
+  if (isStaticPlannerMode()) {
+    elements.plannerWeekRange.textContent = "Template Week";
     return;
   }
 
@@ -978,6 +1057,30 @@ async function saveShowWeekends(showWeekends) {
   syncWeekendsToggleButton();
 }
 
+async function savePlannerMode(nextMode) {
+  const mode = nextMode === "static" ? "static" : "live";
+  const payload = await requestJson("/api/admin/settings/planner-mode", {
+    method: "PATCH",
+    body: JSON.stringify({
+      plannerMode: mode,
+    }),
+  });
+  state.bootstrap.settings = state.bootstrap.settings || {};
+  state.bootstrap.settings.plannerMode = payload.plannerMode || mode;
+  syncPlannerModeControl();
+
+  if (state.calendar) {
+    try {
+      state.calendar.destroy();
+    } catch (_error) {
+      // Ignore teardown errors.
+    }
+    state.calendar = null;
+  }
+  renderCalendar();
+  state.calendar?.refetchEvents();
+}
+
 async function toggleShowWeekends() {
   await saveShowWeekends(!showWeekendsEnabled());
 }
@@ -1088,14 +1191,19 @@ async function refreshCoverageMatrix() {
 }
 
 function collectFormData() {
+  const startAtRaw = document.querySelector("#start-at").value;
+  const endAtRaw = document.querySelector("#end-at").value;
+  const startAt = isStaticPlannerMode() ? mapDateTimeLocalToTemplateWeek(startAtRaw) : startAtRaw;
+  const endAt = isStaticPlannerMode() ? mapDateTimeLocalToTemplateWeek(endAtRaw) : endAtRaw;
+
   return {
     title: document.querySelector("#title").value,
     event_type: document.querySelector("#event-type").value,
     calendar_id: document.querySelector("#calendar-id").value,
     assigned_coach_id: "planner-owner",
     location_id: document.querySelector("#location-id").value,
-    start_at: document.querySelector("#start-at").value,
-    end_at: document.querySelector("#end-at").value,
+    start_at: startAt,
+    end_at: endAt,
     client_name: document.querySelector("#client-name").value,
     client_count: Number(document.querySelector("#client-count").value),
     capacity_limit: Number(document.querySelector("#capacity-limit").value),
@@ -1234,11 +1342,13 @@ async function deleteEvent() {
 async function updateEventTiming(info) {
   const event = info.event;
   try {
+    const startAt = isStaticPlannerMode() ? mapDateTimeLocalToTemplateWeek(isoLocal(event.start)) : isoLocal(event.start);
+    const endAt = isStaticPlannerMode() ? mapDateTimeLocalToTemplateWeek(isoLocal(event.end)) : isoLocal(event.end);
     await requestJson(`/api/events/${event.id}`, {
       method: "PATCH",
       body: JSON.stringify({
-        start_at: isoLocal(event.start),
-        end_at: isoLocal(event.end),
+        start_at: startAt,
+        end_at: endAt,
         calendar_id: event.extendedProps.calendarId,
         location_id: event.extendedProps.locationId,
         assigned_coach_id: "planner-owner",
@@ -1301,8 +1411,11 @@ function isInlineShortEvent(event) {
 function renderCalendar() {
   const businessHoursWeek = normalizeBusinessHoursWeek(state.bootstrap?.settings?.businessHoursWeek);
   const businessSlotRange = computeBusinessSlotRange(businessHoursWeek);
+  const staticMode = isStaticPlannerMode();
+  const templateRange = templateWeekRange();
   state.calendar = new FullCalendar.Calendar(elements.calendar, {
     initialView: "timeGridWeek",
+    initialDate: staticMode ? templateRange.start : undefined,
     height: "auto",
     firstDay: 1,
     allDaySlot: false,
@@ -1315,10 +1428,18 @@ function renderCalendar() {
     businessHours: buildCalendarBusinessHours(businessHoursWeek),
     nowIndicator: true,
     headerToolbar: false,
+    validRange: staticMode
+      ? {
+          start: templateRange.start,
+          end: templateRange.end,
+        }
+      : undefined,
     events(fetchInfo, success, failure) {
+      const rangeStart = staticMode ? templateRange.start.toISOString() : fetchInfo.startStr;
+      const rangeEnd = staticMode ? templateRange.end.toISOString() : fetchInfo.endStr;
       const params = new URLSearchParams({
-        start: fetchInfo.startStr,
-        end: fetchInfo.endStr,
+        start: rangeStart,
+        end: rangeEnd,
       });
       const calendarIds = currentCalendarIds();
       for (const calendarId of calendarIds) {
@@ -1455,6 +1576,10 @@ async function initializeApp() {
   elements.eventTypeFilterOptions?.addEventListener("change", handleEventTypeCheckboxToggle);
   elements.plannerWeekendsToggleInput?.addEventListener("change", () => {
     void toggleShowWeekends();
+  });
+  elements.plannerModeSelect?.addEventListener("change", (event) => {
+    const mode = event.target?.value;
+    void savePlannerMode(mode);
   });
   elements.eventTypeAdminList?.addEventListener("change", saveEventTypeColor);
   elements.eventTypeAdminList?.addEventListener("click", deleteEventType);

@@ -165,6 +165,10 @@ def ensure_setting_defaults(db: sqlite3.Connection) -> None:
         "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING",
         ("show_weekends", "false"),
     )
+    db.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING",
+        ("planner_mode", "live"),
+    )
     # One-time migration: older builds defaulted weekends to true.
     # Flip existing installs to off once so the new default is consistent.
     migrated_row = db.execute(

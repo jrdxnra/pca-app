@@ -144,6 +144,16 @@ def fetch_show_weekends(db) -> bool:
     return raw_value in {"1", "true", "yes", "on"}
 
 
+def fetch_planner_mode(db) -> str:
+    row = db.execute("SELECT value FROM settings WHERE key = 'planner_mode'").fetchone()
+    if row is None:
+        return "live"
+    raw_value = str(row["value"]).strip().lower()
+    if raw_value not in {"live", "static"}:
+        return "live"
+    return raw_value
+
+
 def normalize_payload(raw: dict, existing: dict | None = None) -> dict:
     default_event_type = "In Person Meeting"
     payload = {
@@ -234,6 +244,7 @@ def bootstrap():
     event_types = fetch_event_types(db)
     business_hours = fetch_business_hours(db)
     show_weekends = fetch_show_weekends(db)
+    planner_mode = fetch_planner_mode(db)
     return jsonify(
         {
             "users": users,
@@ -245,6 +256,7 @@ def bootstrap():
                 "businessHours": business_hours["slotRange"],
                 "businessHoursWeek": business_hours["hoursByDay"],
                 "showWeekends": show_weekends,
+                "plannerMode": planner_mode,
             },
         }
     )
@@ -645,6 +657,22 @@ def admin_update_show_weekends():
     )
     db.commit()
     return jsonify({"ok": True, "showWeekends": show_weekends})
+
+
+@bp.patch("/api/admin/settings/planner-mode")
+def admin_update_planner_mode():
+    db = get_db()
+    incoming = request.get_json(force=True)
+    planner_mode = str(incoming.get("plannerMode", "live")).strip().lower()
+    if planner_mode not in {"live", "static"}:
+        return jsonify({"ok": False, "errors": ["plannerMode must be 'live' or 'static'."]}), 400
+
+    db.execute(
+        "INSERT INTO settings (key, value) VALUES ('planner_mode', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (planner_mode,),
+    )
+    db.commit()
+    return jsonify({"ok": True, "plannerMode": planner_mode})
 
 
 @bp.post("/api/admin/locations")
