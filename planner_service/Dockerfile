@@ -1,9 +1,9 @@
 FROM python:3.12-slim
 
-WORKDIR /app
+WORKDIR /app/planner_service
 
-# Copy everything first
-COPY . .
+# Copy planner_service contents (we're in /app/planner_service context in build)
+COPY planner_service/ .
 
 # Install Flask and then the local fitshift package in editable mode
 RUN pip install --no-cache-dir 'Flask>=3.0,<4.0' && \
