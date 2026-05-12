@@ -60,7 +60,8 @@ def create_schema(db: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS calendars (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
-            description TEXT NOT NULL
+            description TEXT NOT NULL,
+            planner_mode TEXT NOT NULL DEFAULT 'live'
         );
 
         CREATE TABLE IF NOT EXISTS calendar_coaches (
@@ -206,6 +207,15 @@ def ensure_events_calendar_column(db: sqlite3.Connection) -> None:
     if "calendar_id" not in columns:
         db.execute("ALTER TABLE events ADD COLUMN calendar_id TEXT")
 
+
+def ensure_calendars_mode_column(db: sqlite3.Connection) -> None:
+    columns = {
+        row["name"]
+        for row in db.execute("PRAGMA table_info(calendars)").fetchall()
+    }
+    if "planner_mode" not in columns:
+        db.execute("ALTER TABLE calendars ADD COLUMN planner_mode TEXT NOT NULL DEFAULT 'live'")
+
     migrated_row = db.execute(
         "SELECT value FROM settings WHERE key = 'events_calendar_backfill_migrated'"
     ).fetchone()
@@ -263,11 +273,14 @@ def seed_database(db: sqlite3.Connection) -> None:
     db.executemany("INSERT INTO locations VALUES (?, ?, ?, ?)", locations)
 
     calendars = [
-        ("cal-coaching-classes", "Coaching Classes", "Group classes and team training sessions"),
-        ("cal-client-training", "Clients/Training", "One-on-one and small group client sessions"),
-        ("cal-onboarding", "Onboarding", "New member orientation and assessment sessions"),
+        ("cal-coaching-classes", "Coaching Classes", "Group classes and team training sessions", "live"),
+        ("cal-client-training", "Clients/Training", "One-on-one and small group client sessions", "live"),
+        ("cal-onboarding", "Onboarding", "New member orientation and assessment sessions", "live"),
     ]
-    db.executemany("INSERT INTO calendars VALUES (?, ?, ?)", calendars)
+    db.executemany(
+        "INSERT INTO calendars (id, name, description, planner_mode) VALUES (?, ?, ?, ?)",
+        calendars,
+    )
 
     calendar_coaches = [
         ("cal-coaching-classes", "coach-2"),
@@ -373,6 +386,7 @@ def initialize_database() -> None:
     db = get_db()
     create_schema(db)
     ensure_events_calendar_column(db)
+    ensure_calendars_mode_column(db)
     seed_database(db)
     ensure_event_type_defaults(db)
     ensure_setting_defaults(db)

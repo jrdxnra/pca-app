@@ -551,13 +551,16 @@ def admin_create_calendar():
     incoming = request.get_json(force=True)
     name = (incoming.get("name") or "").strip()
     description = (incoming.get("description") or "").strip() or "Custom calendar"
+    planner_mode = str(incoming.get("plannerMode") or incoming.get("planner_mode") or "live").strip().lower()
+    if planner_mode not in {"live", "static"}:
+        return jsonify({"ok": False, "errors": ["plannerMode must be 'live' or 'static'."]}), 400
     if not name:
         return jsonify({"ok": False, "errors": ["Calendar name is required."]}), 400
 
     calendar_id = normalize_id("cal", name)
     db.execute(
-        "INSERT INTO calendars (id, name, description) VALUES (?, ?, ?)",
-        (calendar_id, name, description),
+        "INSERT INTO calendars (id, name, description, planner_mode) VALUES (?, ?, ?, ?)",
+        (calendar_id, name, description, planner_mode),
     )
     db.commit()
     return jsonify({"ok": True, "calendars": fetch_calendars(db)})
@@ -659,20 +662,6 @@ def admin_update_show_weekends():
     return jsonify({"ok": True, "showWeekends": show_weekends})
 
 
-@bp.patch("/api/admin/settings/planner-mode")
-def admin_update_planner_mode():
-    db = get_db()
-    incoming = request.get_json(force=True)
-    planner_mode = str(incoming.get("plannerMode", "live")).strip().lower()
-    if planner_mode not in {"live", "static"}:
-        return jsonify({"ok": False, "errors": ["plannerMode must be 'live' or 'static'."]}), 400
-
-    db.execute(
-        "INSERT INTO settings (key, value) VALUES ('planner_mode', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        (planner_mode,),
-    )
-    db.commit()
-    return jsonify({"ok": True, "plannerMode": planner_mode})
 
 
 @bp.post("/api/admin/locations")

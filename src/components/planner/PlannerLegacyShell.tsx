@@ -60,12 +60,6 @@ const ADMIN_HTML = `
       </div>
 
       <div class="planner-header-right">
-        <label class="calendar-select-wrap" for="planner-mode-select" title="Planner mode">
-          <select id="planner-mode-select" class="calendar-select-control" aria-label="Planner mode">
-            <option value="live">Live planner</option>
-            <option value="static">Static template</option>
-          </select>
-        </label>
         <label class="planner-weekends-toggle" for="planner-weekends-toggle-input">
           <span>Sat/Sun</span>
           <input id="planner-weekends-toggle-input" type="checkbox" />
@@ -271,7 +265,7 @@ export default function PlannerLegacyShell() {
         () => Boolean((window as any).FullCalendar?.Calendar)
       ),
       loadPlannerScript(
-        '/planner/app.js?v=20260506-final14',
+        '/planner/app.js?v=20260512-final15',
         'planner-runtime',
         () => typeof (window as any).__PCA_PLANNER_BOOT__ === 'function'
       ),

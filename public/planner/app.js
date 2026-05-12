@@ -542,13 +542,21 @@ function minutesToTime(totalMinutes) {
 }
 
 function computeBusinessSlotRange(week) {
+  // Only consider times from days that are explicitly enabled/checkmarked
   const enabledDays = BUSINESS_DAY_KEYS.filter((day) => week[day]?.enabled);
   const starts = enabledDays.map((day) => timeToMinutes(week[day]?.start)).filter((value) => Number.isFinite(value));
   const ends = enabledDays.map((day) => timeToMinutes(week[day]?.end)).filter((value) => Number.isFinite(value));
+  
+  // Get the earliest start and latest end from ONLY enabled days
   const earliest = starts.length ? Math.min(...starts) : timeToMinutes("06:00");
   const latest = ends.length ? Math.max(...ends) : timeToMinutes("21:00");
-  const start = minutesToTime(earliest);
-  const end = minutesToTime(latest);
+  
+  // Apply 1-hour buffer: subtract 1 hour from earliest, add 1 hour to latest
+  const bufferedStart = Math.max(0, earliest - 60); // Ensure non-negative
+  const bufferedEnd = Math.min(24 * 60, latest + 60); // Cap at 24 hours
+  
+  const start = minutesToTime(bufferedStart);
+  const end = minutesToTime(bufferedEnd);
   return { start, end };
 }
 
