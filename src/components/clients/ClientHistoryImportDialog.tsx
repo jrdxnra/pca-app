@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Timestamp } from 'firebase/firestore';
-import { Upload, Loader2 } from 'lucide-react';
+import { Upload, Loader2, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -15,11 +15,21 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { ClientWorkoutRound, Movement } from '@/lib/types';
 import { createClientWorkout } from '@/lib/firebase/services/clientWorkouts';
 import { fetchClientWorkouts } from '@/lib/firebase/services/clientWorkouts';
 import { updateClientWorkout } from '@/lib/firebase/services/clientWorkouts';
+import { deleteClientWorkout } from '@/lib/firebase/services/clientWorkouts';
 import { useMovements } from '@/hooks/queries/useMovements';
 import {
   normalizeMovementName,
@@ -38,6 +48,9 @@ const DEFAULT_PERIOD_ID = 'history-import';
 const LEGACY_CLUSTER_WINDOW_MS = 5 * 60 * 1000;
 const IMPORT_ALIAS_STORAGE_KEY = 'pca-import-movement-aliases-v1';
 const UNASSIGNED_ALIAS_VALUE = '__unassigned__';
+const MAP_AS_DATE_VALUE = '__map_as_date__';
+const MAP_AS_HEADER_VALUE = '__map_as_header__';
+const MAP_AS_IGNORE_VALUE = '__map_as_ignore__';
 const SUPPORTED_PASTE_TYPES = [
   { badge: 'SHEET', label: 'Google Sheets / Excel Paste' },
   { badge: '.CSV', label: 'CSV Exports' },
@@ -45,6 +58,12 @@ const SUPPORTED_PASTE_TYPES = [
   { badge: '.MD', label: 'Markdown Workout Notes' },
   { badge: '.TXT', label: 'Plain Text Session Notes' },
 ];
+
+const SPECIAL_ALIAS_VALUES = new Set([
+  MAP_AS_DATE_VALUE,
+  MAP_AS_HEADER_VALUE,
+  MAP_AS_IGNORE_VALUE,
+]);
 
 type MovementAliasMap = Record<string, string>;
 
@@ -325,27 +344,31 @@ function findMovementMatch(
   lookup: Map<string, Movement>,
   aliases: MovementAliasMap,
   movementById: Map<string, Movement>
-): Movement | undefined {
+): { movement?: Movement; suppressUnmatched?: boolean } {
   const normalized = normalizeMovementName(name);
-  if (!normalized) return undefined;
+  if (!normalized) return {};
 
   const aliasTargetId = aliases[normalized];
   if (aliasTargetId) {
+    if (SPECIAL_ALIAS_VALUES.has(aliasTargetId)) {
+      return { suppressUnmatched: true };
+    }
+
     const aliased = movementById.get(aliasTargetId);
-    if (aliased) return aliased;
+    if (aliased) return { movement: aliased };
   }
 
   const exact = lookup.get(normalized);
-  if (exact) return exact;
+  if (exact) return { movement: exact };
 
   // Fuzzy fallback for small naming differences.
   for (const [key, movement] of lookup.entries()) {
     if (key.includes(normalized) || normalized.includes(key)) {
-      return movement;
+      return { movement };
     }
   }
 
-  return undefined;
+  return {};
 }
 
 function buildWorkoutStructureFromParsedSession(
@@ -367,16 +390,20 @@ function buildWorkoutStructureFromParsedSession(
     .map((round, roundIdx) => {
       const movementUsages = round.entries
         .map((entry, usageIdx) => {
-          const matched = findMovementMatch(entry.movementName, movementLookup, aliases, movementById);
-          if (!matched) {
+          const mapping = findMovementMatch(entry.movementName, movementLookup, aliases, movementById);
+          if (!mapping.movement && !mapping.suppressUnmatched) {
             unmatchedNames.add(entry.movementName);
+          }
+
+          if (!mapping.movement && mapping.suppressUnmatched) {
+            return null;
           }
 
           return {
             ordinal: usageIdx + 1,
-            movementId: matched?.id || '',
-            categoryId: matched?.categoryId || '',
-            ...(matched ? {} : { note: `Imported movement: ${entry.movementName}` }),
+            movementId: mapping.movement?.id || '',
+            categoryId: mapping.movement?.categoryId || '',
+            ...(mapping.movement ? {} : { note: `Imported movement: ${entry.movementName}` }),
             targetWorkload: {
               useReps: Boolean(entry.reps),
               ...(entry.reps ? { reps: entry.reps } : {}),
@@ -395,7 +422,7 @@ function buildWorkoutStructureFromParsedSession(
             },
           };
         })
-        .filter((usage) => Boolean(usage.movementId || usage.note));
+        .filter((usage): usage is NonNullable<typeof usage> => Boolean(usage));
 
       return {
         ordinal: roundIdx + 1,
@@ -428,6 +455,8 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
   const [selectedArchiveSession, setSelectedArchiveSession] = useState<ImportArchiveSessionSummary | null>(null);
   const [saveSummary, setSaveSummary] = useState<string | null>(null);
   const [movementAliases, setMovementAliases] = useState<MovementAliasMap>({});
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
 
   const { data: movements = [] } = useMovements(true, open);
 
@@ -445,6 +474,24 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
     () => [...movements].sort((a, b) => a.name.localeCompare(b.name)),
     [movements]
   );
+  const movementOptionsByCategory = useMemo(() => {
+    const grouped = new Map<string, Movement[]>();
+
+    movementOptions.forEach((movement) => {
+      const categoryName = movement.category?.name?.trim() || movement.categoryId || 'Uncategorized';
+      if (!grouped.has(categoryName)) {
+        grouped.set(categoryName, []);
+      }
+      grouped.get(categoryName)!.push(movement);
+    });
+
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([categoryName, items]) => ({
+        categoryName,
+        items: items.sort((a, b) => a.name.localeCompare(b.name)),
+      }));
+  }, [movementOptions]);
   const selectedArchive = useMemo(
     () => archiveBatches.find((batch) => batch.id === selectedArchiveId) || null,
     [archiveBatches, selectedArchiveId]
@@ -470,8 +517,8 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
         .filter((round) => !isWarmupSection(round.sectionName))
         .forEach((round) => {
           round.entries.forEach((entry) => {
-            const matched = findMovementMatch(entry.movementName, movementLookup, movementAliases, movementById);
-            if (!matched) names.add(entry.movementName);
+            const mapping = findMovementMatch(entry.movementName, movementLookup, movementAliases, movementById);
+            if (!mapping.movement && !mapping.suppressUnmatched) names.add(entry.movementName);
           });
         });
     });
@@ -725,6 +772,53 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
     }
   };
 
+  const handleDeleteSession = async (session: ImportArchiveSessionSummary) => {
+    const confirmed = window.confirm(`Delete this imported workout?\n\n${session.title}\n\nThis cannot be undone.`);
+    if (!confirmed) return;
+
+    setError(null);
+    setSaveSummary(null);
+    setDeletingSessionId(session.id);
+    try {
+      await deleteClientWorkout(session.id);
+      if (selectedArchiveSession?.id === session.id) {
+        setSelectedArchiveSession(null);
+        setRawText('');
+      }
+      await loadArchive();
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : 'Failed to delete imported workout.';
+      setError(message);
+    } finally {
+      setDeletingSessionId(null);
+    }
+  };
+
+  const handleDeleteBatch = async (batch: ImportArchiveBatch) => {
+    const confirmed = window.confirm(
+      `Delete this entire import batch?\n\n${batch.sessions.length} workout${batch.sessions.length === 1 ? '' : 's'} will be removed.\n\nThis cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setError(null);
+    setSaveSummary(null);
+    setDeletingBatchId(batch.id);
+    try {
+      await Promise.all(batch.sessions.map((session) => deleteClientWorkout(session.id)));
+      if (selectedArchiveId === batch.id) {
+        setSelectedArchiveId(null);
+        setSelectedArchiveSession(null);
+        setRawText('');
+      }
+      await loadArchive();
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : 'Failed to delete import batch.';
+      setError(message);
+    } finally {
+      setDeletingBatchId(null);
+    }
+  };
+
   const content = (
     <>
       {(inline ? false : true) && (
@@ -746,7 +840,7 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
       )}
 
         <div className="grid gap-3 md:grid-cols-[280px_1fr] flex-1 min-h-0">
-          <Card className="min-h-0 overflow-hidden">
+          <Card className={`min-h-0 overflow-hidden ${inline ? 'h-72' : 'h-full'}`}>
             <CardContent className="pt-4 h-full overflow-y-auto space-y-2">
               <p className="text-sm font-medium">Past Imports</p>
               {archiveLoading && <p className="text-sm text-muted-foreground">Loading import archive...</p>}
@@ -755,23 +849,40 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
               )}
 
               {!archiveLoading && archiveBatches.map((batch) => (
-                <button
-                  key={batch.id}
-                  type="button"
-                  onClick={() => setSelectedArchiveId(batch.id)}
-                  className={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
-                    selectedArchiveId === batch.id
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:bg-muted/60'
-                  }`}
-                >
-                  <p className="text-sm font-medium">
-                    Import {new Date(batch.createdAt).toLocaleDateString()} ({batch.sessions.length})
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(batch.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                  </p>
-                </button>
+                <div key={batch.id} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedArchiveId(batch.id)}
+                    className={`w-full rounded-md border px-3 py-2 pr-11 text-left transition-colors ${
+                      selectedArchiveId === batch.id
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:bg-muted/60'
+                    }`}
+                  >
+                    <p className="text-sm font-medium">
+                      Import {new Date(batch.createdAt).toLocaleDateString()} ({batch.sessions.length})
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(batch.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    title="Delete this import batch"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleDeleteBatch(batch);
+                    }}
+                    disabled={deletingBatchId === batch.id || deletingSessionId !== null}
+                    className="absolute right-2 top-2 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                  >
+                    {deletingBatchId === batch.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
               ))}
 
               {selectedArchive && (
@@ -779,26 +890,48 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
                   <p className="text-xs font-medium text-muted-foreground">Sessions in this batch</p>
                   {selectedArchive.sessions.map((session) => {
                     return (
-                      <button
-                        key={session.id}
-                        type="button"
-                        onClick={() => {
-                          setRawText(session.editorText);
-                          setResult(null);
-                          setError(null);
-                          setSaveSummary(null);
-                          setSelectedArchiveSession(session);
-                        }}
-                        className={`w-full rounded border px-2 py-1.5 text-xs text-left hover:bg-muted/60 transition-colors ${
-                          selectedArchiveSession?.id === session.id ? 'border-primary bg-primary/5' : ''
-                        }`}
-                      >
-                        <p className="font-medium line-clamp-1">{session.title}</p>
-                        <p className="text-muted-foreground">
-                          {session.sourceDate ? `Source ${session.sourceDate}` : 'Source date unknown'}
-                        </p>
-                        <p className="text-muted-foreground mt-0.5">{session.movementCount} movements</p>
-                      </button>
+                      <div key={session.id} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRawText(session.editorText);
+                            setResult(null);
+                            setError(null);
+                            setSaveSummary(null);
+                            setSelectedArchiveSession(session);
+                          }}
+                          className={`w-full rounded border px-2 py-1.5 pr-8 text-xs text-left hover:bg-muted/60 transition-colors ${
+                            selectedArchiveSession?.id === session.id ? 'border-primary bg-primary/5' : ''
+                          }`}
+                        >
+                          <p className="font-medium line-clamp-1">{session.title}</p>
+                          <p className="text-muted-foreground">
+                            {session.sourceDate ? `Source ${session.sourceDate}` : 'Source date unknown'}
+                          </p>
+                          <p className="text-muted-foreground mt-0.5">{session.movementCount} movements</p>
+                          {session.unmatchedNames.length > 0 && (
+                            <p className="mt-1 text-[11px] font-medium text-amber-700">
+                              Mapping needed: {session.unmatchedNames.length}
+                            </p>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          title="Delete this workout"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleDeleteSession(session);
+                          }}
+                          disabled={deletingSessionId === session.id || deletingBatchId !== null}
+                          className="absolute right-1.5 top-1.5 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                        >
+                          {deletingSessionId === session.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -871,11 +1004,24 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
                               <SelectValue placeholder="Assign movement" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value={UNASSIGNED_ALIAS_VALUE}>No mapping</SelectItem>
-                              {movementOptions.map((movement) => (
-                                <SelectItem key={movement.id} value={movement.id}>
-                                  {movement.name}
-                                </SelectItem>
+                              <SelectGroup>
+                                <SelectLabel>Special mapping</SelectLabel>
+                                <SelectItem value={UNASSIGNED_ALIAS_VALUE}>No mapping</SelectItem>
+                                <SelectItem value={MAP_AS_DATE_VALUE}>Map as Date</SelectItem>
+                                <SelectItem value={MAP_AS_HEADER_VALUE}>Map as Header Row</SelectItem>
+                                <SelectItem value={MAP_AS_IGNORE_VALUE}>Ignore this value</SelectItem>
+                              </SelectGroup>
+                              <SelectSeparator />
+
+                              {movementOptionsByCategory.map((group) => (
+                                <SelectGroup key={group.categoryName}>
+                                  <SelectLabel>{group.categoryName}</SelectLabel>
+                                  {group.items.map((movement) => (
+                                    <SelectItem key={movement.id} value={movement.id}>
+                                      {movement.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
                               ))}
                             </SelectContent>
                           </Select>
