@@ -13,6 +13,20 @@ import {
 	type StructureSectionForDraft,
 } from '@/lib/ai/workoutDraft';
 
+const DEFAULT_DDS_RECENT_WORKOUT_LIMIT = 24;
+
+function resolveRecentWorkoutLimit(): number {
+	const raw = process.env.DDS_RECENT_WORKOUT_LIMIT;
+	if (!raw) return DEFAULT_DDS_RECENT_WORKOUT_LIMIT;
+
+	const parsed = Number(raw);
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		return DEFAULT_DDS_RECENT_WORKOUT_LIMIT;
+	}
+
+	return Math.min(Math.floor(parsed), 50);
+}
+
 const RequestSchema = z.object({
 	clientId: z.string().min(1),
 	categoryName: z.string().optional(),
@@ -247,17 +261,19 @@ async function fetchClientContext(accountId: string, clientId: string): Promise<
 
 async function fetchRecentWorkouts(accountId: string, clientId: string): Promise<HistoricalWorkoutForDraft[]> {
 	const db = getAdminDb();
+	const recentWorkoutLimit = resolveRecentWorkoutLimit();
+	const fetchLimit = Math.min(Math.max(recentWorkoutLimit * 4, 120), 400);
 
 	const snapshot = await db
 		.collection('clientWorkouts')
 		.where('ownerId', '==', accountId)
-		.limit(250)
+		.where('clientId', '==', clientId)
+		.limit(fetchLimit)
 		.get();
 
 	const workouts = snapshot.docs
 		.map((doc) => {
 			const data = doc.data();
-			if (data.clientId !== clientId) return null;
 
 			return {
 				id: doc.id,
@@ -270,7 +286,11 @@ async function fetchRecentWorkouts(accountId: string, clientId: string): Promise
 		})
 		.filter((item): item is HistoricalWorkoutForDraft => Boolean(item))
 		.sort((a, b) => (b.dateMillis || 0) - (a.dateMillis || 0))
-		.slice(0, 12);
+		// TUNING PARAMETER: Recent history window for DDS analysis.
+		// Smaller (e.g., 6) = more recent bias, faster evolution.
+		// Larger (e.g., 24-32) = broader patterns, more stable recommendations.
+		// Current default: 24 sessions provides good balance of recency + pattern recognition.
+		.slice(0, recentWorkoutLimit);
 
 	return workouts;
 }

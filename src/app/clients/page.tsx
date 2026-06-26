@@ -1,16 +1,48 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Users, Trash2, RotateCcw, Layers, X, Cake, Calendar, Target, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Search, Users, Trash2, RotateCcw, Layers, X, Calendar, Target } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useClientStore } from '@/lib/stores/useClientStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useClientPrograms } from '@/hooks/useClientPrograms';
 import { AddClientDialog } from '@/components/clients/AddClientDialog';
+import { ClientHistoryImportDialog } from '@/components/clients/ClientHistoryImportDialog';
 import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
 import { Client } from '@/lib/types';
+
+interface ClientDraft {
+  name: string;
+  email: string;
+  phone: string;
+  birthday: string;
+  goals: string;
+  notes: string;
+  targetSessionsPerWeek: string;
+}
+
+function toDraft(client: Client): ClientDraft {
+  return {
+    name: client.name || '',
+    email: client.email || '',
+    phone: client.phone || '',
+    birthday: client.birthday || '',
+    goals: client.goals || '',
+    notes: client.notes || '',
+    targetSessionsPerWeek:
+      typeof client.targetSessionsPerWeek === 'number' ? String(client.targetSessionsPerWeek) : '',
+  };
+}
 
 export default function ClientsPage() {
   const {
@@ -23,6 +55,7 @@ export default function ClientsPage() {
     searchClients,
     setSearchTerm,
     setIncludeDeleted,
+    editClient,
     deleteClient,
     permanentDeleteClient,
     restoreClient,
@@ -33,18 +66,88 @@ export default function ClientsPage() {
   const { clientPrograms, assignPeriod, fetchClientPrograms } = useClientPrograms();
 
   const [localSearchTerm, setLocalSearchTerm] = useState('');
-  const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  
-  // Period assignment dialog state
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ClientDraft | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
   const [periodDialogClient, setPeriodDialogClient] = useState<Client | null>(null);
   const [periodDialogOpen, setPeriodDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchClients();
     fetchAllConfig();
-    fetchClientPrograms(); // Fetch all client programs like schedule page does
+    fetchClientPrograms();
   }, [fetchClients, fetchAllConfig, fetchClientPrograms]);
+
+  useEffect(() => {
+    if (clients.length === 0) {
+      setSelectedClientId(null);
+      setDraft(null);
+      return;
+    }
+
+    const existingSelected = selectedClientId ? clients.find((c) => c.id === selectedClientId) : null;
+    if (existingSelected) return;
+
+    const firstActive = clients.find((c) => !c.isDeleted) || clients[0];
+    setSelectedClientId(firstActive.id);
+  }, [clients, selectedClientId]);
+
+  const selectedClient = useMemo(
+    () => clients.find((client) => client.id === selectedClientId) || null,
+    [clients, selectedClientId]
+  );
+
+  useEffect(() => {
+    if (!selectedClient) {
+      setDraft(null);
+      return;
+    }
+    setDraft(toDraft(selectedClient));
+  }, [selectedClient]);
+
+  const dirtyPayload = useMemo(() => {
+    if (!selectedClient || !draft) return null;
+
+    const normalizeText = (value: string): string | undefined => {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    };
+
+    const normalizeNumber = (value: string): number | undefined => {
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      const parsed = Number(trimmed);
+      if (!Number.isFinite(parsed)) return undefined;
+      return parsed;
+    };
+
+    const next = {
+      name: draft.name.trim(),
+      email: normalizeText(draft.email),
+      phone: normalizeText(draft.phone),
+      birthday: normalizeText(draft.birthday),
+      goals: normalizeText(draft.goals),
+      notes: normalizeText(draft.notes),
+      targetSessionsPerWeek: normalizeNumber(draft.targetSessionsPerWeek),
+    };
+
+    const payload: Partial<Omit<Client, 'id' | 'createdAt'>> = {};
+
+    if (next.name !== (selectedClient.name || '')) payload.name = next.name;
+    if (next.email !== selectedClient.email) payload.email = next.email;
+    if (next.phone !== selectedClient.phone) payload.phone = next.phone;
+    if (next.birthday !== selectedClient.birthday) payload.birthday = next.birthday;
+    if (next.goals !== selectedClient.goals) payload.goals = next.goals;
+    if (next.notes !== selectedClient.notes) payload.notes = next.notes;
+    if (next.targetSessionsPerWeek !== selectedClient.targetSessionsPerWeek) {
+      payload.targetSessionsPerWeek = next.targetSessionsPerWeek;
+    }
+
+    return payload;
+  }, [selectedClient, draft]);
+
+  const isDirty = Boolean(dirtyPayload && Object.keys(dirtyPayload).length > 0);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,37 +160,39 @@ export default function ClientsPage() {
     fetchClients();
   };
 
+  const handleSave = async () => {
+    if (!selectedClient || !dirtyPayload || Object.keys(dirtyPayload).length === 0) return;
+
+    setIsSaving(true);
+    try {
+      await editClient(selectedClient.id, dirtyPayload);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDeleteClient = async (id: string, name: string) => {
     if (confirm(`Are you sure you want to delete ${name}? This action can be undone.`)) {
-      try {
-        await deleteClient(id);
-      } catch (error) {
-        console.error('Failed to delete client:', error);
-      }
+      await deleteClient(id);
     }
   };
 
   const handlePermanentDeleteClient = async (id: string, name: string) => {
-    if (confirm(`⚠️ PERMANENTLY DELETE ${name}?\n\nThis action CANNOT be undone. All client data will be lost forever.\n\nAre you absolutely sure?`)) {
-      try {
-        await permanentDeleteClient(id);
-      } catch (error) {
-        console.error('Failed to permanently delete client:', error);
-      }
+    if (
+      confirm(
+        `⚠️ PERMANENTLY DELETE ${name}?\n\nThis action CANNOT be undone. All client data will be lost forever.\n\nAre you absolutely sure?`
+      )
+    ) {
+      await permanentDeleteClient(id);
     }
   };
 
   const handleRestoreClient = async (id: string, name: string) => {
     if (confirm(`Restore ${name}?`)) {
-      try {
-        await restoreClient(id);
-      } catch (error) {
-        console.error('Failed to restore client:', error);
-      }
+      await restoreClient(id);
     }
   };
 
-  // Handle period assignment - matches schedule page logic exactly
   const handleAssignPeriod = async (assignment: {
     clientId: string;
     periodId: string;
@@ -98,28 +203,17 @@ export default function ClientsPage() {
     isAllDay?: boolean;
     dayTimes?: Array<{ time?: string; isAllDay: boolean; category?: string; deleted?: boolean }>;
   }) => {
-    try {
-      // Use the shared hook for period assignment
-      // This handles creating periods, calendar events, and workouts consistently
-      await assignPeriod(assignment);
-      
-      // Refresh client programs after assignment
-      await fetchClientPrograms(assignment.clientId);
-      
-      setPeriodDialogOpen(false);
-      setPeriodDialogClient(null);
-    } catch (error) {
-      console.error('Error assigning period:', error);
-    }
+    await assignPeriod(assignment);
+    await fetchClientPrograms(assignment.clientId);
+    setPeriodDialogOpen(false);
+    setPeriodDialogClient(null);
   };
 
   return (
     <div className="w-full px-1 pt-1 pb-4 space-y-2">
-      {/* Toolbar */}
       <Card className="py-2">
         <CardContent className="py-1 px-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Left - Search */}
             <form onSubmit={handleSearch} className="flex items-center gap-2">
               <div className="relative w-56">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 icon-clients" />
@@ -140,7 +234,6 @@ export default function ClientsPage() {
               )}
             </form>
 
-            {/* Right - Actions */}
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <input
@@ -160,7 +253,6 @@ export default function ClientsPage() {
         </CardContent>
       </Card>
 
-      {/* Error Display */}
       {error && (
         <Card className="border-destructive">
           <CardContent className="pt-6">
@@ -174,8 +266,7 @@ export default function ClientsPage() {
         </Card>
       )}
 
-      {/* Loading State */}
-      {loading && (
+      {loading && clients.length === 0 && (
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-center py-8">
@@ -186,252 +277,262 @@ export default function ClientsPage() {
         </Card>
       )}
 
-      {/* Clients List */}
-      {!loading && (
-        <>
-          {/* Results Count */}
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {searchTerm ? `Found ${clients.length} clients for "${searchTerm}"` : ''}
-              {includeDeleted && ` (including deleted)`}
-            </p>
-          </div>
-
-          {/* Empty State */}
-          {clients.length === 0 && !loading && (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-12">
-                  <Users className="h-12 w-12 icon-clients mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No clients found</h3>
-                  <p className="text-muted-foreground">
-                    {searchTerm 
-                      ? "Try adjusting your search terms or clear the search to see all clients."
-                      : "Get started by adding your first client."
-                    }
-                  </p>
-                </div>
+      {!loading || clients.length > 0 ? (
+        <div className="flex flex-col lg:flex-row gap-4">
+          <aside className="hidden lg:block lg:w-72 shrink-0">
+            <Card className="sticky top-8">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Users className="h-4 w-4 icon-clients" />
+                  Clients
+                </CardTitle>
+                <CardDescription>
+                  {clients.length} total
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {clients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No clients found.</p>
+                ) : (
+                  clients.map((client) => (
+                    <button
+                      key={client.id}
+                      type="button"
+                      onClick={() => setSelectedClientId(client.id)}
+                      className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                        selectedClientId === client.id
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:bg-muted'
+                      } ${client.isDeleted ? 'opacity-70 border-dashed' : ''}`}
+                    >
+                      <p className="text-sm font-medium truncate">{client.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {client.email || 'No email'}
+                      </p>
+                    </button>
+                  ))
+                )}
               </CardContent>
             </Card>
-          )}
+          </aside>
 
-          {/* Clients Grid */}
-          {clients.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clients.map((client) => (
-                <Card 
-                  key={client.id} 
-                  className={`hover:shadow-md transition-shadow flex flex-col ${
-                    client.isDeleted ? 'opacity-60 border-dashed' : ''
-                  }`}
+          <main className="flex-1 space-y-4">
+            <Card className="lg:hidden">
+              <CardContent className="pt-4">
+                <Select
+                  value={selectedClientId || ''}
+                  onValueChange={(value) => setSelectedClientId(value)}
                 >
-                  <CardHeader className="relative">
-                    <CardTitle className="text-lg flex items-center justify-between pr-6">
-                      <span>{client.name}</span>
-                      {client.isDeleted && (
-                        <span className="text-xs bg-muted px-2 py-1 rounded">
-                          Deleted
-                        </span>
-                      )}
-                    </CardTitle>
-                    {client.email && (
-                      <CardDescription>{client.email}</CardDescription>
-                    )}
-                    {!client.isDeleted && (
-                      <button
-                        onClick={() => handleDeleteClient(client.id, client.name)}
-                        className="absolute top-3 right-3 text-destructive hover:text-destructive/80 transition-colors"
-                        title="Delete client"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </CardHeader>
-                  <CardContent className="flex-1 flex flex-col">
-                    <div className="space-y-2 flex-1">
-                      {client.phone && (
-                        <div>
-                          <p className="text-sm font-medium">Phone:</p>
-                          <p className="text-sm text-muted-foreground">{client.phone}</p>
-                        </div>
-                      )}
-                      
-                      {client.goals && (
-                        <div>
-                          <p className="text-sm font-medium">Goals:</p>
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {client.goals}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {client.notes && (
-                        <div>
-                          <p className="text-sm font-medium">Notes:</p>
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {client.notes}
-                          </p>
-                        </div>
-                      )}
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
 
-                      {/* Birthday */}
-                      {client.birthday && (
-                        <div className="flex items-center gap-2">
-                          <Cake className="h-4 w-4 icon-birthday" />
-                          <p className="text-sm text-pink-600">
-                            {new Date(client.birthday + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Personal Records Count */}
+            {selectedClient ? (
+              <>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium">Personal Records:</p>
-                        <p className="text-sm text-muted-foreground">
-                          {Object.keys(client.personalRecords || {}).length} movements tracked
-                        </p>
+                        <CardTitle className="text-xl flex items-center gap-2">
+                          {selectedClient.name}
+                          {selectedClient.isDeleted && (
+                            <span className="text-xs bg-muted px-2 py-1 rounded">Deleted</span>
+                          )}
+                        </CardTitle>
+                        <CardDescription>
+                          Edit details directly. Save applies changed fields only.
+                        </CardDescription>
                       </div>
 
-                      {/* Session Counts */}
-                      <div className="mt-3 pt-3 border-t">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-sm font-medium flex items-center gap-1">
-                            <Calendar className="h-3.5 w-3.5 icon-schedule" />
-                            Sessions
-                          </p>
-                          {client.targetSessionsPerWeek && (
-                            <span className="text-xs flex items-center gap-1 text-muted-foreground">
-                              <Target className="h-3 w-3" />
-                              {client.targetSessionsPerWeek}/week
-                            </span>
-                          )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {!selectedClient.isDeleted ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setPeriodDialogClient(selectedClient);
+                                setPeriodDialogOpen(true);
+                              }}
+                              title="Assign Period"
+                            >
+                              <Layers className="h-4 w-4 mr-1" />
+                              Period
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteClient(selectedClient.id, selectedClient.name)}
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRestoreClient(selectedClient.id, selectedClient.name)}
+                            >
+                              <RotateCcw className="h-4 w-4 mr-1" />
+                              Restore
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handlePermanentDeleteClient(selectedClient.id, selectedClient.name)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete Forever
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {draft && (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Name</label>
+                            <Input
+                              value={draft.name}
+                              onChange={(e) => setDraft((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+                              disabled={selectedClient.isDeleted}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Email</label>
+                            <Input
+                              value={draft.email}
+                              onChange={(e) => setDraft((prev) => (prev ? { ...prev, email: e.target.value } : prev))}
+                              disabled={selectedClient.isDeleted}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Phone</label>
+                            <Input
+                              value={draft.phone}
+                              onChange={(e) => setDraft((prev) => (prev ? { ...prev, phone: e.target.value } : prev))}
+                              disabled={selectedClient.isDeleted}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Birthday</label>
+                            <Input
+                              type="date"
+                              value={draft.birthday}
+                              onChange={(e) => setDraft((prev) => (prev ? { ...prev, birthday: e.target.value } : prev))}
+                              disabled={selectedClient.isDeleted}
+                            />
+                          </div>
                         </div>
-                        <div className="grid grid-cols-4 gap-1 text-center">
-                          <div className="bg-muted/50 rounded p-1.5">
-                            <p className="text-xs text-muted-foreground">Week</p>
-                            <p className="text-sm font-semibold flex items-center justify-center gap-0.5">
-                              {client.sessionCounts?.thisWeek || 0}
-                              {client.targetSessionsPerWeek && (
-                                <>
-                                  {(client.sessionCounts?.thisWeek || 0) > client.targetSessionsPerWeek && (
-                                    <TrendingUp className="h-3 w-3 text-green-500" />
-                                  )}
-                                  {(client.sessionCounts?.thisWeek || 0) < client.targetSessionsPerWeek && (
-                                    <TrendingDown className="h-3 w-3 text-amber-500" />
-                                  )}
-                                  {(client.sessionCounts?.thisWeek || 0) === client.targetSessionsPerWeek && (
-                                    <Minus className="h-3 w-3 text-blue-500" />
-                                  )}
-                                </>
-                              )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Goals</label>
+                            <Textarea
+                              value={draft.goals}
+                              onChange={(e) => setDraft((prev) => (prev ? { ...prev, goals: e.target.value } : prev))}
+                              className="h-28 max-h-28 resize-none overflow-auto [field-sizing:fixed]"
+                              disabled={selectedClient.isDeleted}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium">Notes</label>
+                            <Textarea
+                              value={draft.notes}
+                              onChange={(e) => setDraft((prev) => (prev ? { ...prev, notes: e.target.value } : prev))}
+                              className="h-28 max-h-28 resize-none overflow-auto [field-sizing:fixed]"
+                              disabled={selectedClient.isDeleted}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium flex items-center gap-1">
+                              <Target className="h-4 w-4" />
+                              Target Sessions / Week
+                            </label>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={14}
+                              value={draft.targetSessionsPerWeek}
+                              onChange={(e) =>
+                                setDraft((prev) =>
+                                  prev ? { ...prev, targetSessionsPerWeek: e.target.value } : prev
+                                )
+                              }
+                              disabled={selectedClient.isDeleted}
+                            />
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <p className="flex items-center gap-1">
+                              <Calendar className="h-4 w-4" />
+                              Week {selectedClient.sessionCounts?.thisWeek || 0} / Month {selectedClient.sessionCounts?.thisMonth || 0} / Year {selectedClient.sessionCounts?.thisYear || 0}
                             </p>
                           </div>
-                          <div className="bg-muted/50 rounded p-1.5">
-                            <p className="text-xs text-muted-foreground">Month</p>
-                            <p className="text-sm font-semibold">{client.sessionCounts?.thisMonth || 0}</p>
-                          </div>
-                          <div className="bg-muted/50 rounded p-1.5">
-                            <p className="text-xs text-muted-foreground">Qtr</p>
-                            <p className="text-sm font-semibold">{client.sessionCounts?.thisQuarter || 0}</p>
-                          </div>
-                          <div className="bg-muted/50 rounded p-1.5">
-                            <p className="text-xs text-muted-foreground">Year</p>
-                            <p className="text-sm font-semibold">{client.sessionCounts?.thisYear || 0}</p>
-                          </div>
                         </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-2 mt-4">
-                      {!client.isDeleted ? (
-                        <>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="flex-1"
-                            onClick={() => {
-                              setEditingClient(client);
-                              setEditDialogOpen(true);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setPeriodDialogClient(client);
-                              setPeriodDialogOpen(true);
-                            }}
-                            title="Assign Period"
-                          >
-                            <Layers className="h-4 w-4 icon-clients" />
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => handleRestoreClient(client.id, client.name)}
-                            className="flex-1"
-                          >
-                            <RotateCcw className="h-4 w-4 mr-2 icon-clients" />
-                            Restore
-                          </Button>
-                          <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            onClick={() => handlePermanentDeleteClient(client.id, client.name)}
-                            className="flex-1"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Forever
-                          </Button>
-                        </>
-                      )}
-                    </div>
+
+                        {!selectedClient.isDeleted && (
+                          <div className="flex items-center justify-between border-t pt-3">
+                            <p className="text-sm text-muted-foreground">
+                              {isDirty ? 'Unsaved changes' : 'All changes saved'}
+                            </p>
+                            <Button onClick={handleSave} disabled={!isDirty || isSaving}>
+                              {isSaving ? 'Saving...' : 'Save Client Changes'}
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          )}
-        </>
-      )}
 
-      {/* Edit Client Dialog */}
-      {editingClient && (
-        <AddClientDialog
-          client={editingClient}
-          open={editDialogOpen}
-          onOpenChange={(open) => {
-            setEditDialogOpen(open);
-            if (!open) {
-              setEditingClient(null);
-            }
-          }}
-          periods={periods || []}
-          clientPrograms={clientPrograms}
-          onClientRefresh={async () => {
-            // Refetch all clients to get updated trainingPhases and eventGoals
-            await fetchClients();
-            // Update the local editingClient with the refreshed data from the store
-            if (editingClient) {
-              const refreshedClient = clients.find(c => c.id === editingClient.id);
-              if (refreshedClient) {
-                setEditingClient(refreshedClient);
-              }
-            }
-          }}
-          onClientProgramsRefresh={async () => {
-            if (editingClient) {
-              await fetchClientPrograms(editingClient.id);
-            }
-          }}
-        />
-      )}
+                {!selectedClient.isDeleted && (
+                  <Card>
+                    <CardContent className="pt-4">
+                      <ClientHistoryImportDialog
+                        key={selectedClient.id}
+                        clientId={selectedClient.id}
+                        clientName={selectedClient.name}
+                        inline
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center py-12">
+                    <Users className="h-12 w-12 icon-clients mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Select a client</h3>
+                    <p className="text-muted-foreground">
+                      Choose a client from the left sidebar to edit details and import history.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </main>
+        </div>
+      ) : null}
 
-      {/* Period Assignment Dialog - matches schedule page props exactly */}
       {periodDialogClient && (
         <PeriodAssignmentDialog
           clientId={periodDialogClient.id}
@@ -440,7 +541,7 @@ export default function ClientsPage() {
           workoutCategories={workoutCategories || []}
           weekTemplates={weekTemplates || []}
           onAssignPeriod={handleAssignPeriod}
-          existingAssignments={clientPrograms.find(cp => cp.clientId === periodDialogClient.id)?.periods || []}
+          existingAssignments={clientPrograms.find((cp) => cp.clientId === periodDialogClient.id)?.periods || []}
           open={periodDialogOpen}
           onOpenChange={(open) => {
             setPeriodDialogOpen(open);

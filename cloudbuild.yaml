@@ -18,7 +18,7 @@ steps:
       - '--build-arg'
       - 'NEXT_PUBLIC_FIREBASE_APP_ID=${_NEXT_PUBLIC_FIREBASE_APP_ID}'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/pca-app:$SHORT_SHA'
+      - 'gcr.io/$PROJECT_ID/pca-app:${_IMAGE_TAG}'
       - '-t'
       - 'gcr.io/$PROJECT_ID/pca-app:latest'
       - '-f'
@@ -40,7 +40,7 @@ steps:
       - 'deploy'
       - 'pca-app'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/pca-app:$SHORT_SHA'
+      - 'gcr.io/$PROJECT_ID/pca-app:${_IMAGE_TAG}'
       - '--region'
       - 'us-central1'
       - '--platform'
@@ -60,7 +60,7 @@ steps:
       - 'NEXT_PUBLIC_FIREBASE_API_KEY=${_NEXT_PUBLIC_FIREBASE_API_KEY},NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN},NEXT_PUBLIC_FIREBASE_PROJECT_ID=${_NEXT_PUBLIC_FIREBASE_PROJECT_ID},NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET},NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID},NEXT_PUBLIC_FIREBASE_APP_ID=${_NEXT_PUBLIC_FIREBASE_APP_ID},GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID},GOOGLE_CLIENT_SECRET=${_GOOGLE_CLIENT_SECRET},GOOGLE_REDIRECT_URI=${_GOOGLE_REDIRECT_URI}'
 
 images:
-  - 'gcr.io/$PROJECT_ID/pca-app:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/pca-app:${_IMAGE_TAG}'
 
 options:
   machineType: 'E2_HIGHCPU_8'
