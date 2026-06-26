@@ -17,6 +17,8 @@ fi
 if ! command -v gcloud &> /dev/null; then
     if [ -f "$HOME/google-cloud-sdk/path.bash.inc" ]; then
         source "$HOME/google-cloud-sdk/path.bash.inc"
+    elif [ -f "./google-cloud-sdk/path.bash.inc" ]; then
+        source "./google-cloud-sdk/path.bash.inc"
     fi
 fi
 
@@ -58,18 +60,18 @@ if [ -z "$GOOGLE_CLIENT_ID" ] || [ -z "$GOOGLE_CLIENT_SECRET" ] || [ -z "$GOOGLE
     echo "   Calendar integration may not work without these."
 fi
 
-# Calculate SHORT_SHA
+# Calculate image tag
 if command -v git &> /dev/null && [ -d .git ]; then
-    SHORT_SHA=$(git rev-parse --short HEAD)
+    IMAGE_TAG=$(git rev-parse --short HEAD)
 else
-    SHORT_SHA=$(date +%s) # Fallback to timestamp if not a git repo
+    IMAGE_TAG=$(date +%s) # Fallback to timestamp if not a git repo
 fi
-echo "Ticket: $SHORT_SHA"
+echo "Ticket: $IMAGE_TAG"
 
 # Submit to Cloud Build (replaces local docker build + push + deploy)
 echo "☁️  Submitting build to Google Cloud Build..."
 gcloud builds submit --config=cloudbuild.yaml \
-  --substitutions=_NEXT_PUBLIC_FIREBASE_API_KEY="$NEXT_PUBLIC_FIREBASE_API_KEY",_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",_NEXT_PUBLIC_FIREBASE_PROJECT_ID="$NEXT_PUBLIC_FIREBASE_PROJECT_ID",_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",_NEXT_PUBLIC_FIREBASE_APP_ID="$NEXT_PUBLIC_FIREBASE_APP_ID",_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID",_GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET",_GOOGLE_REDIRECT_URI="$GOOGLE_REDIRECT_URI",SHORT_SHA="$SHORT_SHA"
+    --substitutions=_NEXT_PUBLIC_FIREBASE_API_KEY="$NEXT_PUBLIC_FIREBASE_API_KEY",_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",_NEXT_PUBLIC_FIREBASE_PROJECT_ID="$NEXT_PUBLIC_FIREBASE_PROJECT_ID",_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",_NEXT_PUBLIC_FIREBASE_APP_ID="$NEXT_PUBLIC_FIREBASE_APP_ID",_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID",_GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET",_GOOGLE_REDIRECT_URI="$GOOGLE_REDIRECT_URI",_IMAGE_TAG="$IMAGE_TAG"
 
 # Get Cloud Run service URL
 SERVICE_URL=$(gcloud run services describe pca-app --region us-central1 --format 'value(status.url)' --project $PROJECT_ID)
