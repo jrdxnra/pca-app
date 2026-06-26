@@ -48,8 +48,6 @@ const DEFAULT_PERIOD_ID = 'history-import';
 const LEGACY_CLUSTER_WINDOW_MS = 5 * 60 * 1000;
 const IMPORT_ALIAS_STORAGE_KEY = 'pca-import-movement-aliases-v1';
 const UNASSIGNED_ALIAS_VALUE = '__unassigned__';
-const MAP_AS_DATE_VALUE = '__map_as_date__';
-const MAP_AS_HEADER_VALUE = '__map_as_header__';
 const MAP_AS_IGNORE_VALUE = '__map_as_ignore__';
 const SUPPORTED_PASTE_TYPES = [
   { badge: 'SHEET', label: 'Google Sheets / Excel Paste' },
@@ -59,11 +57,10 @@ const SUPPORTED_PASTE_TYPES = [
   { badge: '.TXT', label: 'Plain Text Session Notes' },
 ];
 
-const SPECIAL_ALIAS_VALUES = new Set([
-  MAP_AS_DATE_VALUE,
-  MAP_AS_HEADER_VALUE,
-  MAP_AS_IGNORE_VALUE,
-]);
+const SPECIAL_ALIAS_VALUES = new Set([MAP_AS_IGNORE_VALUE]);
+const SLASH_DATE_TOKEN_RE = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/;
+const DOT_DATE_TOKEN_RE = /^\d{1,2}\.\d{1,2}\.\d{2,4}$/;
+const ISO_DATE_TOKEN_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type MovementAliasMap = Record<string, string>;
 
@@ -80,6 +77,15 @@ interface ImportArchiveBatch {
   id: string;
   createdAt: number;
   sessions: ImportArchiveSessionSummary[];
+}
+
+function isDateLikeToken(value: string): boolean {
+  const normalized = value.trim();
+  if (!normalized) return false;
+
+  return ISO_DATE_TOKEN_RE.test(normalized)
+    || SLASH_DATE_TOKEN_RE.test(normalized)
+    || DOT_DATE_TOKEN_RE.test(normalized);
 }
 
 function stripUndefinedDeep<T>(value: T): T {
@@ -217,7 +223,7 @@ function extractUnmatchedNamesFromWorkout(workout: Record<string, unknown>): str
 
       if (note.startsWith('Imported movement:')) {
         const parsed = note.replace('Imported movement:', '').trim();
-        if (parsed) unmatched.add(parsed);
+        if (parsed && !isDateLikeToken(parsed)) unmatched.add(parsed);
       }
     });
   });
@@ -347,6 +353,10 @@ function findMovementMatch(
 ): { movement?: Movement; suppressUnmatched?: boolean } {
   const normalized = normalizeMovementName(name);
   if (!normalized) return {};
+
+  if (isDateLikeToken(name)) {
+    return { suppressUnmatched: true };
+  }
 
   const aliasTargetId = aliases[normalized];
   if (aliasTargetId) {
@@ -492,6 +502,33 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
         items: items.sort((a, b) => a.name.localeCompare(b.name)),
       }));
   }, [movementOptions]);
+  const derivedUnmatchedCountBySessionId = useMemo(() => {
+    const bySessionId = new Map<string, number>();
+
+    archiveBatches.forEach((batch) => {
+      batch.sessions.forEach((session) => {
+        const parsed = parsePastedWorkoutHistory(session.editorText);
+        const names = new Set<string>();
+
+        parsed.sessions.forEach((parsedSession) => {
+          parsedSession.rounds
+            .filter((round) => !isWarmupSection(round.sectionName))
+            .forEach((round) => {
+              round.entries.forEach((entry) => {
+                const mapping = findMovementMatch(entry.movementName, movementLookup, movementAliases, movementById);
+                if (!mapping.movement && !mapping.suppressUnmatched) {
+                  names.add(entry.movementName);
+                }
+              });
+            });
+        });
+
+        bySessionId.set(session.id, names.size);
+      });
+    });
+
+    return bySessionId;
+  }, [archiveBatches, movementLookup, movementAliases, movementById]);
   const selectedArchive = useMemo(
     () => archiveBatches.find((batch) => batch.id === selectedArchiveId) || null,
     [archiveBatches, selectedArchiveId]
@@ -840,7 +877,7 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
       )}
 
         <div className="grid gap-3 md:grid-cols-[280px_1fr] flex-1 min-h-0">
-          <Card className={`min-h-0 overflow-hidden ${inline ? 'h-72' : 'h-full'}`}>
+          <Card className={`min-h-0 overflow-hidden ${inline ? 'h-[30rem]' : 'h-full'}`}>
             <CardContent className="pt-4 h-full overflow-y-auto space-y-2">
               <p className="text-sm font-medium">Past Imports</p>
               {archiveLoading && <p className="text-sm text-muted-foreground">Loading import archive...</p>}
@@ -850,6 +887,17 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
 
               {!archiveLoading && archiveBatches.map((batch) => (
                 <div key={batch.id} className="relative">
+                  {(() => {
+                    const batchUnmatchedCount = batch.sessions.reduce(
+                      (sum, session) => {
+                        const stored = session.unmatchedNames.length;
+                        const derived = derivedUnmatchedCountBySessionId.get(session.id) || 0;
+                        return sum + Math.max(stored, derived);
+                      },
+                      0
+                    );
+
+                    return (
                   <button
                     type="button"
                     onClick={() => setSelectedArchiveId(batch.id)}
@@ -865,7 +913,14 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
                     <p className="text-xs text-muted-foreground">
                       {new Date(batch.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                     </p>
+                    {batchUnmatchedCount > 0 && (
+                      <p className="mt-1 text-[11px] font-medium text-amber-700">
+                        Mappings needed: {batchUnmatchedCount}
+                      </p>
+                    )}
                   </button>
+                    );
+                  })()}
                   <button
                     type="button"
                     title="Delete this import batch"
@@ -889,6 +944,10 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
                 <div className="pt-2 border-t space-y-1">
                   <p className="text-xs font-medium text-muted-foreground">Sessions in this batch</p>
                   {selectedArchive.sessions.map((session) => {
+                    const storedCount = session.unmatchedNames.length;
+                    const derivedCount = derivedUnmatchedCountBySessionId.get(session.id) || 0;
+                    const mappingNeededCount = Math.max(storedCount, derivedCount);
+
                     return (
                       <div key={session.id} className="relative">
                         <button
@@ -909,9 +968,9 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
                             {session.sourceDate ? `Source ${session.sourceDate}` : 'Source date unknown'}
                           </p>
                           <p className="text-muted-foreground mt-0.5">{session.movementCount} movements</p>
-                          {session.unmatchedNames.length > 0 && (
+                          {mappingNeededCount > 0 && (
                             <p className="mt-1 text-[11px] font-medium text-amber-700">
-                              Mapping needed: {session.unmatchedNames.length}
+                              Mapping needed: {mappingNeededCount}
                             </p>
                           )}
                         </button>
@@ -1007,8 +1066,6 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
                               <SelectGroup>
                                 <SelectLabel>Special mapping</SelectLabel>
                                 <SelectItem value={UNASSIGNED_ALIAS_VALUE}>No mapping</SelectItem>
-                                <SelectItem value={MAP_AS_DATE_VALUE}>Map as Date</SelectItem>
-                                <SelectItem value={MAP_AS_HEADER_VALUE}>Map as Header Row</SelectItem>
                                 <SelectItem value={MAP_AS_IGNORE_VALUE}>Ignore this value</SelectItem>
                               </SelectGroup>
                               <SelectSeparator />

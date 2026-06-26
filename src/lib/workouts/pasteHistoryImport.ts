@@ -31,6 +31,7 @@ interface MutableSession {
 
 const DATE_RE = /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/;
 const DOT_DATE_RE = /\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})\b/;
+const ISO_DATE_RE = /\b(\d{4})-(\d{2})-(\d{2})\b/;
 
 const NOISE_HEADERS = new Set([
   'date',
@@ -144,6 +145,20 @@ function parseDotDateToken(value: string): Date | null {
   return parsed;
 }
 
+function parseIsoDateToken(value: string): Date | null {
+  const match = value.match(ISO_DATE_RE);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!month || !day || !year) return null;
+
+  const parsed = new Date(year, month - 1, day, 12, 0, 0, 0);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
 function parseSessionLengthMinutes(values: string[]): number | undefined {
   const combined = values.join(' ');
   const match = combined.match(/(\d{1,3})\s*min/i);
@@ -162,6 +177,7 @@ function isLikelyMovementRow(name: string, sets: string, reps: string, load: str
     return false;
   }
   if (DATE_RE.test(name)) return false;
+  if (ISO_DATE_RE.test(name)) return false;
   if (normalizedName.startsWith('working sets') || normalizedName === 'warm up' || normalizedName === 'warmup') {
     return false;
   }
@@ -277,9 +293,9 @@ function parseSheetWorkoutHistory(input: string): ParsedHistoryResult {
         reps,
         load,
       ];
-      const dateToken = dateParts.find((part) => DATE_RE.test(part));
+      const dateToken = dateParts.find((part) => DATE_RE.test(part) || ISO_DATE_RE.test(part));
       if (dateToken) {
-        const parsedDate = parseDateToken(dateToken);
+        const parsedDate = parseDateToken(dateToken) || parseIsoDateToken(dateToken);
         if (parsedDate) {
           const laneSessions = sessionsByLane.get(laneStart) || [];
           laneSessions.push({
@@ -398,11 +414,19 @@ function parseDocWorkoutHistory(input: string): ParsedHistoryResult {
     const line = rawLine.trim();
     if (!line) continue;
 
+    if (/^date\s*:?$/i.test(line)) {
+      continue;
+    }
+
+    if (/^movement\s*[\t, ]+sets\s*[\t, ]+reps\s*[\t, ]+load$/i.test(line)) {
+      continue;
+    }
+
     if (/^date\s*[\t, ]+movement\s*[\t, ]+sets\s*[\t, ]+reps\s*[\t, ]+load$/i.test(line)) {
       continue;
     }
 
-    const explicitDate = parseDateToken(line) || parseDotDateToken(line);
+    const explicitDate = parseDateToken(line) || parseDotDateToken(line) || parseIsoDateToken(line);
     if (explicitDate) {
       if (currentSession && (currentSession as MutableSession).rounds.size > 0) {
         flushSession();
