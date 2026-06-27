@@ -794,7 +794,10 @@ function buildRoundsFromStructure(
   const normalizeIntentKey = (section: StructureSectionForDraft): string => {
     const key = normalizeText(section.workoutIntentKey);
     const name = normalizeText(section.workoutIntentName);
-    const intent = key || name;
+    // Fall back to the workout type name so that headers like "EMOM" or "AMRAP"
+    // are resolved directly to their archetype without relying on keyword matching.
+    const typeName = normalizeText(section.workoutTypeName);
+    const intent = key || name || typeName;
 
     if (!intent) return '';
     if (intent === 'ballistics') return 'potentiation';
