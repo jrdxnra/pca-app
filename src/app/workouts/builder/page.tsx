@@ -147,7 +147,9 @@ export default function BuilderPage() {
   }, [urlClientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
-  // Client programs hook - uses local client state (not URL) to avoid reloads
+  const effectiveClientId = clientIdImmediate || clientId;
+
+  // Client programs hook - uses immediate selection for mutations to avoid deferred-ID drift.
   const {
     clientPrograms,
     isLoading: clientProgramsLoading,
@@ -157,45 +159,89 @@ export default function BuilderPage() {
     updatePeriod,
     deleteDaysFromPeriod,
     archivePeriod
-  } = useClientPrograms(clientId);
+  } = useClientPrograms(effectiveClientId);
 
   const handleAssignWeek = useCallback(async (assignment: {
     weekTemplateId: string;
     clientId: string;
     startDate: Date;
     endDate: Date;
+    selectedWeekdays?: number[];
+    scheduledDays?: Array<{
+      date: Date;
+      workoutCategory: string;
+      workoutCategoryColor?: string;
+      isAllDay?: boolean;
+      time?: string;
+      appliedTemplateId?: string;
+      appliedTemplateSelection?: string;
+    }>;
+    overwriteExistingWorkouts?: boolean;
+    duplicateWorkoutIds?: string[];
+    excludedSessionDateKeys?: string[];
   }) => {
     try {
       setLoading(true);
       await assignWeekTemplate(assignment);
       toastSuccess('Week Template assigned successfully');
     } catch (error) {
-      console.error('Error assigning week template:', error);
-      toastError('Failed to assign Week Template');
+      const fillFailures = (error && typeof error === 'object' && 'fillFailures' in error)
+        ? (error as { fillFailures?: Array<{ dateKey: string; reason: string }> }).fillFailures
+        : undefined;
+
+      if (fillFailures && fillFailures.length > 0) {
+        const hasMissingAdminCredentials = fillFailures.some((item) =>
+          item.reason.toLowerCase().includes('local +fill unavailable')
+          || item.reason.toLowerCase().includes('firebase admin credentials')
+        );
+        const hasWorkoutCreationFailures = fillFailures.some((item) => {
+          const reason = item.reason.toLowerCase();
+          return reason.includes('workout creation failed') || reason.includes('workout missing after verification');
+        });
+        if (hasMissingAdminCredentials) {
+          toastError('Local +Fill is unavailable until Firebase Admin credentials are configured. No workouts were created.');
+        } else if (hasWorkoutCreationFailures) {
+          toastError('Workout creation failed during week assignment. No events will be created until workout writes succeed. Check console logs for exact failing dates.');
+        } else {
+          toastError(`+Fill completed with issues on ${fillFailures.length} day${fillFailures.length === 1 ? '' : 's'}. Review highlighted rows.`);
+        }
+      } else {
+        console.error('Error assigning week template:', error);
+        toastError('Failed to assign Week Template');
+      }
+      throw error;
     } finally {
       setLoading(false);
     }
   }, [assignWeekTemplate]);
 
-  const handleDeleteDays = useCallback(async (periodId: string, daysToDelete: string[]) => {
+  const handleDeleteDays = useCallback(async (
+    periodId: string,
+    daysToDelete: string[],
+    periodWindow?: { startDate: Date; endDate: Date }
+  ) => {
     try {
-      if (!clientId) return;
+      if (!effectiveClientId) return;
       setLoading(true);
-      await deleteDaysFromPeriod(periodId, clientId, daysToDelete);
-      toastSuccess(`Deleted ${daysToDelete.length} day(s) from period`);
+      await deleteDaysFromPeriod(periodId, effectiveClientId, daysToDelete, periodWindow);
+      if (daysToDelete.includes('__ALL__')) {
+        toastSuccess('Deleted all workouts for this assignment range');
+      } else {
+        toastSuccess(`Deleted ${daysToDelete.length} day(s) from period`);
+      }
     } catch (error) {
       console.error('Error deleting days:', error);
       toastError('Failed to delete days');
     } finally {
       setLoading(false);
     }
-  }, [clientId, deleteDaysFromPeriod]);
+  }, [effectiveClientId, deleteDaysFromPeriod]);
 
   const handleArchivePeriod = useCallback(async (periodId: string) => {
     try {
-      if (!clientId) return;
+      if (!effectiveClientId) return;
       setLoading(true);
-      await archivePeriod(periodId, clientId);
+      await archivePeriod(periodId, effectiveClientId);
       toastSuccess('Period archived successfully');
     } catch (error) {
       console.error('Error archiving period:', error);
@@ -203,11 +249,16 @@ export default function BuilderPage() {
     } finally {
       setLoading(false);
     }
-  }, [clientId, archivePeriod]);
+  }, [effectiveClientId, archivePeriod]);
 
   // Simple local state - only day view is supported now
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('day');
   const [calendarDate, setCalendarDate] = useState(new Date());
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   // Use store data directly - no need for local state
   const clients = storeClients;
@@ -667,6 +718,22 @@ export default function BuilderPage() {
     let start: Date;
     let end: Date;
 
+    const visibleAnchor = new Date(calendarDate || new Date());
+    const anchorDayOfWeek = visibleAnchor.getDay();
+    const mondayOffset = anchorDayOfWeek === 0 ? -6 : 1 - anchorDayOfWeek;
+    const visibleWeekStart = new Date(visibleAnchor);
+    visibleWeekStart.setDate(visibleAnchor.getDate() + mondayOffset);
+    visibleWeekStart.setHours(0, 0, 0, 0);
+
+    // Match the day-view window: one week before plus current and next four weeks.
+    const fetchStart = new Date(visibleWeekStart);
+    fetchStart.setDate(visibleWeekStart.getDate() - 7);
+    fetchStart.setHours(0, 0, 0, 0);
+
+    const fetchEnd = new Date(fetchStart);
+    fetchEnd.setDate(fetchStart.getDate() + (5 * 7) - 1);
+    fetchEnd.setHours(23, 59, 59, 999);
+
     if (selectedPeriod) {
       // Use the raw period start/end for calculateWeeks
       const periodStart = safeToDate(selectedPeriod.startDate);
@@ -713,8 +780,8 @@ export default function BuilderPage() {
       try {
         const fetchedWorkouts = await fetchWorkoutsByDateRange(
           clientId,
-          Timestamp.fromDate(start),
-          Timestamp.fromDate(end)
+          Timestamp.fromDate(fetchStart),
+          Timestamp.fromDate(fetchEnd)
         );
         setWorkouts(fetchedWorkouts);
       } catch (error) {
@@ -1846,12 +1913,21 @@ export default function BuilderPage() {
   };
 
   const getNavigationLabel = () => {
-    // Only day view is supported - show week range since we display workouts for the week
+    // Avoid SSR/client mismatch around timezone/week-boundary differences.
+    if (!hasMounted) {
+      return ' ';
+    }
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const formatMonthDay = (date: Date) => `${monthNames[date.getMonth()]} ${date.getDate()}`;
+
+    // Only day view is supported - show week range since we display workouts for the week.
     const weekStart = new Date(calendarDate);
     weekStart.setDate(calendarDate.getDate() - calendarDate.getDay());
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
-    return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+    return `${formatMonthDay(weekStart)} - ${formatMonthDay(weekEnd)}`;
   };
 
   return (
@@ -1863,7 +1939,7 @@ export default function BuilderPage() {
             {/* Navigation */}
             <BuilderHeader
               clients={clients}
-              clientId={clientId}
+              clientId={effectiveClientId}
               clientIdImmediate={clientIdImmediate}
               onClientChange={handleClientChange}
               loading={loading}
@@ -1872,16 +1948,59 @@ export default function BuilderPage() {
               navigationLabel={getNavigationLabel()}
               periods={periods}
               workoutCategories={workoutCategories}
+              workoutStructureTemplates={workoutStructureTemplates}
               weekTemplates={weekTemplates}
               clientPrograms={clientPrograms}
               onAssignPeriod={handleAssignPeriod}
               onAssignWeek={handleAssignWeek}
               onDeleteDays={handleDeleteDays}
               onArchivePeriod={handleArchivePeriod}
-              onWorkoutCreated={() => {
-                // Force re-fetch workouts and calendar events
-                setCalendarDate(new Date(calendarDate));
-                refreshCalendarEvents();
+              onWorkoutCreated={async () => {
+                const activeClientId = effectiveClientId || clientId || clientIdImmediate;
+
+                // Refresh both workout and event data without a hard page reload.
+                await fetchAllScheduledWorkouts();
+                await refreshCalendarEvents();
+                setCalendarDate((prev) => new Date(prev));
+
+                if (activeClientId) {
+                  const visibleWeekStart = new Date(calendarDate);
+                  const dayOfWeek = visibleWeekStart.getDay();
+                  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                  visibleWeekStart.setDate(visibleWeekStart.getDate() + mondayOffset);
+                  visibleWeekStart.setHours(0, 0, 0, 0);
+
+                  const fetchStart = new Date(visibleWeekStart);
+                  fetchStart.setDate(visibleWeekStart.getDate() - 7);
+                  fetchStart.setHours(0, 0, 0, 0);
+
+                  const fetchEnd = new Date(fetchStart);
+                  fetchEnd.setDate(fetchStart.getDate() + (5 * 7) - 1);
+                  fetchEnd.setHours(23, 59, 59, 999);
+
+                  try {
+                    let visibleWorkouts = await fetchWorkoutsByDateRange(
+                      activeClientId,
+                      Timestamp.fromDate(fetchStart),
+                      Timestamp.fromDate(fetchEnd)
+                    );
+
+                    // Rarely, writes are not visible on the immediate next query in this flow.
+                    // Retry once before giving up so the grid can populate deterministically.
+                    if (visibleWorkouts.length === 0) {
+                      await new Promise((resolve) => setTimeout(resolve, 250));
+                      visibleWorkouts = await fetchWorkoutsByDateRange(
+                        activeClientId,
+                        Timestamp.fromDate(fetchStart),
+                        Timestamp.fromDate(fetchEnd)
+                      );
+                    }
+
+                    setWorkouts(visibleWorkouts);
+                  } catch (verifyError) {
+                    logger.error('Failed to verify workouts after refresh:', verifyError);
+                  }
+                }
               }}
               weekOrder={weekSettings.weekOrder}
               onWeekOrderChange={(order) => setWeekSettings(prev => ({ ...prev, weekOrder: order }))}
@@ -2112,16 +2231,11 @@ export default function BuilderPage() {
                                         <div className="flex flex-col items-center justify-center p-2">
                                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mb-1"></div>
                                         </div>
-                                      ) : (inPeriod || !selectedPeriod) ? (
+                                      ) : (
                                         <div className="flex flex-col items-center gap-1">
                                           <Plus className="w-5 h-5 opacity-50 group-hover:opacity-100 transition-opacity" />
                                           <span className="opacity-0 group-hover:opacity-100 transition-opacity">Add Workout</span>
                                         </div>
-                                      ) : (
-                                        <>
-                                          <div className="text-lg mb-1">🚫</div>
-                                          <div>Outside training period</div>
-                                        </>
                                       )}
                                     </div>
                                   </div>
@@ -2453,16 +2567,11 @@ export default function BuilderPage() {
                                       <div className="flex flex-col items-center justify-center p-2">
                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mb-1"></div>
                                       </div>
-                                    ) : (inPeriod || !selectedPeriod) ? (
+                                    ) : (
                                       <div className="flex flex-col items-center gap-1">
                                         <Plus className="w-5 h-5 opacity-50 group-hover:opacity-100 transition-opacity" />
                                         <span className="opacity-0 group-hover:opacity-100 transition-opacity">Add Workout</span>
                                       </div>
-                                    ) : (
-                                      <>
-                                        <div className="text-lg mb-1">🚫</div>
-                                        <div>Outside training period</div>
-                                      </>
                                     )}
                                   </div>
                                 </div>
@@ -2684,12 +2793,14 @@ export default function BuilderPage() {
             initialCategory={quickWorkoutInitialData.category}
             initialTime={quickWorkoutInitialData.time}
             eventId={quickWorkoutInitialData.eventId}
-            onWorkoutCreated={() => {
+            onWorkoutCreated={async () => {
               setQuickWorkoutDialogOpen(false);
               setQuickWorkoutInitialData({});
-              // Force re-fetch workouts and calendar events
-              setCalendarDate(new Date(calendarDate));
-              refreshCalendarEvents();
+
+              // Refresh both workout and event data without a hard page reload.
+              await fetchAllScheduledWorkouts();
+              await refreshCalendarEvents();
+              setCalendarDate((prev) => new Date(prev));
             }}
             onClose={() => {
               setQuickWorkoutDialogOpen(false);

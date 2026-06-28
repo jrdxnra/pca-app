@@ -30,6 +30,11 @@ import { createClientWorkout } from '@/lib/firebase/services/clientWorkouts';
 import { fetchClientWorkouts } from '@/lib/firebase/services/clientWorkouts';
 import { updateClientWorkout } from '@/lib/firebase/services/clientWorkouts';
 import { deleteClientWorkout } from '@/lib/firebase/services/clientWorkouts';
+import {
+  getImportMovementAliases,
+  setImportMovementAliases,
+  type MovementAliasMap,
+} from '@/lib/firebase/services/importAliases';
 import { useMovements } from '@/hooks/queries/useMovements';
 import {
   normalizeMovementName,
@@ -61,8 +66,6 @@ const SPECIAL_ALIAS_VALUES = new Set([MAP_AS_IGNORE_VALUE]);
 const SLASH_DATE_TOKEN_RE = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/;
 const DOT_DATE_TOKEN_RE = /^\d{1,2}\.\d{1,2}\.\d{2,4}$/;
 const ISO_DATE_TOKEN_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-type MovementAliasMap = Record<string, string>;
 
 interface ImportArchiveSessionSummary {
   id: string;
@@ -332,6 +335,14 @@ function persistAliasMap(aliasMap: MovementAliasMap) {
   }
 }
 
+function aliasMapsEqual(left: MovementAliasMap, right: MovementAliasMap): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+
+  return leftKeys.every((key) => left[key] === right[key]);
+}
+
 function buildMovementLookup(movements: Movement[]): Map<string, Movement> {
   const lookup = new Map<string, Movement>();
 
@@ -577,13 +588,47 @@ export function ClientHistoryImportDialog({ clientId, clientName, inline = false
         next[aliasKey] = targetMovementId;
       }
       persistAliasMap(next);
+      void setImportMovementAliases(next).catch((error) => {
+        console.warn('Failed to persist alias mapping to account scope:', error);
+      });
       return next;
     });
   };
 
   useEffect(() => {
     if (!open && !inline) return;
-    setMovementAliases(loadAliasMap());
+
+    let cancelled = false;
+
+    const hydrateAliases = async () => {
+      const localAliases = loadAliasMap();
+      setMovementAliases(localAliases);
+
+      const remoteAliases = await getImportMovementAliases();
+      if (cancelled) return;
+
+      const mergedAliases = {
+        ...remoteAliases,
+        ...localAliases,
+      };
+
+      setMovementAliases(mergedAliases);
+      persistAliasMap(mergedAliases);
+
+      if (!aliasMapsEqual(mergedAliases, remoteAliases)) {
+        try {
+          await setImportMovementAliases(mergedAliases);
+        } catch (error) {
+          console.warn('Failed to sync aliases to account scope:', error);
+        }
+      }
+    };
+
+    void hydrateAliases();
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, inline]);
 
   const loadArchive = async () => {

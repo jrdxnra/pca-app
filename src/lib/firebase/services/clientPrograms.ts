@@ -170,7 +170,7 @@ export async function deleteClientProgram(id: string): Promise<void> {
 export async function addPeriodToClientProgram(
   clientProgramId: string,
   period: Omit<ClientProgramPeriod, 'id'>
-): Promise<void> {
+): Promise<string> {
   try {
     const clientProgram = await getClientProgram(clientProgramId);
     if (!clientProgram) {
@@ -216,6 +216,8 @@ export async function addPeriodToClientProgram(
       savedPeriodId: newPeriod.id,
       savedPeriodFound: verifyProgram?.periods?.some(p => p.id === newPeriod.id) || false
     });
+
+    return newPeriod.id;
   } catch (error) {
     console.error('Error adding period to client program:', error);
     throw error;
@@ -299,8 +301,14 @@ export async function deleteDaysFromPeriod(
       throw new Error('Client program not found');
     }
 
-    const updatedPeriods = clientProgram.periods.map(period => {
-      if (period.id !== periodId) return period;
+    const deleteAllDays = daysToDelete.includes('__ALL__');
+
+    const updatedPeriods = clientProgram.periods.flatMap(period => {
+      if (period.id !== periodId) return [period];
+
+      if (deleteAllDays) {
+        return [];
+      }
 
       // Filter out days that match the days to delete
       const updatedDays = period.days.filter(day => {
@@ -313,10 +321,14 @@ export async function deleteDaysFromPeriod(
         return !daysToDelete.includes(dayName);
       });
 
-      return {
+      if (updatedDays.length === 0) {
+        return [];
+      }
+
+      return [{
         ...period,
         days: updatedDays
-      };
+      }];
     });
 
     await updateClientProgram(clientProgramId, {

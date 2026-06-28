@@ -49,6 +49,7 @@ ui-debug.log
 *.api-key*
 *api-key*
 .render-api-key*
+/.secrets/
 
 # typescript
 *.tsbuildinfo

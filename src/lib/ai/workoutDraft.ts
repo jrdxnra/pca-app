@@ -7,6 +7,24 @@ export interface GenerateWorkoutDraftRequest {
   sessionDurationMinutes?: number;
   currentTitle?: string;
   currentNotes?: string;
+  includeDecisionTrace?: boolean;
+}
+
+export interface WorkoutDraftDecisionTrace {
+  categoryRequested?: string;
+  filteredByCategory: boolean;
+  totalRecentWorkoutCount: number;
+  candidateWorkoutCount: number;
+  topRankedMovements: Array<{
+    movementId: string;
+    count: number;
+    latestWorkoutIndex: number;
+  }>;
+  sectionPlan?: Array<{
+    sectionOrder: number;
+    sectionName?: string;
+    movementIds: string[];
+  }>;
 }
 
 export interface ClientContextForDraft {
@@ -32,6 +50,7 @@ export interface GenerateWorkoutDraftResponse {
   source: {
     recentWorkoutsAnalyzed: number;
     strategy: 'history-with-structure' | 'history-clone' | 'fallback';
+    decisionTrace?: WorkoutDraftDecisionTrace;
   };
 }
 
@@ -821,6 +840,7 @@ function buildRoundsFromStructure(
   const latestTargetByMovementId = new Map<string, Partial<ClientWorkoutTargetWorkload>>();
   const latestTargetByMovementName = new Map<string, Partial<ClientWorkoutTargetWorkload>>();
   const recentMovementKeys = new Set<string>();
+  const recentMovementPenaltyByKey = new Map<string, number>();
 
   rankedMovements.forEach((movement) => {
     if (movement.latestTargetWorkload) {
@@ -1298,6 +1318,30 @@ function buildRoundsFromStructure(
       });
     });
 
+  // Build a stronger anti-repeat penalty across the last few sessions.
+  // This nudges Tue/Thu/Tue generation away from repeating the same movement families
+  // while still allowing repeat exposure when history is sparse.
+  roundTemplates
+    .filter((template) => template.workoutIndex <= 2)
+    .forEach((template) => {
+      const sessionPenalty =
+        template.workoutIndex === 0
+          ? 260
+          : template.workoutIndex === 1
+            ? 180
+            : 110;
+
+      (template.round.movementUsages || []).forEach((usage) => {
+        const key = getMovementDedupKeyFromId(usage.movementId);
+        if (!key) return;
+
+        const existing = recentMovementPenaltyByKey.get(key) || 0;
+        if (sessionPenalty > existing) {
+          recentMovementPenaltyByKey.set(key, sessionPenalty);
+        }
+      });
+    });
+
   const getPreferredCategoryKeywords = (section: StructureSectionForDraft): string[] => {
     const intent = normalizeIntentKey(section);
     const interval = detectSectionIntervalFormat(section);
@@ -1443,7 +1487,7 @@ function buildRoundsFromStructure(
         const categoryHits = countKeywordHits(categoryText, preferredKeywords);
         const movementHits = countKeywordHits(movementText, preferredKeywords);
         const movementKey = getMovementDedupKeyFromStat(movement);
-        const recentPenalty = movementKey && recentMovementKeys.has(movementKey) ? 45 : 0;
+        const recentPenalty = movementKey ? (recentMovementPenaltyByKey.get(movementKey) || 0) : 0;
         const crossSectionPenalty = movementKey && usedMovementKeys.has(movementKey) ? 80 : 0;
         const score =
           movement.count * 100 -
@@ -1934,6 +1978,7 @@ export function buildWorkoutDraftFromHistory(input: {
   recentWorkouts: HistoricalWorkoutForDraft[];
   fallbackTitle?: string;
   currentNotes?: string;
+  includeDecisionTrace?: boolean;
   categoryContextById?: Record<string, CategoryContextForDraft>;
   movementContextById?: Record<string, MovementContextForDraft>;
   sessionDurationMinutes?: number;
@@ -1952,6 +1997,21 @@ export function buildWorkoutDraftFromHistory(input: {
   const rankedMovements = mergeMovementStats(categoryEnrichedMovements, libraryMovements);
   const historicalRoundTemplates = buildHistoricalRoundTemplates(candidateWorkouts);
   const actualSessionsPerWeek = getActualSessionsPerWeek(candidateWorkouts);
+  const shouldIncludeDecisionTrace = Boolean(input.includeDecisionTrace);
+
+  const baseDecisionTrace: WorkoutDraftDecisionTrace | undefined = shouldIncludeDecisionTrace
+    ? {
+        categoryRequested: input.categoryName,
+        filteredByCategory: Boolean(normalizedCategory && filteredByCategory.length > 0),
+        totalRecentWorkoutCount: input.recentWorkouts.length,
+        candidateWorkoutCount: candidateWorkouts.length,
+        topRankedMovements: rankedMovements.slice(0, 12).map((movement) => ({
+          movementId: movement.movementId,
+          count: movement.count,
+          latestWorkoutIndex: movement.latestWorkoutIndex,
+        })),
+      }
+    : undefined;
 
   const globalContextText = compactText([
     input.categoryName,
@@ -2043,6 +2103,16 @@ export function buildWorkoutDraftFromHistory(input: {
       source: {
         recentWorkoutsAnalyzed: candidateWorkouts.length,
         strategy: 'history-with-structure',
+        decisionTrace: baseDecisionTrace
+          ? {
+              ...baseDecisionTrace,
+              sectionPlan: rounds.map((round, index) => ({
+                sectionOrder: index + 1,
+                sectionName: round.sectionName,
+                movementIds: (round.movementUsages || []).map((usage) => usage.movementId).filter(Boolean),
+              })),
+            }
+          : undefined,
       },
     };
   }
@@ -2056,6 +2126,16 @@ export function buildWorkoutDraftFromHistory(input: {
       source: {
         recentWorkoutsAnalyzed: candidateWorkouts.length,
         strategy: 'history-clone',
+        decisionTrace: baseDecisionTrace
+          ? {
+              ...baseDecisionTrace,
+              sectionPlan: (candidateWorkouts[0].rounds || []).map((round, index) => ({
+                sectionOrder: index + 1,
+                sectionName: round.sectionName,
+                movementIds: (round.movementUsages || []).map((usage) => usage.movementId).filter(Boolean),
+              })),
+            }
+          : undefined,
       },
     };
   }
@@ -2081,6 +2161,7 @@ export function buildWorkoutDraftFromHistory(input: {
     source: {
       recentWorkoutsAnalyzed: candidateWorkouts.length,
       strategy: 'fallback',
+      decisionTrace: baseDecisionTrace,
     },
   };
 }

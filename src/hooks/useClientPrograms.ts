@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import React from 'react';
 import { Timestamp } from 'firebase/firestore';
 import { format, getDay } from 'date-fns';
-import { ClientProgram, ClientProgramPeriod } from '@/lib/types';
+import { ClientProgram, ClientProgramPeriod, ClientWorkoutRound } from '@/lib/types';
 import { safeToDate, getDateKey, isDateInRange } from '@/lib/utils/dateHelpers';
 import {
     createClientProgram,
@@ -26,14 +26,22 @@ import { queryKeys } from '@/lib/react-query/queryKeys';
 import {
     createClientWorkout,
     deleteClientWorkout,
+    fetchClientWorkouts,
     fetchWorkoutsByDateRange,
     fetchPeriodWorkouts
 } from '@/lib/firebase/services/clientWorkouts';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 import { useClientStore } from '@/lib/stores/useClientStore';
+import { useMovementStore } from '@/lib/stores/useMovementStore';
+import { auth } from '@/lib/firebase/config';
 import { createRecurringCalendarEvent, checkGoogleCalendarAuth } from '@/lib/google-calendar/api-client';
 import { weekTemplateToRRULE } from '@/lib/google-calendar/rrule-utils';
+import {
+    buildWorkoutDraftFromHistory,
+    type GenerateWorkoutDraftResponse,
+    type HistoricalWorkoutForDraft,
+} from '@/lib/ai/workoutDraft';
 
 export interface PeriodAssignment {
     clientId: string;
@@ -60,6 +68,38 @@ export interface WeekTemplateAssignment {
     clientId: string;
     startDate: Date;
     endDate: Date;
+    selectedWeekdays?: number[];
+    scheduledDays?: Array<{
+        date: Date;
+        workoutCategory: string;
+        workoutCategoryColor?: string;
+        isAllDay?: boolean;
+        time?: string;
+        appliedTemplateId?: string;
+        appliedTemplateSelection?: string;
+    }>;
+    overwriteExistingWorkouts?: boolean;
+    duplicateWorkoutIds?: string[];
+    excludedSessionDateKeys?: string[];
+}
+
+type WeeklyFillFailure = {
+    dateKey: string;
+    reason: string;
+};
+
+type WeeklyFillPartialError = Error & {
+    fillFailures: WeeklyFillFailure[];
+    partialSuccess: true;
+};
+
+function isWeeklyFillPartialError(err: unknown): err is WeeklyFillPartialError {
+    return Boolean(
+        err
+        && typeof err === 'object'
+        && 'fillFailures' in err
+        && Array.isArray((err as { fillFailures?: unknown }).fillFailures)
+    );
 }
 
 interface UseClientProgramsResult {
@@ -76,7 +116,12 @@ interface UseClientProgramsResult {
     updatePeriod: (periodId: string, updates: Partial<ClientProgramPeriod>) => Promise<void>;
     deletePeriod: (periodId: string, clientId: string) => Promise<void>;
     clearAllPeriods: (clientId: string) => Promise<void>;
-    deleteDaysFromPeriod: (periodId: string, clientId: string, daysToDelete: string[]) => Promise<void>;
+    deleteDaysFromPeriod: (
+        periodId: string,
+        clientId: string,
+        daysToDelete: string[],
+        periodWindow?: { startDate: Date; endDate: Date }
+    ) => Promise<void>;
     archivePeriod: (periodId: string, clientId: string) => Promise<void>;
 
     // Helpers
@@ -92,6 +137,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
     // Mutation-specific loading/error states (separate from query loading)
     const [mutationLoading, setMutationLoading] = useState(false);
     const [mutationError, setMutationError] = useState<string | null>(null);
+    const weekAssignmentLocksRef = useRef<Set<string>>(new Set());
 
     // Combined loading state (query or mutation)
     const isLoading = queryLoading || mutationLoading;
@@ -138,6 +184,110 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
             return isDateInRange(date, start, end);
         }) || null;
     }, [getClientProgramForClient]);
+
+    const generateWeeklyFillDraftClientFallback = useCallback(async (
+        clientId: string,
+        categoryName: string,
+        structureTemplateId: string,
+        fallbackTitle: string
+    ): Promise<GenerateWorkoutDraftResponse> => {
+        const configState = useConfigurationStore.getState();
+
+        if (configState.workoutStructureTemplates.length === 0) {
+            await configState.fetchWorkoutStructureTemplates().catch(() => undefined);
+        }
+        if (configState.workoutCategories.length === 0) {
+            await configState.fetchWorkoutCategories().catch(() => undefined);
+        }
+
+        const movementState = useMovementStore.getState();
+        if (movementState.movements.length === 0) {
+            await movementState.fetchMovements().catch(() => undefined);
+        }
+
+        const structureTemplate = useConfigurationStore
+            .getState()
+            .workoutStructureTemplates
+            .find((template) => template.id === structureTemplateId);
+
+        if (!structureTemplate) {
+            throw new Error('Local fallback could not find the selected structure template.');
+        }
+
+        const allWorkouts = await fetchClientWorkouts(clientId);
+        const recentWorkouts: HistoricalWorkoutForDraft[] = allWorkouts
+            .slice()
+            .sort((a, b) => {
+                const am = typeof (a.date as { toMillis?: () => number })?.toMillis === 'function'
+                    ? (a.date as { toMillis: () => number }).toMillis()
+                    : 0;
+                const bm = typeof (b.date as { toMillis?: () => number })?.toMillis === 'function'
+                    ? (b.date as { toMillis: () => number }).toMillis()
+                    : 0;
+                return bm - am;
+            })
+            .slice(0, 12)
+            .map((workout) => ({
+                id: workout.id,
+                categoryName: workout.categoryName,
+                title: workout.title,
+                notes: workout.notes,
+                rounds: workout.rounds,
+                dateMillis: typeof (workout.date as { toMillis?: () => number })?.toMillis === 'function'
+                    ? (workout.date as { toMillis: () => number }).toMillis()
+                    : undefined,
+            }));
+
+        const structureSections = (structureTemplate.sections || []).map((section) => ({
+            order: section.order,
+            workoutTypeId: section.workoutTypeId,
+            workoutTypeName: section.workoutTypeName,
+            workoutIntentId: section.workoutIntentId,
+            workoutIntentKey: section.workoutIntentKey,
+            workoutIntentName: section.workoutIntentName,
+            configuration: section.configuration
+                ? {
+                    defaultDuration: section.configuration.defaultDuration,
+                    defaultStructure: section.configuration.defaultStructure,
+                    focusArea: section.configuration.focusArea,
+                    aiGuidance: section.configuration.aiGuidance,
+                }
+                : undefined,
+        }));
+
+        const categoryContextById = Object.fromEntries(
+            useConfigurationStore.getState().workoutCategories.map((category) => [
+                category.id,
+                {
+                    name: category.name,
+                    description: category.description,
+                },
+            ])
+        );
+
+        const movementContextById = Object.fromEntries(
+            useMovementStore.getState().movements.map((movement) => [
+                movement.id,
+                {
+                    categoryId: movement.categoryId,
+                    name: movement.name,
+                    instructions: movement.instructions,
+                    configuration: movement.configuration,
+                },
+            ])
+        );
+
+        return buildWorkoutDraftFromHistory({
+            categoryName,
+            structureTemplateId,
+            structureSections,
+            recentWorkouts,
+            fallbackTitle,
+            categoryContextById,
+            movementContextById,
+            sessionDurationMinutes: 60,
+        });
+    }, []);
 
     // Assign a period to a client
     const assignPeriod = useCallback(async (assignment: PeriodAssignment) => {
@@ -283,6 +433,17 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
 
                     // Check if Google Calendar is connected
                     const isGoogleCalendarConnected = await checkGoogleCalendarAuth();
+                    const timedDays = newPeriod.days.filter((day) => !day.workoutCategory.toLowerCase().includes('rest') && Boolean(day.time));
+                    const untimedDays = newPeriod.days.filter((day) => !day.workoutCategory.toLowerCase().includes('rest') && !day.time);
+
+                    if (untimedDays.length > 0) {
+                        console.warn('[Weekly +Fill] Untimed days will not create Google Calendar recurring events', {
+                            untimedDays: untimedDays.map((day) => ({
+                                dateKey: getDateKey(safeToDate(day.date)),
+                                category: day.workoutCategory,
+                            })),
+                        });
+                    }
 
                     if (isGoogleCalendarConnected && weekTemplate) {
                         // Use Google Calendar API to create recurring events
@@ -306,6 +467,16 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                     });
                                 }
                                 categoryGroups.get(key)!.days.push(day);
+                            }
+
+                            if (categoryGroups.size === 0) {
+                                console.warn('[Weekly +Fill] No category/time groups were available for Google Calendar event creation', {
+                                    periodIdToUse,
+                                    clientId: assignment.clientId,
+                                    weekTemplateId: assignment.weekTemplateId,
+                                    timedDays: timedDays.length,
+                                    untimedDays: untimedDays.length,
+                                });
                             }
 
                             // Create recurring events for each category group
@@ -490,13 +661,54 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
 
     // Assign a week template directly with a date range (creates a period internally)
     const assignWeekTemplate = useCallback(async (assignment: WeekTemplateAssignment) => {
+        const flowStartMs = Date.now();
+        const flowDebugId = `weekly-fill:${assignment.clientId}:${flowStartMs}`;
+        const shouldLogWeeklyFillDebug = process.env.NEXT_PUBLIC_DEBUG_WEEKLY_FILL === 'true';
+        const debugFlow = (stage: string, data?: Record<string, unknown>) => {
+            if (!shouldLogWeeklyFillDebug) return;
+            console.info('[Weekly +Fill]', {
+                flowDebugId,
+                stage,
+                elapsedMs: Date.now() - flowStartMs,
+                ...(data || {}),
+            });
+        };
+
+        const assignmentKey = `${assignment.clientId}:${getDateKey(assignment.startDate)}:${getDateKey(assignment.endDate)}:${assignment.weekTemplateId}`;
+        if (weekAssignmentLocksRef.current.has(assignmentKey)) {
+            return;
+        }
+        weekAssignmentLocksRef.current.add(assignmentKey);
+
         setMutationLoading(true);
         setMutationError(null);
 
+        let clientProgramIdForRollback: string | null = null;
+        let createdPeriodIdForRollback: string | null = null;
+        const createdWorkoutIdsForRollback: string[] = [];
+
         try {
+            debugFlow('start', {
+                weekTemplateId: assignment.weekTemplateId,
+                startDate: assignment.startDate.toISOString(),
+                endDate: assignment.endDate.toISOString(),
+                scheduledDaysCount: assignment.scheduledDays?.length || 0,
+            });
+
             const weekTemplate = weekTemplates.find(wt => wt.id === assignment.weekTemplateId);
             if (!weekTemplate) {
                 throw new Error('Week template not found');
+            }
+
+            if (assignment.overwriteExistingWorkouts && assignment.duplicateWorkoutIds?.length) {
+                const uniqueIds = Array.from(new Set(assignment.duplicateWorkoutIds));
+                for (const workoutId of uniqueIds) {
+                    try {
+                        await deleteClientWorkout(workoutId);
+                    } catch (deleteErr) {
+                        console.error('Failed to delete duplicate workout before overwrite:', deleteErr);
+                    }
+                }
             }
 
             // Find or create client program
@@ -517,6 +729,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
             } else {
                 clientProgramId = clientProgram.id;
             }
+            clientProgramIdForRollback = clientProgramId;
 
             // Create a special period for the week template assignment
             const newPeriod: Omit<ClientProgramPeriod, 'id'> = {
@@ -529,47 +742,359 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                 days: []
             };
 
-            // Generate days from the week template
-            const days = [];
-            const currentDate = new Date(assignment.startDate);
-            const endDate = new Date(assignment.endDate);
+            const excludedDateKeys = new Set(assignment.excludedSessionDateKeys || []);
+            const scheduledTemplateByDateKey = new Map<string, string>();
+            const scheduledSelectionByDateKey = new Map<string, string>();
+            (assignment.scheduledDays || []).forEach((day) => {
+                if (!day.appliedTemplateId) return;
+                const key = getDateKey(safeToDate(day.date));
+                scheduledTemplateByDateKey.set(key, day.appliedTemplateId);
+            });
+            (assignment.scheduledDays || []).forEach((day) => {
+                if (!day.appliedTemplateSelection) return;
+                const key = getDateKey(safeToDate(day.date));
+                scheduledSelectionByDateKey.set(key, day.appliedTemplateSelection);
+            });
 
-            while (currentDate <= endDate) {
-                const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
-                const templateDay = weekTemplate.days.find((d: { day: string }) => d.day === dayOfWeek);
+            // Generate days from the explicit schedule when provided, otherwise fall back to the legacy date-range behavior.
+            const days = assignment.scheduledDays && assignment.scheduledDays.length > 0
+                ? assignment.scheduledDays
+                    .filter(day => !excludedDateKeys.has(getDateKey(safeToDate(day.date))))
+                    .map(day => ({
+                        date: Timestamp.fromDate(new Date(day.date)),
+                        workoutCategory: day.workoutCategory,
+                        workoutCategoryColor: day.workoutCategoryColor || weekTemplate.color || '#6b7280',
+                        time: day.time,
+                        isAllDay: Boolean(day.isAllDay),
+                    }))
+                : (() => {
+                    const generatedDays = [];
+                    const currentDate = new Date(assignment.startDate);
+                    const endDate = new Date(assignment.endDate);
+                    const selectedWeekdaySet = new Set(
+                        assignment.selectedWeekdays && assignment.selectedWeekdays.length > 0
+                            ? assignment.selectedWeekdays
+                            : [0, 1, 2, 3, 4, 5, 6]
+                    );
 
-                const finalCategory = templateDay?.workoutCategory || 'Rest Day';
-                const isRestDayCategory = finalCategory.toLowerCase().includes('rest');
-                const category = workoutCategories.find(wc => wc.name === finalCategory);
-
-                if (finalCategory && templateDay) {
-                    days.push({
-                        date: Timestamp.fromDate(new Date(currentDate)),
-                        workoutCategory: finalCategory,
-                        workoutCategoryColor: category?.color || '#6b7280',
-                        time: undefined, // Default to no time for direct week template assignments
-                        isAllDay: false
+                    const nonRestTemplateDays = weekTemplate.days.filter((d: { workoutCategory: string }) => {
+                        const categoryName = d?.workoutCategory || '';
+                        return categoryName && !categoryName.toLowerCase().includes('rest');
                     });
-                }
-                currentDate.setDate(currentDate.getDate() + 1);
-            }
+                    const categorySequence = nonRestTemplateDays.length > 0 ? nonRestTemplateDays : weekTemplate.days;
+                    let sequenceIndex = 0;
+
+                    while (currentDate <= endDate) {
+                        const dayOfWeekNumber = getDay(currentDate);
+                        if (selectedWeekdaySet.has(dayOfWeekNumber) && categorySequence.length > 0) {
+                            const templateDay = categorySequence[sequenceIndex % categorySequence.length];
+                            const finalCategory = templateDay?.workoutCategory || 'Workout';
+                            const category = workoutCategories.find(wc => wc.name === finalCategory);
+                            generatedDays.push({
+                                date: Timestamp.fromDate(new Date(currentDate)),
+                                workoutCategory: finalCategory,
+                                workoutCategoryColor: category?.color || '#6b7280',
+                                time: undefined, // Default to no time for direct week template assignments
+                                isAllDay: false
+                            });
+                            sequenceIndex += 1;
+                        }
+                        currentDate.setDate(currentDate.getDate() + 1);
+                    }
+
+                    return generatedDays;
+                })();
             newPeriod.days = days;
 
+            // Preflight weekly +Fill before creating period/workouts so partial +Fill errors
+            // do not create workouts in the background.
+            const plannedCategoryByDateKey = new Map<string, string>();
+            for (const day of newPeriod.days) {
+                if (day.workoutCategory.toLowerCase().includes('rest')) continue;
+                plannedCategoryByDateKey.set(getDateKey(safeToDate(day.date)), day.workoutCategory);
+            }
+
+            const fillTargets = Array.from(scheduledSelectionByDateKey.entries())
+                .filter(([dateKey, selection]) => selection.startsWith('structure-fill:') && plannedCategoryByDateKey.has(dateKey));
+            const fillDraftByDateKey = new Map<string, {
+                title?: string;
+                notes?: string;
+                rounds: ClientWorkoutRound[];
+                appliedTemplateId: string;
+            }>();
+            const preflightFillFailures: Array<{ dateKey: string; reason: string }> = [];
+            const preflightStartMs = Date.now();
+            debugFlow('preflight_begin', { fillTargets: fillTargets.length });
+            const fillAuthToken = await auth.currentUser?.getIdToken();
+
+            if (!fillAuthToken && fillTargets.length > 0) {
+                for (const [targetDateKey] of fillTargets) {
+                    preflightFillFailures.push({
+                        dateKey: targetDateKey,
+                        reason: 'Unauthorized: session token missing. Refresh the app and retry +Fill.',
+                    });
+                }
+            }
+
+            for (let i = 0; i < fillTargets.length; i += 1) {
+                const [dateKey, selection] = fillTargets[i];
+                const structureTemplateId = selection.replace('structure-fill:', '').trim();
+                if (!structureTemplateId) continue;
+
+                if (preflightFillFailures.length > 0) {
+                    break;
+                }
+
+                const categoryName = plannedCategoryByDateKey.get(dateKey) || 'Workout';
+
+                try {
+                    const draftRequestStartMs = Date.now();
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 12000);
+                    const response = await fetch('/api/fill/workouts/draft', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${fillAuthToken}`,
+                        },
+                        signal: controller.signal,
+                        body: JSON.stringify({
+                            clientId: assignment.clientId,
+                            categoryName,
+                            structureTemplateId,
+                            sessionDurationMinutes: 60,
+                            currentTitle: `${categoryName} Draft`,
+                        }),
+                    });
+                    clearTimeout(timeoutId);
+                    debugFlow('preflight_api_response', {
+                        dateKey,
+                        status: response.status,
+                        requestMs: Date.now() - draftRequestStartMs,
+                    });
+
+                    if (!response.ok) {
+                        const errorBody = await response.json().catch(() => ({}));
+                        const errorCode = typeof errorBody?.code === 'string' ? errorBody.code : undefined;
+                        const debugNote = typeof errorBody?.debugNote === 'string' ? errorBody.debugNote : undefined;
+
+                        if (response.status === 401) {
+                            const unauthorizedReason = 'Unauthorized: session expired. Refresh the app and retry +Fill.';
+                            for (let targetIndex = i; targetIndex < fillTargets.length; targetIndex += 1) {
+                                const [remainingDateKey] = fillTargets[targetIndex];
+                                preflightFillFailures.push({ dateKey: remainingDateKey, reason: unauthorizedReason });
+                            }
+                            break;
+                        }
+
+                        if (errorCode === 'missing_admin_credentials') {
+                            for (let targetIndex = i; targetIndex < fillTargets.length; targetIndex += 1) {
+                                const [remainingDateKey, remainingSelection] = fillTargets[targetIndex];
+                                const remainingTemplateId = remainingSelection.replace('structure-fill:', '').trim();
+                                if (!remainingTemplateId) continue;
+
+                                const remainingCategoryName = plannedCategoryByDateKey.get(remainingDateKey) || 'Workout';
+
+                                try {
+                                    const fallbackDraft = await generateWeeklyFillDraftClientFallback(
+                                        assignment.clientId,
+                                        remainingCategoryName,
+                                        remainingTemplateId,
+                                        `${remainingCategoryName} Draft`
+                                    );
+
+                                    if (!fallbackDraft?.draft?.rounds || !Array.isArray(fallbackDraft.draft.rounds)) {
+                                        preflightFillFailures.push({
+                                            dateKey: remainingDateKey,
+                                            reason: 'Local fallback returned no rounds for +Fill.',
+                                        });
+                                        continue;
+                                    }
+
+                                    fillDraftByDateKey.set(remainingDateKey, {
+                                        title: fallbackDraft.draft.title,
+                                        notes: fallbackDraft.draft.notes,
+                                        rounds: fallbackDraft.draft.rounds,
+                                        appliedTemplateId: remainingTemplateId,
+                                    });
+                                } catch (fallbackErr) {
+                                    const fallbackReason = fallbackErr instanceof Error
+                                        ? fallbackErr.message
+                                        : 'Local fallback failed for +Fill.';
+                                    preflightFillFailures.push({ dateKey: remainingDateKey, reason: fallbackReason });
+                                }
+                            }
+                            break;
+                        }
+
+                        if (response.status >= 500) {
+                            try {
+                                const fallbackDraft = await generateWeeklyFillDraftClientFallback(
+                                    assignment.clientId,
+                                    categoryName,
+                                    structureTemplateId,
+                                    `${categoryName} Draft`
+                                );
+
+                                if (!fallbackDraft?.draft?.rounds || !Array.isArray(fallbackDraft.draft.rounds)) {
+                                    preflightFillFailures.push({
+                                        dateKey,
+                                        reason: `DDS draft request failed (${response.status}) and local fallback returned no rounds.`,
+                                    });
+                                    continue;
+                                }
+
+                                fillDraftByDateKey.set(dateKey, {
+                                    title: fallbackDraft.draft.title,
+                                    notes: fallbackDraft.draft.notes,
+                                    rounds: fallbackDraft.draft.rounds,
+                                    appliedTemplateId: structureTemplateId,
+                                });
+                                continue;
+                            } catch (fallbackErr) {
+                                const fallbackReason = fallbackErr instanceof Error
+                                    ? fallbackErr.message
+                                    : 'Local fallback failed for +Fill.';
+                                preflightFillFailures.push({
+                                    dateKey,
+                                    reason: `DDS draft request failed (${response.status}). ${fallbackReason}`,
+                                });
+                                continue;
+                            }
+                        }
+
+                        const errorMessage = typeof errorBody?.error === 'string'
+                            ? `${errorBody.error}${debugNote ? ` ${debugNote}` : ''}`
+                            : `DDS draft request failed (${response.status})`;
+                        preflightFillFailures.push({ dateKey, reason: errorMessage });
+                        continue;
+                    }
+
+                    const payload = await response.json() as {
+                        draft?: {
+                            title?: string;
+                            notes?: string;
+                            rounds?: ClientWorkoutRound[];
+                        };
+                    };
+
+                    if (!payload?.draft?.rounds || !Array.isArray(payload.draft.rounds)) {
+                        preflightFillFailures.push({ dateKey, reason: 'DDS returned no rounds' });
+                        continue;
+                    }
+
+                    fillDraftByDateKey.set(dateKey, {
+                        title: payload.draft.title,
+                        notes: payload.draft.notes,
+                        rounds: payload.draft.rounds,
+                        appliedTemplateId: structureTemplateId,
+                    });
+                } catch (fillErr) {
+                    const isTimeoutAbort = fillErr instanceof DOMException && fillErr.name === 'AbortError';
+                    if (isTimeoutAbort) {
+                        debugFlow('preflight_api_timeout', { dateKey, timeoutMs: 12000 });
+                        try {
+                            const fallbackDraft = await generateWeeklyFillDraftClientFallback(
+                                assignment.clientId,
+                                categoryName,
+                                structureTemplateId,
+                                `${categoryName} Draft`
+                            );
+
+                            if (!fallbackDraft?.draft?.rounds || !Array.isArray(fallbackDraft.draft.rounds)) {
+                                preflightFillFailures.push({
+                                    dateKey,
+                                    reason: 'DDS request timed out and local fallback returned no rounds.',
+                                });
+                                continue;
+                            }
+
+                            fillDraftByDateKey.set(dateKey, {
+                                title: fallbackDraft.draft.title,
+                                notes: fallbackDraft.draft.notes,
+                                rounds: fallbackDraft.draft.rounds,
+                                appliedTemplateId: structureTemplateId,
+                            });
+                            debugFlow('preflight_timeout_fallback_ok', { dateKey });
+                            continue;
+                        } catch (fallbackErr) {
+                            const fallbackReason = fallbackErr instanceof Error
+                                ? fallbackErr.message
+                                : 'Local fallback failed for +Fill.';
+                            preflightFillFailures.push({
+                                dateKey,
+                                reason: `DDS request timed out. ${fallbackReason}`,
+                            });
+                            continue;
+                        }
+                    }
+
+                    const reason = fillErr instanceof Error ? fillErr.message : 'Unknown +Fill error';
+                    preflightFillFailures.push({ dateKey, reason });
+                }
+            }
+
+            debugFlow('preflight_end', {
+                preflightMs: Date.now() - preflightStartMs,
+                resolvedDrafts: fillDraftByDateKey.size,
+                failures: preflightFillFailures.length,
+            });
+
+            if (preflightFillFailures.length > 0) {
+                const partialError = new Error('Weekly +Fill completed with issues') as WeeklyFillPartialError;
+                partialError.fillFailures = preflightFillFailures;
+                partialError.partialSuccess = true;
+                debugFlow('preflight_failed', { failures: preflightFillFailures.length });
+                throw partialError;
+            }
+
             // Save period to Firebase
-            await addPeriodToClientProgram(clientProgramId, newPeriod);
+            const createdPeriodId = await addPeriodToClientProgram(clientProgramId, newPeriod);
+            createdPeriodIdForRollback = createdPeriodId;
+            debugFlow('period_saved', { dayCount: newPeriod.days.length, createdPeriodId });
 
             // Fetch updated program
             await fetchClientProgramsAsync(assignment.clientId);
 
-            const queryData = queryClient.getQueryData<ClientProgram[]>(queryKeys.clientPrograms.byClient(assignment.clientId));
-            const updatedPrograms = queryData || await getClientProgramsByClient(assignment.clientId);
-            const updatedProgram = updatedPrograms[0];
+            if (newPeriod.days.length > 0) {
+                const periodIdToUse = createdPeriodId || clientProgramId;
 
-            if (updatedProgram && newPeriod.days.length > 0) {
-                const createdPeriod = updatedProgram.periods[updatedProgram.periods.length - 1]; // The latest one
-                const periodIdToUse = createdPeriod?.id || clientProgramId;
+                const normalizedTrainingDates = newPeriod.days
+                    .filter(day => !day.workoutCategory.toLowerCase().includes('rest'))
+                    .map(day => {
+                        const date = safeToDate(day.date);
+                        date.setHours(0, 0, 0, 0);
+                        return date;
+                    })
+                    .sort((a, b) => a.getTime() - b.getTime());
+
+                let existingWorkoutDateKeys = new Set<string>();
+                if (normalizedTrainingDates.length > 0) {
+                    const rangeStart = new Date(normalizedTrainingDates[0]);
+                    const rangeEnd = new Date(normalizedTrainingDates[normalizedTrainingDates.length - 1]);
+                    rangeStart.setHours(0, 0, 0, 0);
+                    rangeEnd.setHours(23, 59, 59, 999);
+
+                    const existingWorkouts = await fetchWorkoutsByDateRange(
+                        assignment.clientId,
+                        Timestamp.fromDate(rangeStart),
+                        Timestamp.fromDate(rangeEnd)
+                    );
+
+                    existingWorkoutDateKeys = new Set(existingWorkouts.map(workout => getDateKey(safeToDate(workout.date))));
+                }
 
                 // Create workouts for each day
+                const workoutCreationFailures: Array<{ dateKey: string; reason: string }> = [];
+                const firstFailureReasonByDateKey = new Map<string, string>();
+                const plannedDayByDateKey = new Map<string, typeof newPeriod.days[number]>();
+                for (const day of newPeriod.days) {
+                    if (day.workoutCategory.toLowerCase().includes('rest')) continue;
+                    const dayDate = safeToDate(day.date);
+                    dayDate.setHours(0, 0, 0, 0);
+                    plannedDayByDateKey.set(getDateKey(dayDate), day);
+                }
+
                 for (const day of newPeriod.days) {
                     if (day.workoutCategory.toLowerCase().includes('rest')) continue;
 
@@ -577,30 +1102,306 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                         const dayDate = safeToDate(day.date);
                         const normalizedDayDate = new Date(dayDate);
                         normalizedDayDate.setHours(0, 0, 0, 0);
+                        const dayKey = getDateKey(normalizedDayDate);
 
-                        await createClientWorkout({
+                        if (existingWorkoutDateKeys.has(dayKey)) {
+                            continue;
+                        }
+
+                        const precomputedFillDraft = fillDraftByDateKey.get(dayKey);
+
+                        const createdWorkout = await createClientWorkout({
                             clientId: assignment.clientId,
                             periodId: periodIdToUse,
                             date: Timestamp.fromDate(normalizedDayDate),
                             dayOfWeek: getDay(normalizedDayDate),
                             categoryName: day.workoutCategory,
-                            isModified: false,
+                            appliedTemplateId: precomputedFillDraft?.appliedTemplateId || scheduledTemplateByDateKey.get(dayKey),
+                            title: precomputedFillDraft?.title,
+                            notes: precomputedFillDraft?.notes,
+                            rounds: precomputedFillDraft?.rounds,
+                            isModified: Boolean(precomputedFillDraft),
                             createdBy: 'system'
                         });
+                        createdWorkoutIdsForRollback.push(createdWorkout.id);
+
+                        existingWorkoutDateKeys.add(dayKey);
                     } catch (err) {
-                        console.error('Error creating workout for day:', err);
+                        const dayKey = getDateKey(safeToDate(day.date));
+                        const reason = err instanceof Error ? err.message : 'Unknown workout creation error';
+                        workoutCreationFailures.push({ dateKey: dayKey, reason: `Workout creation failed: ${reason}` });
+                        if (!firstFailureReasonByDateKey.has(dayKey)) {
+                            firstFailureReasonByDateKey.set(dayKey, `Workout creation failed: ${reason}`);
+                        }
                     }
+                }
+
+                // Verify writes landed for all planned training dates and self-heal once if any are missing.
+                if (normalizedTrainingDates.length > 0) {
+                    const verifyStart = new Date(normalizedTrainingDates[0]);
+                    const verifyEnd = new Date(normalizedTrainingDates[normalizedTrainingDates.length - 1]);
+                    verifyStart.setHours(0, 0, 0, 0);
+                    verifyEnd.setHours(23, 59, 59, 999);
+
+                    const verifyWorkouts = await fetchWorkoutsByDateRange(
+                        assignment.clientId,
+                        Timestamp.fromDate(verifyStart),
+                        Timestamp.fromDate(verifyEnd)
+                    );
+                    const verifiedDateKeys = new Set(
+                        verifyWorkouts.map(workout => getDateKey(safeToDate(workout.date)))
+                    );
+
+                    const missingDateKeys = Array.from(plannedDayByDateKey.keys()).filter(
+                        (dateKey) => !verifiedDateKeys.has(dateKey)
+                    );
+
+                    if (missingDateKeys.length > 0) {
+                        debugFlow('workouts_missing_after_create', {
+                            missingCount: missingDateKeys.length,
+                            missingDateKeys,
+                        });
+
+                        for (const missingDateKey of missingDateKeys) {
+                            const missingDay = plannedDayByDateKey.get(missingDateKey);
+                            if (!missingDay) continue;
+
+                            try {
+                                const missingDate = safeToDate(missingDay.date);
+                                missingDate.setHours(0, 0, 0, 0);
+                                const precomputedFillDraft = fillDraftByDateKey.get(missingDateKey);
+
+                                const createdWorkout = await createClientWorkout({
+                                    clientId: assignment.clientId,
+                                    periodId: periodIdToUse,
+                                    date: Timestamp.fromDate(missingDate),
+                                    dayOfWeek: getDay(missingDate),
+                                    categoryName: missingDay.workoutCategory,
+                                    appliedTemplateId: precomputedFillDraft?.appliedTemplateId || scheduledTemplateByDateKey.get(missingDateKey),
+                                    title: precomputedFillDraft?.title,
+                                    notes: precomputedFillDraft?.notes,
+                                    rounds: precomputedFillDraft?.rounds,
+                                    isModified: Boolean(precomputedFillDraft),
+                                    createdBy: 'system'
+                                });
+                                createdWorkoutIdsForRollback.push(createdWorkout.id);
+                            } catch (retryErr) {
+                                const retryReason = retryErr instanceof Error ? retryErr.message : 'Unknown retry creation error';
+                                workoutCreationFailures.push({
+                                    dateKey: missingDateKey,
+                                    reason: `Retry workout creation failed: ${retryReason}`,
+                                });
+                                if (!firstFailureReasonByDateKey.has(missingDateKey)) {
+                                    firstFailureReasonByDateKey.set(missingDateKey, `Retry workout creation failed: ${retryReason}`);
+                                }
+                            }
+                        }
+
+                        const finalVerifyWorkouts = await fetchWorkoutsByDateRange(
+                            assignment.clientId,
+                            Timestamp.fromDate(verifyStart),
+                            Timestamp.fromDate(verifyEnd)
+                        );
+                        const finalVerifiedDateKeys = new Set(
+                            finalVerifyWorkouts.map(workout => getDateKey(safeToDate(workout.date)))
+                        );
+                        const stillMissingDateKeys = Array.from(plannedDayByDateKey.keys()).filter(
+                            (dateKey) => !finalVerifiedDateKeys.has(dateKey)
+                        );
+
+                        if (stillMissingDateKeys.length > 0) {
+                            for (const stillMissingDateKey of stillMissingDateKeys) {
+                                if (firstFailureReasonByDateKey.has(stillMissingDateKey)) {
+                                    workoutCreationFailures.push({
+                                        dateKey: stillMissingDateKey,
+                                        reason: firstFailureReasonByDateKey.get(stillMissingDateKey) as string,
+                                    });
+                                    continue;
+                                }
+
+                                const priorFailureForDate = workoutCreationFailures.find(
+                                    (entry) => entry.dateKey === stillMissingDateKey
+                                );
+                                if (priorFailureForDate?.reason) {
+                                    workoutCreationFailures.push({
+                                        dateKey: stillMissingDateKey,
+                                        reason: priorFailureForDate.reason,
+                                    });
+                                    continue;
+                                }
+
+                                workoutCreationFailures.push({
+                                    dateKey: stillMissingDateKey,
+                                    reason: 'Workout missing after verification and retry.',
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if (workoutCreationFailures.length > 0) {
+                    debugFlow('workouts_create_failed', {
+                        failures: workoutCreationFailures.length,
+                        sampleFailures: workoutCreationFailures.slice(0, 5),
+                    });
+                    const partialError = new Error('Weekly workout creation completed with issues') as WeeklyFillPartialError;
+                    partialError.fillFailures = workoutCreationFailures;
+                    partialError.partialSuccess = true;
+                    throw partialError;
+                }
+                debugFlow('workouts_created', {
+                    createdOrUpdatedDays: newPeriod.days.length,
+                    timedDays: newPeriod.days.filter((day) => !day.workoutCategory.toLowerCase().includes('rest') && Boolean(day.time)).length,
+                    untimedDays: newPeriod.days.filter((day) => !day.workoutCategory.toLowerCase().includes('rest') && !day.time).length,
+                });
+
+                const timedDays = newPeriod.days.filter(
+                    (day) => !day.workoutCategory.toLowerCase().includes('rest') && Boolean(day.time)
+                );
+
+                if (timedDays.length > 0) {
+                    const client = clients.find(c => c.id === assignment.clientId);
+                    const clientName = client?.name || 'Client';
+                    const isGoogleCalendarConnected = await checkGoogleCalendarAuth();
+
+                    debugFlow('calendar_events_create_start', {
+                        isGoogleCalendarConnected,
+                        timedDays: timedDays.length,
+                        periodId: periodIdToUse,
+                    });
+
+                    if (!isGoogleCalendarConnected) {
+                        debugFlow('calendar_events_skipped_not_connected', {
+                            reason: 'Google Calendar is not connected',
+                            timedDays: timedDays.length,
+                        });
+                    } else {
+                        const rangeStart = new Date(timedDays[0].date.toDate());
+                        const rangeEnd = new Date(timedDays[timedDays.length - 1].date.toDate());
+                        rangeStart.setHours(0, 0, 0, 0);
+                        rangeEnd.setHours(23, 59, 59, 999);
+
+                        const workoutsForRange = await fetchWorkoutsByDateRange(
+                            assignment.clientId,
+                            Timestamp.fromDate(rangeStart),
+                            Timestamp.fromDate(rangeEnd)
+                        );
+
+                        const workoutIdByDateKey = new Map<string, string>();
+                        for (const workout of workoutsForRange) {
+                            const workoutDateKey = getDateKey(safeToDate(workout.date));
+                            if (!workoutIdByDateKey.has(workoutDateKey)) {
+                                workoutIdByDateKey.set(workoutDateKey, workout.id);
+                            }
+                        }
+
+                        const eventCreationFailures: Array<{ dateKey: string; reason: string }> = [];
+
+                        for (const day of timedDays) {
+                            try {
+                                const dayDate = safeToDate(day.date);
+                                dayDate.setHours(0, 0, 0, 0);
+                                const dateKey = getDateKey(dayDate);
+                                const workoutId = workoutIdByDateKey.get(dateKey);
+
+                                let timeStr = String(day.time || '').trim();
+                                let hours: number;
+                                let minutes: number;
+
+                                if (timeStr.includes('AM') || timeStr.includes('PM')) {
+                                    const [timePart, ampm] = timeStr.split(/\s*(AM|PM)/i);
+                                    const [h, m] = timePart.split(':').map(Number);
+                                    hours = ampm.toUpperCase() === 'PM' && h !== 12 ? h + 12 : (ampm.toUpperCase() === 'AM' && h === 12 ? 0 : h);
+                                    minutes = m || 0;
+                                    timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                                } else {
+                                    [hours, minutes] = timeStr.split(':').map(Number);
+                                    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+                                        throw new Error(`Invalid time format: ${timeStr}`);
+                                    }
+                                }
+
+                                const eventEnd = new Date(dayDate);
+                                eventEnd.setHours(hours + 1, minutes, 0, 0);
+
+                                await createTestEvent({
+                                    summary: `${day.workoutCategory} Session with ${clientName}`,
+                                    description: `Workout Category: ${day.workoutCategory}\n[Metadata: client=${assignment.clientId}, category=${day.workoutCategory}, workoutId=${workoutId || ''}]`,
+                                    date: format(dayDate, 'yyyy-MM-dd'),
+                                    startTime: timeStr,
+                                    endTime: format(eventEnd, 'HH:mm')
+                                });
+
+                                debugFlow('calendar_event_create_success', {
+                                    dateKey,
+                                    workoutId: workoutId || null,
+                                    startTime: timeStr,
+                                });
+                            } catch (eventErr) {
+                                const failedDateKey = getDateKey(safeToDate(day.date));
+                                const reason = eventErr instanceof Error ? eventErr.message : String(eventErr);
+                                eventCreationFailures.push({ dateKey: failedDateKey, reason });
+                                debugFlow('calendar_event_create_failed', {
+                                    dateKey: failedDateKey,
+                                    reason,
+                                });
+                            }
+                        }
+
+                        debugFlow('calendar_events_create_end', {
+                            attempted: timedDays.length,
+                            failures: eventCreationFailures.length,
+                        });
+                    }
+                } else {
+                    debugFlow('calendar_events_skipped_no_timed_days', {
+                        totalDays: newPeriod.days.length,
+                    });
                 }
             }
         } catch (err) {
+            if (createdPeriodIdForRollback && clientProgramIdForRollback) {
+                debugFlow('rollback_start', {
+                    createdPeriodId: createdPeriodIdForRollback,
+                    createdWorkoutCount: createdWorkoutIdsForRollback.length,
+                    reason: err instanceof Error ? err.message : String(err),
+                });
+
+                for (const workoutId of createdWorkoutIdsForRollback) {
+                    try {
+                        await deleteClientWorkout(workoutId);
+                    } catch (cleanupWorkoutErr) {
+                        debugFlow('rollback_workout_delete_failed', {
+                            workoutId,
+                            error: cleanupWorkoutErr instanceof Error ? cleanupWorkoutErr.message : String(cleanupWorkoutErr),
+                        });
+                    }
+                }
+
+                try {
+                    await deletePeriodFromClientProgram(clientProgramIdForRollback, createdPeriodIdForRollback);
+                    debugFlow('rollback_period_deleted', { createdPeriodId: createdPeriodIdForRollback });
+                } catch (cleanupPeriodErr) {
+                    debugFlow('rollback_period_delete_failed', {
+                        createdPeriodId: createdPeriodIdForRollback,
+                        error: cleanupPeriodErr instanceof Error ? cleanupPeriodErr.message : String(cleanupPeriodErr),
+                    });
+                }
+            }
+
+            if (isWeeklyFillPartialError(err)) {
+                throw err;
+            }
             console.error('Error assigning week template:', err);
             setMutationError(err instanceof Error ? err.message : 'Failed to assign week template');
             throw err;
         } finally {
+            debugFlow('end');
             setMutationLoading(false);
             await fetchClientProgramsAsync(assignment.clientId);
+            weekAssignmentLocksRef.current.delete(assignmentKey);
         }
-    }, [clientPrograms, weekTemplates, workoutCategories, fetchClientProgramsAsync]);
+    }, [clientPrograms, weekTemplates, workoutCategories, fetchClientProgramsAsync, queryClient, generateWeeklyFillDraftClientFallback]);
 
 
     // Update a period
@@ -723,9 +1524,16 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
     }, [clientPrograms, selectedClientId, fetchClientProgramsAsync]);
 
     // Delete specific days from a period
-    const deleteDaysFromPeriodAsync = useCallback(async (periodId: string, clientId: string, daysToDelete: string[]) => {
+    const deleteDaysFromPeriodAsync = useCallback(async (
+        periodId: string,
+        clientId: string,
+        daysToDelete: string[],
+        periodWindow?: { startDate: Date; endDate: Date }
+    ) => {
         setMutationLoading(true);
         setMutationError(null);
+
+        const deleteAllDays = daysToDelete.includes('__ALL__');
 
         try {
             const clientProgram = clientPrograms.find(cp => cp.clientId === clientId);
@@ -733,11 +1541,56 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                 throw new Error('Client program not found');
             }
 
+            if (deleteAllDays) {
+                const rangeStartDate = periodWindow?.startDate;
+                const rangeEndDate = periodWindow?.endDate;
+
+                if (!rangeStartDate || !rangeEndDate) {
+                    throw new Error('Delete-all requires an assignment date window');
+                }
+
+                const normalizedStart = new Date(rangeStartDate);
+                const normalizedEnd = new Date(rangeEndDate);
+                normalizedStart.setHours(0, 0, 0, 0);
+                normalizedEnd.setHours(23, 59, 59, 999);
+
+                const workoutsToDelete = await fetchWorkoutsByDateRange(
+                    clientId,
+                    Timestamp.fromDate(normalizedStart),
+                    Timestamp.fromDate(normalizedEnd)
+                );
+
+                for (const workout of workoutsToDelete) {
+                    await deleteClientWorkout(workout.id);
+                }
+
+                await deleteDaysFromPeriod(clientProgram.id, periodId, daysToDelete);
+                await fetchClientProgramsAsync(selectedClientId);
+                return;
+            }
+
             await deleteDaysFromPeriod(clientProgram.id, periodId, daysToDelete);
             
             // Also delete corresponding workouts for those days
-            const period = clientProgram.periods.find(p => p.id === periodId);
+            let period = clientProgram.periods.find(p => p.id === periodId);
+            if (!period) {
+                const refreshedPrograms = await getClientProgramsByClient(clientId);
+                const refreshedClientProgram = refreshedPrograms.find(cp => cp.clientId === clientId);
+                period = refreshedClientProgram?.periods.find(p => p.id === periodId);
+            }
+
             if (period) {
+                const validPeriodIds = new Set<string>([periodId, clientProgram.id]);
+                const targetDateKeys = new Set(
+                    (period.days || [])
+                        .filter((dayEntry) => {
+                            if (deleteAllDays) return true;
+                            const dayName = safeToDate(dayEntry.date).toLocaleDateString('en-US', { weekday: 'long' });
+                            return daysToDelete.includes(dayName);
+                        })
+                        .map((dayEntry) => getDateKey(safeToDate(dayEntry.date)))
+                );
+
                 // Find and delete workouts for the specified days
                 const workoutsToDelete = await fetchWorkoutsByDateRange(
                     clientId,
@@ -746,9 +1599,10 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                 );
 
                 for (const workout of workoutsToDelete) {
-                    const workoutDate = workout.date.toDate();
-                    const dayName = workoutDate.toLocaleDateString('en-US', { weekday: 'long' });
-                    if (daysToDelete.includes(dayName)) {
+                    const workoutDateKey = getDateKey(safeToDate(workout.date));
+                    if (!validPeriodIds.has(workout.periodId)) continue;
+
+                    if (deleteAllDays || targetDateKeys.has(workoutDateKey)) {
                         await deleteClientWorkout(workout.id);
                     }
                 }

@@ -420,7 +420,7 @@ export function PeriodAssignmentDialog({
         <DialogTrigger asChild>
           <Button size="sm" variant="outline" type="button">
             <Layers className="h-4 w-4 mr-2 icon-template" />
-            Assign<span className="hidden lg:inline"> Period</span>
+            Periodize + Fill
           </Button>
         </DialogTrigger>
       )}
@@ -428,10 +428,10 @@ export function PeriodAssignmentDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Layers className="h-5 w-5 icon-template" />
-            Assign Period to {clientName}
+            Periodization + Fill for {clientName}
           </DialogTitle>
           <DialogDescription>
-            Select a period configuration and assign it to this client with optional timing settings.
+            Link current and future months through goal-driven periods so each block builds into the next.
           </DialogDescription>
         </DialogHeader>
 

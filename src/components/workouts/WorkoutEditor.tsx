@@ -1278,6 +1278,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         sessionDurationMinutes,
         currentTitle: title,
         currentNotes: notes,
+        includeDecisionTrace: true,
       };
 
       const response = await fetch('/api/fill/workouts/draft', {
@@ -1308,15 +1309,23 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
           data && typeof data === 'object' && 'code' in data
             ? String((data as any).code)
             : null;
+        const apiDebugNote =
+          data && typeof data === 'object' && 'debugNote' in data
+            ? String((data as any).debugNote)
+            : null;
         logFillDebug('fill_generate_response_error', {
           status: response.status,
           apiError: apiError || null,
           apiCode: apiCode || null,
+          apiDebugNote: apiDebugNote || null,
         });
         const responseError = new Error(apiError || `Failed to fill workout (${response.status})`) as Error & {
           status?: number;
           code?: string;
         };
+        if (apiDebugNote) {
+          responseError.message = `${responseError.message} ${apiDebugNote}`;
+        }
         responseError.status = response.status;
         if (apiCode) {
           responseError.code = apiCode;
@@ -1331,6 +1340,7 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
       const draftData = data as GenerateWorkoutDraftResponse;
       const draft = draftData.draft;
       const strategy = (draftData as any)?.source?.strategy as string | undefined;
+      const decisionTrace = draftData.source?.decisionTrace;
 
       if (desiredTemplateId) {
         if (draft.structureTemplateId !== desiredTemplateId) {
@@ -1352,7 +1362,20 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
         titleProvided: Boolean(draft.title),
         notesProvided: Boolean(draft.notes),
         structureTemplateId: draft.structureTemplateId || null,
+        decisionTraceCandidateWorkouts: decisionTrace?.candidateWorkoutCount,
+        decisionTraceTopMovementCount: decisionTrace?.topRankedMovements?.length,
       });
+
+      if (decisionTrace) {
+        logFillDebug('fill_generate_decision_trace', {
+          categoryRequested: decisionTrace.categoryRequested || null,
+          filteredByCategory: decisionTrace.filteredByCategory,
+          totalRecentWorkoutCount: decisionTrace.totalRecentWorkoutCount,
+          candidateWorkoutCount: decisionTrace.candidateWorkoutCount,
+          topRankedMovements: decisionTrace.topRankedMovements.slice(0, 8),
+          sectionPlan: decisionTrace.sectionPlan || [],
+        });
+      }
 
       if (draft.rounds && draft.rounds.length > 0) {
         setRounds(draft.rounds);

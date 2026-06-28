@@ -29,6 +29,11 @@ function cleanUndefinedValues(obj: any): any {
   if (obj === null || obj === undefined) {
     return undefined;
   }
+
+  // Preserve Firestore native timestamp values so queries on `date` keep working.
+  if (obj instanceof Timestamp) {
+    return obj;
+  }
   
   if (Array.isArray(obj)) {
     return obj.map(item => cleanUndefinedValues(item)).filter(item => item !== undefined);
@@ -75,11 +80,33 @@ export async function createClientWorkout(
     updatedAt: now,
   };
 
-  const docRef = await addDoc(collection(getDb(), COLLECTION_NAME), workoutData);
+  const cleanedWorkoutData = cleanUndefinedValues(workoutData);
+  if (!cleanedWorkoutData) {
+    throw new Error('Invalid workout payload after cleaning undefined values');
+  }
+
+  let docRef;
+  try {
+    docRef = await addDoc(collection(getDb(), COLLECTION_NAME), cleanedWorkoutData);
+  } catch (error) {
+    console.error('[createClientWorkout] Firestore write failed', {
+      accountId,
+      clientId: cleanedWorkoutData.clientId,
+      periodId: cleanedWorkoutData.periodId,
+      date: cleanedWorkoutData.date instanceof Timestamp ? cleanedWorkoutData.date.toDate().toISOString() : cleanedWorkoutData.date,
+      dayOfWeek: cleanedWorkoutData.dayOfWeek,
+      categoryName: cleanedWorkoutData.categoryName,
+      hasRounds: Array.isArray((cleanedWorkoutData as any).rounds),
+      roundsCount: Array.isArray((cleanedWorkoutData as any).rounds) ? (cleanedWorkoutData as any).rounds.length : 0,
+      errorCode: (error as { code?: string })?.code || null,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 
   return {
     id: docRef.id,
-    ...workoutData,
+    ...cleanedWorkoutData,
   };
 }
 

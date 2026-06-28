@@ -1,17 +1,50 @@
 "use client";
 
+import { useEffect, useState } from 'react';
 import { Users, ChevronLeft, ChevronRight, ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ColumnVisibilityToggle } from '@/components/workouts/ColumnVisibilityToggle';
 
-import { Client } from '@/lib/types';
+import { Client, ClientProgramPeriod } from '@/lib/types';
 import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBuilderDialog';
 import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
-import { AssignWeekDialog } from '@/components/programs/AssignWeekDialog';
 import { ManageWeekDialog } from '@/components/programs/ManageWeekDialog';
-import { safeToDate } from '@/lib/utils/dateHelpers';
-import { ClientProgramPeriod } from '@/lib/types';
+
+type BuilderHeaderPeriod = {
+  id: string;
+  name: string;
+  color: string;
+  focus: string;
+};
+
+type BuilderHeaderWorkoutCategory = {
+  id: string;
+  name: string;
+  color: string;
+  linkedWorkoutStructureTemplateId?: string;
+};
+
+type BuilderHeaderWeekTemplate = {
+  id: string;
+  name: string;
+  color: string;
+  days: Array<{
+    day: string;
+    workoutCategory: string;
+    variations?: string[];
+  }>;
+};
+
+type BuilderHeaderWorkoutStructureTemplate = {
+  id: string;
+  name: string;
+};
+
+type BuilderHeaderClientProgram = {
+  clientId: string;
+  periods?: ClientProgramPeriod[];
+};
 
 interface BuilderHeaderProps {
   // Client selection
@@ -27,10 +60,11 @@ interface BuilderHeaderProps {
   navigationLabel: string;
 
   // Period assignment
-  periods: any[];
-  workoutCategories: any[];
-  weekTemplates: any[];
-  clientPrograms: any[];
+  periods: BuilderHeaderPeriod[];
+  workoutCategories: BuilderHeaderWorkoutCategory[];
+  workoutStructureTemplates: BuilderHeaderWorkoutStructureTemplate[];
+  weekTemplates: BuilderHeaderWeekTemplate[];
+  clientPrograms: BuilderHeaderClientProgram[];
   onAssignPeriod: (assignment: {
     clientId: string;
     periodId: string;
@@ -48,9 +82,26 @@ interface BuilderHeaderProps {
     clientId: string;
     startDate: Date;
     endDate: Date;
+    selectedWeekdays?: number[];
+    scheduledDays?: Array<{
+      date: Date;
+      workoutCategory: string;
+      workoutCategoryColor?: string;
+      isAllDay?: boolean;
+      time?: string;
+      appliedTemplateId?: string;
+      appliedTemplateSelection?: string;
+    }>;
+    overwriteExistingWorkouts?: boolean;
+    duplicateWorkoutIds?: string[];
+    excludedSessionDateKeys?: string[];
   }) => Promise<void>;
 
-  onDeleteDays?: (periodId: string, daysToDelete: string[]) => Promise<void>;
+  onDeleteDays?: (
+    periodId: string,
+    daysToDelete: string[],
+    periodWindow?: { startDate: Date; endDate: Date }
+  ) => Promise<void>;
   onArchivePeriod?: (periodId: string) => Promise<void>;
 
   // Quick workout
@@ -63,9 +114,9 @@ interface BuilderHeaderProps {
   // Day view toggle
   showDayView: boolean;
   onShowDayViewChange: (show: boolean) => void;
+  viewMode?: 'month' | 'week' | 'day';
 
   // Column visibility
-  viewMode: 'month' | 'week' | 'day';
   visibleColumns: {
     tempo?: boolean;
     distance?: boolean;
@@ -86,6 +137,7 @@ export function BuilderHeader({
   navigationLabel,
   periods,
   workoutCategories,
+  workoutStructureTemplates,
   weekTemplates,
   clientPrograms,
   onAssignPeriod,
@@ -97,10 +149,15 @@ export function BuilderHeader({
   onWeekOrderChange,
   showDayView,
   onShowDayViewChange,
-  viewMode,
   visibleColumns,
   onColumnVisibilityChange,
 }: BuilderHeaderProps) {
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   const clientName = clientId ? (clients.find(c => c.id === clientId)?.name || 'Unknown Client') : '';
   const existingAssignments = clientId ? (clientPrograms.find(cp => cp.clientId === clientId)?.periods || []) : [];
 
@@ -159,8 +216,8 @@ export function BuilderHeader({
             <ChevronRight className="h-4 w-4 icon-builder" />
           </Button>
         </div>
-        <div className="min-w-[110px] font-medium text-sm px-2 tabular-nums">
-          {navigationLabel}
+        <div className="min-w-[110px] font-medium text-sm px-2 tabular-nums" suppressHydrationWarning>
+          {hasMounted ? navigationLabel : ' '}
         </div>
 
         {/* Separator */}
@@ -220,7 +277,22 @@ export function BuilderHeader({
           }}
           onToggle={onColumnVisibilityChange}
         />
-        {/* Tools & Toggles */}
+        {/* Fill modes: Week -> Month -> Period */}
+        {clientId && onDeleteDays && onArchivePeriod && (
+          <ManageWeekDialog
+            clientId={clientId}
+            clientName={clientName}
+            weekTemplates={weekTemplates}
+            workoutCategories={workoutCategories}
+            workoutStructureTemplates={workoutStructureTemplates}
+            existingAssignments={existingAssignments}
+            onAssignWeek={onAssignWeek}
+            onDeleteDays={onDeleteDays}
+            onArchivePeriod={onArchivePeriod}
+            onDataChanged={onWorkoutCreated}
+            loading={loading}
+          />
+        )}
         {clientId && (
           <QuickWorkoutBuilderDialog
             clientId={clientId}
@@ -237,18 +309,6 @@ export function BuilderHeader({
           onAssignPeriod={onAssignPeriod}
           existingAssignments={existingAssignments}
         />
-        {clientId && onDeleteDays && onArchivePeriod && (
-          <ManageWeekDialog
-            clientId={clientId}
-            clientName={clientName}
-            weekTemplates={weekTemplates}
-            existingAssignments={existingAssignments}
-            onAssignWeek={onAssignWeek}
-            onDeleteDays={onDeleteDays}
-            onArchivePeriod={onArchivePeriod}
-            loading={loading}
-          />
-        )}
 
 
 

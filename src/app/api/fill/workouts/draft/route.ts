@@ -14,6 +14,8 @@ import {
 } from '@/lib/ai/workoutDraft';
 
 const DEFAULT_DDS_RECENT_WORKOUT_LIMIT = 24;
+const FILL_DRAFT_ADMIN_DEBUG_NOTE =
+	'CHECKLIST: verify Firebase Admin credentials in deployment env (FIREBASE_SERVICE_ACCOUNT_KEY/FIREBASE_SERVICE_ACCOUNT/GOOGLE_APPLICATION_CREDENTIALS), service account IAM access to Firestore, and correct project binding.';
 
 function resolveRecentWorkoutLimit(): number {
 	const raw = process.env.DDS_RECENT_WORKOUT_LIMIT;
@@ -34,6 +36,7 @@ const RequestSchema = z.object({
 	sessionDurationMinutes: z.number().int().positive().max(300).optional(),
 	currentTitle: z.string().optional(),
 	currentNotes: z.string().optional(),
+	includeDecisionTrace: z.boolean().optional(),
 });
 
 function hasAdminFirestoreCredentials(): boolean {
@@ -43,6 +46,18 @@ function hasAdminFirestoreCredentials(): boolean {
 		process.env.FIREBASE_SERVICE_ACCOUNT ||
 		process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
 		process.env.GOOGLE_CLOUD_PROJECT
+	);
+}
+
+function createMissingAdminCredentialResponse() {
+	return NextResponse.json(
+		{
+			error: 'Firebase Admin credentials are not configured for Fill Draft API.',
+			code: 'missing_admin_credentials',
+			debugNote: FILL_DRAFT_ADMIN_DEBUG_NOTE,
+			environment: process.env.NODE_ENV || 'unknown',
+		},
+		{ status: 503 }
 	);
 }
 
@@ -298,14 +313,15 @@ async function fetchRecentWorkouts(accountId: string, clientId: string): Promise
 export async function POST(request: NextRequest) {
 	try {
 		if (process.env.NODE_ENV === 'development' && !hasAdminFirestoreCredentials()) {
-			return NextResponse.json(
-				{
-					error:
-						'Firebase Admin credentials are not configured for local dev. Set FIREBASE_SERVICE_ACCOUNT or FIREBASE_SERVICE_ACCOUNT_KEY, GOOGLE_APPLICATION_CREDENTIALS, or FIRESTORE_EMULATOR_HOST.',
-					code: 'missing_admin_credentials',
-				},
-				{ status: 503 }
-			);
+			console.error('[Fill Draft API][missing_admin_credentials]', {
+				environment: process.env.NODE_ENV || 'unknown',
+				hasFirestoreEmulatorHost: Boolean(process.env.FIRESTORE_EMULATOR_HOST),
+				hasGoogleApplicationCredentials: Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS),
+				hasFirebaseServiceAccount: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT),
+				hasFirebaseServiceAccountKey: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_KEY),
+				hasGoogleCloudProject: Boolean(process.env.GOOGLE_CLOUD_PROJECT),
+			});
+			return createMissingAdminCredentialResponse();
 		}
 
 		const userId = await getAuthenticatedUser(request);
@@ -355,6 +371,7 @@ export async function POST(request: NextRequest) {
 			recentWorkouts,
 			fallbackTitle,
 			currentNotes: payload.currentNotes,
+			includeDecisionTrace: payload.includeDecisionTrace,
 			categoryContextById: movementCategoryContextMap,
 			movementContextById: movementContextMap,
 			sessionDurationMinutes: payload.sessionDurationMinutes,
@@ -365,6 +382,14 @@ export async function POST(request: NextRequest) {
 	} catch (error) {
 		console.error('[Fill Draft API] Failed to generate workout draft:', error);
 		const message = error instanceof Error ? error.message : 'Failed to generate draft';
+		const looksLikeMissingAdminCredentials = /default credentials|service account|credential|google_application_credentials|firestore emulator/i.test(message);
+		if (looksLikeMissingAdminCredentials) {
+			console.error('[Fill Draft API][missing_admin_credentials_runtime]', {
+				environment: process.env.NODE_ENV || 'unknown',
+				message,
+			});
+			return createMissingAdminCredentialResponse();
+		}
 		return NextResponse.json({ error: message }, { status: 500 });
 	}
 }

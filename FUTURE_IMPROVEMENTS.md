@@ -2,6 +2,47 @@
 
 ## Deferred Features
 
+### DDS Evolution Backlog (Pinned)
+- **Date Added:** June 26, 2026
+- **Priority:** High
+- **Status:** Deferred (keep current DDS stable first)
+
+#### Alias Mapping Scope Clarification
+- Current behavior: import alias mapping is stored in browser localStorage (`ClientHistoryImportDialog`), so it is tied to the current browser profile.
+- This is not "global across all coaches," but it is also not account-portable.
+- If you use another browser/device (or clear storage), aliases are not available there.
+- Future direction (if needed): move aliases to account-scoped storage (shared for the same coach/account only, not cross-account).
+
+#### Movement Capability Profiles (Deferred)
+- Keep current behavior for now: DDS uses stored `targetWorkload`/`setEntries` and latest movement workload carryover.
+- Future feature: build per-client movement capability profiles by `movementId`:
+  - exposure count
+  - min/max/median working load
+  - progression trend
+  - confidence score
+- Future feature: optional broader movement benchmark profile (population ranges) to support better first-session starting loads.
+- Example goal: if a movement has broad known ranges, start new clients conservatively; increase recommendations as client-specific confidence grows.
+
+#### Warmup/Cooldown Composer + Coverage Checks (Deferred)
+- Problem observed: repetitive warmup/cooldown selections and weak section-level composition quality checks.
+- Future feature: section recipe slots with coverage rules (mobility, activation, pattern prep, intensity ramp, downregulation, etc.).
+- Goal: evaluate warmup/cooldown quality as a section, not only as independent movement picks.
+
+#### Review Feedback Loop (Deferred)
+- Future feature: structured workout review signals (movement/round/workout-level) that modify future fill ranking.
+- Initial input source can be notes captured during/after sessions.
+- Goal: explicit boosts/penalties from review outcomes instead of text-only passive influence.
+
+#### DDS Workout Knowledge Packs (Deferred)
+- Pin for later implementation: import curated workout knowledge into DDS as account-scoped context.
+- Target examples: training styles, split archetypes, progression models, phase rules, movement pairing guidelines.
+- Scope guard: keep current DDS stabilization work focused first; do not broaden runtime behavior until fill modes settle.
+
+#### Week Split Calendar + Time Capture (Deferred)
+- Pin for later: when creating weeks, add optional session-time capture and optional calendar event creation from the confirmation list.
+- Current behavior to keep for now: create program period + workouts only (no calendar events and no time selection in Week Split flow).
+- Active scope now: focus on workout creation quality and split/session assignment correctness.
+
 ### Workouts Tab (Hidden)
 - **Status:** Temporarily hidden to focus on core stability (Movements & Schedule).
 - **Next Steps:** Re-enable once the workout list and logging functions are ready for testing.

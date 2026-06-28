@@ -204,6 +204,19 @@ export async function createRecurringCalendarEvent(
 ): Promise<any> {
   const headers = await buildAuthHeaders({ 'Content-Type': 'application/json' }, idToken);
 
+  console.info('[google-calendar/api-client] createRecurringCalendarEvent request', {
+    summary: params.summary,
+    startDate: params.startDate,
+    endDate: params.endDate,
+    startTime: params.startTime,
+    duration: params.duration || 60,
+    clientId: params.clientId,
+    periodId: params.periodId,
+    categoryName: params.categoryName,
+    weekTemplateId: params.weekTemplateId || null,
+    calendarId: params.calendarId || 'primary',
+  });
+
   const response = await fetch('/api/calendar/events', {
     method: 'POST',
     headers,
@@ -217,10 +230,21 @@ export async function createRecurringCalendarEvent(
     } catch {
       // ignore parse errors
     }
+    console.error('[google-calendar/api-client] createRecurringCalendarEvent response error', {
+      status: response.status,
+      error,
+    });
     const err = new Error(error.error || 'Failed to create calendar event');
     (err as any).status = response.status;
+    if (error?.code) {
+      (err as any).code = error.code;
+    }
     throw err;
   }
+
+  console.info('[google-calendar/api-client] createRecurringCalendarEvent success', {
+    status: response.status,
+  });
 
   return response.json();
 }

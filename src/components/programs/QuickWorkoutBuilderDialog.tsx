@@ -521,17 +521,17 @@ export function QuickWorkoutBuilderDialog({
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
           <Dumbbell className="h-4 w-4" />
-          <span className="hidden lg:inline">Quick </span>Workout
+          <span className="hidden lg:inline">Month Plan + </span>Fill
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Dumbbell className="h-5 w-5" />
-            Quick Workout Builder
+            Month Plan + Fill
           </DialogTitle>
           <DialogDescription>
-            Create a workout for {clientName}
+            Extend training into upcoming months by creating workouts that kick-start your monthly progression plan.
           </DialogDescription>
         </DialogHeader>
 
@@ -662,7 +662,7 @@ export function QuickWorkoutBuilderDialog({
               </Button>
               <Button variant="outline" onClick={handleSave} disabled={isSaving || !workoutTitle}>
                 <Save className="h-4 w-4 mr-2 icon-success" />
-                {isSaving ? 'Creating...' : 'Create Workout'}
+                {isSaving ? 'Creating...' : 'Add Month Workout'}
               </Button>
             </DialogFooter>
           </>

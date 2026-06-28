@@ -132,8 +132,6 @@ export const resolveActiveAccountId = async (): Promise<string | null> => {
         return null;
     }
 
-    console.log(`[resolveActiveAccountId] Resolving for UID: ${user.uid}`);
-
     if (sessionAccountId && sessionAccountUid === user.uid) {
         return sessionAccountId;
     }
@@ -144,7 +142,6 @@ export const resolveActiveAccountId = async (): Promise<string | null> => {
 
     // 2. Short-circuit for Master User to ensure stability
     if (user.uid === MASTER_UID) {
-        console.log('[resolveActiveAccountId] Master user detected, resolving to "master"');
         sessionAccountId = 'master';
         sessionAccountUid = user.uid;
         return 'master';
@@ -153,7 +150,6 @@ export const resolveActiveAccountId = async (): Promise<string | null> => {
     try {
         const membership = await getActiveMembership(user.uid);
         if (membership?.accountId) {
-            console.log(`[resolveActiveAccountId] Resolved to account: ${membership.accountId}`);
             sessionAccountId = membership.accountId;
             sessionAccountUid = user.uid;
             return membership.accountId;

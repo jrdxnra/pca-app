@@ -172,6 +172,13 @@ function HorizontalDayItem({
   onDelete: (index: number) => void;
 }) {
   const workoutTypes = ['Workout', 'Cardio Day', 'Conditioning'];
+  const normalizeCategoryForSelect = (value?: string): string => {
+    const normalized = value?.trim().toLowerCase();
+    if (normalized === 'workout') return 'Workout';
+    if (normalized === 'cardio day') return 'Cardio Day';
+    if (normalized === 'conditioning') return 'Conditioning';
+    return '';
+  };
 
   return (
     <div className="flex items-center gap-2 p-2 border rounded bg-gray-50">
@@ -182,7 +189,7 @@ function HorizontalDayItem({
           className="w-24 text-sm"
         />
         <Select
-          value={day.workoutCategory}
+          value={normalizeCategoryForSelect(day.workoutCategory)}
           onValueChange={(value) => onUpdate(index, { workoutCategory: value })}
         >
           <SelectTrigger className="flex-1 h-8 text-xs">
@@ -209,29 +216,44 @@ function HorizontalDayItem({
   );
 }
 
-// Helper function to count workout days by category for WeekTemplate
-function getWorkoutDaysSummary(template: WeekTemplate): string {
-  const categoryCounts: Record<string, number> = {};
+function normalizeWeekTemplateCategory(value?: string): 'Workout' | 'Cardio Day' | 'Conditioning' | '' {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === 'workout') return 'Workout';
+  if (normalized === 'cardio day') return 'Cardio Day';
+  if (normalized === 'conditioning') return 'Conditioning';
+  return '';
+}
 
-  template.days.forEach(day => {
-    const category = day.workoutCategory?.trim();
-    if (category && category.toLowerCase() !== 'rest day') {
-      categoryCounts[category] = (categoryCounts[category] || 0) + 1;
-    }
+// Helper function to summarize workout days in order for WeekTemplate
+function getWorkoutDaysSummary(template: WeekTemplate): string {
+  const workoutDays = template.days
+    .map((day, index) => ({
+      day: day.day?.trim() || `Day ${index + 1}`,
+      category: normalizeWeekTemplateCategory(day.workoutCategory),
+    }))
+    .filter((entry) => Boolean(entry.category));
+
+  if (!workoutDays.length) return 'No workouts';
+
+  const categoryCounts: Record<string, number> = {};
+  workoutDays.forEach(({ category }) => {
+    categoryCounts[category] = (categoryCounts[category] || 0) + 1;
   });
 
   const parts: string[] = [];
   Object.entries(categoryCounts).forEach(([category, count]) => {
-    // Handle pluralization
-    let label = category.toLowerCase();
     if (category === 'Cardio Day') {
-      label = count === 1 ? 'cardio day' : 'cardio days';
-    } else if (category === 'Workout') {
-      label = count === 1 ? 'workout' : 'workouts';
-    } else {
-      label = count === 1 ? label : `${label}s`;
+      parts.push(`${count} ${count === 1 ? 'cardio day' : 'cardio days'}`);
+      return;
     }
-    parts.push(`${count} ${label}`);
+
+    const lower = category.toLowerCase();
+    if (lower === 'workout') {
+      parts.push(`${count} ${count === 1 ? 'workout' : 'workouts'}`);
+      return;
+    }
+
+    parts.push(`${count} ${count === 1 ? lower : `${lower}s`}`);
   });
 
   return parts.join(', ') || 'No workouts';
@@ -1829,10 +1851,13 @@ export default function ConfigurePage() {
   const handleSaveWeekTemplate = async () => {
     if (editingTemplate) {
       try {
-        // Filter out rest days before saving
-        const activeDays = editingTemplate.days.filter(day =>
-          day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day'
-        );
+        // Keep only valid configured workout-day categories before saving.
+        const activeDays = editingTemplate.days
+          .map(day => ({
+            day: day.day,
+            workoutCategory: normalizeWeekTemplateCategory(day.workoutCategory),
+          }))
+          .filter(day => Boolean(day.workoutCategory));
 
         if (editingTemplate.id.startsWith('temp_')) {
           // New template
@@ -2689,7 +2714,7 @@ export default function ConfigurePage() {
                           </Button>
                         </div>
                         {editingTemplate.days
-                          .filter(day => day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day')
+                          .filter(day => Boolean(normalizeWeekTemplateCategory(day.workoutCategory)))
                           .map((day, index) => {
                             const originalIndex = editingTemplate.days.indexOf(day);
                             return (
@@ -2761,7 +2786,7 @@ export default function ConfigurePage() {
                                   </Button>
                                 </div>
                                 {editingTemplate.days
-                                  .filter(day => day.workoutCategory && day.workoutCategory.toLowerCase() !== 'rest day')
+                                  .filter(day => Boolean(normalizeWeekTemplateCategory(day.workoutCategory)))
                                   .map((day, index) => {
                                     const originalIndex = editingTemplate.days.indexOf(day);
                                     return (
