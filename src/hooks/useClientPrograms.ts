@@ -764,6 +764,8 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                         date: Timestamp.fromDate(new Date(day.date)),
                         workoutCategory: day.workoutCategory,
                         workoutCategoryColor: day.workoutCategoryColor || weekTemplate.color || '#6b7280',
+                        appliedTemplateId: day.appliedTemplateId,
+                        appliedTemplateSelection: day.appliedTemplateSelection,
                         time: day.time,
                         isAllDay: Boolean(day.isAllDay),
                     }))
@@ -815,7 +817,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
             }
 
             const fillTargets = Array.from(scheduledSelectionByDateKey.entries())
-                .filter(([dateKey, selection]) => selection.startsWith('structure-fill:') && plannedCategoryByDateKey.has(dateKey));
+                .filter(([dateKey, selection]) => /^structure-fill:/.test(selection) && plannedCategoryByDateKey.has(dateKey));
             const fillDraftByDateKey = new Map<string, {
                 title?: string;
                 notes?: string;
@@ -823,9 +825,36 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                 appliedTemplateId: string;
             }>();
             const preflightFillFailures: Array<{ dateKey: string; reason: string }> = [];
+            const preflightFailureCategoryCounts = new Map<string, number>();
+            let preflightApiDraftCount = 0;
+            let preflightFallbackDraftCount = 0;
             const preflightStartMs = Date.now();
             debugFlow('preflight_begin', { fillTargets: fillTargets.length });
             const fillAuthToken = await auth.currentUser?.getIdToken();
+
+            const recordPreflightFailure = (reason: string): void => {
+                const normalized = reason.toLowerCase();
+                const category = normalized.includes('unauthorized')
+                    ? 'unauthorized'
+                    : normalized.includes('timeout')
+                        ? 'timeout'
+                        : normalized.includes('missing_admin_credentials')
+                            ? 'missing_admin_credentials'
+                            : normalized.includes('flow is disabled') || normalized.includes('dds_flow_disabled')
+                                ? 'flow_disabled'
+                                : normalized.includes('fallback')
+                                    ? 'fallback_failure'
+                                    : normalized.includes('no rounds')
+                                        ? 'empty_draft'
+                                        : normalized.includes('failed')
+                                            ? 'request_failed'
+                                            : 'other';
+
+                preflightFailureCategoryCounts.set(
+                    category,
+                    (preflightFailureCategoryCounts.get(category) || 0) + 1
+                );
+            };
 
             if (!fillAuthToken && fillTargets.length > 0) {
                 for (const [targetDateKey] of fillTargets) {
@@ -833,12 +862,13 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                         dateKey: targetDateKey,
                         reason: 'Unauthorized: session token missing. Refresh the app and retry +Fill.',
                     });
+                    recordPreflightFailure('unauthorized');
                 }
             }
 
             for (let i = 0; i < fillTargets.length; i += 1) {
                 const [dateKey, selection] = fillTargets[i];
-                const structureTemplateId = selection.replace('structure-fill:', '').trim();
+                const structureTemplateId = selection.replace(/^structure-(fill|ai):/, '').trim();
                 if (!structureTemplateId) continue;
 
                 if (preflightFillFailures.length > 0) {
@@ -856,6 +886,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                         headers: {
                             'Content-Type': 'application/json',
                             Authorization: `Bearer ${fillAuthToken}`,
+                            'X-DDS-Flow': 'weekly',
                         },
                         signal: controller.signal,
                         body: JSON.stringify({
@@ -864,6 +895,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                             structureTemplateId,
                             sessionDurationMinutes: 60,
                             currentTitle: `${categoryName} Draft`,
+                            includeDecisionTrace: true,
                         }),
                     });
                     clearTimeout(timeoutId);
@@ -883,6 +915,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                             for (let targetIndex = i; targetIndex < fillTargets.length; targetIndex += 1) {
                                 const [remainingDateKey] = fillTargets[targetIndex];
                                 preflightFillFailures.push({ dateKey: remainingDateKey, reason: unauthorizedReason });
+                                recordPreflightFailure(unauthorizedReason);
                             }
                             break;
                         }
@@ -890,7 +923,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                         if (errorCode === 'missing_admin_credentials') {
                             for (let targetIndex = i; targetIndex < fillTargets.length; targetIndex += 1) {
                                 const [remainingDateKey, remainingSelection] = fillTargets[targetIndex];
-                                const remainingTemplateId = remainingSelection.replace('structure-fill:', '').trim();
+                                const remainingTemplateId = remainingSelection.replace(/^structure-(fill|ai):/, '').trim();
                                 if (!remainingTemplateId) continue;
 
                                 const remainingCategoryName = plannedCategoryByDateKey.get(remainingDateKey) || 'Workout';
@@ -908,6 +941,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                             dateKey: remainingDateKey,
                                             reason: 'Local fallback returned no rounds for +Fill.',
                                         });
+                                        recordPreflightFailure('Local fallback returned no rounds for +Fill.');
                                         continue;
                                     }
 
@@ -917,11 +951,13 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                         rounds: fallbackDraft.draft.rounds,
                                         appliedTemplateId: remainingTemplateId,
                                     });
+                                    preflightFallbackDraftCount += 1;
                                 } catch (fallbackErr) {
                                     const fallbackReason = fallbackErr instanceof Error
                                         ? fallbackErr.message
                                         : 'Local fallback failed for +Fill.';
                                     preflightFillFailures.push({ dateKey: remainingDateKey, reason: fallbackReason });
+                                    recordPreflightFailure(fallbackReason);
                                 }
                             }
                             break;
@@ -941,6 +977,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                         dateKey,
                                         reason: `DDS draft request failed (${response.status}) and local fallback returned no rounds.`,
                                     });
+                                    recordPreflightFailure(`DDS draft request failed (${response.status}) and local fallback returned no rounds.`);
                                     continue;
                                 }
 
@@ -950,6 +987,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                     rounds: fallbackDraft.draft.rounds,
                                     appliedTemplateId: structureTemplateId,
                                 });
+                                preflightFallbackDraftCount += 1;
                                 continue;
                             } catch (fallbackErr) {
                                 const fallbackReason = fallbackErr instanceof Error
@@ -959,6 +997,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                     dateKey,
                                     reason: `DDS draft request failed (${response.status}). ${fallbackReason}`,
                                 });
+                                recordPreflightFailure(`DDS draft request failed (${response.status}). ${fallbackReason}`);
                                 continue;
                             }
                         }
@@ -967,6 +1006,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                             ? `${errorBody.error}${debugNote ? ` ${debugNote}` : ''}`
                             : `DDS draft request failed (${response.status})`;
                         preflightFillFailures.push({ dateKey, reason: errorMessage });
+                        recordPreflightFailure(errorMessage);
                         continue;
                     }
 
@@ -980,6 +1020,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
 
                     if (!payload?.draft?.rounds || !Array.isArray(payload.draft.rounds)) {
                         preflightFillFailures.push({ dateKey, reason: 'DDS returned no rounds' });
+                        recordPreflightFailure('DDS returned no rounds');
                         continue;
                     }
 
@@ -989,6 +1030,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                         rounds: payload.draft.rounds,
                         appliedTemplateId: structureTemplateId,
                     });
+                    preflightApiDraftCount += 1;
                 } catch (fillErr) {
                     const isTimeoutAbort = fillErr instanceof DOMException && fillErr.name === 'AbortError';
                     if (isTimeoutAbort) {
@@ -1006,6 +1048,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                     dateKey,
                                     reason: 'DDS request timed out and local fallback returned no rounds.',
                                 });
+                                recordPreflightFailure('DDS request timed out and local fallback returned no rounds.');
                                 continue;
                             }
 
@@ -1015,6 +1058,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                 rounds: fallbackDraft.draft.rounds,
                                 appliedTemplateId: structureTemplateId,
                             });
+                            preflightFallbackDraftCount += 1;
                             debugFlow('preflight_timeout_fallback_ok', { dateKey });
                             continue;
                         } catch (fallbackErr) {
@@ -1025,17 +1069,29 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                 dateKey,
                                 reason: `DDS request timed out. ${fallbackReason}`,
                             });
+                            recordPreflightFailure(`DDS request timed out. ${fallbackReason}`);
                             continue;
                         }
                     }
 
                     const reason = fillErr instanceof Error ? fillErr.message : 'Unknown +Fill error';
                     preflightFillFailures.push({ dateKey, reason });
+                    recordPreflightFailure(reason);
                 }
             }
 
-            debugFlow('preflight_end', {
+            const preflightSummary = {
+                flow: 'weekly' as const,
+                fillTargets: fillTargets.length,
+                apiDrafts: preflightApiDraftCount,
+                fallbackDrafts: preflightFallbackDraftCount,
+                failedDrafts: preflightFillFailures.length,
+                failureCategories: Object.fromEntries(preflightFailureCategoryCounts.entries()),
                 preflightMs: Date.now() - preflightStartMs,
+            };
+
+            debugFlow('preflight_end', {
+                ...preflightSummary,
                 resolvedDrafts: fillDraftByDateKey.size,
                 failures: preflightFillFailures.length,
             });

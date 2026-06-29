@@ -1,0 +1,667 @@
+{
+  "generatedAt": "2026-06-28T16:47:32.350Z",
+  "accountId": "master",
+  "summary": {
+    "sampleSizeRequested": 24,
+    "sampleSizeEvaluated": 24,
+    "manualEditsProxy": {
+      "baselineAvg": 0,
+      "currentAvg": 0,
+      "delta": 0
+    },
+    "unsafePicks": {
+      "baselineAvg": 0,
+      "currentAvg": 0,
+      "delta": 0
+    },
+    "progressionCoherence": {
+      "baselineAvg": 1,
+      "currentAvg": 1,
+      "delta": 0
+    },
+    "coachConfidenceProxy": {
+      "baselineAvg": 5,
+      "currentAvg": 5,
+      "delta": 0
+    },
+    "wins": {
+      "currentLowerManualEdits": 0,
+      "currentLowerUnsafe": 0,
+      "currentHigherProgression": 0,
+      "currentHigherConfidence": 0
+    }
+  },
+  "comparisons": [
+    {
+      "workoutId": "0bYjQ6MfsQzqT3lLq7P5",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 605,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 798,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "191Yh56U9wkhznmBUFum",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 511,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 765,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "9e8To6njuEZEvixSU5Ny",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 531,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 572,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "AQpPV6hhuPMXZoxeDSP2",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 441,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 520,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "CRoHCEjH24JQTQ9Wi0gZ",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 560,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 475,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "JOkT4NSEqm6mLy0wmbEG",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 460,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 490,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "LJl7bUGMrY9ocvL2y7sW",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 440,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 453,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "VIGfqshhqxf6dzJ8kkK3",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 440,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 556,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "mZgRUj3JzEyb0DTmSgFg",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 648,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 455,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "n3alcuN1gJJZs9xUVWIr",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 538,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 483,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "ojKMuVAQH2nOOeAC5jT0",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 949,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 449,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "sdpM0Nj18Y1XOKGUD2Bd",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Conditioning",
+      "structureTemplateId": "rlkoFgJOcxYdqTQPHp15",
+      "baseline": {
+        "generationMs": 637,
+        "rounds": 5,
+        "movementUsages": 19,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 471,
+        "rounds": 5,
+        "movementUsages": 19,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "uay6luIw3fPJFWiNZ4kg",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Conditioning",
+      "structureTemplateId": "rlkoFgJOcxYdqTQPHp15",
+      "baseline": {
+        "generationMs": 426,
+        "rounds": 5,
+        "movementUsages": 19,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 452,
+        "rounds": 5,
+        "movementUsages": 19,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "wBjDRcEIErddE1HWNI4A",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 490,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 491,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "ygp9Vev4LrdFKvhIo8hM",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 450,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 458,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "3PJm2r2VPbScAWZ87zBN",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 427,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 612,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "6pYrEIsQkuKGFkZwTm8X",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 443,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 444,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "GFSNP2PXQRXWoipsT1B4",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 446,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 484,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "P18uITuXSFkcDyJRq8um",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 424,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 512,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "Q3ym22D1GrX3V33RSWVh",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 524,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 557,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "S4NLj4HRed3IynfP6TM2",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 425,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 606,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "SA2KkhhHJ654n2W9zkJ1",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 428,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 448,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "VEzf06e1Z2gwWtFLsxO8",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 465,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 533,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    },
+    {
+      "workoutId": "VIaN1UBzXXjhb4VlHDfu",
+      "clientId": "gIqJjNOmI5y8f0nbYmAq",
+      "categoryName": "Workout",
+      "structureTemplateId": "Pbw119baQhczlpId7UC4",
+      "baseline": {
+        "generationMs": 433,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      },
+      "current": {
+        "generationMs": 645,
+        "rounds": 5,
+        "movementUsages": 18,
+        "missingMovementIds": 0,
+        "unsafePickCount": 0,
+        "progressionContinuityRatio": 1,
+        "manualEditsProxy": 0,
+        "coachConfidenceProxy": 5
+      }
+    }
+  ],
+  "diagnostics": {
+    "totalWorkoutsScanned": 367,
+    "totalCandidatesDetected": 244,
+    "sampledCandidates": 24,
+    "noSectionsCount": 0,
+    "noHistoryCount": 0
+  }
+}

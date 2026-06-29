@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { addDays, format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -122,6 +123,20 @@ export function PeriodAssignmentDialog({
 
   // Check if a category is a rest day (no time needed)
   const isRestDay = (categoryName: string) => categoryName.toLowerCase() === 'rest day';
+
+  const formatDateForInput = (date: Date) => format(date, 'yyyy-MM-dd');
+
+  const getNextWeekday = (date: Date): Date => {
+    const nextDate = new Date(date);
+    nextDate.setHours(12, 0, 0, 0);
+    nextDate.setDate(nextDate.getDate() + 1);
+
+    while (nextDate.getDay() === 0 || nextDate.getDay() === 6) {
+      nextDate.setDate(nextDate.getDate() + 1);
+    }
+
+    return nextDate;
+  };
 
   // Build default template for new custom week
   const buildDefaultTemplate = (): TemplateEditorState => ({
@@ -316,6 +331,26 @@ export function PeriodAssignmentDialog({
     setIsCreatingNew(false);
     setIsOpen(false);
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (startDate || endDate) return;
+
+    const latestAssignmentEnd = existingAssignments.reduce<Date | null>((latest, assignment) => {
+      const candidate = safeToDate(assignment.endDate);
+      candidate.setHours(12, 0, 0, 0);
+      if (!latest || candidate.getTime() > latest.getTime()) return candidate;
+      return latest;
+    }, null);
+
+    const suggestedStart = latestAssignmentEnd
+      ? getNextWeekday(latestAssignmentEnd)
+      : getNextWeekday(new Date());
+    const suggestedEnd = addDays(suggestedStart, 14);
+
+    setStartDate(formatDateForInput(suggestedStart));
+    setEndDate(formatDateForInput(suggestedEnd));
+  }, [endDate, existingAssignments, isOpen, startDate]);
 
   const getSelectedPeriod = () => {
     return periods.find(p => p.id === selectedPeriod);

@@ -2,8 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirebaseAdminApp } from '@/lib/firebase/admin';
 import { ensureCoachAccountProvisioned } from '@/lib/firebase/admin/provision';
+import { existsSync } from 'node:fs';
 
 getFirebaseAdminApp();
+
+function hasProvisioningCredentials(): boolean {
+  const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  return Boolean(
+    process.env.FIRESTORE_EMULATOR_HOST ||
+    process.env.FIREBASE_SERVICE_ACCOUNT ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+    (serviceAccountPath && existsSync(serviceAccountPath)) ||
+    existsSync('/workspaces/pca-app/.secrets/firebase-admin.json')
+  );
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,16 +33,9 @@ export async function POST(request: NextRequest) {
 
     // Dev guardrail: if no explicit cloud credentials are configured, skip expensive provisioning attempts.
     // This prevents repeated ~20s hangs and noisy stack traces in local environments.
-    const hasExplicitCloudCreds = Boolean(
-      process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-      process.env.FIREBASE_SERVICE_ACCOUNT ||
-      process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
-      process.env.GOOGLE_CLOUD_PROJECT
-    );
-
     if (
       process.env.NODE_ENV === 'development' &&
-      !hasExplicitCloudCreds &&
+      !hasProvisioningCredentials() &&
       process.env.FORCE_DEV_PROVISION_ATTEMPT !== '1'
     ) {
       return NextResponse.json(

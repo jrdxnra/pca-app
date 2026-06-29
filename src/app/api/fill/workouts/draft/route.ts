@@ -7,6 +7,7 @@ import {
 	buildWorkoutDraftFromHistory,
 	type CategoryContextForDraft,
 	type ClientContextForDraft,
+	type ClientMovementProfileForDraft,
 	type GenerateWorkoutDraftRequest,
 	type HistoricalWorkoutForDraft,
 	type MovementContextForDraft,
@@ -14,6 +15,8 @@ import {
 } from '@/lib/ai/workoutDraft';
 
 const DEFAULT_DDS_RECENT_WORKOUT_LIMIT = 24;
+type DdsEngineMode = 'current' | 'baseline';
+type DdsFlow = 'single' | 'monthly' | 'weekly';
 const FILL_DRAFT_ADMIN_DEBUG_NOTE =
 	'CHECKLIST: verify Firebase Admin credentials in deployment env (FIREBASE_SERVICE_ACCOUNT_KEY/FIREBASE_SERVICE_ACCOUNT/GOOGLE_APPLICATION_CREDENTIALS), service account IAM access to Firestore, and correct project binding.';
 
@@ -29,6 +32,102 @@ function resolveRecentWorkoutLimit(): number {
 	return Math.min(Math.floor(parsed), 50);
 }
 
+function resolveDdsEngineMode(): DdsEngineMode {
+	const raw = (process.env.DDS_ENGINE_MODE || '').trim().toLowerCase();
+	if (raw === 'baseline') return 'baseline';
+	return 'current';
+}
+
+function resolveRequestFlow(request: NextRequest): DdsFlow {
+	const raw = (request.headers.get('x-dds-flow') || '').trim().toLowerCase();
+	if (raw === 'monthly') return 'monthly';
+	if (raw === 'weekly') return 'weekly';
+	return 'single';
+}
+
+function parseEnvFlag(raw: string | undefined, fallback: boolean): boolean {
+	if (!raw) return fallback;
+	const normalized = raw.trim().toLowerCase();
+	if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+	if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+	return fallback;
+}
+
+function isFlowEnabled(flow: DdsFlow): boolean {
+	if (flow === 'monthly') {
+		return parseEnvFlag(process.env.DDS_ENABLE_MONTHLY_FILL, true);
+	}
+
+	if (flow === 'weekly') {
+		return parseEnvFlag(process.env.DDS_ENABLE_WEEKLY_FILL, true);
+	}
+
+	return parseEnvFlag(process.env.DDS_ENABLE_SINGLE_FILL, true);
+}
+
+type FillDraftTelemetryFields = {
+	flow: DdsFlow;
+	engineMode: DdsEngineMode;
+	accountId?: string;
+	userId?: string;
+	status: number;
+	latencyMs: number;
+	templateId?: string;
+	categoryName?: string;
+	errorCode?: string;
+	errorMessage?: string;
+	strategy?: string;
+	recentWorkoutsAnalyzed?: number;
+};
+
+function logFillDraftTelemetry(event: 'success' | 'error', fields: FillDraftTelemetryFields): void {
+	const payload = {
+		event,
+		...fields,
+	};
+
+	void persistFillDraftTelemetry(payload);
+
+	if (event === 'success') {
+		console.info('[Fill Draft API][telemetry]', payload);
+		return;
+	}
+
+	console.warn('[Fill Draft API][telemetry]', payload);
+}
+
+async function persistFillDraftTelemetry(payload: {
+	event: 'success' | 'error';
+	flow: DdsFlow;
+	engineMode: DdsEngineMode;
+	accountId?: string;
+	userId?: string;
+	status: number;
+	latencyMs: number;
+	templateId?: string;
+	categoryName?: string;
+	errorCode?: string;
+	errorMessage?: string;
+	strategy?: string;
+	recentWorkoutsAnalyzed?: number;
+}): Promise<void> {
+	try {
+		const db = getAdminDb();
+		await db.collection('ddsFillTelemetry').add({
+			...payload,
+			createdAt: new Date(),
+		});
+	} catch (error) {
+		// Keep telemetry best-effort so draft generation never fails on logging.
+		console.warn('[Fill Draft API][telemetry_persist_failed]', {
+			error: error instanceof Error ? error.message : String(error),
+			flow: payload.flow,
+			status: payload.status,
+			accountId: payload.accountId,
+		});
+	}
+}
+
 const RequestSchema = z.object({
 	clientId: z.string().min(1),
 	categoryName: z.string().optional(),
@@ -36,6 +135,7 @@ const RequestSchema = z.object({
 	sessionDurationMinutes: z.number().int().positive().max(300).optional(),
 	currentTitle: z.string().optional(),
 	currentNotes: z.string().optional(),
+	goals: z.string().optional(),
 	includeDecisionTrace: z.boolean().optional(),
 });
 
@@ -274,6 +374,117 @@ async function fetchClientContext(accountId: string, clientId: string): Promise<
 	};
 }
 
+async function fetchClientMovementProfile(
+	accountId: string,
+	clientId: string
+): Promise<ClientMovementProfileForDraft> {
+	const db = getAdminDb();
+	const profileRef = db.collection('clientMovementProfiles').doc(clientId);
+	const profileDoc = await profileRef.get();
+
+	if (!profileDoc.exists) {
+		const bootstrap: ClientMovementProfileForDraft & { ownerId: string; clientId: string; createdAt: Date; updatedAt: Date } = {
+			ownerId: accountId,
+			clientId,
+			equipmentAccess: [],
+			restrictions: [],
+			preferences: [],
+			familyProfiles: [],
+			feedbackLog: [],
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		await profileRef.set(bootstrap, { merge: true });
+		return {
+			equipmentAccess: [],
+			restrictions: [],
+			preferences: [],
+			familyProfiles: [],
+			feedbackLog: [],
+		};
+	}
+
+	const data = profileDoc.data() as Record<string, unknown>;
+	if (!data || data.ownerId !== accountId || data.clientId !== clientId) {
+		return {
+			equipmentAccess: [],
+			restrictions: [],
+			preferences: [],
+			familyProfiles: [],
+			feedbackLog: [],
+		};
+	}
+
+	const isPreferenceStatus = (
+		value: unknown
+	): value is 'allow' | 'avoid' | 'preferred' =>
+		value === 'allow' || value === 'avoid' || value === 'preferred';
+
+	const isReadiness = (
+		value: unknown
+	): value is 'low' | 'moderate' | 'high' =>
+		value === 'low' || value === 'moderate' || value === 'high';
+
+	const isProgressionStage = (
+		value: unknown
+	): value is 'rebuild' | 'base' | 'build' | 'peak' | 'maintain' =>
+		value === 'rebuild' ||
+		value === 'base' ||
+		value === 'build' ||
+		value === 'peak' ||
+		value === 'maintain';
+
+	const isFeedbackSignal = (
+		value: unknown
+	): value is 'too_easy' | 'too_hard' | 'pain' | 'great_quality' | 'time_overrun' | 'poor_tolerance' | 'good_tolerance' =>
+		value === 'too_easy' ||
+		value === 'too_hard' ||
+		value === 'pain' ||
+		value === 'great_quality' ||
+		value === 'time_overrun' ||
+		value === 'poor_tolerance' ||
+		value === 'good_tolerance';
+
+	return {
+		equipmentAccess: Array.isArray(data.equipmentAccess)
+			? data.equipmentAccess.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+			: [],
+		restrictions: Array.isArray(data.restrictions)
+			? data.restrictions.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+			: [],
+		preferences: Array.isArray(data.preferences)
+			? data.preferences
+				.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+				.map((item) => ({
+					movementId: typeof item.movementId === 'string' ? item.movementId : '',
+					status: isPreferenceStatus(item.status) ? item.status : 'allow',
+					reason: typeof item.reason === 'string' ? item.reason : undefined,
+				}))
+				.filter((item) => item.movementId)
+			: [],
+		familyProfiles: Array.isArray(data.familyProfiles)
+			? data.familyProfiles
+				.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+				.map((item) => ({
+					familyKey: typeof item.familyKey === 'string' ? item.familyKey : '',
+					readiness: isReadiness(item.readiness) ? item.readiness : undefined,
+					progressionStage: isProgressionStage(item.progressionStage) ? item.progressionStage : undefined,
+				}))
+				.filter((item) => item.familyKey)
+			: [],
+		feedbackLog: Array.isArray(data.feedbackLog)
+			? data.feedbackLog
+				.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+				.map((item) => ({
+					movementId: typeof item.movementId === 'string' ? item.movementId : undefined,
+					familyKey: typeof item.familyKey === 'string' ? item.familyKey : undefined,
+					signal: isFeedbackSignal(item.signal) ? item.signal : 'good_tolerance',
+					score: typeof item.score === 'number' ? item.score : undefined,
+				}))
+			: [],
+	};
+}
+
 async function fetchRecentWorkouts(accountId: string, clientId: string): Promise<HistoricalWorkoutForDraft[]> {
 	const db = getAdminDb();
 	const recentWorkoutLimit = resolveRecentWorkoutLimit();
@@ -311,6 +522,12 @@ async function fetchRecentWorkouts(accountId: string, clientId: string): Promise
 }
 
 export async function POST(request: NextRequest) {
+	const startedAt = Date.now();
+	const flow = resolveRequestFlow(request);
+	const engineMode = resolveDdsEngineMode();
+	const safeTemplateId = request.nextUrl.searchParams.get('templateId') || undefined;
+	let telemetryUserId: string | undefined;
+	let telemetryAccountId: string | undefined;
 	try {
 		if (process.env.NODE_ENV === 'development' && !hasAdminFirestoreCredentials()) {
 			console.error('[Fill Draft API][missing_admin_credentials]', {
@@ -321,16 +538,46 @@ export async function POST(request: NextRequest) {
 				hasFirebaseServiceAccountKey: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_KEY),
 				hasGoogleCloudProject: Boolean(process.env.GOOGLE_CLOUD_PROJECT),
 			});
+			logFillDraftTelemetry('error', {
+				flow,
+				engineMode,
+				status: 503,
+				latencyMs: Date.now() - startedAt,
+				templateId: safeTemplateId,
+				errorCode: 'missing_admin_credentials',
+				errorMessage: 'Missing Firebase Admin credentials in development.',
+			});
 			return createMissingAdminCredentialResponse();
 		}
 
 		const userId = await getAuthenticatedUser(request);
+		telemetryUserId = userId || undefined;
 		if (!userId) {
+			logFillDraftTelemetry('error', {
+				flow,
+				engineMode,
+				userId: telemetryUserId,
+				status: 401,
+				latencyMs: Date.now() - startedAt,
+				templateId: safeTemplateId,
+				errorCode: 'unauthorized',
+				errorMessage: 'Missing authenticated user.',
+			});
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
 		const parsed = RequestSchema.safeParse(await request.json());
 		if (!parsed.success) {
+			logFillDraftTelemetry('error', {
+				flow,
+				engineMode,
+				userId: telemetryUserId,
+				status: 400,
+				latencyMs: Date.now() - startedAt,
+				templateId: safeTemplateId,
+				errorCode: 'invalid_request_payload',
+				errorMessage: 'Request schema validation failed.',
+			});
 			return NextResponse.json(
 				{ error: 'Invalid request payload', details: parsed.error.flatten() },
 				{ status: 400 }
@@ -338,22 +585,70 @@ export async function POST(request: NextRequest) {
 		}
 
 		const payload: GenerateWorkoutDraftRequest = parsed.data;
+		if (!isFlowEnabled(flow)) {
+			logFillDraftTelemetry('error', {
+				flow,
+				engineMode,
+				userId: telemetryUserId,
+				status: 409,
+				latencyMs: Date.now() - startedAt,
+				templateId: payload.structureTemplateId,
+				categoryName: payload.categoryName,
+				errorCode: 'dds_flow_disabled',
+				errorMessage: `DDS flow disabled for ${flow}`,
+			});
+			return NextResponse.json(
+				{
+					error: `DDS +Fill is disabled for ${flow} flow in this environment.`,
+					code: 'dds_flow_disabled',
+					flow,
+				},
+				{ status: 409 }
+			);
+		}
+
 		const accountId = await resolveAccountIdForUser(userId);
+		telemetryAccountId = accountId || undefined;
 		if (!accountId) {
+			logFillDraftTelemetry('error', {
+				flow,
+				engineMode,
+				userId: telemetryUserId,
+				accountId: telemetryAccountId,
+				status: 403,
+				latencyMs: Date.now() - startedAt,
+				templateId: payload.structureTemplateId,
+				categoryName: payload.categoryName,
+				errorCode: 'no_active_account',
+				errorMessage: 'No active account found for user.',
+			});
 			return NextResponse.json({ error: 'No active account found' }, { status: 403 });
 		}
 
-		const [structureSections, recentWorkouts, clientContext, movementCategoryContextMap, movementContextMap] = await Promise.all([
+		const [structureSections, recentWorkouts, clientContext, movementCategoryContextMap, movementContextMap, movementProfile] = await Promise.all([
 			fetchStructureSections(accountId, payload.structureTemplateId),
 			fetchRecentWorkouts(accountId, payload.clientId),
 			fetchClientContext(accountId, payload.clientId),
 			fetchMovementCategoryContextMap(accountId),
 			fetchMovementContextMap(accountId),
+			fetchClientMovementProfile(accountId, payload.clientId),
 		]);
 
 		// Do not silently degrade to history-clone when a specific structure template
 		// was requested but could not be resolved.
 		if (payload.structureTemplateId && structureSections.length === 0) {
+			logFillDraftTelemetry('error', {
+				flow,
+				engineMode,
+				userId: telemetryUserId,
+				accountId: telemetryAccountId,
+				status: 422,
+				latencyMs: Date.now() - startedAt,
+				templateId: payload.structureTemplateId,
+				categoryName: payload.categoryName,
+				errorCode: 'template_unavailable',
+				errorMessage: 'Requested structure template unavailable for account.',
+			});
 			return NextResponse.json(
 				{ error: 'Selected structure template is unavailable for this account.' },
 				{ status: 422 }
@@ -364,18 +659,49 @@ export async function POST(request: NextRequest) {
 			? payload.currentTitle.trim()
 			: `${payload.categoryName || 'Workout'} Draft`;
 
+		const isBaselineEngine = engineMode === 'baseline';
+
 		const draft = buildWorkoutDraftFromHistory({
 			categoryName: payload.categoryName,
+			goals: isBaselineEngine ? undefined : payload.goals,
 			structureTemplateId: payload.structureTemplateId,
 			structureSections,
 			recentWorkouts,
 			fallbackTitle,
-			currentNotes: payload.currentNotes,
+			currentNotes: isBaselineEngine ? undefined : payload.currentNotes,
 			includeDecisionTrace: payload.includeDecisionTrace,
 			categoryContextById: movementCategoryContextMap,
 			movementContextById: movementContextMap,
+			movementProfile: isBaselineEngine
+				? {
+					equipmentAccess: movementProfile.equipmentAccess || [],
+					restrictions: movementProfile.restrictions || [],
+					preferences: [],
+					familyProfiles: [],
+					feedbackLog: [],
+				}
+				: movementProfile,
 			sessionDurationMinutes: payload.sessionDurationMinutes,
-			clientContext,
+			clientContext: isBaselineEngine
+				? {
+					targetSessionsPerWeek: clientContext.targetSessionsPerWeek,
+					sessionCounts: clientContext.sessionCounts,
+				}
+				: clientContext,
+			engineMode,
+		});
+
+		logFillDraftTelemetry('success', {
+			flow,
+			engineMode,
+			userId: telemetryUserId,
+			accountId: telemetryAccountId,
+			status: 200,
+			latencyMs: Date.now() - startedAt,
+			templateId: payload.structureTemplateId,
+			categoryName: payload.categoryName,
+			strategy: draft.source.strategy,
+			recentWorkoutsAnalyzed: draft.source.recentWorkoutsAnalyzed,
 		});
 
 		return NextResponse.json(draft);
@@ -388,8 +714,30 @@ export async function POST(request: NextRequest) {
 				environment: process.env.NODE_ENV || 'unknown',
 				message,
 			});
+			logFillDraftTelemetry('error', {
+				flow,
+				engineMode,
+				userId: telemetryUserId,
+				accountId: telemetryAccountId,
+				status: 503,
+				latencyMs: Date.now() - startedAt,
+				templateId: safeTemplateId,
+				errorCode: 'missing_admin_credentials_runtime',
+				errorMessage: message,
+			});
 			return createMissingAdminCredentialResponse();
 		}
+		logFillDraftTelemetry('error', {
+			flow,
+			engineMode,
+			userId: telemetryUserId,
+			accountId: telemetryAccountId,
+			status: 500,
+			latencyMs: Date.now() - startedAt,
+			templateId: safeTemplateId,
+			errorCode: 'draft_generation_failed',
+			errorMessage: message,
+		});
 		return NextResponse.json({ error: message }, { status: 500 });
 	}
 }

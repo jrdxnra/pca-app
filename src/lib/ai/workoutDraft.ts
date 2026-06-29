@@ -7,14 +7,33 @@ export interface GenerateWorkoutDraftRequest {
   sessionDurationMinutes?: number;
   currentTitle?: string;
   currentNotes?: string;
+  goals?: string;
   includeDecisionTrace?: boolean;
 }
 
 export interface WorkoutDraftDecisionTrace {
+  engineMode?: 'current' | 'baseline';
   categoryRequested?: string;
   filteredByCategory: boolean;
   totalRecentWorkoutCount: number;
   candidateWorkoutCount: number;
+  appliedGoalProfile?: {
+    intentPriority: string[];
+    preferredStructures: string[];
+    biasKeywords: string[];
+  };
+  scoringBreakdown?: {
+    goalIntentFitWeight: number;
+    sectionStructureFitWeight: number;
+    clientProfileFitWeight: number;
+    progressionContinuityWeight: number;
+    historyFrequencyWeight: number;
+  };
+  safetyBreakdown?: {
+    avoidedPreferenceCount: number;
+    lowReadinessFamilyCount: number;
+    feedbackBlockedMovementCount: number;
+  };
   topRankedMovements: Array<{
     movementId: string;
     count: number;
@@ -38,6 +57,34 @@ export interface ClientContextForDraft {
     thisMonth?: number;
     total?: number;
   };
+}
+
+export interface ClientMovementProfileForDraft {
+  equipmentAccess?: string[];
+  restrictions?: string[];
+  preferences?: Array<{
+    movementId: string;
+    status: 'allow' | 'avoid' | 'preferred';
+    reason?: string;
+  }>;
+  familyProfiles?: Array<{
+    familyKey: string;
+    readiness?: 'low' | 'moderate' | 'high';
+    progressionStage?: 'rebuild' | 'base' | 'build' | 'peak' | 'maintain';
+  }>;
+  feedbackLog?: Array<{
+    movementId?: string;
+    familyKey?: string;
+    signal:
+      | 'too_easy'
+      | 'too_hard'
+      | 'pain'
+      | 'great_quality'
+      | 'time_overrun'
+      | 'poor_tolerance'
+      | 'good_tolerance';
+    score?: number;
+  }>;
 }
 
 export interface GenerateWorkoutDraftResponse {
@@ -217,6 +264,235 @@ function compactText(parts: Array<string | undefined>): string {
     .filter((part): part is string => Boolean(part && part.trim()))
     .join(' ')
     .trim();
+}
+
+type GoalStructure =
+  | 'straight-sets'
+  | 'supersets'
+  | 'circuits'
+  | 'amrap'
+  | 'emom'
+  | 'intervals';
+
+type GoalIntentLabel =
+  | 'strength'
+  | 'aerobic-base'
+  | 'threshold-intervals'
+  | 'hypertrophy'
+  | 'conditioning'
+  | 'amrap'
+  | 'emom'
+  | 'power'
+  | 'speed'
+  | 'plyo'
+  | 'potentiation'
+  | 'core'
+  | 'skill'
+  | 'prep'
+  | 'recovery'
+  | 'cooldown'
+  | 'prehab'
+  | 'mobility-flow'
+  | 'rehab'
+  | 'accessory';
+
+type GoalProfileDefinition = {
+  aliases: string[];
+  intentMix: Array<{ intent: GoalIntentLabel; weight: number }>;
+  preferredStructures: GoalStructure[];
+  biasKeywords: string[];
+};
+
+const GOAL_PROFILE_DEFINITIONS: GoalProfileDefinition[] = [
+  {
+    aliases: ['strength'],
+    intentMix: [
+      { intent: 'strength', weight: 50 },
+      { intent: 'power', weight: 20 },
+      { intent: 'accessory', weight: 20 },
+      { intent: 'core', weight: 10 },
+      { intent: 'prep', weight: 10 },
+    ],
+    preferredStructures: ['straight-sets', 'supersets'],
+    biasKeywords: ['compound', 'heavy', 'long rest', 'low reps'],
+  },
+  {
+    aliases: ['hypertrophy', 'muscle gain'],
+    intentMix: [
+      { intent: 'hypertrophy', weight: 45 },
+      { intent: 'accessory', weight: 25 },
+      { intent: 'strength', weight: 15 },
+      { intent: 'core', weight: 5 },
+      { intent: 'conditioning', weight: 10 },
+    ],
+    preferredStructures: ['supersets', 'straight-sets', 'circuits'],
+    biasKeywords: ['volume', 'moderate load', 'short rest', 'pump'],
+  },
+  {
+    aliases: ['endurance'],
+    intentMix: [
+      { intent: 'conditioning', weight: 50 },
+      { intent: 'aerobic-base', weight: 30 },
+      { intent: 'threshold-intervals', weight: 25 },
+      { intent: 'recovery', weight: 20 },
+    ],
+    preferredStructures: ['intervals', 'circuits', 'amrap', 'emom'],
+    biasKeywords: ['aerobic', 'sustained work', 'time based'],
+  },
+  {
+    aliases: ['power', 'explosive'],
+    intentMix: [
+      { intent: 'power', weight: 40 },
+      { intent: 'speed', weight: 20 },
+      { intent: 'plyo', weight: 20 },
+      { intent: 'strength', weight: 20 },
+      { intent: 'potentiation', weight: 10 },
+    ],
+    preferredStructures: ['straight-sets', 'emom', 'intervals'],
+    biasKeywords: ['explosive', 'quality first', 'low reps'],
+  },
+  {
+    aliases: ['conditioning', 'general fitness'],
+    intentMix: [
+      { intent: 'conditioning', weight: 60 },
+      { intent: 'amrap', weight: 25 },
+      { intent: 'emom', weight: 20 },
+      { intent: 'threshold-intervals', weight: 15 },
+      { intent: 'core', weight: 10 },
+    ],
+    preferredStructures: ['circuits', 'amrap', 'emom', 'intervals'],
+    biasKeywords: ['work capacity', 'density', 'engine'],
+  },
+  {
+    aliases: ['fat loss', 'weight loss'],
+    intentMix: [
+      { intent: 'conditioning', weight: 35 },
+      { intent: 'hypertrophy', weight: 30 },
+      { intent: 'aerobic-base', weight: 20 },
+      { intent: 'accessory', weight: 15 },
+      { intent: 'core', weight: 10 },
+    ],
+    preferredStructures: ['supersets', 'circuits', 'intervals'],
+    biasKeywords: ['adherence', 'weekly volume', 'moderate load'],
+  },
+  {
+    aliases: ['sport-specific performance', 'sport specific', 'sport performance', 'sport-specific'],
+    intentMix: [
+      { intent: 'speed', weight: 20 },
+      { intent: 'power', weight: 25 },
+      { intent: 'strength', weight: 25 },
+      { intent: 'conditioning', weight: 15 },
+      { intent: 'prehab', weight: 10 },
+      { intent: 'skill', weight: 10 },
+    ],
+    preferredStructures: ['straight-sets', 'intervals', 'emom'],
+    biasKeywords: ['transfer', 'fatigue control', 'athletic'],
+  },
+  {
+    aliases: ['mobility/flexibility', 'mobility flexibility', 'mobility', 'flexibility'],
+    intentMix: [
+      { intent: 'prep', weight: 30 },
+      { intent: 'recovery', weight: 35 },
+      { intent: 'cooldown', weight: 20 },
+      { intent: 'mobility-flow', weight: 30 },
+      { intent: 'core', weight: 15 },
+    ],
+    preferredStructures: ['intervals', 'circuits'],
+    biasKeywords: ['range of motion', 'end range control', 'low fatigue'],
+  },
+  {
+    aliases: ['injury prevention', 'prehab'],
+    intentMix: [
+      { intent: 'prehab', weight: 35 },
+      { intent: 'rehab', weight: 35 },
+      { intent: 'mobility-flow', weight: 20 },
+      { intent: 'accessory', weight: 25 },
+      { intent: 'core', weight: 20 },
+    ],
+    preferredStructures: ['straight-sets', 'supersets'],
+    biasKeywords: ['unilateral', 'stability', 'tempo control', 'resilience'],
+  },
+  {
+    aliases: ['maintenance'],
+    intentMix: [
+      { intent: 'strength', weight: 25 },
+      { intent: 'hypertrophy', weight: 20 },
+      { intent: 'conditioning', weight: 20 },
+      { intent: 'aerobic-base', weight: 15 },
+      { intent: 'recovery', weight: 10 },
+      { intent: 'accessory', weight: 15 },
+    ],
+    preferredStructures: ['straight-sets', 'supersets', 'circuits'],
+    biasKeywords: ['minimum effective dose', 'low complexity'],
+  },
+];
+
+function resolveGoalInfluence(goalsText?: string): {
+  goalNames: string[];
+  intentPriority: GoalIntentLabel[];
+  preferredStructures: GoalStructure[];
+  biasKeywords: string[];
+} {
+  const normalizedGoals = (goalsText || '')
+    .split(',')
+    .map((goal) => normalizeText(goal))
+    .filter(Boolean);
+
+  if (normalizedGoals.length === 0) {
+    return {
+      goalNames: [],
+      intentPriority: [],
+      preferredStructures: [],
+      biasKeywords: [],
+    };
+  }
+
+  const matchedProfiles = GOAL_PROFILE_DEFINITIONS.filter((profile) =>
+    normalizedGoals.some((goal) => profile.aliases.some((alias) => goal.includes(alias)))
+  );
+
+  if (matchedProfiles.length === 0) {
+    return {
+      goalNames: normalizedGoals,
+      intentPriority: [],
+      preferredStructures: [],
+      biasKeywords: [],
+    };
+  }
+
+  const intentWeights = new Map<GoalIntentLabel, number>();
+  const structureWeights = new Map<GoalStructure, number>();
+  const biasKeywords = new Set<string>();
+
+  matchedProfiles.forEach((profile) => {
+    profile.intentMix.forEach(({ intent, weight }) => {
+      intentWeights.set(intent, (intentWeights.get(intent) || 0) + weight);
+    });
+
+    profile.preferredStructures.forEach((structure, index) => {
+      const structureWeight = 4 - index;
+      structureWeights.set(structure, (structureWeights.get(structure) || 0) + structureWeight);
+    });
+
+    profile.biasKeywords.forEach((keyword) => {
+      if (keyword.trim()) biasKeywords.add(keyword.trim());
+    });
+  });
+
+  const intentPriority = Array.from(intentWeights.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([intent]) => intent);
+
+  const preferredStructures = Array.from(structureWeights.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([structure]) => structure);
+
+  return {
+    goalNames: normalizedGoals,
+    intentPriority,
+    preferredStructures,
+    biasKeywords: Array.from(biasKeywords),
+  };
 }
 
 function normalizeText(value?: string): string {
@@ -788,6 +1064,10 @@ function buildRoundsFromStructure(
     targetSessionsPerWeek?: number;
     actualSessionsPerWeek?: number;
     categoryBiasKeywords?: string[];
+    goalIntentPriority?: GoalIntentLabel[];
+    goalPreferredStructures?: GoalStructure[];
+    goalBiasKeywords?: string[];
+    movementProfile?: ClientMovementProfileForDraft;
   }
 ): ClientWorkoutRound[] {
   type SectionProfile = 'warmup' | 'strength' | 'accessory' | 'conditioning' | 'cooldown';
@@ -818,6 +1098,14 @@ function buildRoundsFromStructure(
     if (!intent) return '';
     if (intent === 'ballistics') return 'potentiation';
     if (intent === 'capacity' || intent === 'cardio') return 'conditioning';
+    if (intent === 'aerobic-base' || intent === 'aerobic base' || intent === 'zone2' || intent === 'zone 2') {
+      return 'conditioning';
+    }
+    if (intent === 'threshold-intervals' || intent === 'threshold intervals' || intent === 'threshold' || intent === 'tempo') {
+      return 'conditioning';
+    }
+    if (intent === 'mobility-flow' || intent === 'mobility flow') return 'recovery';
+    if (intent === 'resilience' || intent === 'durability') return 'prehab';
     if (intent === 'prehab') return 'rehab';
     return intent;
   };
@@ -828,11 +1116,74 @@ function buildRoundsFromStructure(
     return Boolean(movementContextById[movementId]);
   };
 
+  const profilePreferences = options?.movementProfile?.preferences || [];
+  const preferredMovementIds = new Set(
+    profilePreferences
+      .filter((item) => item.status === 'preferred' && item.movementId)
+      .map((item) => item.movementId)
+  );
+  const allowedMovementIds = new Set(
+    profilePreferences
+      .filter((item) => item.status === 'allow' && item.movementId)
+      .map((item) => item.movementId)
+  );
+  const avoidedMovementIds = new Set(
+    profilePreferences
+      .filter((item) => item.status === 'avoid' && item.movementId)
+      .map((item) => item.movementId)
+  );
+
+  const profileFamilyReadiness = new Map(
+    (options?.movementProfile?.familyProfiles || []).map((item) => [
+      normalizeText(item.familyKey),
+      item.readiness || 'moderate',
+    ])
+  );
+
+  const profileFamilyProgressionStage = new Map(
+    (options?.movementProfile?.familyProfiles || []).map((item) => [
+      normalizeText(item.familyKey),
+      item.progressionStage,
+    ])
+  );
+
   const selectableMovements = rankedMovements.filter(
     (movement) =>
       isKnownMovementId(movement.movementId) &&
+      !avoidedMovementIds.has(movement.movementId) &&
       !isPseudoMovement(movement.movementId, movementContextById, categoryContextById, movement.latestCategoryId)
   );
+
+  const feedbackLog = options?.movementProfile?.feedbackLog || [];
+  const blockedByFeedbackMovementIds = new Set(
+    feedbackLog
+      .filter((entry) => (entry.signal === 'pain' || entry.signal === 'poor_tolerance') && entry.movementId)
+      .map((entry) => entry.movementId as string)
+  );
+  const feedbackScoreByMovementId = new Map<string, number>();
+
+  feedbackLog.forEach((entry) => {
+    if (!entry.movementId) return;
+    const delta =
+      entry.signal === 'pain'
+        ? -120
+        : entry.signal === 'poor_tolerance'
+          ? -90
+          : entry.signal === 'too_hard'
+            ? -45
+            : entry.signal === 'time_overrun'
+              ? -30
+              : entry.signal === 'too_easy'
+                ? -10
+                : entry.signal === 'great_quality'
+                  ? 35
+                  : entry.signal === 'good_tolerance'
+                    ? 25
+                    : 0;
+
+    const existing = feedbackScoreByMovementId.get(entry.movementId) || 0;
+    feedbackScoreByMovementId.set(entry.movementId, Math.max(-140, Math.min(90, existing + delta)));
+  });
 
   const usedMovementIds = new Set<string>();
   const usedMovementKeys = new Set<string>();
@@ -911,6 +1262,59 @@ function buildRoundsFromStructure(
   const getMovementDedupKeyFromStat = (movement?: MovementStat): string => {
     if (!movement) return '';
     return getMovementDedupKeyFromId(movement.movementId);
+  };
+
+  const getMovementProfileFitScore = (movement: MovementStat): number => {
+    if (!movement?.movementId) return 0;
+    if (preferredMovementIds.has(movement.movementId)) return 120;
+    if (allowedMovementIds.has(movement.movementId)) return 70;
+
+    const movementText = getMovementProfileText(movement);
+    if (!movementText) return 0;
+
+    let score = 0;
+    for (const [familyKey, readiness] of profileFamilyReadiness.entries()) {
+      if (!familyKey || !movementText.includes(familyKey)) continue;
+      if (readiness === 'high') score += 30;
+      if (readiness === 'moderate') score += 10;
+      if (readiness === 'low') score -= 40;
+    }
+
+    score += feedbackScoreByMovementId.get(movement.movementId) || 0;
+
+    return score;
+  };
+
+  const clamp01 = (value: number): number => {
+    if (value <= 0) return 0;
+    if (value >= 1) return 1;
+    return value;
+  };
+
+  const hasLowReadinessFamily = (movement: MovementStat): boolean => {
+    const movementText = getMovementProfileText(movement);
+    if (!movementText) return false;
+
+    for (const [familyKey, readiness] of profileFamilyReadiness.entries()) {
+      if (!familyKey || readiness !== 'low') continue;
+      if (movementText.includes(familyKey)) return true;
+    }
+
+    return false;
+  };
+
+  const hasProgressionFriendlyFamilyStage = (movement: MovementStat): boolean => {
+    const movementText = getMovementProfileText(movement);
+    if (!movementText) return false;
+
+    for (const [familyKey, stage] of profileFamilyProgressionStage.entries()) {
+      if (!familyKey || !stage || !movementText.includes(familyKey)) continue;
+      if (stage === 'build' || stage === 'peak' || stage === 'maintain') {
+        return true;
+      }
+    }
+
+    return false;
   };
 
   const getTargetMovementCount = (section: StructureSectionForDraft): number => {
@@ -1077,6 +1481,32 @@ function buildRoundsFromStructure(
     if (textIncludesAny(text, ['strength', 'power', 'main'])) {
       return 'strength';
     }
+
+    const topGoalIntent = options?.goalIntentPriority?.[0];
+    if (topGoalIntent === 'strength') return 'strength';
+    if (topGoalIntent === 'aerobic-base' || topGoalIntent === 'threshold-intervals') return 'conditioning';
+    if (topGoalIntent === 'power') return 'power';
+    if (topGoalIntent === 'speed') return 'speed';
+    if (topGoalIntent === 'plyo') return 'plyometrics';
+    if (topGoalIntent === 'potentiation') return 'ballistics';
+    if (topGoalIntent === 'hypertrophy') return 'hypertrophy';
+    if (topGoalIntent === 'conditioning') return 'conditioning';
+    if (topGoalIntent === 'amrap') return 'amrap';
+    if (topGoalIntent === 'emom') return 'emom';
+    if (topGoalIntent === 'core') return 'core';
+    if (topGoalIntent === 'skill') return 'skill';
+    if (topGoalIntent === 'prep') return 'prep';
+    if (topGoalIntent === 'recovery') return 'recovery';
+    if (topGoalIntent === 'cooldown') return 'cooldown';
+    if (topGoalIntent === 'prehab') return 'rehab';
+    if (topGoalIntent === 'mobility-flow') return 'recovery';
+    if (topGoalIntent === 'rehab') return 'rehab';
+
+    const topGoalStructure = options?.goalPreferredStructures?.[0];
+    if (topGoalStructure === 'amrap') return 'amrap';
+    if (topGoalStructure === 'emom') return 'emom';
+    if (topGoalStructure === 'intervals' || topGoalStructure === 'circuits') return 'conditioning';
+    if (topGoalStructure === 'straight-sets' || topGoalStructure === 'supersets') return 'strength';
 
     return 'generic';
   };
@@ -1347,52 +1777,53 @@ function buildRoundsFromStructure(
     const interval = detectSectionIntervalFormat(section);
     const text = getSectionKeywords(section);
     const globalHints = getContextKeywordHints(options?.globalContextText || '');
+    const goalHints = options?.goalBiasKeywords || [];
 
     if (interval?.format === 'amrap') {
-      return ['conditioning', 'amrap', 'repeatable', 'engine', 'sustainable pace', ...globalHints];
+      return ['conditioning', 'amrap', 'repeatable', 'engine', 'sustainable pace', ...globalHints, ...goalHints];
     }
 
     if (interval?.format === 'emom') {
-      return ['conditioning', 'interval', 'cadence', 'clock', 'engine', ...globalHints];
+      return ['conditioning', 'interval', 'cadence', 'clock', 'engine', ...globalHints, ...goalHints];
     }
 
     if (interval?.format === 'conditioning') {
-      return ['conditioning', 'cardio', 'engine', 'interval', ...globalHints];
+      return ['conditioning', 'cardio', 'engine', 'interval', ...globalHints, ...goalHints];
     }
 
     if (intent === 'cooldown' || intent === 'recovery') {
-      return ['mobility', 'recovery', 'cooldown', 'stretch', 'breath', ...globalHints];
+      return ['mobility', 'recovery', 'cooldown', 'stretch', 'breath', ...globalHints, ...goalHints];
     }
 
     if (intent === 'prep' || intent === 'potentiation' || intent === 'skill' || intent === 'speed' || intent === 'plyo') {
-      return ['prep', 'warm', 'mobility', 'activation', 'ballistic', 'jump', 'throw', ...globalHints];
+      return ['prep', 'warm', 'mobility', 'activation', 'ballistic', 'jump', 'throw', ...globalHints, ...goalHints];
     }
 
     if (intent === 'strength' || intent === 'power' || intent === 'testing') {
-      return ['strength', 'power', 'squat', 'hinge', 'push', 'pull', ...globalHints];
+      return ['strength', 'power', 'squat', 'hinge', 'push', 'pull', ...globalHints, ...goalHints];
     }
 
     if (intent === 'conditioning' || intent === 'amrap' || intent === 'emom') {
-      return ['conditioning', 'cardio', 'engine', 'interval', ...globalHints];
+      return ['conditioning', 'cardio', 'engine', 'interval', ...globalHints, ...goalHints];
     }
 
     if (textIncludesAny(text, ['cooldown', 'cool down', 'recovery', 'stretch', 'breath'])) {
-      return ['mobility', 'recovery', 'cooldown', 'stretch', 'breath', ...globalHints];
+      return ['mobility', 'recovery', 'cooldown', 'stretch', 'breath', ...globalHints, ...goalHints];
     }
 
     if (textIncludesAny(text, ['warm-up', 'warm up', 'warmup', 'prep', 'activation'])) {
-      return ['prep', 'warm', 'mobility', 'activation', 'ballistic', ...globalHints];
+      return ['prep', 'warm', 'mobility', 'activation', 'ballistic', ...globalHints, ...goalHints];
     }
 
     if (textIncludesAny(text, ['strength', 'power', 'main'])) {
-      return ['strength', 'power', 'squat', 'hinge', 'push', 'pull', ...globalHints];
+      return ['strength', 'power', 'squat', 'hinge', 'push', 'pull', ...globalHints, ...goalHints];
     }
 
     if (textIncludesAny(text, ['conditioning', 'esd', 'metcon', 'circuit'])) {
-      return ['conditioning', 'cardio', 'engine', 'power', ...globalHints];
+      return ['conditioning', 'cardio', 'engine', 'power', ...globalHints, ...goalHints];
     }
 
-    return globalHints;
+    return [...globalHints, ...goalHints];
   };
 
   const pickMovementsForSection = (
@@ -1411,6 +1842,14 @@ function buildRoundsFromStructure(
     );
     const unusedPool = selectableMovements.filter((movement) => !usedMovementIds.has(movement.movementId));
     const fallbackReusePool = selectableMovements;
+    const scoringWeights = {
+      // Explicit weighted components: G (goal), S (section), C (client profile), P (progression), H (history).
+      goalIntentFit: 38,
+      sectionStructureFit: 22,
+      clientProfileFit: 22,
+      progressionContinuity: 12,
+      historyFrequency: 6,
+    } as const;
 
     // For recovery/cool-down and warm-up sections, exclude high-intensity conditioning movements
     const sectionText = getSectionKeywords(section);
@@ -1470,8 +1909,51 @@ function buildRoundsFromStructure(
       return true;
     };
 
+    const isProfileGatedOut = (movement: MovementStat): boolean => {
+      // Gate low-readiness families out of higher-load sections unless explicitly allowed.
+      if (preferredMovementIds.has(movement.movementId) || allowedMovementIds.has(movement.movementId)) {
+        return false;
+      }
+
+      if (!['strength', 'power', 'testing', 'hypertrophy'].includes(archetype)) {
+        return false;
+      }
+
+      return hasLowReadinessFamily(movement);
+    };
+
+    const supportsPlannedRepeat = (movement: MovementStat): boolean => {
+      const movementId = movement.movementId;
+      const progressionArchetype = ['strength', 'power', 'testing', 'hypertrophy'].includes(archetype);
+      const progressionGoal = (options?.goalIntentPriority || []).some((intent) =>
+        ['strength', 'power', 'hypertrophy', 'testing'].includes(intent)
+      );
+
+      if (!progressionArchetype && !progressionGoal) {
+        return false;
+      }
+
+      if (!matchesSectionArchetype(movement) || !matchesSectionProfile(movement, profile)) {
+        return false;
+      }
+
+      if (isProfileGatedOut(movement)) {
+        return false;
+      }
+
+      const latestTarget = resolveLatestTargetForMovement(movementId) || movement.latestTargetWorkload;
+      const hasLoadContinuity = hasMeaningfulTargetValue(latestTarget);
+      const hasProgressionStage = hasProgressionFriendlyFamilyStage(movement);
+      const explicitPreference = preferredMovementIds.has(movementId) || allowedMovementIds.has(movementId);
+      const recentEnough = movement.latestWorkoutIndex <= 2;
+
+      return recentEnough && (hasLoadContinuity || hasProgressionStage || explicitPreference);
+    };
+
     const scorePool = (poolSource: MovementStat[]) =>
       poolSource
+      .filter((movement) => !isProfileGatedOut(movement))
+      .filter((movement) => !blockedByFeedbackMovementIds.has(movement.movementId))
       .map((movement) => {
         const categoryContext = categoryContextById?.[movement.latestCategoryId || ''];
         const movementContext = movementContextById?.[movement.movementId];
@@ -1488,13 +1970,35 @@ function buildRoundsFromStructure(
         const movementHits = countKeywordHits(movementText, preferredKeywords);
         const movementKey = getMovementDedupKeyFromStat(movement);
         const recentPenalty = movementKey ? (recentMovementPenaltyByKey.get(movementKey) || 0) : 0;
-        const crossSectionPenalty = movementKey && usedMovementKeys.has(movementKey) ? 80 : 0;
+        const crossSectionPenalty = movementKey && usedMovementKeys.has(movementKey) ? 12 : 0;
+        const profileFitScoreRaw = getMovementProfileFitScore(movement);
+        const feedbackScoreRaw = feedbackScoreByMovementId.get(movement.movementId) || 0;
+        const hasLoadedTarget = hasMeaningfulTargetValue(movement.latestTargetWorkload);
+        const recencySignal = clamp01(1 - Math.min(movement.latestWorkoutIndex, 8) / 8);
+
+        const goalIntentFit = clamp01((categoryHits * 1.25 + movementHits) / 6);
+        const sectionStructureFit = (
+          (matchesSectionArchetype(movement) ? 0.55 : 0) +
+          (matchesSectionProfile(movement, profile) ? 0.45 : 0)
+        );
+        const clientProfileFit = clamp01((profileFitScoreRaw + 40) / 160);
+        const feedbackProgressionAdjustment = Math.max(-0.3, Math.min(0.2, feedbackScoreRaw / 300));
+        const progressionContinuity = clamp01(
+          (hasLoadedTarget ? 0.65 : 0.3) + recencySignal * 0.35 + feedbackProgressionAdjustment
+        );
+        // Keep history low-weight; it should tie-break, not dominate selection.
+        const historyFrequency = clamp01((Math.min(movement.count, 6) / 6) * 0.7 + recencySignal * 0.3);
+
+        const weightedScore =
+          goalIntentFit * scoringWeights.goalIntentFit +
+          sectionStructureFit * scoringWeights.sectionStructureFit +
+          clientProfileFit * scoringWeights.clientProfileFit +
+          progressionContinuity * scoringWeights.progressionContinuity +
+          historyFrequency * scoringWeights.historyFrequency;
+
         const score =
-          movement.count * 100 -
-          movement.latestWorkoutIndex * 5 +
-          categoryHits * 10 +
-          movementHits * 5 -
-          recentPenalty -
+          weightedScore -
+          recentPenalty * 0.08 -
           crossSectionPenalty;
 
         return {
@@ -1502,10 +2006,22 @@ function buildRoundsFromStructure(
           score,
           categoryHits,
           movementHits,
+          weightedScore,
+          goalIntentFit,
+          sectionStructureFit,
+          clientProfileFit,
+          progressionContinuity,
+          historyFrequency,
         };
       })
       .sort((left, right) => {
         if (right.score !== left.score) return right.score - left.score;
+        if (right.weightedScore !== left.weightedScore) return right.weightedScore - left.weightedScore;
+        if (right.goalIntentFit !== left.goalIntentFit) return right.goalIntentFit - left.goalIntentFit;
+        if (right.clientProfileFit !== left.clientProfileFit) return right.clientProfileFit - left.clientProfileFit;
+        if (right.sectionStructureFit !== left.sectionStructureFit) return right.sectionStructureFit - left.sectionStructureFit;
+        if (right.progressionContinuity !== left.progressionContinuity) return right.progressionContinuity - left.progressionContinuity;
+        if (right.historyFrequency !== left.historyFrequency) return right.historyFrequency - left.historyFrequency;
         if (right.categoryHits !== left.categoryHits) return right.categoryHits - left.categoryHits;
         if (right.movementHits !== left.movementHits) return right.movementHits - left.movementHits;
         if (right.movement.count !== left.movement.count) return right.movement.count - left.movement.count;
@@ -1556,7 +2072,8 @@ function buildRoundsFromStructure(
         return false;
       }
 
-      if (!allowRecentReuse && recentMovementKeys.has(movementKey)) {
+      const isRecentFamily = recentMovementKeys.has(movementKey);
+      if (!allowRecentReuse && isRecentFamily && !supportsPlannedRepeat(movement)) {
         return false;
       }
 
@@ -1795,6 +2312,38 @@ function buildRoundsFromStructure(
       const usageCount = Math.max(templateUsageCount, targetMovementCount, 1);
       const selected = pickMovementsForSection(section, usageCount, sectionProfile, sectionArchetype);
       const allowProgressionCarryover = sectionArchetype === 'strength' || sectionArchetype === 'power' || sectionArchetype === 'testing';
+      const supportsPlannedRepeatForTemplate = (movement: MovementStat): boolean => {
+        const movementId = movement.movementId;
+        const progressionArchetype = ['strength', 'power', 'testing', 'hypertrophy'].includes(sectionArchetype);
+        const progressionGoal = (options?.goalIntentPriority || []).some((intent) =>
+          ['strength', 'power', 'hypertrophy', 'testing'].includes(intent)
+        );
+
+        if (!progressionArchetype && !progressionGoal) {
+          return false;
+        }
+
+        if (!matchesSectionProfile(movement, sectionProfile)) {
+          return false;
+        }
+
+        if (
+          ['strength', 'power', 'testing', 'hypertrophy'].includes(sectionArchetype) &&
+          hasLowReadinessFamily(movement) &&
+          !preferredMovementIds.has(movementId) &&
+          !allowedMovementIds.has(movementId)
+        ) {
+          return false;
+        }
+
+        const latestTarget = resolveLatestTargetForMovement(movementId) || movement.latestTargetWorkload;
+        const hasLoadContinuity = hasMeaningfulTargetValue(latestTarget);
+        const hasProgressionStage = hasProgressionFriendlyFamilyStage(movement);
+        const explicitPreference = preferredMovementIds.has(movementId) || allowedMovementIds.has(movementId);
+        const recentEnough = movement.latestWorkoutIndex <= 2;
+
+        return recentEnough && (hasLoadContinuity || hasProgressionStage || explicitPreference);
+      };
       let fillIndex = 0;
       const seenUsageMovementKeys = new Set<string>();
 
@@ -1855,6 +2404,7 @@ function buildRoundsFromStructure(
         if (hasTemplateMovement) {
           const templateMovementId = templateUsage!.movementId;
           const templateMovementKey = getMovementDedupKeyFromId(templateMovementId);
+          const templateMovement = rankedMovements.find((item) => item.movementId === templateMovementId);
 
           // Do not clone template rows that violate this section's intended profile.
           if (!isMovementIdCompatibleWithProfile(templateMovementId, sectionProfile)) {
@@ -1871,9 +2421,12 @@ function buildRoundsFromStructure(
 
           // Avoid directly cloning the latest session movement family when alternatives exist.
           if (templateMovementKey && recentMovementKeys.has(templateMovementKey)) {
-            const replacement = takeNextUniqueFallbackUsage(usageIndex + 1, templateUsage);
-            if (replacement) {
-              return replacement;
+            const canRepeatByPlan = templateMovement ? supportsPlannedRepeatForTemplate(templateMovement) : false;
+            if (!canRepeatByPlan) {
+              const replacement = takeNextUniqueFallbackUsage(usageIndex + 1, templateUsage);
+              if (replacement) {
+                return replacement;
+              }
             }
           }
 
@@ -1973,6 +2526,7 @@ function getGlobalFallbackWorkload(
 
 export function buildWorkoutDraftFromHistory(input: {
   categoryName?: string;
+  goals?: string;
   structureTemplateId?: string;
   structureSections?: StructureSectionForDraft[];
   recentWorkouts: HistoricalWorkoutForDraft[];
@@ -1981,9 +2535,12 @@ export function buildWorkoutDraftFromHistory(input: {
   includeDecisionTrace?: boolean;
   categoryContextById?: Record<string, CategoryContextForDraft>;
   movementContextById?: Record<string, MovementContextForDraft>;
+  movementProfile?: ClientMovementProfileForDraft;
   sessionDurationMinutes?: number;
   clientContext?: ClientContextForDraft;
+  engineMode?: 'current' | 'baseline';
 }): GenerateWorkoutDraftResponse {
+  const goalInfluence = resolveGoalInfluence(input.goals || input.clientContext?.goals);
   const normalizedCategory = normalizeCategory(input.categoryName);
   const filteredByCategory = normalizedCategory
     ? input.recentWorkouts.filter((workout) => normalizeCategory(workout.categoryName) === normalizedCategory)
@@ -2001,10 +2558,30 @@ export function buildWorkoutDraftFromHistory(input: {
 
   const baseDecisionTrace: WorkoutDraftDecisionTrace | undefined = shouldIncludeDecisionTrace
     ? {
+        engineMode: input.engineMode || 'current',
         categoryRequested: input.categoryName,
         filteredByCategory: Boolean(normalizedCategory && filteredByCategory.length > 0),
         totalRecentWorkoutCount: input.recentWorkouts.length,
         candidateWorkoutCount: candidateWorkouts.length,
+        appliedGoalProfile: {
+          intentPriority: goalInfluence.intentPriority,
+          preferredStructures: goalInfluence.preferredStructures,
+          biasKeywords: goalInfluence.biasKeywords,
+        },
+        scoringBreakdown: {
+          goalIntentFitWeight: 38,
+          sectionStructureFitWeight: 22,
+          clientProfileFitWeight: 22,
+          progressionContinuityWeight: 12,
+          historyFrequencyWeight: 6,
+        },
+        safetyBreakdown: {
+          avoidedPreferenceCount: (input.movementProfile?.preferences || []).filter((item) => item.status === 'avoid').length,
+          lowReadinessFamilyCount: (input.movementProfile?.familyProfiles || []).filter((item) => item.readiness === 'low').length,
+          feedbackBlockedMovementCount: (input.movementProfile?.feedbackLog || []).filter(
+            (item) => item.signal === 'pain' || item.signal === 'poor_tolerance'
+          ).length,
+        },
         topRankedMovements: rankedMovements.slice(0, 12).map((movement) => ({
           movementId: movement.movementId,
           count: movement.count,
@@ -2015,6 +2592,9 @@ export function buildWorkoutDraftFromHistory(input: {
 
   const globalContextText = compactText([
     input.categoryName,
+    input.goals,
+    goalInfluence.intentPriority.join(' '),
+    goalInfluence.preferredStructures.join(' '),
     input.currentNotes,
     input.clientContext?.notes,
     input.clientContext?.goals,
@@ -2026,6 +2606,7 @@ export function buildWorkoutDraftFromHistory(input: {
     new Set([
       ...getContextKeywordHints(input.categoryName || ''),
       ...extractMeaningfulKeywords(input.categoryName || ''),
+      ...goalInfluence.biasKeywords,
     ])
   );
 
@@ -2040,16 +2621,24 @@ export function buildWorkoutDraftFromHistory(input: {
 
   const sectionsWithDuration =
     totalSessionMinutes && structureSections.length > 0
-      ? structureSections.map((section) => {
+      ? structureSections.map((section, sectionIndex) => {
           const hasDefaultDuration = typeof section.configuration?.defaultDuration === 'number' && section.configuration.defaultDuration > 0;
-          if (hasDefaultDuration) return section;
+          const hasDefaultStructure = Boolean(section.configuration?.defaultStructure);
+
+          const nextGoalStructure =
+            goalInfluence.preferredStructures.length > 0
+              ? goalInfluence.preferredStructures[sectionIndex % goalInfluence.preferredStructures.length]
+              : undefined;
+
+          if (hasDefaultDuration && (hasDefaultStructure || !nextGoalStructure)) return section;
 
           const equalSplit = Math.max(8, Math.round(totalSessionMinutes / structureSections.length));
           return {
             ...section,
             configuration: {
               ...(section.configuration || {}),
-              defaultDuration: equalSplit,
+              defaultDuration: hasDefaultDuration ? section.configuration?.defaultDuration : equalSplit,
+              defaultStructure: hasDefaultStructure ? section.configuration?.defaultStructure : nextGoalStructure,
             },
           };
         })
@@ -2092,6 +2681,10 @@ export function buildWorkoutDraftFromHistory(input: {
         targetSessionsPerWeek: input.clientContext?.targetSessionsPerWeek,
         actualSessionsPerWeek,
         categoryBiasKeywords,
+        goalIntentPriority: goalInfluence.intentPriority,
+        goalPreferredStructures: goalInfluence.preferredStructures,
+        goalBiasKeywords: goalInfluence.biasKeywords,
+        movementProfile: input.movementProfile,
       }
     );
     return {

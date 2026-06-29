@@ -26,28 +26,22 @@ function readServiceAccountFromEnv(): Record<string, unknown> | null {
     return null;
 }
 
-if (!admin.apps.length) {
-    try {
-        admin.initializeApp({
-            credential: admin.credential.applicationDefault(),
-            projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        });
-        console.log('[Firebase Admin] Initialized successfully');
-    } catch (error) {
-        console.error('[Firebase Admin] Initialization error:', error);
-    }
-}
-
-
 export function getFirebaseAdminApp() {
     if (!admin.apps.length) {
         try {
-            const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+            const serviceAccount = readServiceAccountFromEnv();
+            const serviceAccountProjectId =
+                serviceAccount && typeof serviceAccount.project_id === 'string'
+                    ? serviceAccount.project_id
+                    : undefined;
+            const projectId =
                 process.env.GOOGLE_CLOUD_PROJECT ||
                 process.env.FIREBASE_PROJECT_ID ||
+                serviceAccountProjectId ||
+                process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
                 'performancecoachapp-26bd1';
 
-            console.log('[Firebase Admin] Initializing with Project ID:', projectId);
+            console.log('[Firebase Admin] Initializing with project:', projectId);
 
             const options: admin.AppOptions = {
                 projectId: projectId,
@@ -55,7 +49,6 @@ export function getFirebaseAdminApp() {
 
             // Check if we have a service account key in environment variables.
             // Support both FIREBASE_SERVICE_ACCOUNT and FIREBASE_SERVICE_ACCOUNT_KEY.
-            const serviceAccount = readServiceAccountFromEnv();
             if (serviceAccount) {
                 if (!serviceAccount.project_id) {
                     serviceAccount.project_id = projectId;

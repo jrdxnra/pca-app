@@ -29,6 +29,7 @@ import { ClientProgramPeriod } from '@/lib/types';
 import { getDateKey, safeToDate } from '@/lib/utils/dateHelpers';
 import { Separator } from '@/components/ui/separator';
 import { fetchWorkoutsByDateRange } from '@/lib/firebase/services/clientWorkouts';
+import { PROGRAM_PLANNING_DIALOG_CONTENT_CLASS } from '@/components/programs/dialogSizing';
 
 interface WeekTemplate {
     id: string;
@@ -130,6 +131,69 @@ function parseDateInput(value: string): Date | null {
     const parsed = new Date(`${value}T00:00:00`);
     if (Number.isNaN(parsed.getTime())) return null;
     return parsed;
+}
+
+function getNextWeekdayAfter(afterDate: Date): Date {
+    // Find the next weekday (Mon-Fri) after the given date
+    const next = new Date(afterDate);
+    next.setDate(next.getDate() + 1);
+    
+    const dayOfWeek = getDay(next); // 0=Sun, 1=Mon, ..., 6=Sat
+    
+    // If Saturday (6), jump to Monday
+    if (dayOfWeek === 6) {
+        next.setDate(next.getDate() + 2);
+    }
+    // If Sunday (0), jump to Monday
+    else if (dayOfWeek === 0) {
+        next.setDate(next.getDate() + 1);
+    }
+    
+    return next;
+}
+
+function calculateSmartDefaults(existingAssignments: ClientProgramPeriod[], selectedDate?: Date) {
+    // If no existing assignments, use selectedDate or today
+    if (!existingAssignments || existingAssignments.length === 0) {
+        const startDate = selectedDate || new Date();
+        console.log('[Schedule Selector] No existing assignments, using today/selectedDate as start:', format(startDate, 'yyyy-MM-dd'));
+        return {
+            startDate,
+            endDate: addDays(startDate, 13), // 2 weeks = 14 days, so +13 to include start day
+        };
+    }
+    
+    // Find the assignment with the latest end date
+    let latestEndDate: Date | null = null;
+    let latestAssignment = null;
+    
+    for (const assignment of existingAssignments) {
+        const endDate = safeToDate(assignment.endDate);
+        if (!latestEndDate || endDate > latestEndDate) {
+            latestEndDate = endDate;
+            latestAssignment = assignment;
+        }
+    }
+    
+    if (latestAssignment && latestEndDate) {
+        const nextWeekdayStart = getNextWeekdayAfter(latestEndDate);
+        const endDate = addDays(nextWeekdayStart, 13); // 2 weeks
+        console.log('[Schedule Selector] Found latest assignment ending:', format(latestEndDate, 'yyyy-MM-dd'));
+        console.log('[Schedule Selector] Next weekday:', format(nextWeekdayStart, 'yyyy-MM-dd (EEEE)'));
+        console.log('[Schedule Selector] Default date range:', format(nextWeekdayStart, 'yyyy-MM-dd'), 'to', format(endDate, 'yyyy-MM-dd'));
+        return {
+            startDate: nextWeekdayStart,
+            endDate,
+        };
+    }
+    
+    // Fallback
+    const startDate = selectedDate || new Date();
+    console.log('[Schedule Selector] Fallback: using today/selectedDate as start:', format(startDate, 'yyyy-MM-dd'));
+    return {
+        startDate,
+        endDate: addDays(startDate, 13),
+    };
 }
 
 function getTemplateCategoryOptions(template?: WeekTemplate): string[] {
@@ -267,14 +331,19 @@ export function ManageWeekDialog({
 }: ManageWeekDialogProps) {
     const [open, setOpen] = useState(false);
     
+    // Calculate smart defaults based on existing assignments
+    const smartDefaults = useMemo(() => {
+        return calculateSmartDefaults(existingAssignments, selectedDate);
+    }, [existingAssignments, selectedDate]);
+    
     // Assignment state
-    const defaultStartDate = selectedDate || new Date();
+    const defaultStartDate = smartDefaults.startDate;
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
     const [wizardStep, setWizardStep] = useState<'setup' | 'confirm'>('setup');
     const [startDateInput, setStartDateInput] = useState<string>(toDateInputValue(defaultStartDate));
     const [selectedWeekdays, setSelectedWeekdays] = useState<Set<number>>(new Set(DEFAULT_WEEKDAY_SELECTION));
     const [endMode, setEndMode] = useState<EndMode>('on');
-    const [endOnDateInput, setEndOnDateInput] = useState<string>(toDateInputValue(addDays(defaultStartDate, 27)));
+    const [endOnDateInput, setEndOnDateInput] = useState<string>(toDateInputValue(smartDefaults.endDate));
     const [endAfterOccurrences, setEndAfterOccurrences] = useState<number>(8);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [excludedSessionDates, setExcludedSessionDates] = useState<Set<string>>(new Set());
@@ -317,10 +386,10 @@ export function ManageWeekDialog({
         if (!newOpen) {
             setSelectedTemplateId('');
             setWizardStep('setup');
-            setStartDateInput(toDateInputValue(selectedDate || new Date()));
+            setStartDateInput(toDateInputValue(smartDefaults.startDate));
             setSelectedWeekdays(new Set(DEFAULT_WEEKDAY_SELECTION));
             setEndMode('on');
-            setEndOnDateInput(toDateInputValue(addDays(selectedDate || new Date(), 27)));
+            setEndOnDateInput(toDateInputValue(smartDefaults.endDate));
             setEndAfterOccurrences(8);
             setExcludedSessionDates(new Set());
             setCategoryOverrides({});
@@ -777,7 +846,7 @@ export function ManageWeekDialog({
                     Week Split + Fill
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
+            <DialogContent className={PROGRAM_PLANNING_DIALOG_CONTENT_CLASS}>
                 <DialogHeader>
                     <DialogTitle>
                         Starter Weeks + Fill{clientName ? ` - ${clientName}` : ''}
@@ -788,6 +857,40 @@ export function ManageWeekDialog({
                 </DialogHeader>
 
                 <div className="space-y-6 py-4">
+                    {/* Debug Info - Schedule Loading Indicator */}
+                    <div className="bg-blue-50 border border-blue-200 rounded p-3 space-y-2 text-sm">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span className="font-medium text-blue-900">Schedule Selector Loaded</span>
+                        </div>
+                        {existingAssignments.length > 0 ? (
+                            (() => {
+                                const latestAssignment = existingAssignments.reduce((latest, a) => {
+                                    const aEnd = safeToDate(a.endDate);
+                                    const latestEnd = latest ? safeToDate(latest.endDate) : null;
+                                    return (!latestEnd || aEnd > latestEnd) ? a : latest;
+                                }, null as ClientProgramPeriod | null);
+
+                                if (!latestAssignment) return null;
+
+                                const latestEndDate = safeToDate(latestAssignment.endDate);
+                                const nextWeekday = getNextWeekdayAfter(latestEndDate);
+
+                                return (
+                                    <div className="text-blue-700">
+                                        <div>Last assignment ends: <span className="font-semibold">{format(latestEndDate, 'MMM d, yyyy')}</span></div>
+                                        <div>Next weekday: <span className="font-semibold">{format(nextWeekday, 'EEEE, MMM d, yyyy')}</span></div>
+                                    </div>
+                                );
+                            })()
+                        ) : (
+                            <div className="text-blue-700">No existing assignments - using today as default start</div>
+                        )}
+                        <div className="text-blue-700">
+                            Default duration: 2 weeks
+                        </div>
+                    </div>
+
                     {/* Assignment Section */}
                     <div className="border rounded-lg p-4 bg-muted/30">
                         {wizardStep === 'setup' ? (
@@ -804,7 +907,7 @@ export function ManageWeekDialog({
                                         }}
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        Default is today. You can move this to any day, such as Monday.
+                                        Defaults to the next weekday after your last assignment. Adjust as needed.
                                     </p>
                                 </div>
 

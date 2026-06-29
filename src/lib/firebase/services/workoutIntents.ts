@@ -65,14 +65,14 @@ const DEFAULT_WORKOUT_INTENTS: WorkoutIntentSeed[] = [
     key: 'strength',
     name: 'Strength',
     color: '#ef4444',
-    description: 'Primary loaded work for force production and strength progression.',
+    description: 'Primary loaded work for force production and strength progression (load-first progression).',
     order: 5,
   },
   {
     key: 'hypertrophy',
     name: 'Hypertrophy',
     color: '#f59e0b',
-    description: 'Volume-based work to build tissue capacity, local muscular endurance, and size.',
+    description: 'Volume and density based work to build tissue capacity, local muscular endurance, and size.',
     order: 6,
   },
   {
@@ -93,57 +93,85 @@ const DEFAULT_WORKOUT_INTENTS: WorkoutIntentSeed[] = [
     key: 'conditioning',
     name: 'Conditioning',
     color: '#10b981',
-    description: 'Engine or work-capacity focused efforts, including ESD and interval work.',
+    description: 'Mixed metabolic work-capacity efforts, including circuits and metcon-focused sessions.',
     order: 9,
+  },
+  {
+    key: 'aerobic-base',
+    name: 'Aerobic Base',
+    color: '#14b8a6',
+    description: 'Steady aerobic development work focused on sustainable pace, respiration control, and repeatability.',
+    order: 10,
+  },
+  {
+    key: 'threshold-intervals',
+    name: 'Threshold Intervals',
+    color: '#0d9488',
+    description: 'Tempo and threshold interval work to improve lactate tolerance and high-output repeatability.',
+    order: 11,
   },
   {
     key: 'amrap',
     name: 'AMRAP',
     color: '#8b5cf6',
     description: 'As-many-rounds/reps-as-possible effort with clear density and pacing targets.',
-    order: 10,
+    order: 12,
   },
   {
     key: 'emom',
     name: 'EMOM',
     color: '#6366f1',
     description: 'Every-minute-on-the-minute structure with time-boxed effort and repeatability.',
-    order: 11,
+    order: 13,
   },
   {
     key: 'plyo',
     name: 'Plyo',
     color: '#ec4899',
     description: 'Jump, bound, and reactive elastic work emphasizing power and stiffness control.',
-    order: 12,
+    order: 14,
   },
   {
     key: 'testing',
     name: 'Testing',
     color: '#64748b',
     description: 'Assessment-focused work to benchmark readiness, capacity, and performance trends.',
-    order: 13,
+    order: 15,
+  },
+  {
+    key: 'prehab',
+    name: 'Prehab',
+    color: '#16a34a',
+    description: 'Preventive resilience work targeting stability, tissue tolerance, and asymmetry control.',
+    order: 16,
   },
   {
     key: 'rehab',
     name: 'Rehab',
     color: '#22c55e',
     description: 'Targeted return-to-function work focused on symptom-guided progression and control.',
-    order: 14,
+    order: 17,
+  },
+  {
+    key: 'mobility-flow',
+    name: 'Mobility Flow',
+    color: '#0891b2',
+    description: 'Continuous mobility and end-range control work to improve movement quality and recovery readiness.',
+    order: 18,
   },
   {
     key: 'recovery',
     name: 'Recovery',
     color: '#2dd4bf',
-    description: 'Low-intensity restoration work focused on breathing, mobility, and tissue reset.',
-    order: 15,
+    description: 'Standalone low-intensity restoration session focused on breathing, mobility, and tissue reset.',
+    order: 19,
   },
   {
     key: 'cooldown',
     name: 'Cooldown',
     color: '#14b8a6',
-    description: 'Downregulation and restoration work: breathing, mobility, and recovery focus.',
-    order: 16,
+    description: 'End-of-session downregulation block using breathing and low-intensity mobility.',
+    order: 20,
   },
 ];
 
@@ -209,8 +237,45 @@ async function ensureDefaultWorkoutIntents(accountId: string): Promise<void> {
 
   // Re-read after migration updates/deletes before missing-default checks.
   const freshSnapshot = await getDocs(q);
-  const existingByKey = new Set(
+
+  // Keep default intents in sync with the latest canonical seed definitions.
+  const defaultByKey = new Map(
+    DEFAULT_WORKOUT_INTENTS.map((intent) => [intent.key.trim().toLowerCase(), intent])
+  );
+
+  await Promise.all(
     freshSnapshot.docs
+      .map((docItem) => ({ id: docItem.id, data: docItem.data() as Record<string, unknown> }))
+      .map(async ({ id, data }) => {
+        const key = typeof data.key === 'string' ? data.key.trim().toLowerCase() : '';
+        const canonical = key ? defaultByKey.get(key) : undefined;
+        if (!canonical) return;
+
+        const hasNameMismatch = (typeof data.name === 'string' ? data.name : '') !== canonical.name;
+        const hasColorMismatch = (typeof data.color === 'string' ? data.color : '') !== canonical.color;
+        const hasDescriptionMismatch =
+          (typeof data.description === 'string' ? data.description : '') !== canonical.description;
+        const hasOrderMismatch =
+          (typeof data.order === 'number' ? data.order : Number.NaN) !==
+          (typeof canonical.order === 'number' ? canonical.order : Number.NaN);
+
+        if (!hasNameMismatch && !hasColorMismatch && !hasDescriptionMismatch && !hasOrderMismatch) {
+          return;
+        }
+
+        await updateDoc(doc(getDb(), 'workoutIntents', id), {
+          name: canonical.name,
+          color: canonical.color,
+          description: canonical.description,
+          order: canonical.order,
+          updatedAt: Timestamp.now(),
+        });
+      })
+  );
+
+  const postSyncSnapshot = await getDocs(q);
+  const existingByKey = new Set(
+    postSyncSnapshot.docs
       .map((docItem) => {
         const data = docItem.data();
         return typeof data.key === 'string' ? data.key.trim().toLowerCase() : '';
@@ -218,7 +283,7 @@ async function ensureDefaultWorkoutIntents(accountId: string): Promise<void> {
       .filter(Boolean)
   );
   const existingByName = new Set(
-    freshSnapshot.docs
+    postSyncSnapshot.docs
       .map((docItem) => {
         const data = docItem.data();
         return typeof data.name === 'string' ? data.name.trim().toLowerCase() : '';

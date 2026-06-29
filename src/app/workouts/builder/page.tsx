@@ -29,6 +29,12 @@ import { Client, Program, ScheduledWorkout, ClientProgramPeriod, WorkoutStructur
 // ModernCalendarView not used in Builder - removed to reduce bundle size
 import { CalendarSkeleton } from '@/components/programs/CalendarSkeleton';
 
+// Deterministic date formatter — avoids SSR/client locale mismatch from toLocaleDateString.
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function fmtShortMonDay(d: Date) { return `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`; }
+function fmtWeekdayMonDay(d: Date) { return `${DAY_SHORT[d.getDay()]}, ${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`; }
+
 const PeriodAssignmentDialog = dynamic(
   () => import('@/components/programs/PeriodAssignmentDialog').then(mod => ({ default: mod.PeriodAssignmentDialog }))
 );
@@ -2149,7 +2155,7 @@ export default function BuilderPage() {
                                       ? 'text-blue-700 font-bold'
                                       : 'text-gray-700'
                                     }`}>
-                                    {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                    {fmtWeekdayMonDay(date)}
                                   </span>
                                   {isEditingThisDate && !isToday && (
                                     <div className="flex items-center gap-1">
@@ -2410,7 +2416,7 @@ export default function BuilderPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <h3 className="text-sm font-semibold text-gray-800">
-                            {week[0]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {week[week.length - 1]?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {week[0] ? fmtShortMonDay(week[0]) : ''} - {week[week.length - 1] ? fmtShortMonDay(week[week.length - 1]) : ''}
                           </h3>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${hasActiveEditors
                             ? 'bg-amber-600 text-white font-bold'
@@ -2486,7 +2492,7 @@ export default function BuilderPage() {
                                     ? 'text-blue-700 font-bold'
                                     : 'text-gray-700'
                                   }`}>
-                                  {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                  {fmtWeekdayMonDay(date)}
                                 </div>
                                 {isEditingThisDate && (
                                   <div className="flex items-center gap-1">

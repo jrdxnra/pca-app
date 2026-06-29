@@ -13,6 +13,8 @@ import {
 import { db, getDb, auth } from '../config';
 import { resolveActiveAccountId } from './memberships';
 import type { WorkoutLog } from '@/lib/types';
+import { extractFeedbackSignalsFromWorkoutLogInput } from '@/lib/ai/workoutFeedbackSignals';
+import { appendFeedbackSignalsToClientMovementProfile } from './clientMovementProfiles';
 
 const COLLECTION_NAME = 'workoutLogs';
 
@@ -131,20 +133,39 @@ export async function upsertWorkoutLog(
   // Check if log already exists
   const existingLog = await getWorkoutLogByScheduledWorkout(scheduledWorkoutId);
 
+  let persistedLog: WorkoutLog;
   if (existingLog) {
     // Update existing log
     await updateWorkoutLog(existingLog.id, workoutLogData);
-    return {
+    persistedLog = {
       ...existingLog,
       ...workoutLogData,
     };
   } else {
     // Create new log
-    return createWorkoutLog({
+    persistedLog = await createWorkoutLog({
       ...workoutLogData,
       scheduledWorkoutId,
     });
   }
+
+  try {
+    const feedbackSignals = extractFeedbackSignalsFromWorkoutLogInput({
+      workoutId: scheduledWorkoutId,
+      sessionRPE: workoutLogData.sessionRPE,
+      athleteNotes: workoutLogData.athleteNotes,
+      exercises: workoutLogData.exercises,
+      createdBy: auth.currentUser?.uid || undefined,
+    });
+
+    if (feedbackSignals.length > 0) {
+      await appendFeedbackSignalsToClientMovementProfile(workoutLogData.clientId, feedbackSignals);
+    }
+  } catch (feedbackError) {
+    console.warn('Failed to persist movement feedback signals from workout log:', feedbackError);
+  }
+
+  return persistedLog;
 }
 
 

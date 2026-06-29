@@ -1558,8 +1558,8 @@ export const WorkoutEditor = forwardRef<WorkoutEditorHandle, WorkoutEditorProps>
       hasMeaningfulRoundsBefore: hasMeaningfulRoundData(rounds),
     });
 
-    if (value.startsWith('structure-fill:') || value.startsWith('structure-ai:')) {
-      const id = value.replace(/^structure-(fill|ai):/, '');
+    if (value.startsWith('structure-fill:')) {
+      const id = value.replace(/^structure-fill:/, '');
       const applied = applyStructureTemplateById(id);
       logFillDebug('template_change_structure_fill', {
         templateId: id,

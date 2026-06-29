@@ -60,6 +60,55 @@ export interface EventGoal {
   date: string; // ISO date string (YYYY-MM-DD)
 }
 
+export interface ClientMovementPreference {
+  movementId: string;
+  status: 'allow' | 'avoid' | 'preferred';
+  reason?: string;
+  source?: 'coach' | 'client' | 'inferred';
+  updatedAt: Timestamp;
+}
+
+export interface ClientMovementFamilyProfile {
+  familyKey: string;
+  skillLevel?: 'novice' | 'intermediate' | 'advanced';
+  readiness?: 'low' | 'moderate' | 'high';
+  progressionStage?: 'rebuild' | 'base' | 'build' | 'peak' | 'maintain';
+  notes?: string;
+  updatedAt: Timestamp;
+}
+
+export interface ClientMovementFeedback {
+  id: string;
+  workoutId?: string;
+  movementId?: string;
+  familyKey?: string;
+  signal:
+    | 'too_easy'
+    | 'too_hard'
+    | 'pain'
+    | 'great_quality'
+    | 'time_overrun'
+    | 'poor_tolerance'
+    | 'good_tolerance';
+  note?: string;
+  score?: number;
+  createdAt: Timestamp;
+  createdBy?: string;
+}
+
+export interface ClientMovementProfile {
+  id: string;
+  clientId: string;
+  ownerId?: string;
+  equipmentAccess?: string[];
+  restrictions?: string[];
+  preferences: ClientMovementPreference[];
+  familyProfiles: ClientMovementFamilyProfile[];
+  feedbackLog?: ClientMovementFeedback[];
+  updatedAt: Timestamp;
+  createdAt: Timestamp;
+}
+
 export interface Period {
   id: string;
   name: string;
@@ -369,6 +418,8 @@ export interface ClientProgramDay {
   workoutCategory: string; // e.g., "Workout", "Rest Day", "Cardio Day"
   workoutCategoryColor: string;
   workoutTypeId?: string; // Optional reference to specific workout type (PP, MB, etc.)
+  appliedTemplateId?: string; // Optional structure template used for +Fill generation
+  appliedTemplateSelection?: string; // Original selector value used during assignment
   time?: string; // Time in HH:MM format (e.g., "09:00")
   isAllDay?: boolean; // Whether this is an all-day event
 }

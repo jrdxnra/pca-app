@@ -10,6 +10,7 @@ import { Client, ClientProgramPeriod } from '@/lib/types';
 import { QuickWorkoutBuilderDialog } from '@/components/programs/QuickWorkoutBuilderDialog';
 import { PeriodAssignmentDialog } from '@/components/programs/PeriodAssignmentDialog';
 import { ManageWeekDialog } from '@/components/programs/ManageWeekDialog';
+import { PROGRAM_PLANNING_NAV_BUTTON_CLASS, PROGRAM_PLANNING_NAV_GROUP_CLASS } from '@/components/programs/dialogSizing';
 
 type BuilderHeaderPeriod = {
   id: string;
@@ -158,6 +159,7 @@ export function BuilderHeader({
     setHasMounted(true);
   }, []);
 
+  const hydratedClientId = hasMounted ? (clientIdImmediate || '') : '';
   const clientName = clientId ? (clients.find(c => c.id === clientId)?.name || 'Unknown Client') : '';
   const existingAssignments = clientId ? (clientPrograms.find(cp => cp.clientId === clientId)?.periods || []) : [];
 
@@ -172,11 +174,11 @@ export function BuilderHeader({
           </div>
 
           <Select
-            value={clientIdImmediate || ''}
+            value={hydratedClientId}
             onValueChange={onClientChange}
             disabled={loading}
           >
-            <SelectTrigger className={`w-[130px] ${!clientId ? 'border-green-300 bg-green-50' : ''}`}>
+            <SelectTrigger className={`w-[130px] ${!hydratedClientId ? 'border-green-300 bg-green-50' : ''}`}>
               <SelectValue placeholder="Select client" />
             </SelectTrigger>
             <SelectContent>
@@ -198,12 +200,12 @@ export function BuilderHeader({
         <Button variant="outline" size="sm" onClick={() => onNavigate('today')} className="text-sm px-3 h-8">
           Today
         </Button>
-        <div className="flex items-center rounded-md border border-input shadow-sm">
+        <div className={PROGRAM_PLANNING_NAV_GROUP_CLASS}>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onNavigate('prev')}
-            className="p-1 h-8 w-8 rounded-l-md rounded-r-none border-r hover:bg-slate-50"
+            className={`${PROGRAM_PLANNING_NAV_BUTTON_CLASS} rounded-l-md rounded-r-none border-r`}
           >
             <ChevronLeft className="h-4 w-4 icon-builder" />
           </Button>
@@ -211,7 +213,7 @@ export function BuilderHeader({
             variant="ghost"
             size="sm"
             onClick={() => onNavigate('next')}
-            className="p-1 h-8 w-8 rounded-r-md rounded-l-none hover:bg-slate-50"
+            className={`${PROGRAM_PLANNING_NAV_BUTTON_CLASS} rounded-r-md rounded-l-none`}
           >
             <ChevronRight className="h-4 w-4 icon-builder" />
           </Button>

@@ -12,6 +12,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dds:ab": "npx tsx ./scripts/dds_ab_runner.ts",
+    "dds:canary": "npx tsx ./scripts/dds_weekly_canary_report.ts",
     "ci:check": "npm run typecheck && npm run lint",
     "clean:main": "./scripts/clean-dev-artifacts.sh",
     "deploy:firebase": "./deploy-firebase.sh",

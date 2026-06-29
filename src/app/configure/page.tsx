@@ -98,6 +98,8 @@ interface WorkoutCategory {
   id: string;
   name: string;
   color: string;
+  description?: string;
+  linkedWorkoutStructureTemplateId?: string;
   order?: number;
 }
 
@@ -274,7 +276,7 @@ function inferRoundCategoryHints(sectionName?: string, focusArea?: string, defau
     return ['Strength', 'Power', 'Primary Lifts'];
   }
 
-  if (/(condition|metcon|esd|engine|cardio|amrap|emom|circuit|interval)/.test(text)) {
+  if (/(threshold|tempo|zone\s?2|aerobic|condition|metcon|esd|engine|cardio|amrap|emom|circuit|interval)/.test(text)) {
     return ['Conditioning', 'Cardio', 'Work Capacity'];
   }
 
@@ -295,12 +297,16 @@ function inferSectionIntentKey(section: {
   const text = `${section.workoutTypeName || ''} ${section.configuration?.focusArea || ''} ${section.configuration?.defaultStructure || ''}`
     .toLowerCase();
 
+  if (/(aerobic|zone\s?2|zone\s?ii|base\s*run|steady\s*state|liss)/.test(text)) return 'aerobic-base';
+  if (/(threshold|tempo\s*run|lactate|vo2|hiit|repeat\s*interval)/.test(text)) return 'threshold-intervals';
   if (/(amrap)/.test(text)) return 'amrap';
   if (/(emom|e\d+mom|every\s*\d+\s*minute\s*on\s*the\s*minute)/.test(text)) return 'emom';
   if (/(test|assessment|benchmark|max out|1rm)/.test(text)) return 'testing';
-  if (/(rehab|prehab|corrective|return to play|physio)/.test(text)) return 'rehab';
+  if (/(prehab|resilience|durability|joint\s*prep)/.test(text)) return 'prehab';
+  if (/(rehab|corrective|return to play|physio)/.test(text)) return 'rehab';
   if (/(cool\s?down|downreg|breathwork|recovery block)/.test(text)) return 'cooldown';
-  if (/(recovery|restore|mobility flow|reset)/.test(text)) return 'recovery';
+  if (/(mobility flow|mobility session|flow mobility|end-range mobility)/.test(text)) return 'mobility-flow';
+  if (/(recovery|restore|reset|active recovery)/.test(text)) return 'recovery';
   if (/(movement skill|skill|technique|mechanics)/.test(text)) return 'skill';
   if (/(warm\s?-?up|movement prep|prep|activation|pillar prep)/.test(text)) return 'prep';
   if (/(ballistic|potentiation|primer)/.test(text)) return 'potentiation';
@@ -335,7 +341,11 @@ function resolveIntentForSection(
   const aliasMap: Record<string, string[]> = {
     potentiation: ['ballistics'],
     conditioning: ['capacity', 'cardio'],
-    rehab: ['prehab'],
+    rehab: ['return-to-play'],
+    prehab: ['resilience', 'durability'],
+    'aerobic-base': ['zone2', 'zone 2', 'aerobic base'],
+    'threshold-intervals': ['threshold', 'tempo', 'vo2'],
+    'mobility-flow': ['mobility', 'flow'],
   };
 
   const aliases = aliasMap[inferredKey] || [];
@@ -393,10 +403,14 @@ function buildSectionConfigDefaults(section: {
       accessory: 'supersets',
       core: 'circuits',
       conditioning: 'circuits',
+      'aerobic-base': 'intervals',
+      'threshold-intervals': 'intervals',
       amrap: 'amrap',
       emom: 'emom',
       testing: 'straight-sets',
+      prehab: 'straight-sets',
       rehab: 'straight-sets',
+      'mobility-flow': 'circuits',
       recovery: 'circuits',
       cooldown: 'circuits',
     };
@@ -416,10 +430,14 @@ function buildSectionConfigDefaults(section: {
       accessory: 'Structural balance and weak-link support',
       core: 'Bracing and trunk control',
       conditioning: 'Energy system development',
+      'aerobic-base': 'Sustainable aerobic output and pacing control',
+      'threshold-intervals': 'Threshold tolerance and repeat effort quality',
       amrap: 'Sustainable density and pacing',
       emom: 'Paced repeatability under fatigue',
       testing: 'Benchmark performance and output tracking',
+      prehab: 'Joint resilience and preventive durability',
       rehab: 'Symptom-guided control and progression',
+      'mobility-flow': 'End-range control and movement quality',
       recovery: 'Low-intensity restoration and mobility',
       cooldown: 'Downregulation and recovery',
     };
@@ -439,38 +457,52 @@ function buildSectionConfigDefaults(section: {
       accessory: 12,
       core: 10,
       conditioning: 15,
+      'aerobic-base': 20,
+      'threshold-intervals': 16,
       amrap: 12,
       emom: 12,
       testing: 15,
+      prehab: 12,
       rehab: 12,
+      'mobility-flow': 14,
       recovery: 10,
       cooldown: 8,
     };
     defaults.defaultDuration = durationByIntent[inferredIntent] || 12;
   }
 
-  if (!current.defaultRepRange && ['strength', 'hypertrophy', 'accessory', 'power'].includes(inferredIntent)) {
+  if (!current.defaultRepRange && ['strength', 'hypertrophy', 'accessory', 'power', 'prehab', 'rehab'].includes(inferredIntent)) {
     if (inferredIntent === 'strength') defaults.defaultRepRange = { min: 3, max: 6 };
     if (inferredIntent === 'power') defaults.defaultRepRange = { min: 2, max: 5 };
     if (inferredIntent === 'hypertrophy') defaults.defaultRepRange = { min: 8, max: 12 };
     if (inferredIntent === 'accessory') defaults.defaultRepRange = { min: 10, max: 15 };
+    if (inferredIntent === 'prehab') defaults.defaultRepRange = { min: 8, max: 12 };
+    if (inferredIntent === 'rehab') defaults.defaultRepRange = { min: 6, max: 10 };
   }
 
-  if (!current.defaultRestPeriod && ['strength', 'power', 'hypertrophy', 'accessory'].includes(inferredIntent)) {
+  if (!current.defaultRestPeriod && ['strength', 'power', 'hypertrophy', 'accessory', 'prehab', 'rehab'].includes(inferredIntent)) {
     if (inferredIntent === 'strength') defaults.defaultRestPeriod = { min: 90, max: 180 };
     if (inferredIntent === 'power') defaults.defaultRestPeriod = { min: 90, max: 150 };
     if (inferredIntent === 'hypertrophy') defaults.defaultRestPeriod = { min: 45, max: 90 };
     if (inferredIntent === 'accessory') defaults.defaultRestPeriod = { min: 30, max: 75 };
+    if (inferredIntent === 'prehab') defaults.defaultRestPeriod = { min: 45, max: 90 };
+    if (inferredIntent === 'rehab') defaults.defaultRestPeriod = { min: 60, max: 120 };
   }
 
-  if (!current.workRestRatio && ['potentiation', 'speed', 'plyo', 'conditioning', 'recovery', 'cooldown'].includes(inferredIntent)) {
-    defaults.workRestRatio = inferredIntent === 'conditioning' ? '1:1' : '1:2';
+  if (!current.workRestRatio && ['potentiation', 'speed', 'plyo', 'conditioning', 'aerobic-base', 'threshold-intervals', 'mobility-flow', 'recovery', 'cooldown'].includes(inferredIntent)) {
+    if (inferredIntent === 'conditioning' || inferredIntent === 'threshold-intervals') {
+      defaults.workRestRatio = '1:1';
+    } else if (inferredIntent === 'aerobic-base') {
+      defaults.workRestRatio = '2:1';
+    } else {
+      defaults.workRestRatio = '1:2';
+    }
   }
 
   if (typeof current.useRPE !== 'boolean' && ['strength', 'hypertrophy', 'accessory', 'power'].includes(inferredIntent)) {
     defaults.useRPE = true;
   }
-  if (typeof current.useTime !== 'boolean' && ['conditioning', 'amrap', 'emom', 'recovery', 'cooldown', 'prep'].includes(inferredIntent)) {
+  if (typeof current.useTime !== 'boolean' && ['conditioning', 'aerobic-base', 'threshold-intervals', 'amrap', 'emom', 'mobility-flow', 'recovery', 'cooldown', 'prep'].includes(inferredIntent)) {
     defaults.useTime = true;
   }
 
@@ -846,6 +878,114 @@ function buildWorkoutTypeDescription(workoutType: Pick<WorkoutType, 'name'>): st
   return `${name} phase used to organize session intent, movement focus, and loading strategy.`;
 }
 
+function getPresetWorkoutCategoryDescription(name?: string): string | undefined {
+  const key = normalizePeriodName(name);
+
+  const presets: Record<string, string> = {
+    workout:
+      'General performance session category that can blend prep, strength, and conditioning blocks based on the linked structure template.',
+    strength:
+      'Primary force-production category for loaded movement patterns and progressive overload-focused sessions.',
+    power:
+      'Explosive output category emphasizing velocity, intent, and fast force production.',
+    hypertrophy:
+      'Muscle-building category prioritizing volume, density, and tissue capacity work.',
+    conditioning:
+      'Energy-system category for metabolic stress, aerobic/anaerobic capacity, and pacing development.',
+    cardioday:
+      'Cardio-focused category for engine sessions, interval work, and aerobic capacity development.',
+    metabolicresistance:
+      'Mixed strength-conditioning category combining resistance training with elevated metabolic demand.',
+    recovery:
+      'Low-intensity category for restoration, mobility, and downregulation sessions.',
+    mobility:
+      'Movement quality category emphasizing end-range control, flexibility, and joint preparation.',
+    prehab:
+      'Preventive resilience category targeting weak links, joint stability, and tissue tolerance.',
+  };
+
+  return presets[key];
+}
+
+function buildWorkoutCategoryDescription(category: Pick<WorkoutCategory, 'name'>): string {
+  const preset = getPresetWorkoutCategoryDescription(category.name);
+  if (preset) return preset;
+
+  const name = category.name?.trim() || 'Workout Category';
+  return `${name} category used to organize sessions with a consistent structure template, intent profile, and planning context for DDS +Fill.`;
+}
+
+function shouldRewriteWorkoutCategoryDescription(category: Pick<WorkoutCategory, 'name' | 'description'>): boolean {
+  const next = buildWorkoutCategoryDescription(category);
+  const current = category.description?.trim();
+  if (!current) return true;
+  if (current === next) return false;
+
+  const lower = current.toLowerCase();
+  if (lower.includes('category used to organize sessions')) return true;
+  if (current.length < 70) return true;
+
+  return false;
+}
+
+function resolveBestTemplateForCategory(
+  category: Pick<WorkoutCategory, 'name'>,
+  templates: WorkoutStructureTemplate[]
+): WorkoutStructureTemplate | undefined {
+  if (!templates.length) return undefined;
+
+  const categoryKey = normalizePeriodName(category.name);
+  const categoryText = (category.name || '').toLowerCase();
+
+  const aliasMatchers: Array<{ key: string; templateKeys: string[] }> = [
+    { key: 'cardioday', templateKeys: ['cardio', 'conditioning'] },
+    { key: 'conditioning', templateKeys: ['cardio', 'metabolicresistance', 'conditioning'] },
+    { key: 'metabolicresistance', templateKeys: ['metabolicresistance', 'cardio'] },
+    { key: 'strength', templateKeys: ['basic', 'thebig3', 'exos'] },
+    { key: 'power', templateKeys: ['powerdevelopment', 'speedandagility', 'exos'] },
+    { key: 'hypertrophy', templateKeys: ['thebig3', 'basic', 'metabolicresistance'] },
+    { key: 'workout', templateKeys: ['exos', 'basic'] },
+    { key: 'recovery', templateKeys: ['activerecovery', 'cardio'] },
+    { key: 'mobility', templateKeys: ['activerecovery', 'exos'] },
+    { key: 'prehab', templateKeys: ['activerecovery', 'exos'] },
+  ];
+
+  const templateByKey = new Map(
+    templates.map((template) => [normalizePeriodName(template.name), template])
+  );
+
+  const exact = templateByKey.get(categoryKey);
+  if (exact) return exact;
+
+  const alias = aliasMatchers.find((entry) => entry.key === categoryKey);
+  if (alias) {
+    for (const templateKey of alias.templateKeys) {
+      const hit = templateByKey.get(templateKey);
+      if (hit) return hit;
+    }
+  }
+
+  // Fallback: pick the template with the strongest keyword overlap.
+  const ranked = templates
+    .map((template) => {
+      const text = `${template.name || ''} ${template.description || ''}`.toLowerCase();
+      const score = [
+        categoryText,
+        categoryKey,
+        categoryText.split(' ').join(''),
+      ].reduce((acc, token) => (token && text.includes(token) ? acc + 1 : acc), 0);
+
+      return { template, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  if ((ranked[0]?.score || 0) > 0) {
+    return ranked[0]?.template;
+  }
+
+  return undefined;
+}
+
 function shouldRewriteWorkoutTypeDescription(workoutType: Pick<WorkoutType, 'name' | 'description'>): boolean {
   const nextDescription = buildWorkoutTypeDescription(workoutType);
   const current = workoutType.description?.trim();
@@ -1027,7 +1167,6 @@ export default function ConfigurePage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
-  const [showCelebration, setShowCelebration] = useState(false);
   const oauthToastShownRef = useRef(false);  // Track if we've already shown the OAuth success toast
   const calendarSectionRef = useRef<HTMLDivElement | null>(null);
   const businessHoursSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1044,12 +1183,8 @@ export default function ConfigurePage() {
   const selectedCalendarSummary = calendars.find(calendar => calendar.id === calendarConfig.selectedCalendarId)?.summary;
   const selectedCalendarLabel = selectedCalendarSummary || calendarConfig.selectedCalendarId;
   const { needsSetup: needsSetupHub, isLoading: onboardingLoading } = useSetupHubProgress(calendarReady, hasClients);
-  const celebrationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const checklistCompleteRef = useRef(false);
-  const hasInitializedChecklistStateRef = useRef(false);
   const hasBackfilledInitialDescriptionsRef = useRef(false);
   const isBackfillingInitialDescriptionsRef = useRef(false);
-  const confettiColors = ['#6366F1', '#10B981', '#FBBF24', '#F472B6'];
 
   // Sync local state with store state when it changes
   useEffect(() => {
@@ -1277,41 +1412,6 @@ export default function ConfigurePage() {
   const checklistProgressPercent = totalChecklistSteps === 0
     ? 0
     : Math.round((completedChecklistSteps / totalChecklistSteps) * 100);
-  const checklistComplete = totalChecklistSteps > 0 && completedChecklistSteps === totalChecklistSteps;
-
-  useEffect(() => {
-    // Wait until setup-related data has finished loading so we don't treat initial hydration
-    // as a "new completion" for users who completed setup long ago.
-    if (onboardingLoading || configLoading) {
-      return;
-    }
-
-    if (!hasInitializedChecklistStateRef.current) {
-      checklistCompleteRef.current = checklistComplete;
-      hasInitializedChecklistStateRef.current = true;
-      return;
-    }
-
-    if (checklistComplete && !checklistCompleteRef.current) {
-      setShowCelebration(true);
-      if (celebrationTimeoutRef.current) {
-        clearTimeout(celebrationTimeoutRef.current);
-      }
-      celebrationTimeoutRef.current = setTimeout(() => {
-        setShowCelebration(false);
-      }, 4500);
-    } else if (!checklistComplete && checklistCompleteRef.current) {
-      setShowCelebration(false);
-    }
-
-    checklistCompleteRef.current = checklistComplete;
-
-    return () => {
-      if (celebrationTimeoutRef.current) {
-        clearTimeout(celebrationTimeoutRef.current);
-      }
-    };
-  }, [checklistComplete, onboardingLoading, configLoading]);
 
   // Location management state
   const [uniqueLocations, setUniqueLocations] = useState<string[]>([]);
@@ -1489,10 +1589,17 @@ export default function ConfigurePage() {
       (workoutType) => shouldRewriteWorkoutTypeDescription(workoutType)
     );
 
+    const workoutCategoriesNeedingUpdate = workoutCategories.filter((category) => {
+      const needsDescription = shouldRewriteWorkoutCategoryDescription(category);
+      const needsTemplateLink = !category.linkedWorkoutStructureTemplateId;
+      return needsDescription || needsTemplateLink;
+    });
+
     if (
       periodsNeedingDescriptionRewrite.length === 0 &&
       templatesNeedingUpdate.length === 0 &&
-      workoutTypesMissingDescription.length === 0
+      workoutTypesMissingDescription.length === 0 &&
+      workoutCategoriesNeedingUpdate.length === 0
     ) {
       hasBackfilledInitialDescriptionsRef.current = true;
       return;
@@ -1505,6 +1612,7 @@ export default function ConfigurePage() {
         let periodUpdates = 0;
         let templateUpdates = 0;
         let workoutTypeUpdates = 0;
+        let workoutCategoryUpdates = 0;
 
         for (const period of periodsNeedingDescriptionRewrite) {
           await updatePeriod(period.id, { description: buildPeriodDescription(period) });
@@ -1557,9 +1665,25 @@ export default function ConfigurePage() {
           workoutTypeUpdates += 1;
         }
 
-        if (periodUpdates > 0 || templateUpdates > 0 || workoutTypeUpdates > 0) {
+        for (const category of workoutCategoriesNeedingUpdate) {
+          const nextDescription = shouldRewriteWorkoutCategoryDescription(category)
+            ? buildWorkoutCategoryDescription(category)
+            : category.description;
+          const bestTemplate = category.linkedWorkoutStructureTemplateId
+            ? undefined
+            : resolveBestTemplateForCategory(category, workoutStructureTemplates);
+
+          await updateWorkoutCategory(category.id, {
+            description: nextDescription,
+            linkedWorkoutStructureTemplateId:
+              category.linkedWorkoutStructureTemplateId || bestTemplate?.id,
+          });
+          workoutCategoryUpdates += 1;
+        }
+
+        if (periodUpdates > 0 || templateUpdates > 0 || workoutTypeUpdates > 0 || workoutCategoryUpdates > 0) {
           toastSuccess(
-            `Added starter descriptions/context (${periodUpdates} period${periodUpdates === 1 ? '' : 's'}, ${templateUpdates} template${templateUpdates === 1 ? '' : 's'}, ${workoutTypeUpdates} workout type${workoutTypeUpdates === 1 ? '' : 's'}).`
+            `Added starter descriptions/context (${periodUpdates} period${periodUpdates === 1 ? '' : 's'}, ${templateUpdates} template${templateUpdates === 1 ? '' : 's'}, ${workoutTypeUpdates} workout type${workoutTypeUpdates === 1 ? '' : 's'}, ${workoutCategoryUpdates} workout categor${workoutCategoryUpdates === 1 ? 'y' : 'ies'}).`
           );
         }
       } catch (error) {
@@ -1570,7 +1694,17 @@ export default function ConfigurePage() {
         isBackfillingInitialDescriptionsRef.current = false;
       }
     })();
-  }, [periods, workoutStructureTemplates, workoutTypes, workoutIntents, updatePeriod, updateWorkoutStructureTemplate, updateWorkoutType]);
+  }, [
+    periods,
+    workoutStructureTemplates,
+    workoutTypes,
+    workoutCategories,
+    workoutIntents,
+    updatePeriod,
+    updateWorkoutStructureTemplate,
+    updateWorkoutType,
+    updateWorkoutCategory,
+  ]);
 
   // Fetch unique locations from calendar events
   useEffect(() => {
@@ -1941,11 +2075,18 @@ export default function ConfigurePage() {
   const handleSaveCategory = async () => {
     if (editingCategory) {
       try {
+        const description = editingCategory.description?.trim() || buildWorkoutCategoryDescription(editingCategory);
+        const bestTemplate = editingCategory.linkedWorkoutStructureTemplateId
+          ? undefined
+          : resolveBestTemplateForCategory(editingCategory, workoutStructureTemplates);
+
         if (editingCategory.id.startsWith('temp_')) {
           // New category
           await addWorkoutCategory({
             name: editingCategory.name,
             color: editingCategory.color,
+            description,
+            linkedWorkoutStructureTemplateId: editingCategory.linkedWorkoutStructureTemplateId || bestTemplate?.id,
             order: editingCategory.order || 0
           });
           setShowNewCategoryForm(false);
@@ -1954,6 +2095,8 @@ export default function ConfigurePage() {
           await updateWorkoutCategory(editingCategory.id, {
             name: editingCategory.name,
             color: editingCategory.color,
+            description,
+            linkedWorkoutStructureTemplateId: editingCategory.linkedWorkoutStructureTemplateId || bestTemplate?.id,
             order: editingCategory.order
           });
           setEditingCategoryId(null);
@@ -2828,10 +2971,7 @@ export default function ConfigurePage() {
                   </SortableContext>
                 </DndContext>
               </div>
-            </div>
 
-            {/* Right Column */}
-            <div className="space-y-8">
               {/* Workout Categories Section */}
               <div ref={workoutCategoriesSectionRef}>
                 <div className="flex items-center justify-between mb-4">
@@ -3051,7 +3191,10 @@ export default function ConfigurePage() {
                   ))}
                 </div>
               </div>
+            </div>
 
+            {/* Right Column */}
+            <div className="space-y-8">
               {/* Workout Types Section */}
               <div ref={workoutTypesSectionRef}>
                 <div className="flex items-center justify-between mb-4">
@@ -4419,13 +4562,27 @@ export default function ConfigurePage() {
         onSave={(templateData) => {
           const sectionsWithGuidance = (templateData.sections || []).map((section) => {
             const hasGuidance = Boolean(section.configuration?.aiGuidance?.trim());
-            if (hasGuidance) return section;
+            const hasIntent = Boolean(section.workoutIntentId || section.workoutIntentKey || section.workoutIntentName);
+            const matchedIntent = hasIntent ? undefined : resolveIntentForSection(section, workoutIntents);
+            const defaultConfig = buildSectionConfigDefaults(section);
+            const mergedConfig = {
+              ...(section.configuration || {}),
+              ...defaultConfig,
+            };
+
+            if (hasGuidance && hasIntent && Object.keys(defaultConfig).length === 0) return section;
 
             return {
               ...section,
+              workoutIntentId: matchedIntent?.id ?? section.workoutIntentId,
+              workoutIntentKey: matchedIntent?.key ?? section.workoutIntentKey,
+              workoutIntentName: matchedIntent?.name ?? section.workoutIntentName,
               configuration: {
-                ...(section.configuration || {}),
-                aiGuidance: buildRoundGuidance(section),
+                ...mergedConfig,
+                aiGuidance: hasGuidance ? section.configuration?.aiGuidance : buildRoundGuidance({
+                  ...section,
+                  configuration: mergedConfig,
+                }),
               },
             };
           });
@@ -4454,49 +4611,6 @@ export default function ConfigurePage() {
         }}
       />
     </div>
-    {showCelebration && (
-      <>
-        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center">
-          <div className="rounded-3xl bg-white/90 px-6 py-4 text-center shadow-2xl border border-indigo-100">
-            <p className="text-sm font-semibold text-indigo-600">All setup tasks complete</p>
-            <p className="text-2xl font-bold text-gray-900">Nice work!</p>
-          </div>
-        </div>
-        <div className="pointer-events-none fixed inset-0 z-30 overflow-hidden">
-          {Array.from({ length: 24 }).map((_, index) => (
-            <span
-              key={`confetti-${index}`}
-              className="confetti-piece"
-              style={{
-                left: `${(index / 24) * 100}%`,
-                animationDelay: `${index * 0.08}s`,
-                backgroundColor: confettiColors[index % confettiColors.length],
-              }}
-            />
-          ))}
-        </div>
-        <style jsx>{`
-          .confetti-piece {
-            position: absolute;
-            top: -10px;
-            width: 8px;
-            height: 16px;
-            border-radius: 2px;
-            animation: confettiFall 2.8s ease-in forwards;
-          }
-          @keyframes confettiFall {
-            0% {
-              transform: translateY(0) rotate(0deg);
-              opacity: 1;
-            }
-            100% {
-              transform: translateY(120vh) rotate(360deg);
-              opacity: 0;
-            }
-          }
-        `}</style>
-      </>
-    )}
     </>
   );
 }

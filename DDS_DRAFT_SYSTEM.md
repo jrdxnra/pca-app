@@ -6,6 +6,8 @@ This file is the operator-facing reference for how DDS currently works, which in
 
 It is intentionally biased toward live, verified behavior over aspirational design.
 
+Execution tracker: [DDS_IMPLEMENTATION_TODO.md](DDS_IMPLEMENTATION_TODO.md)
+
 ## What DDS Is Doing Today
 
 DDS builds workout drafts from a combination of:
@@ -226,6 +228,157 @@ To make this document the true main interface, the next concrete improvements sh
 3. Promote the Current Gaps section into implementation tickets, especially for `aiGuidance` actually affecting generation.
 4. If you want a stronger operator surface, build a dedicated DDS settings UI around the levers listed in this file rather than around aspirational fields.
 
+## Implemented Updates (2026-06-28)
+
+This section captures what was actually implemented in this codebase during the current DDS/configuration pass.
+
+### 1. Workout intent taxonomy was expanded and reconfigured
+
+Updated default intent seeding and intent sync behavior in [src/lib/firebase/services/workoutIntents.ts](src/lib/firebase/services/workoutIntents.ts):
+
+- Added new intent keys:
+	- `aerobic-base`
+	- `threshold-intervals`
+	- `prehab`
+	- `mobility-flow`
+- Clarified existing intent definitions:
+	- `conditioning` now describes mixed metabolic work-capacity sessions
+	- `recovery` is explicitly standalone low-intensity restoration
+	- `cooldown` is explicitly end-of-session downregulation
+	- `strength` and `hypertrophy` descriptions were tightened for progression intent
+- Added default-sync logic so existing default intents are auto-reconciled to canonical seed values (name, color, description, order) without manual re-entry.
+
+### 2. Configure-page intent inference and section defaults were upgraded
+
+Updated intent inference, alias resolution, and default section config in [src/app/configure/page.tsx](src/app/configure/page.tsx):
+
+- Inference now recognizes additional patterns and routes to new keys (`aerobic-base`, `threshold-intervals`, `prehab`, `mobility-flow`).
+- Alias map expanded for backward compatibility and migration safety.
+- Section defaults were extended for new intents across:
+	- `defaultStructure`
+	- `focusArea`
+	- `defaultDuration`
+	- `defaultRepRange`
+	- `defaultRestPeriod`
+	- `workRestRatio`
+	- `useTime`
+
+### 3. DDS intent normalization was made backward-compatible
+
+Updated intent key normalization in [src/lib/ai/workoutDraft.ts](src/lib/ai/workoutDraft.ts) so new keys map safely into current draft archetypes without breaking generation behavior.
+
+### 4. Configure page UX updates completed
+
+Updated layout and completion-notification behavior in [src/app/configure/page.tsx](src/app/configure/page.tsx):
+
+- Removed the setup-completion celebration overlay (`All setup tasks complete` popup/confetti).
+- Reordered workout config layout:
+	- `Workout Structure Templates` moved to the left column under `Week Templates`.
+	- `Workout Categories` moved to the left column above `Workout Structure Templates`.
+
+### 5. Validation
+
+- TypeScript compile checks were run successfully using `npx tsc --noEmit -p tsconfig.json --pretty false` after these changes.
+
+### 6. DDS scoring and repeat control was refactored
+
+Updated section movement scoring and repeat control in [src/lib/ai/workoutDraft.ts](src/lib/ai/workoutDraft.ts):
+
+- Ranking now uses explicit weighted components:
+	- goal-intent fit (`G`)
+	- session structure fit (`S`)
+	- client movement profile fit (`C`)
+	- progression continuity (`P`)
+	- raw history frequency (`H`, low-weight tie-breaker)
+- Added profile-gated filtering before ranking so low-readiness movement families are blocked in high-load archetypes unless explicitly allowed/preferred.
+- Added planned-repeat logic so recent movement-family repeats are allowed when progression is justified (progressive archetypes/goals plus continuity signals like prior loading or favorable progression stage), rather than only via last-resort fallback.
+
+### 7. Coach feedback loop signals were wired into DDS
+
+Updated feedback ingestion and DDS signal usage across:
+
+- [src/lib/ai/workoutFeedbackSignals.ts](src/lib/ai/workoutFeedbackSignals.ts)
+- [src/lib/firebase/services/workoutLogs.ts](src/lib/firebase/services/workoutLogs.ts)
+- [src/lib/firebase/services/clientMovementProfiles.ts](src/lib/firebase/services/clientMovementProfiles.ts)
+- [src/app/api/fill/workouts/draft/route.ts](src/app/api/fill/workouts/draft/route.ts)
+- [src/lib/ai/workoutDraft.ts](src/lib/ai/workoutDraft.ts)
+
+Implemented behavior:
+
+- Completed workout log notes and session RPE now map to deterministic feedback signals (`pain`, `poor_tolerance`, `too_hard`, `too_easy`, `great_quality`, `good_tolerance`, `time_overrun`).
+- Extracted signals are persisted to `clientMovementProfiles.feedbackLog` during workout log upsert.
+- Severe movement-level signals (`pain`, `poor_tolerance`) auto-infer movement preference safeguards and are blocked during DDS movement selection.
+- Feedback signals are also folded into profile-fit and progression-continuity scoring, so recent tolerance quality can nudge ranking.
+
+### 8. Phase 4 A/B runner was added
+
+Added executable evaluation runner in [scripts/dds_ab_runner.ts](scripts/dds_ab_runner.ts) with npm command in [package.json](package.json):
+
+- Run command: `npm run dds:ab`
+- Required env: `DDS_AB_ACCOUNT_ID`
+- Optional env:
+	- `DDS_AB_SAMPLE_SIZE` (default `24`, intended range `20-30`)
+	- `DDS_AB_OUTPUT` (default `scripts/dds_ab_results.json`)
+
+Runner behavior:
+
+- Samples recent account workouts that used `structure-fill:*` and have linked structure templates.
+- Replays the same input context through two variants:
+	- baseline variant (minimal profile/context features)
+	- current refactored variant (goal/profile/feedback-aware)
+- Produces per-sample and aggregate metrics JSON including:
+	- manual edits proxy
+	- unsafe pick count proxy
+	- progression coherence ratio
+	- coach confidence proxy (1-5)
+	- comparative win counts by metric
+
+## External Source Review: wger + Kaggle
+
+This section summarizes what was verified from external reference sources and how those findings map to DDS planning.
+
+### wger routine API (official docs)
+
+Source reviewed: [https://wger.readthedocs.io/en/latest/api/routines.html](https://wger.readthedocs.io/en/latest/api/routines.html)
+
+Verified model shape:
+
+- `Routine` -> `Day` -> `Slot` -> `SlotEntry`
+- Progression configs are first-class (`WeightConfig`, `RepetitionsConfig`, `SetsConfig`, `RirConfig`, `RestConfig`, with max variants)
+- Iterations are explicit and drive progression timing
+- Day sequencing supports control flags like `need_logs_to_advance` and `fit_in_week`
+- Computed views are exposed (`structure`, `date-sequence-display`, `date-sequence-gym`, `logs`, `stats`)
+
+Interpretation for DDS:
+
+- wger treats intent/config/progression as explicit data objects, not only labels.
+- This is a useful north-star for future DDS evolution (especially for progression-rule clarity and iteration-aware analytics).
+
+### Kaggle workout program dataset page
+
+Dataset page reviewed: `adnanelouardi/600k-fitness-exercise-and-workout-program-dataset` on Kaggle.
+
+Verified from page metadata/data-dictionary content:
+
+- Two files are described:
+	- `fitness_exercises.csv` (exercise-level rows)
+	- `program_summary.csv` (program-level aggregates)
+- `program_summary.csv` includes fields such as:
+	- `title`, `description`, `level`, `goal`, `equipment`, `program_length`, `time_per_workout`, `total_exercises`, timestamps
+- `fitness_exercises.csv` includes workout-positioning context (`week/day`) and prescription-like columns (`sets/reps`, `intensity`, etc.)
+
+Important constraint observed during review:
+
+- Kaggle page/API endpoints in this environment were partially gated (anti-forgery/auth/subscription), so a full raw CSV value-enum extraction was not available from direct download.
+- We can verify field presence and dataset structure from page metadata, but not guarantee a complete closed list of all real-world `goal` values without authenticated CSV access.
+
+Interpretation for DDS:
+
+- Kaggle’s useful signal is that `goal` is program-level context, while workout details live at exercise/week/day granularity.
+- This supports the current DDS direction:
+	- goals as macro-level bias
+	- intents/templates as session/section-level execution controls
+
 ## Weekly +Fill Execution Plan (Current Phase)
 
 This section defines the live plan for the weekly rollout of DDS-driven `+Fill` from the Week Split flow.
@@ -274,6 +427,12 @@ For each +Fill day call [src/app/api/fill/workouts/draft/route.ts](src/app/api/f
 4. `sessionDurationMinutes: 60`
 5. Optional `currentTitle`
 6. Optional `currentNotes`
+7. Optional `goals` (comma-separated macro goal context)
+
+Notes:
+
+- `goals` is now supported by the request schema and consumed in DDS global context.
+- Month +Fill currently sends both `currentNotes` and `goals` derived from selected goal chips.
 
 ### Weekly Error Handling Standard
 
@@ -332,3 +491,141 @@ If metrics regress, adjust this section before moving to monthly phase.
 | What most often weakens DDS? | Unmatched imported movements and vague template wording |
 | Is `aiGuidance` live today? | Not in the current movement-selection logic |
 | End | DDS control surface. |
+
+## Go Or No-Go Rule (Phase 4)
+
+Use this fixed threshold gate after each A/B run from [scripts/dds_ab_runner.ts](scripts/dds_ab_runner.ts):
+
+1. `manualEditsProxy.delta <= -0.20`
+2. `unsafePicks.delta <= -0.10`
+3. `progressionCoherence.delta >= +0.05`
+4. `coachConfidenceProxy.delta >= +0.20`
+
+Decision rule:
+
+1. If at least 3 of 4 checks pass, mark `go`.
+2. If fewer than 3 pass, mark `no-go`, tune DDS weights/filters, then re-run A/B.
+
+### Latest run outcome (2026-06-28)
+
+Using [scripts/dds_ab_runner.ts](scripts/dds_ab_runner.ts) with `DDS_AB_ACCOUNT_ID=master` and `DDS_AB_SAMPLE_SIZE=24`:
+
+1. `sampleSizeEvaluated = 24`
+2. `manualEditsProxy.delta = 0.00` (threshold: `<= -0.20`, fail)
+3. `unsafePicks.delta = 0.00` (threshold: `<= -0.10`, fail)
+4. `progressionCoherence.delta = 0.00` (threshold: `>= +0.05`, fail)
+5. `coachConfidenceProxy.delta = 0.00` (threshold: `>= +0.20`, fail)
+
+Decision:
+
+1. `no-go` for promotion based on the current threshold gate (0/4 checks passed).
+2. Next action is metric calibration in the A/B runner so baseline/current variants produce differentiable quality signals before another rollout decision.
+
+## Phase 5 Rollout Controls
+
+### Feature flag: engine switching
+
+Fill Draft API now supports environment-level engine selection in [src/app/api/fill/workouts/draft/route.ts](src/app/api/fill/workouts/draft/route.ts):
+
+1. `DDS_ENGINE_MODE=current` (default): full goal/profile/feedback-aware DDS
+2. `DDS_ENGINE_MODE=baseline`: reduced-context baseline mode for controlled comparisons
+
+### Feature flag: month-first flow rollout
+
+Fill Draft API now enforces flow-level rollout gating in [src/app/api/fill/workouts/draft/route.ts](src/app/api/fill/workouts/draft/route.ts) via `X-DDS-Flow` headers sent by callers:
+
+1. Monthly +Fill caller ([src/components/programs/QuickWorkoutBuilderDialog.tsx](src/components/programs/QuickWorkoutBuilderDialog.tsx)) sends `X-DDS-Flow: monthly`.
+2. Weekly +Fill caller ([src/hooks/useClientPrograms.ts](src/hooks/useClientPrograms.ts)) sends `X-DDS-Flow: weekly`.
+
+Environment flags:
+
+1. `DDS_ENABLE_MONTHLY_FILL` (default `true`)
+2. `DDS_ENABLE_WEEKLY_FILL` (default `false`)
+3. `DDS_ENABLE_SINGLE_FILL` (default `true`)
+
+Operational rollout sequence:
+
+1. Keep weekly disabled while validating month flow behavior and A/B outcomes.
+2. Enable weekly by setting `DDS_ENABLE_WEEKLY_FILL=true` after month stability criteria are met.
+
+### Runtime telemetry surfaces
+
+Added structured rollout telemetry in [src/app/api/fill/workouts/draft/route.ts](src/app/api/fill/workouts/draft/route.ts):
+
+1. Per-request `success`/`error` telemetry events with:
+	- `flow` (`single|monthly|weekly`)
+	- `engineMode` (`current|baseline`)
+	- `status`
+	- `latencyMs`
+	- `templateId`
+	- `categoryName`
+	- `strategy` and `recentWorkoutsAnalyzed` on success
+	- normalized `errorCode`/`errorMessage` on failure
+
+Added weekly preflight summary capture in [src/hooks/useClientPrograms.ts](src/hooks/useClientPrograms.ts):
+
+1. `apiDrafts`
+2. `fallbackDrafts`
+3. `failedDrafts`
+4. categorized `failureCategories`
+5. `preflightMs`
+
+This is emitted through existing `debugFlow('preflight_end', ...)` so weekly rollout quality can be monitored per assignment.
+
+### Weekly canary script
+
+Run canary summary from backend telemetry:
+
+1. `npm run dds:canary`
+
+Optional env:
+
+1. `DDS_CANARY_LOOKBACK_HOURS` (default `24`)
+2. `DDS_CANARY_MIN_REQUESTS` (default `8`)
+
+Current status note (2026-06-28):
+
+1. Weekly flow defaults to enabled unless `DDS_ENABLE_WEEKLY_FILL=false` is set.
+2. Canary output currently has `total=0` for weekly telemetry in the last 24h, so verdict is expected to be `fail` until real weekly +Fill traffic is generated.
+
+### Decision trace: score/profile breakdown
+
+Decision trace payload in [src/lib/ai/workoutDraft.ts](src/lib/ai/workoutDraft.ts) now includes:
+
+1. `engineMode`
+2. `appliedGoalProfile` (intent priority, preferred structures, bias keywords)
+3. `scoringBreakdown` (current G/S/C/P/H component weights)
+4. `safetyBreakdown` (avoid preferences, low-readiness families, pain/poor-tolerance feedback block count)
+
+## Checkpoint Note (2026-06-28)
+
+This note captures the latest save-state so we can resume later without context loss.
+
+### Config hardening saves completed
+
+Applied in [src/app/configure/page.tsx](src/app/configure/page.tsx):
+
+1. Category saves now auto-fill canonical description when blank.
+2. Category saves now auto-link the best matching workout structure template when no link is set.
+3. Workout Structure Template dialog saves now normalize sections by:
+	- auto-inferencing missing workout intent fields
+	- applying missing section defaults (structure/focus/duration)
+	- generating `aiGuidance` when missing
+
+### +Fill DDS check run (post-change)
+
+Canary command run with explicit project env:
+
+1. `GOOGLE_CLOUD_PROJECT=performancecoachapp-26bd1 GCLOUD_PROJECT=performancecoachapp-26bd1 npm run dds:canary`
+
+Result snapshot:
+
+1. `accountId: master`
+2. `lookbackHours: 24`
+3. `summary.total: 0`
+4. `verdict: fail` (no weekly sample yet in lookback window)
+
+Interpretation:
+
+1. DDS rollout logic is running, but this specific telemetry window still has no weekly events to score.
+2. Next check should be re-run after more weekly +Fill traffic lands in the last 24h window.
