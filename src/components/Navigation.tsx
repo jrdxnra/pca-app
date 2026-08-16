@@ -30,6 +30,11 @@ type NavigationItem = {
   requireSkillSandboxAccess?: boolean;
 };
 
+type NavigationAccess = {
+  canAccessSkillSandbox: boolean;
+  isMasterUser: boolean;
+};
+
 const mainNavigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Schedule', href: '/programs', icon: Calendar },
@@ -46,9 +51,12 @@ const menuNavigation: NavigationItem[] = [
   { name: 'App Status', href: '/health', icon: Activity, requireMaster: true },
 ];
 
-function useSkillSandboxAccess() {
+export function useNavigationAccess(): NavigationAccess {
   const { user, loading } = useAuth();
-  const [canAccessSkillSandbox, setCanAccessSkillSandbox] = useState(false);
+  const [access, setAccess] = useState<NavigationAccess>({
+    canAccessSkillSandbox: false,
+    isMasterUser: false,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -58,14 +66,22 @@ function useSkillSandboxAccess() {
 
       if (!user) {
         if (!cancelled) {
-          setCanAccessSkillSandbox(false);
+          setAccess({
+            canAccessSkillSandbox: false,
+            isMasterUser: false,
+          });
         }
         return;
       }
 
-      if (user.uid === MASTER_UID) {
+      const isMasterUser = user.uid === MASTER_UID;
+
+      if (isMasterUser) {
         if (!cancelled) {
-          setCanAccessSkillSandbox(true);
+          setAccess({
+            canAccessSkillSandbox: true,
+            isMasterUser: true,
+          });
         }
         return;
       }
@@ -73,12 +89,18 @@ function useSkillSandboxAccess() {
       try {
         const membership = await getActiveMembership(user.uid);
         if (!cancelled) {
-          setCanAccessSkillSandbox(membership?.role === 'owner' || membership?.role === 'coach');
+          setAccess({
+            canAccessSkillSandbox: membership?.role === 'owner' || membership?.role === 'coach',
+            isMasterUser: false,
+          });
         }
       } catch (error) {
         console.error('Error loading skill sandbox access:', error);
         if (!cancelled) {
-          setCanAccessSkillSandbox(false);
+          setAccess({
+            canAccessSkillSandbox: false,
+            isMasterUser: false,
+          });
         }
       }
     };
@@ -90,10 +112,7 @@ function useSkillSandboxAccess() {
     };
   }, [loading, user]);
 
-  return {
-    canAccessSkillSandbox,
-    isMasterUser: user?.uid === MASTER_UID,
-  };
+  return access;
 }
 
 function filterNavigation(items: NavigationItem[], isMasterUser: boolean, canAccessSkillSandbox: boolean) {
@@ -111,10 +130,10 @@ function filterNavigation(items: NavigationItem[], isMasterUser: boolean, canAcc
 }
 
 // Main Navigation - Left aligned with logo
-export function Navigation() {
+export function Navigation({ access }: { access: NavigationAccess }) {
   const pathname = usePathname();
   const isPlannerPage = pathname?.startsWith('/admin/planner');
-  const { canAccessSkillSandbox, isMasterUser } = useSkillSandboxAccess();
+  const { canAccessSkillSandbox, isMasterUser } = access;
   const navItems = filterNavigation(mainNavigation, isMasterUser, canAccessSkillSandbox);
 
   return (
@@ -150,13 +169,13 @@ export function Navigation() {
   );
 }
 
-export function ProfileMenu() {
+export function ProfileMenu({ access }: { access: NavigationAccess }) {
   const router = useRouter();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const { canAccessSkillSandbox, isMasterUser } = useSkillSandboxAccess();
+  const { canAccessSkillSandbox, isMasterUser } = access;
   const visibleMainNavigation = filterNavigation(mainNavigation, isMasterUser, canAccessSkillSandbox);
   const visibleMenuNavigation = filterNavigation(menuNavigation, isMasterUser, canAccessSkillSandbox);
 

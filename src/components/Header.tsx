@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { Navigation, ProfileMenu } from './Navigation';
+import { Navigation, ProfileMenu, useNavigationAccess } from './Navigation';
 import { CalendarClock, Loader2 } from 'lucide-react';
 import { useCalendarStore } from '@/lib/stores/useCalendarStore';
 import { queryKeys } from '@/lib/react-query/queryKeys';
@@ -14,6 +14,7 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
+  const navigationAccess = useNavigationAccess();
   const [isSyncing, setIsSyncing] = useState(false);
   const { fetchEvents, isGoogleCalendarConnected, checkGoogleCalendarConnection } = useCalendarStore();
 
@@ -109,7 +110,7 @@ export function Header() {
               </Link>
 
               {/* Main Navigation - Left aligned */}
-              <Navigation />
+              <Navigation access={navigationAccess} />
             </div>
 
             {/* Right side - Sync Button and Profile Menu */}
@@ -132,7 +133,7 @@ export function Header() {
               </button>
 
               {/* Profile Menu */}
-              <ProfileMenu />
+              <ProfileMenu access={navigationAccess} />
             </div>
           </div>
         </div>
