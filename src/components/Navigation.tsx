@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
+import { getActiveMembership, MASTER_UID } from '@/lib/firebase/services/memberships';
+import type { User as FirebaseUser } from 'firebase/auth';
 import {
   Users,
-  Dumbbell,
   Calendar,
   Home,
   Zap,
@@ -14,35 +16,125 @@ import {
   Settings,
   Activity,
   LogOut,
-  User,
   Shield,
-  BarChart3
+  BarChart3,
+  type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { MASTER_UID } from '@/lib/firebase/services/memberships';
 
-const mainNavigation = [
+type NavigationItem = {
+  name: string;
+  href: string;
+  icon: LucideIcon;
+  requireMaster?: boolean;
+  requireSkillSandboxAccess?: boolean;
+};
+
+type NavigationAccess = {
+  canAccessSkillSandbox: boolean;
+  isMasterUser: boolean;
+};
+
+const mainNavigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Schedule', href: '/programs', icon: Calendar },
   { name: 'Builder', href: '/workouts/builder', icon: Wrench },
   { name: 'Clients', href: '/clients', icon: Users },
   { name: 'Movements', href: '/movements', icon: Activity },
   { name: 'Planner', href: '/admin/planner', icon: Calendar },
+  { name: 'Workout Skills', href: '/admin/skill-sandbox', icon: Zap, requireSkillSandboxAccess: true },
 ];
 
-const menuNavigation = [
-  // { name: 'Workouts', href: '/workouts', icon: Zap },
+const menuNavigation: NavigationItem[] = [
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Configuration', href: '/configure', icon: Settings },
   { name: 'App Status', href: '/health', icon: Activity, requireMaster: true },
 ];
 
+export function useNavigationAccess(): NavigationAccess {
+  const { user, loading } = useAuth();
+  const [access, setAccess] = useState<NavigationAccess>({
+    canAccessSkillSandbox: false,
+    isMasterUser: false,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAccess = async () => {
+      if (loading) return;
+
+      if (!user) {
+        if (!cancelled) {
+          setAccess({
+            canAccessSkillSandbox: false,
+            isMasterUser: false,
+          });
+        }
+        return;
+      }
+
+      const isMasterUser = user.uid === MASTER_UID;
+
+      if (isMasterUser) {
+        if (!cancelled) {
+          setAccess({
+            canAccessSkillSandbox: true,
+            isMasterUser: true,
+          });
+        }
+        return;
+      }
+
+      try {
+        const membership = await getActiveMembership(user.uid);
+        if (!cancelled) {
+          setAccess({
+            canAccessSkillSandbox: membership?.role === 'owner' || membership?.role === 'coach',
+            isMasterUser: false,
+          });
+        }
+      } catch (error) {
+        console.error('Error loading skill sandbox access:', error);
+        if (!cancelled) {
+          setAccess({
+            canAccessSkillSandbox: false,
+            isMasterUser: false,
+          });
+        }
+      }
+    };
+
+    void loadAccess();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user]);
+
+  return access;
+}
+
+function filterNavigation(items: NavigationItem[], isMasterUser: boolean, canAccessSkillSandbox: boolean) {
+  return items.filter((item) => {
+    if (item.requireMaster && !isMasterUser) {
+      return false;
+    }
+
+    if (item.requireSkillSandboxAccess && !canAccessSkillSandbox) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 // Main Navigation - Left aligned with logo
-export function Navigation() {
+export function Navigation({ access }: { access: NavigationAccess }) {
   const pathname = usePathname();
   const isPlannerPage = pathname?.startsWith('/admin/planner');
-
-  const navItems = [...mainNavigation];
+  const { canAccessSkillSandbox, isMasterUser } = access;
+  const navItems = filterNavigation(mainNavigation, isMasterUser, canAccessSkillSandbox);
 
   return (
     <nav
@@ -77,12 +169,15 @@ export function Navigation() {
   );
 }
 
-export function ProfileMenu() {
+export function ProfileMenu({ access }: { access: NavigationAccess }) {
   const router = useRouter();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const { canAccessSkillSandbox, isMasterUser } = access;
+  const visibleMainNavigation = filterNavigation(mainNavigation, isMasterUser, canAccessSkillSandbox);
+  const visibleMenuNavigation = filterNavigation(menuNavigation, isMasterUser, canAccessSkillSandbox);
 
   useEffect(() => {
     let unsubscribe: () => void;
@@ -140,7 +235,6 @@ export function ProfileMenu() {
   const photoUrl = user.photoURL;
   const displayName = user.displayName || user.email || 'User';
   const initial = displayName[0]?.toUpperCase() || 'U';
-  const isMasterUser = user.uid === MASTER_UID;
 
   return (
     <div className="relative ml-2">
@@ -183,7 +277,7 @@ export function ProfileMenu() {
               <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Menu
               </div>
-              {mainNavigation.map((item) => {
+              {visibleMainNavigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
                 return (
@@ -210,28 +304,26 @@ export function ProfileMenu() {
             <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider md:hidden">
               Tools
             </div>
-            {menuNavigation
-              .filter(item => !item.requireMaster || user.uid === MASTER_UID)
-              .map((item) => {
-                const Icon = item.icon;
-                const isActive = pathname === item.href;
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={cn(
-                      'flex w-full items-center px-2 py-2 text-sm rounded-sm transition-colors',
-                      isActive
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'hover:bg-accent text-muted-foreground hover:text-foreground'
-                    )}
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Icon className="mr-3 h-4 w-4" />
-                    {item.name}
-                  </Link>
-                );
-              })}
+            {visibleMenuNavigation.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={cn(
+                    'flex w-full items-center px-2 py-2 text-sm rounded-sm transition-colors',
+                    isActive
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'hover:bg-accent text-muted-foreground hover:text-foreground'
+                  )}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <Icon className="mr-3 h-4 w-4" />
+                  {item.name}
+                </Link>
+              );
+            })}
 
             {/* Admin Tab - Only for Master Admin */}
             {isMasterUser && (
