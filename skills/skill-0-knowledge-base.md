@@ -13,130 +13,242 @@ This is the source of truth. All other skills read from here and apply these pri
 ### Principle 1: Progressive Overload
 **Definition**: Gradually increasing demand on the client's body over time.
 
-**Application by Training Style:**
+**Core rule**: Progress the *primary lever* for the current training style first. Secondary levers support progression when the primary lever is constrained.
 
-**Strength Training:**
+#### Application by Training Style
+
+**Strength Training**
 - Primary lever: Load (weight on bar)
 - Secondary lever: Volume (sets × reps)
+- Tertiary lever: Density, tempo, exercise variation
 - Progression cadence: Weekly or every 2 weeks
-- Rep ranges: 3-6 reps (heavy), 6-10 reps (moderate), 8-12 reps (accessory)
+- Rep ranges: 1-6 reps for main lifts, 6-10 reps for secondary lifts, 8-12 reps for accessory work
+- Best progression models: Linear, wave loading, DUP, block periodization, autoregulation
 - Example: Week 1 = 5x225 lbs squat, Week 2 = 5x230 lbs squat
 
-**Hypertrophy Training:**
-- Primary lever: Volume (total reps per movement)
+**Hypertrophy Training**
+- Primary lever: Volume (total reps and hard sets per movement/muscle group)
 - Secondary lever: Load (moderate, sustainable)
+- Tertiary lever: Density, tempo, variation within a family
 - Progression cadence: Every 1-2 weeks
-- Rep ranges: 8-15 reps (focus 8-12)
+- Rep ranges: 6-15 reps, with a strong focus on 8-12
+- Best progression models: Double progression, volume progression, density progression, autoregulation
 - Example: Week 1 = 4x8 @ 185 lbs, Week 2 = 4x9 @ 185 lbs OR 4x8 @ 190 lbs
 
-**Conditioning/Metabolic:**
-- Primary lever: Density (more work in same time) or intensity (shorter time for same work)
-- Secondary lever: Load (secondary)
-- Progression cadence: Every 3-5 days
+**Power / Speed-Strength Training**
+- Primary lever: Bar velocity, acceleration, and intent
+- Secondary lever: Load at a speed target
+- Tertiary lever: Volume and exercise complexity
+- Progression cadence: Every 1-2 weeks, or by wave within a session
+- Rep ranges: 1-5 reps
+- Load range: Typically 55-85% 1RM depending on exercise and intent
+- Best progression models: Velocity-based training, wave loading, low-fatigue exposure
+- Example: Week 1 = 6x2 speed squat @ target bar speed, Week 2 = 6x2 slightly heavier at same speed target
+
+**Conditioning / Metabolic Conditioning (MetCon / HIIT)**
+- Primary lever: Density, work capacity, or work-to-rest ratio
+- Secondary lever: Load, movement selection, interval structure
+- Tertiary lever: Time cap, repetition count, pace
+- Progression cadence: Every 3-7 days depending on intensity
+- Best progression models: Density progression, interval progression, round progression, time-cap progression
 - Example: Week 1 = 4 rounds 400m run + 20 kettlebell swings, Week 2 = 5 rounds same
 
-**Endurance:**
+**Endurance / Aerobic Base**
 - Primary lever: Duration or distance
 - Secondary lever: Pace
-- Progression cadence: Every 1-2 weeks
-- Example: Week 1 = 20 min zone 2 run, Week 2 = 22 min zone 2 run
+- Tertiary lever: Elevation, modality, interval shape
+- Progression cadence: Every 1-2 weeks, with conservative weekly increases
+- Best progression models: Volume progression, pace progression, zone-based progression
+- Example: Week 1 = 20 min Zone 2 run, Week 2 = 22 min Zone 2 run
+
+**Skill Work / Technical Practice**
+- Primary lever: Movement quality and complexity
+- Secondary lever: Practice frequency
+- Tertiary lever: Coordination, precision, timing, and efficiency
+- Progression cadence: Often weekly, but driven by quality rather than load
+- Best progression models: Complexity ladder, constraint reduction, repetition quality
+- Example: Muscle clean → power clean → full clean
+
+**Prehabilitation / Injury Prevention**
+- Primary lever: Control, tolerance, and stability
+- Secondary lever: Range of motion, integration, and dosage
+- Tertiary lever: Load only when intentional
+- Progression cadence: Gradual and highly individualized
+- Best progression models: Graded exposure, integration ladder, tissue tolerance progression
+- Example: Isolated glute med activation → split stance stability → loaded single-leg work
+
+**Mobility / Flexibility**
+- Primary lever: Active range of motion and tissue tolerance
+- Secondary lever: Frequency and position exposure
+- Tertiary lever: Load when using loaded mobility
+- Progression cadence: As needed, often frequent
+- Best progression models: Exposure progression, hold-time progression, loaded ROM progression
+- Example: 30-second static holds progress to deeper loaded positions over time
+
+**Mixed / General Fitness**
+- Primary lever: Balance across qualities
+- Secondary lever: Weekly consistency
+- Tertiary lever: Individual weak-point emphasis
+- Progression cadence: Flexible, usually weekly or biweekly
+- Best progression models: Hybrid of the above based on what is limiting the client
+
+---
 
 ### Principle 2: Movement Variation vs. Repetition
 
-**The Balance:**
-- Clients need **familiarity** (to progress load/form)
-- Clients need **novelty** (to prevent boredom, plateaus, imbalance)
-- The ratio depends on **time horizon** and **goals**
+**The balance**:
+- Clients need **familiarity** to improve load, skill, and confidence.
+- Clients need **novelty** to prevent boredom, overuse, and stale adaptation.
+- The right balance depends on time horizon, training style, and the role of the movement in the program.
 
-**Strength-Focused Blocks:**
-- ✅ Repeat main lifts frequently (same lift 2x per week, 2-3 days apart)
-- ✅ Accessory rotation every 2-4 weeks
-- ✗ Don't randomize main lifts session-to-session
+#### Rotation Rules by Style
 
-**Hypertrophy-Focused Blocks:**
-- ✅ Repeat lift families (squat, hinge, push, pull) but vary angles/implements
-- ✅ Different exercise variation each week (back squat → front squat → goblet squat)
-- ✗ Don't do same exact exercise >3 weeks in a row
+**Strength-Focused Blocks**
+- Repeat main lifts frequently.
+- Keep the same primary lift in the same slot across the block when possible.
+- Accessory work can rotate every 2-4 weeks.
+- Do not randomize the main lift session-to-session.
 
-**Conditioning-Focused Blocks:**
-- ✅ Vary movements frequently (different each session)
-- ✅ Vary modalities (cardio machine, barbell, bodyweight, hybrid)
-- ✗ Don't repeat same AMRAP twice in one week
+**Hypertrophy-Focused Blocks**
+- Repeat movement families frequently.
+- Rotate variations within the family to provide new stimulus.
+- Do not keep the exact same exercise indefinitely.
+- Use variation to target different angles, ROMs, and stability demands.
 
-**Mixed/General Fitness:**
-- ✅ Moderate repetition (same movement 1x per week)
-- ✅ Moderate variation (2-3 alternatives per movement family)
-- ✗ Avoid both extremes (randomness or staleness)
+**Power / Speed-Strength Blocks**
+- Keep movements highly specific and technically clean.
+- Use only enough variation to preserve intent and avoid stagnation.
+- Stop sets when speed or quality drops.
+- Do not chase fatigue.
+
+**Conditioning-Focused Blocks**
+- Vary movements more frequently.
+- Rotate modalities and interval structures often.
+- Avoid repeating the same exact MetCon too often.
+
+**Skill Work**
+- Repetition is useful when it improves quality.
+- Variation should only increase complexity when the base pattern is stable.
+
+**Mixed / General Fitness**
+- Use moderate repetition with moderate variation.
+- Avoid both randomness and staleness.
+
+---
 
 ### Principle 3: Fatigue Management
 
-**Energy System Overlay:**
-- Different exercises stress different energy systems
-- Stacking high-stress sessions back-to-back accelerates fatigue
+**Core rule**: The system must manage local fatigue, systemic fatigue, and CNS fatigue together.
 
-**Energy System Categories:**
+#### Energy System Categories
 
 | System | Examples | Recovery | Stacking Risk |
 |--------|----------|----------|---------------|
-| **Phosphocreatine (PC)** | Heavy strength (1-5 reps) | 3-5 min per set | Can stack if <48h between main lifts |
-| **Anaerobic Glycolytic** | Moderate reps (6-15), power | 3-10 min per set | High risk if stacked daily |
-| **Aerobic (Zone 2)** | Long, easy cardio | Low | Can do daily |
-| **High-Intensity Interval** | Sprints, MetCons, AMRAP | 24-48h full recovery | **Cannot stack on same day** |
+| **Phosphocreatine (PC)** | Heavy strength (1-5 reps), explosive lifts | 3-5 min between efforts | Moderate if repeated too soon |
+| **Anaerobic Glycolytic** | Moderate reps (6-15), power-endurance, hard MetCon | 3-10 min between efforts | High if stacked daily |
+| **Aerobic (Zone 1-2)** | Recovery cardio, easy continuous work | Low | Can be done often |
+| **Threshold / Zone 3-4** | Tempo, sustained hard work | Moderate to high | Needs spacing |
+| **High-Intensity Interval / Zone 5** | Sprints, intervals, all-out MetCon | 24-72h depending on dose | Cannot be stacked freely |
 
-**Fatigue Spacing Rules by Time Horizon:**
+#### Fatigue Spacing Rules by Time Horizon
 
-**SINGLE Workout:**
-- No constraints (isolated session)
+**SINGLE Workout**
+- No cross-session constraints.
+- Optimize the session itself.
 
-**WEEKLY (same week, multiple sessions):**
-- High-stress sessions (strength, speed, high-intensity) need 2-3 days apart minimum
-- Same movement family (e.g., squat): 2-3 days apart
-- Same energy system: 2+ days apart if high-intensity
-- Low-stress (conditioning, endurance, mobility): Can stack daily
+**WEEKLY Planning**
+- High-stress sessions need 2-3 days apart when possible.
+- Same movement family should not appear on adjacent days unless intentionally managed.
+- Low-stress work can be stacked more freely.
 
-**MONTHLY (4 weeks, progressive):**
-- Week 1: Establish baseline patterns (no stacking)
-- Week 2: Can increase frequency (build phase)
-- Week 3: Peak phase, reduce total sessions or lower intensity on secondary days
-- Week 4: Deload, reduce stress significantly
+**MONTHLY Planning**
+- Build fatigue intentionally.
+- Use early weeks to establish baseline, mid-block weeks to build, late weeks to peak or unload.
+- Do not accidentally stack high-stress days across the block.
 
 **Exception: Planned Accumulation**
-- If progression requires it, can stack (e.g., strength-focused client, 3x squat per week)
-- BUT must be intentional, not accidental
-- Must include deload week after accumulation
+- Stacking is allowed when it is purposeful.
+- If accumulation is intentional, it must be paired with a future reduction phase or deload.
+
+---
 
 ### Principle 4: Movement Pattern Balance
 
-**Six Fundamental Patterns** (every complete program should hit all):
+A complete program should cover all essential movement patterns over time.
 
-1. **Squat Pattern**: Quads primary, glutes/hamstrings secondary
+#### Core Pattern Families
+
+1. **Squat Pattern**
    - Examples: back squat, front squat, goblet squat, leg press, split squat
-   
-2. **Hinge Pattern**: Hamstrings/glutes primary, lower back/quads secondary
+   - Primary demand: knee-dominant lower body strength
+
+2. **Hinge Pattern**
    - Examples: deadlift, RDL, good morning, trap bar deadlift, kettlebell swing
-   
-3. **Push Pattern (Horizontal)**: Chest/shoulders/triceps
-   - Examples: bench press, push-ups, dumbbell press, machine press
-   
-4. **Push Pattern (Vertical)**: Shoulders/triceps primary
+   - Primary demand: hip-dominant lower body strength
+
+3. **Horizontal Push Pattern**
+   - Examples: bench press, push-up, dumbbell press, machine press
+   - Primary demand: chest/shoulders/triceps
+
+4. **Vertical Push Pattern**
    - Examples: overhead press, dip, pike push-up, handstand press
-   
-5. **Pull Pattern (Horizontal)**: Back/biceps
-   - Examples: rows (bent-over, dumbbell, machine), chest-supported row
-   
-6. **Pull Pattern (Vertical)**: Lats/biceps primary
-   - Examples: pull-ups, chin-ups, lat pulldown, assisted pull-up
+   - Primary demand: shoulders/triceps
 
-**Balance Rules:**
+5. **Horizontal Pull Pattern**
+   - Examples: rows, chest-supported row, machine row
+   - Primary demand: mid-back/biceps
 
-- **Strength-focused**: Each pattern appears at least 1x per week, main lift 2x per week
-- **Hypertrophy-focused**: Each pattern 1-2x per week with multiple angles
-- **Conditioning-focused**: Patterns mixed, not systematic repetition
-- **General fitness**: Each pattern 1x per week minimum
+6. **Vertical Pull Pattern**
+   - Examples: pull-ups, chin-ups, lat pulldown
+   - Primary demand: lats/biceps
 
-**Anti-Pattern Rule:**
-- Avoid 3+ sessions in a row hitting the same pattern
-- Example: ✗ Mon: squat, Tue: squat variation, Wed: leg press = TOO MUCH SAME PATTERN
+#### Extended Pattern Families
+
+7. **Unilateral Lower Body — Squat Variant**
+   - Family key: `squat-unilateral`
+   - Examples: Bulgarian split squat, step-up, pistol squat, single-leg squat to bench
+   - Role: asymmetry correction, stability, single-leg strength
+
+8. **Unilateral Lower Body — Hinge Variant**
+   - Family key: `hinge-unilateral`
+   - Examples: single-leg RDL, single-leg deadlift, single-leg hip thrust
+   - Role: asymmetry correction, glute-med demand, balance
+
+9. **Hip Thrust / Glute Bridge Pattern**
+   - Family key: `hip-extension-supine`
+   - Examples: barbell hip thrust, hip bridge, single-leg hip thrust, banded hip thrust
+   - Role: glute-dominant hip extension without vertical spinal loading
+
+10. **Carry Pattern**
+   - Family key: `carry`
+   - Examples: farmer's walk, suitcase carry, overhead carry, yoke walk, sandbag carry
+   - Role: full-body integration, grip, trunk stiffness, locomotion under load
+
+11. **Locomotive / Traveling Pattern**
+   - Family key: `locomotive`
+   - Examples: sprint mechanics, broad jump, lateral shuffle, agility ladder, bear crawl, crab walk, skipping, bounding
+   - Role: speed, change of direction, spatial awareness, athleticism
+
+12. **Rotational Core Pattern**
+   - Family key: `core-rotational`
+   - Examples: cable woodchop, landmine rotation, med-ball rotational throw, Russian twist
+   - Role: produce rotation and power transfer
+
+13. **Anti-Rotation / Stabilization Core Pattern**
+   - Family key: `core-anti-rotation`
+   - Examples: Pallof press, dead bug, bird dog, half-kneeling hold, plank variations
+   - Role: resist rotation, stabilize trunk, protect spine
+
+#### Balance Rules
+
+- Strength-focused programs should hit all major patterns every week.
+- Hypertrophy-focused programs should cover major patterns with repeat exposure and variation.
+- Conditioning-focused programs can use patterns more fluidly, but should still maintain movement balance over time.
+- Mixed/general fitness programs should avoid neglecting any major movement family.
+
+#### Anti-Pattern Rule
+- Avoid 3+ sessions in a row emphasizing the same primary pattern.
+- Avoid redundant exercise selection that gives the same stimulus twice without meaningful new demand.
 
 ---
 
@@ -144,119 +256,113 @@ This is the source of truth. All other skills read from here and apply these pri
 
 ### SINGLE Workout
 
-**Definition**: One isolated workout with no planned context (next session may be days away or entirely different)
+**Definition**: One isolated workout with no planned context.
 
-**Key Characteristics:**
+**Key characteristics**
 - No cross-session coordination needed
-- Movement selection is greedy (pick the best movements for THIS session)
-- Movement repeat from recent history is OK (client is familiar)
-- Density target: Standard for session type
+- Movement selection is greedy: pick the best movements for this session
+- Repeat from recent history is acceptable
+- Safety and quality still apply
 
-**Movement Repeat Policy:**
-- ✅ Can repeat movements from last 1-2 sessions
-- ✅ No penalty for using same movement
+**Movement repeat policy**
+- Can repeat movements from the last 1-2 sessions
+- No penalty for using the same movement if it is still appropriate
 
-**Variety Policy:**
-- ✅ Aim for 4-6 unique movements per session
-- ✅ No special rules
+**Variety policy**
+- Aim for 4-6 unique movements per session when the structure allows it
 
-**Progression Policy:**
-- Use latest known weight/reps from movement history
-- If not available, start conservative
+**Progression policy**
+- Use the latest known history for load, reps, and tolerance
+- If no history exists, start conservatively
 
-**Safety Overrides:**
-- Check: Is movement blocked by pain feedback? → Skip
-- Check: Is movement in "avoid" preference? → Skip
+**Safety overrides**
+- If a movement is blocked by pain or poor tolerance, skip it.
+- If a movement is marked avoid, skip it.
 
 ---
 
 ### WEEKLY Planning (1-4 weeks)
 
-**Definition**: Multiple sessions (4-7) across 1-4 weeks with planned coordination
+**Definition**: Multiple sessions across a short block with planned coordination.
 
-**Key Characteristics:**
-- Same movement patterns appear multiple times per week
-- Must coordinate fatigue across days
-- Must space same movement family 2-3 days minimum
-- Intent is coherent training week, not random sessions
+**Key characteristics**
+- Same movement patterns may repeat within the week
+- Fatigue must be coordinated across days
+- Sessions should support one another instead of competing
 
-**Movement Repeat Policy:**
-- ✅ Same movement can appear 2x per week if spaced 2-3 days apart
-- ✅ Same movement family (e.g., squat variants) can appear 3x per week if spaced
-- ✗ Cannot have same movement on adjacent days (Mon + Tue)
-- ✗ Cannot have 3+ same-pattern sessions in a row
+**Movement repeat policy**
+- Same movement can appear 2x per week if spacing is appropriate
+- Same family can appear 3x per week if the variants and stress are managed
+- Do not place the same movement on adjacent days unless intentional and low risk
+- Do not repeat the same same-pattern stress too many times in a row
 
-**Spacing Rules:**
-- Same lift (e.g., "Back Squat"): 2-3 days minimum
-- Same pattern family (e.g., "Squat Pattern"): Can be more frequent if different movement
-- Same energy system (high-intensity): 2+ days minimum
+**Spacing rules**
+- Same lift: usually 2-3 days minimum
+- Same high-intensity energy system: usually 2+ days minimum
+- Same pattern family: can repeat more often if the stimulus is meaningfully different
 
-**Variety Policy:**
-- Each day should have a different primary focus
-- Example: Mon Strength A, Tue Conditioning, Wed Strength B, Thu Accessory, Fri Conditioning
+**Variety policy**
+- Each day should have a primary focus
+- Example: strength, conditioning, accessory, power, or mobility emphasis
 
-**Progression Policy:**
-- Week 1: Establish baseline
-- Week 2+: Slight progression (load +5%, volume +10%, density +15%)
+**Progression policy**
+- Week 1: establish baseline
+- Later weeks: progress load, reps, density, or quality based on the style
 
-**Deload Trigger:**
-- If week 4 exists, it's typically a deload week (reduce volume 30-40%)
+**Deload trigger**
+- A deload may be inserted when fatigue, calendar timing, or block structure requires it.
+- Week 4 is not automatically a deload in every case.
 
 ---
 
-### MONTHLY Planning (4 weeks, 12-16+ sessions)
+### MONTHLY Planning (4 weeks, progressive)
 
-**Definition**: Four weeks of training with progressive structure and intentional phases
+**Definition**: Four weeks of training with intentional phase progression.
 
-**Key Characteristics:**
-- Macro-level progression arc across weeks
+**Key characteristics**
+- Macro-level progression across weeks
 - Micro-level progression within weeks
-- Movements repeat within AND across weeks (but with intentional progression)
-- Total volume/intensity builds then drops
+- Movements can repeat across weeks with purpose
+- Volume and intensity are intentionally managed
 
-**Standard Microcycle Structure:**
+#### Standard Microcycle Structure
 
-```
-Week 1 (Base): Establish movement patterns, moderate load, baseline volume
-  → Goal: Movement quality, recovery, foundation
-  → Load: 70-75% of estimated max
-  → Volume: Baseline
+**Week 1: Base**
+- Establish movement patterns
+- Moderate load
+- Baseline volume
+- Focus on quality and tolerance
 
-Week 2 (Build): Increase volume or load
-  → Goal: Accumulate work
-  → Load: 75-80% of estimated max OR add sets/reps
-  → Volume: +15-20% from W1
+**Week 2: Build**
+- Increase volume or load
+- Add work while maintaining quality
 
-Week 3 (Peak/Intensity): Higher intensity, possibly lower volume
-  → Goal: Peak performance, test strength
-  → Load: 80-85% of estimated max
-  → Volume: Same or slightly lower than W2 (quality > quantity)
+**Week 3: Peak / Intensify**
+- Increase intensity or complexity
+- Reduce unnecessary volume if needed
+- Prioritize quality over quantity
 
-Week 4 (Deload): Significant reduction
-  → Goal: Recovery, CNS downregulation
-  → Load: 60-70% of estimated max
-  → Volume: -40-50% from W3
-  → Optional: Switch to mobility/skill work
-```
+**Week 4: Deload / Recovery**
+- Reduce total stress
+- Reduce volume and/or intensity based on the reason for deload
+- Optional mobility, skill, or low-intensity work
 
-**Alternative Microcycle: Undulating**
-```
-Week 1: Hypertrophy focus (8-12 reps, moderate load)
-Week 2: Strength focus (3-6 reps, high load)
-Week 3: Power/speed focus (3-5 reps, explosive, lower load)
-Week 4: Deload
-```
+#### Alternative Microcycle: Undulating
+- Week 1: Hypertrophy focus
+- Week 2: Strength focus
+- Week 3: Power / speed focus
+- Week 4: Deload
 
-**Movement Repeat Policy (Monthly):**
-- ✅ Main lift repeats in SAME position each week (e.g., Monday squat every week)
-- ✅ But load/reps/volume progress week-to-week
-- ✅ Accessory movements can rotate week-to-week
-- ✗ Don't introduce completely new movement families mid-month
+#### Movement Repeat Policy (Monthly)
+- Main lift can repeat in the same slot each week
+- Load, reps, sets, tempo, or density can change week-to-week
+- Accessory movements can rotate more freely
+- Do not introduce completely new movement families mid-block unless intentional
 
-**Progression Policy (Monthly):**
-- Week 1→2: +10-15% volume increase OR load increases if strength focus
-- Week 2→3: Load increase (if not already done) or intensity increase
-- Week 3→4: -30-50% reduction (deload)
+#### Progression Policy (Monthly)
+- Week 1→2: increase volume or load
+- Week 2→3: increase intensity or complexity
+- Week 3→4: reduce stress or deload depending on fatigue and calendar context
 
 ---
 
@@ -264,356 +370,455 @@ Week 4: Deload
 
 ### STRENGTH-FOCUSED TRAINING
 
-**Primary Goal**: Build maximal or relative strength
+**Primary goal**: Build maximal or relative strength
 
-**Characteristics:**
-- Heavy loads (1-6 rep range for main lifts)
-- Longer rest periods (3-5 min between heavy sets)
-- Low reps, high load, high quality
-- Controlled tempo (2-3 sec down, pause, explosive up)
+**Characteristics**
+- Heavy loads
+- Longer rests
+- Lower reps on key lifts
+- High quality, high intent
 
-**Movement Repeat Policy**: 
-- ✅ **Very frequent** (same lift 2-3x per week)
-- Main lifts: Same exercise, same day position (e.g., Monday = back squat)
-- Accessory: Related movement families, different angles
+**Movement repeat policy**
+- Very frequent main lift exposure is acceptable
+- Same exercise in the same slot can be effective across a block
+- Accessory work should support the main lift and movement balance
 
-**Progression Model:**
-- Linear: Load up 2-5 lbs per week (main lifts)
-- Wave: Alternate heavy/moderate weeks
-- Daily Undulating: High/Moderate/Speed days rotating
+**Progression model**
+- Linear load progression
+- Wave loading
+- DUP
+- Block periodization when advanced
+- Autoregulation when readiness varies
 
-**Fatigue Management:**
-- Main lifts 2x per week, spaced 3-4 days (Mon/Thu or Tue/Fri)
-- Different movement patterns on opposite days
-- Example: Mon = Squat + Push, Thu = Deadlift + Pull
+**Fatigue management**
+- Main lifts should be spaced appropriately
+- Pair opposing movement patterns when useful
+- Avoid excessive conditioning interference on heavy days
 
-**Session Density:** 3-4 movements, high quality, 60-90 minutes
+**Session density**
+- Usually low to moderate density
 
-**Anti-Patterns:**
-- ✗ Same heavy lift 2 days in a row
-- ✗ Multiple heavy compounds in same session without clear sequencing
-- ✗ High-intensity conditioning same day as heavy strength
+**Anti-patterns**
+- Same heavy lift two days in a row
+- Multiple heavy compounds with poor sequencing
+- High-intensity conditioning stacked carelessly with heavy strength
 
 ---
 
 ### HYPERTROPHY-FOCUSED TRAINING
 
-**Primary Goal**: Build muscle mass
+**Primary goal**: Build muscle mass
 
-**Characteristics:**
-- Moderate loads (6-15 rep range)
-- Moderate rest (60-90 sec between sets)
+**Characteristics**
+- Moderate loads
+- Moderate rest
 - Moderate to high volume
-- Continuous tension, variable tempos
+- Variable tempos and angles
 
-**Movement Repeat Policy:**
-- ✅ Frequent, but **variation within family**
-- Same pattern (e.g., squat) 2-3x per week, but different angles/implements
-- Example: Mon = Back Squat, Wed = Front Squat, Fri = Goblet Squat
+**Movement repeat policy**
+- Repeat families often
+- Rotate variations inside the family
+- Keep stimulus fresh without making the movement unrecognizable
 
-**Progression Model:**
-- Volume progression: Add reps or sets week-to-week
-- Load progression: Every 3-4 weeks, jump up 5-10%
-- Density progression: Same volume in shorter time
+**Progression model**
+- Double progression
+- Volume progression
+- Density progression
+- Tempo progression when needed
 
-**Fatigue Management:**
-- Can stack same-pattern sessions closer together (2 days apart OK)
-- Emphasis on recovery between muscle groups
-- Can do same pattern on consecutive days if different emphasis (e.g., quad-focused + glute-focused)
+**Fatigue management**
+- Consecutive days can work if the emphasis differs
+- Monitor local muscular fatigue carefully
 
-**Session Density:** 4-6 movements, 60-90 minutes typical
+**Session density**
+- Moderate to high
 
-**Anti-Patterns:**
-- ✗ Zero variation (same exact exercise >3 weeks)
-- ✗ Stacking too much volume on one body part without recovery day
-
----
-
-### CONDITIONING-FOCUSED TRAINING
-
-**Primary Goal**: Build work capacity, energy system performance
-
-**Characteristics:**
-- Variable loads (bodyweight to moderate)
-- Short-to-no rest (30 sec to 2 min)
-- High intensity, high energy
-- Time-based, density-based, or reps-based
-
-**Movement Repeat Policy:**
-- ✅ **Low repeat** within same week
-- Different movement combinations each session
-- Can repeat specific modality (e.g., assault bike) if movement varies
-
-**Progression Model:**
-- More rounds in same time (density)
-- Same rounds in less time (speed)
-- More reps in same time cap (capacity)
-- Heavier load for same rounds (intensity)
-
-**Fatigue Management:**
-- Condition different energy systems on different days
-- Example: Mon = 20min Zone 2 aerobic, Wed = 5min AMRAP high-intensity, Fri = 10min intervals
-- Can do daily if varying intensity
-
-**Session Density:** 2-4 movements, 20-45 minutes typical
-
-**Anti-Patterns:**
-- ✗ Same exact MetCon twice in one week
-- ✗ Max-effort conditioning 3 days in a row
-- ✗ High-intensity conditioning + heavy strength same day (without strategic separation)
+**Anti-patterns**
+- Zero variation over too long a span
+- Excessive volume with no recovery window
 
 ---
 
-### MIXED/GENERAL FITNESS TRAINING
+### POWER / SPEED-STRENGTH TRAINING
 
-**Primary Goal**: Balanced development
+**Primary goal**: Maximize rate of force development
 
-**Characteristics:**
-- Mix of all rep ranges
-- Mix of modalities
-- Balance of emphasis
+**Characteristics**
+- Explosive intent
+- Moderate to low volume
+- High technical demand
+- Quality falls before load does
 
-**Movement Repeat Policy:**
-- ✅ Moderate repeat (same movement 1x per week)
-- Variation preferred but not required
+**Movement repeat policy**
+- Repeated exposure is useful, but never with sloppy fatigue accumulation
+- Can be paired with strength if power is first and total dose is controlled
 
-**Progression Model:**
-- Flexible, responsive to what feels good
-- Overall volume gradually increases
-- Peaks every 4 weeks, then deload
+**Progression model**
+- Velocity-based targets
+- Wave loading
+- Small load changes only when speed remains high
 
-**Fatigue Management:**
-- Standard spacing (2-3 days between high-stress sessions)
-- Vary intensity session-to-session
+**Fatigue management**
+- Never stack carelessly with heavy strength
+- Avoid consecutive high-CNS days unless intentional and well-managed
 
-**Session Density:** 4-5 movements, 60-75 minutes typical
+**Session density**
+- Usually low to moderate
 
----
-
-## Part 4: Feedback Signal Integration
-
-### Signal Types & Meanings
-
-**Movement-Level Signals** (tied to specific movements):
-
-| Signal | Meaning | DDS Action | Next Generation |
-|--------|---------|-----------|-----------------|
-| `pain` | Client reported pain during/after movement | Block immediately | Skip movement, suggest alternatives |
-| `poor_tolerance` | Client struggled, form broke down, injury risk | Block immediately | Skip movement, reduce load if must repeat |
-| `too_hard` | Load/intensity too high relative to ability | Flag for load reduction | Lower load 10-15% next occurrence |
-| `too_easy` | Movement felt effortless, no challenge | Flag for progression | Increase load 5-10% next occurrence |
-| `great_quality` | Movement executed perfectly, felt great | Anchor/anchor this | Prioritize for future, use as reference |
-| `good_tolerance` | Movement was good, worth repeating | Endorse | Repeat in similar context |
-
-**Session-Level Signals** (tied to overall workout):
-
-| Signal | Meaning | Next Generation |
-|--------|---------|-----------------|
-| `time_overrun` | Session took 15+ min longer than expected | Reduce movement count for this session type |
-| `quality_score: 1-5` | Coach's overall assessment of session | High scores = repeat structure; low = adjust |
-| `notes` | Free-form coach observations | Extract keywords for future context bias |
+**Anti-patterns**
+- Chasing fatigue instead of speed
+- Letting movement speed drop and continuing the set anyway
 
 ---
 
-### How Signals Influence Next Generation
+### CONDITIONING / METCON / HIIT
 
-**Pain or Poor Tolerance:**
-- ✅ Block movement from being selected
-- ✅ Update movement profile to "avoid"
-- ✅ Suggest safe alternative from same family
+**Primary goal**: Build work capacity and energy system performance
 
-**Too Hard:**
-- ✅ Next occurrence: Reduce load 10-15%
-- ✅ If pattern continues: Consider regressing exercise entirely
-- ✅ Flag for coach review (may indicate programming error)
+**Characteristics**
+- Time-based, round-based, or interval-based
+- Load is secondary to density and output
+- Structure matters as much as exercise choice
 
-**Too Easy:**
-- ✅ Next occurrence: Increase load 5-10%
-- ✅ If continued: Skip movement, select harder variant
+**Movement repeat policy**
+- Repeat specific modalities only when the movement stimulus changes meaningfully
+- Do not repeat the same exact MetCon too frequently
 
-**Great Quality:**
-- ✅ This is an **anchor movement** for this client
-- ✅ Prioritize in future programming
-- ✅ Use as reference for load estimation
+**Progression model**
+- More rounds
+- More reps in the same time
+- Same work in less time
+- More work with the same or slightly lower rest
 
-**Time Overrun:**
-- ✅ For THIS session type: Reduce movement count
-- ✅ Example: If "Strength A" ran 20 min over, next "Strength A" = 4 movements instead of 6
+**Fatigue management**
+- Match work-to-rest ratio to the intended system
+- Do not stack multiple all-out sessions without recovery
 
----
+**Session density**
+- Usually moderate to high, but highly variable
 
-## Part 5: Movement Family Definitions
-
-### The Movement Families
-
-**SQUAT FAMILY**
-- Primary movers: Quadriceps, glutes
-- Secondary: Core, lower back
-- Variants: Back squat, front squat, goblet squat, leg press, split squat, sissy squat
-- Family key: `squat`
-
-**HINGE FAMILY**
-- Primary movers: Hamstrings, glutes
-- Secondary: Lower back, core
-- Variants: Deadlift, RDL, good morning, trap bar deadlift, kettlebell swing, sled push
-- Family key: `hinge`
-
-**HORIZONTAL PUSH FAMILY**
-- Primary movers: Chest, shoulders, triceps
-- Secondary: Core, serratus
-- Variants: Bench press, dumbbell press, push-ups, machine press, landmine press
-- Family key: `push-horizontal`
-
-**VERTICAL PUSH FAMILY**
-- Primary movers: Shoulders, triceps
-- Secondary: Core
-- Variants: Overhead press, dip, pike push-up, handstand push-up, machine shoulder press
-- Family key: `push-vertical`
-
-**HORIZONTAL PULL FAMILY**
-- Primary movers: Back (mid/lower), biceps
-- Secondary: Core, lats
-- Variants: Bent-over row, dumbbell row, machine row, chest-supported row, seal row
-- Family key: `pull-horizontal`
-
-**VERTICAL PULL FAMILY**
-- Primary movers: Lats, biceps
-- Secondary: Upper back, core
-- Variants: Pull-ups, chin-ups, lat pulldown, assisted pull-up, resistance band pull-up
-- Family key: `pull-vertical`
-
-**CORE/ANTI-ROTATION FAMILY**
-- Primary movers: Deep core, transverse abdominis
-- Secondary: Obliques, stability
-- Variants: Ab wheel rollout, pallof press, landmine rotation, dead bug, bird dog
-- Family key: `core`
-
-**CONDITIONING/METABOLIC FAMILY**
-- Primary movers: Multiple, varies
-- Secondary: Cardiovascular/metabolic demand
-- Variants: Assault bike, rower, sled sprint, kettlebell swing, burpees, jump rope
-- Family key: `conditioning`
-
-**MOBILITY/MOVEMENT QUALITY FAMILY**
-- Primary movers: N/A (mobility focus)
-- Secondary: Flexibility, motor control
-- Variants: Stretching, yoga poses, mobility flows, activation drills
-- Family key: `mobility`
+**Anti-patterns**
+- Max-effort conditioning too many days in a row
+- Same exact MetCon repeated without reason
+- High-intensity conditioning placed carelessly next to heavy strength
 
 ---
 
-## Part 6: Session Density by Time & Structure
+### ENDURANCE / AEROBIC BASE
 
-### Density Rules
+**Primary goal**: Build aerobic capacity and sustain output over time
 
-**STRAIGHT-SETS (e.g., 4x6 squats, rest 3min)**
-- Movements: 3-4 total
-- Fatigue: Moderate to high (depending on load)
-- Session time: 45-90 min
-- Best for: Strength focus
+**Characteristics**
+- Zone-based work
+- Duration and consistency matter most
+- Pacing and tolerance matter more than load
 
-**SUPERSETS (e.g., A1: Bench, A2: Rows, 3x8 each)**
-- Movements: 4-6 total (in pairs)
-- Fatigue: Moderate
-- Session time: 45-60 min
-- Best for: Hypertrophy, time-efficient training
+**Zone structure**
+- Zone 1: recovery, very easy
+- Zone 2: aerobic base, conversational pace
+- Zone 3: tempo, comfortably hard
+- Zone 4: threshold, sustained hard effort
+- Zone 5: VO2max intervals, high intensity bouts
 
-**CIRCUITS (e.g., 3 rounds: 10 pull-ups, 15 box jumps, 20 kettlebell swings)**
-- Movements: 3-5 per round
-- Fatigue: High (cardiovascular)
-- Session time: 30-45 min
-- Best for: Conditioning, time-constrained
+**Progression model**
+- Duration first
+- Distance second
+- Pace third
+- Keep progress conservative
 
-**AMRAP (As Many Rounds As Possible, 12min: 10 pull-ups, 15 burpees, 20 box jumps)**
-- Movements: 3-5
-- Fatigue: Very high (pacing-dependent)
-- Session time: 10-20 min
-- Best for: Conditioning, capacity testing
+**Fatigue management**
+- Zone 1-2 can be used frequently
+- Zone 4-5 needs meaningful recovery
+- Zone 2 can often pair with strength better than higher zones
 
-**EMOM (Every Minute On The Minute: min 1 do 5 squats, min 2 rest, repeat)**
-- Movements: 1-3 per round
-- Fatigue: Variable (depends on density within minute)
-- Session time: 10-20 min
-- Best for: Skill work, speed/power, capacity at sustainable pace
-
-**INTERVALS (e.g., 5x(30sec hard / 90sec easy) on bike)**
-- Movements: 1 (typically)
-- Fatigue: Very high in work periods, low in rest
-- Session time: 15-30 min
-- Best for: Conditioning, aerobic development
+**Session density**
+- Usually low to moderate
 
 ---
 
-## Part 7: Quality Checkpoints
+### SKILL WORK / TECHNICAL PRACTICE
 
-### Safety Checks (All Generations)
+**Primary goal**: Improve movement skill, coordination, and technical consistency
 
-1. **Pain Block Check**
-   - Is any selected movement in the client's pain/poor_tolerance feedback log?
-   - If yes: Reject movement, select alternative
+**Characteristics**
+- Low fatigue
+- High quality requirement
+- Best done fresh
+- Practice should stop when form degrades
 
-2. **Preference Check**
-   - Is any selected movement marked "avoid" in client preferences?
-   - If yes: Reject movement, select alternative
+**Movement repeat policy**
+- Repetition is valuable if it improves pattern quality
+- Complexity should only rise when the simpler version is stable
 
-3. **Load Sanity Check**
-   - Is selected load reasonable for this client's history?
-   - If load jumping 20%+ from recent, flag for manual review
+**Progression model**
+- Movement complexity ladder
+- Constraint reduction
+- Precision and timing improvement
 
-4. **Form Risk Check**
-   - Is movement fatigued near end of session?
-   - If yes for heavy strength: Consider moving to earlier position or removing
-
-### Coherence Checks (Weekly/Monthly)
-
-5. **Spacing Check**
-   - Are same-movement-family sessions 2-3 days apart?
-   - Are same-energy-system sessions appropriately spaced?
-   - Violation: Flag for adjustment
-
-6. **Pattern Balance Check**
-   - Does week/month hit all 6 fundamental patterns?
-   - Missing pattern: Note for next cycle planning
-
-7. **Progression Arc Check (Monthly only)**
-   - Does load/volume increase W1→W2→W3, then decrease W4?
-   - If W4 load > W3: Flag as deload failure
-
-8. **Fatigue Accumulation Check**
-   - Are high-stress sessions clustered at beginning of week?
-   - If 3+ high-stress sessions in last 2 days: Flag fatigue risk
+**Fatigue management**
+- Place early in sessions or in dedicated practice blocks
+- Avoid placing skill work after heavy fatigue if quality matters
 
 ---
 
-## Part 8: Definitions & Terminology
+### PREHAB / INJURY PREVENTION
 
-**Load**: Absolute weight on bar or resistance used
+**Primary goal**: Improve tolerance, stability, and joint integrity
 
-**Volume**: Total reps × load (e.g., 3 sets × 5 reps × 225 lbs = 3375 lbs volume)
+**Characteristics**
+- Light to moderate load
+- High control
+- Often uses isolated or highly specific work
 
-**Density**: Volume per unit time (e.g., 3375 lbs in 20 min = 168.75 lbs/min)
+**Movement repeat policy**
+- Frequent, low-risk repetition is acceptable
+- Use to build capacity in weak or unstable areas
 
-**Reps**: Individual repetitions
+**Progression model**
+- Graded exposure
+- Isolated → integrated → loaded
 
-**Sets**: Grouping of reps with rest between
+**Fatigue management**
+- Can appear at the start of sessions or standalone
+- Should not create unnecessary fatigue
 
-**Tempo**: Speed of movement (e.g., 2-1-1 = 2 sec down, 1 sec pause, 1 sec up)
+---
 
-**RPE (Rate of Perceived Exertion)**: 1-10 scale where 10 = max effort, 6-7 = moderate, 8-9 = hard
+### MOBILITY / FLEXIBILITY
 
-**RIR (Reps In Reserve)**: How many more reps could theoretically be done (e.g., RIR 2 = stopped 2 reps before failure)
+**Primary goal**: Increase usable range of motion and reduce stiffness
 
-**AMRAP**: As Many Rounds As Possible in a time cap
+**Characteristics**
+- Dynamic mobility before sessions
+- Static stretching after sessions
+- Loaded mobility when intentional
+- Can be standalone
 
-**EMOM**: Every Minute On The Minute (work starts at 0:00, rest remainder of minute, repeat)
+**Progression model**
+- More range
+- More control
+- More load only when appropriate
 
-**MetCon**: Metabolic Conditioning (high-intensity, multiple movements, short duration)
+**Fatigue management**
+- Usually low fatigue
+- Often supportive rather than primary
 
-**Modality**: Type of exercise (barbell, dumbbell, machine, bodyweight, cardio equipment, etc.)
+---
 
-**Energy System**: Physiological system providing ATP (phosphocreatine, anaerobic glycolytic, aerobic)
+### MIXED / GENERAL FITNESS
+
+**Primary goal**: Balanced development
+
+**Characteristics**
+- Blend of strength, conditioning, mobility, and skill
+- Should still follow deliberate priorities
+
+**Movement repeat policy**
+- Moderate repetition is appropriate
+- Use variation intelligently, not randomly
+
+**Progression model**
+- Hybrid of the most relevant levers for the client
+
+---
+
+## Part 4: Periodization Frameworks
+
+### 1. Linear Periodization
+- Load or challenge increases over time in a straightforward progression.
+- Best for newer trainees and simpler goals.
+- Usually effective for short to moderate blocks.
+
+### 2. Block Periodization
+- Sequential phases with distinct emphasis:
+  - Accumulation: volume and capacity
+  - Transmutation: conversion toward performance
+  - Realization: peak expression
+- Best for advanced athletes or highly targeted goals.
+
+### 3. Weekly Undulating Periodization (WUP)
+- Different emphases across weeks in the same block.
+- Useful when multiple qualities need to be trained but not all at once.
+
+### 4. Daily Undulating Periodization (DUP)
+- Different emphases on different days within the same week.
+- Useful for 3+ day/week training and intermediate to advanced clients.
+
+### 5. Conjugate / Concurrent Periodization
+- Multiple qualities trained in the same week.
+- Uses max-effort and dynamic-effort style exposures.
+- Best when the system can rotate variations with purpose.
+
+### 6. Autoregulation
+- Load, volume, or intensity adjusts based on readiness.
+- Uses RPE, RIR, bar speed, feedback, or performance markers.
+
+---
+
+## Part 5: Progression Models
+
+### Linear Progression
+- Add a fixed amount each session or week.
+- Works best early in training or on simple movements.
+
+### Double Progression
+- Increase reps first, then load.
+- Very useful for hypertrophy.
+- When the top of the rep range is achieved, load increases and reps reset.
+
+### Wave Loading
+- Progress in waves within a session or across sessions.
+- Useful for strength and power.
+
+### Density Progression
+- Do more work in the same amount of time, or the same work in less time.
+- Strong fit for conditioning and hypertrophy.
+
+### RPE / RIR Autoregulation
+- Prescribe effort targets instead of fixed loads.
+- Useful when day-to-day readiness varies.
+
+### Velocity-Based Training (VBT)
+- Use bar speed as the key performance marker.
+- Best for power and high-quality strength work.
+
+### Complexity Ladder
+- Progress technical difficulty rather than load.
+- Best for skill work.
+
+### Graded Exposure
+- Progress range, tolerance, and control gradually.
+- Best for prehab and mobility.
+
+---
+
+## Part 6: Deload Triggers and Protocols
+
+### Deload triggers
+
+**Structural / frequency-based**
+- Planned reduction after a block of accumulated stress.
+- Example: a 4th week deload in a simple block.
+
+**Performance-based**
+- Repeated high RPE unexpectedly.
+- Repeated `too_hard` signals.
+- Unexpected regression in output.
+- Signs of accumulated fatigue that are not resolving.
+
+**Contextual**
+- Holiday or travel window
+- High life stress
+- Illness or recent illness
+- Other upcoming disruptions
+
+### Deload protocols
+
+**Full deload**
+- Reduce volume and intensity meaningfully.
+
+**Intensity deload**
+- Keep some structure, reduce intensity more than volume.
+
+**Volume deload**
+- Keep the movement pattern, reduce the amount of work.
+
+**Active recovery**
+- Low stress movement only: mobility, easy aerobic work, skill practice.
+
+**Movement variety deload**
+- Keep the broad structure, lower load, and use easier variations.
+
+### Deload rule
+- Week 4 is not automatically a deload in every program.
+- Deload timing depends on intensity, goal, calendar, and fatigue.
+
+---
+
+## Part 7: Exercise Variation Strategy
+
+### Variation hierarchy
+
+1. **Movement family**
+   - Same category, different specific exercise.
+
+2. **Implement**
+   - Barbell, dumbbell, kettlebell, machine, cable, band, bodyweight.
+
+3. **Load vector**
+   - Vertical, horizontal, angled.
+
+4. **Range of motion**
+   - Full, shortened, lengthened.
+
+5. **Tempo**
+   - Slow eccentric, pause, explosive, isometric.
+
+### Variation fatigue
+- New variations carry a learning cost.
+- Initial performance on a new variation should not be treated as a clean baseline.
+- Load should be conservative when the client is still learning the movement.
+
+### Rule of thumb
+- Prefer small changes when the goal is strength.
+- Use larger variation when the goal is novelty, balance, or conditioning.
+- Do not change too many variables at once unless that is the goal.
+
+---
+
+## Part 8: Density by Session Format
+
+**Straight sets**
+- Best for strength and controlled progression.
+- Lower movement count.
+
+**Supersets**
+- Good for hypertrophy and time efficiency.
+
+**Circuits**
+- Good for conditioning and density.
+
+**AMRAP**
+- Good for conditioning and pacing.
+
+**EMOM**
+- Good for skill, speed, and structured density.
+
+**Intervals**
+- Good for endurance and conditioning.
+
+---
+
+## Part 9: Quality Checkpoints
+
+### Safety checks
+1. Pain block check
+2. Preference check
+3. Load sanity check
+4. Form risk check
+
+### Coherence checks
+5. Spacing check
+6. Pattern balance check
+7. Progression arc check
+8. Fatigue accumulation check
+
+---
+
+## Part 10: Definitions & Terminology
+
+**Load**: Absolute weight or resistance used.  
+**Volume**: Total work done, usually sets × reps × load.  
+**Density**: Work done per unit time.  
+**Tempo**: Speed of the movement.  
+**RPE**: Rate of perceived exertion.  
+**RIR**: Reps in reserve.  
+**AMRAP**: As many rounds/reps as possible.  
+**EMOM**: Every minute on the minute.  
+**MetCon**: Metabolic conditioning.  
+**Modality**: Exercise type or equipment type.  
+**Energy system**: Physiological system supplying ATP.  
 
 ---
 
 This is SKILL 0. All other skills read from this and apply these principles to their outputs.
-
