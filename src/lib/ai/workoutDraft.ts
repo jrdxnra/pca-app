@@ -5,6 +5,9 @@ export interface GenerateWorkoutDraftRequest {
   categoryName?: string;
   structureTemplateId?: string;
   sessionDurationMinutes?: number;
+  targetDateKey?: string;
+  weeklySequenceIndex?: number;
+  avoidMovementIds?: string[];
   currentTitle?: string;
   currentNotes?: string;
   goals?: string;
@@ -264,6 +267,54 @@ function compactText(parts: Array<string | undefined>): string {
     .filter((part): part is string => Boolean(part && part.trim()))
     .join(' ')
     .trim();
+}
+
+function hashTextToPositiveInt(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function applySeededMovementRotation(movements: MovementStat[], seed?: number): MovementStat[] {
+  if (!Number.isFinite(seed) || !seed || movements.length < 4) {
+    return movements;
+  }
+
+  const windowSize = Math.min(12, movements.length);
+  const offset = seed % windowSize;
+  if (offset === 0) {
+    return movements;
+  }
+
+  const window = movements.slice(0, windowSize);
+  const rotatedWindow = [...window.slice(offset), ...window.slice(0, offset)];
+  return [...rotatedWindow, ...movements.slice(windowSize)];
+}
+
+function applySeededScoreDiversification<T extends { score: number }>(
+  scored: T[],
+  seed?: number,
+  poolWindow = 14,
+  step = 4.5
+): T[] {
+  if (!Number.isFinite(seed) || !seed || scored.length < 4) {
+    return scored;
+  }
+
+  const window = Math.min(poolWindow, scored.length);
+  const offset = (seed % window) + 1;
+  return scored.map((item, index) => {
+    if (index >= window) return item;
+    const tier = (index + offset) % window;
+    // Lower tiers get slightly less boost to preserve quality ranking while adding diversity.
+    const adjustment = ((window - tier) / window) * step;
+    return {
+      ...item,
+      score: item.score + adjustment,
+    };
+  });
 }
 
 type GoalStructure =
@@ -1068,6 +1119,8 @@ function buildRoundsFromStructure(
     goalPreferredStructures?: GoalStructure[];
     goalBiasKeywords?: string[];
     movementProfile?: ClientMovementProfileForDraft;
+    weeklyDiversitySeed?: number;
+    avoidMovementIds?: string[];
   }
 ): ClientWorkoutRound[] {
   type SectionProfile = 'warmup' | 'strength' | 'accessory' | 'conditioning' | 'cooldown';
@@ -1160,6 +1213,7 @@ function buildRoundsFromStructure(
       .filter((entry) => (entry.signal === 'pain' || entry.signal === 'poor_tolerance') && entry.movementId)
       .map((entry) => entry.movementId as string)
   );
+  const callerAvoidedMovementIds = new Set((options?.avoidMovementIds || []).filter(Boolean));
   const feedbackScoreByMovementId = new Map<string, number>();
 
   feedbackLog.forEach((entry) => {
@@ -1950,8 +2004,8 @@ function buildRoundsFromStructure(
       return recentEnough && (hasLoadContinuity || hasProgressionStage || explicitPreference);
     };
 
-    const scorePool = (poolSource: MovementStat[]) =>
-      poolSource
+    const scorePool = (poolSource: MovementStat[]) => {
+      const scoredPool = poolSource
       .filter((movement) => !isProfileGatedOut(movement))
       .filter((movement) => !blockedByFeedbackMovementIds.has(movement.movementId))
       .map((movement) => {
@@ -1975,6 +2029,7 @@ function buildRoundsFromStructure(
         const feedbackScoreRaw = feedbackScoreByMovementId.get(movement.movementId) || 0;
         const hasLoadedTarget = hasMeaningfulTargetValue(movement.latestTargetWorkload);
         const recencySignal = clamp01(1 - Math.min(movement.latestWorkoutIndex, 8) / 8);
+        const callerAvoidPenalty = callerAvoidedMovementIds.has(movement.movementId) ? 48 : 0;
 
         const goalIntentFit = clamp01((categoryHits * 1.25 + movementHits) / 6);
         const sectionStructureFit = (
@@ -1999,7 +2054,8 @@ function buildRoundsFromStructure(
         const score =
           weightedScore -
           recentPenalty * 0.08 -
-          crossSectionPenalty;
+          crossSectionPenalty -
+          callerAvoidPenalty;
 
         return {
           movement,
@@ -2014,7 +2070,15 @@ function buildRoundsFromStructure(
           historyFrequency,
         };
       })
-      .sort((left, right) => {
+      ;
+
+      const sectionSeed = Number.isFinite(options?.weeklyDiversitySeed)
+        ? ((options?.weeklyDiversitySeed as number) + hashTextToPositiveInt(`${section.order || 0}|${profile}|${archetype}`))
+        : undefined;
+
+      const diversifiedPool = applySeededScoreDiversification(scoredPool, sectionSeed);
+
+      return diversifiedPool.sort((left, right) => {
         if (right.score !== left.score) return right.score - left.score;
         if (right.weightedScore !== left.weightedScore) return right.weightedScore - left.weightedScore;
         if (right.goalIntentFit !== left.goalIntentFit) return right.goalIntentFit - left.goalIntentFit;
@@ -2027,6 +2091,7 @@ function buildRoundsFromStructure(
         if (right.movement.count !== left.movement.count) return right.movement.count - left.movement.count;
         return left.movement.latestWorkoutIndex - right.movement.latestWorkoutIndex;
       });
+    };
 
     const filteredUnusedPool = filterByIntensity(unusedPool);
     const filteredReusePool = filterByIntensity(fallbackReusePool);
@@ -2532,6 +2597,9 @@ export function buildWorkoutDraftFromHistory(input: {
   recentWorkouts: HistoricalWorkoutForDraft[];
   fallbackTitle?: string;
   currentNotes?: string;
+  targetDateKey?: string;
+  weeklySequenceIndex?: number;
+  avoidMovementIds?: string[];
   includeDecisionTrace?: boolean;
   categoryContextById?: Record<string, CategoryContextForDraft>;
   movementContextById?: Record<string, MovementContextForDraft>;
@@ -2552,6 +2620,12 @@ export function buildWorkoutDraftFromHistory(input: {
   const libraryMovements = buildLibraryMovementStats(input.movementContextById, candidateWorkouts.length);
   const categoryEnrichedMovements = mergeMovementStats(historicalMovements, allHistoricalMovements);
   const rankedMovements = mergeMovementStats(categoryEnrichedMovements, libraryMovements);
+  const weeklyDiversitySeed = input.targetDateKey
+    ? hashTextToPositiveInt(
+      `${input.targetDateKey}|${input.weeklySequenceIndex || 0}|${input.categoryName || ''}|${input.structureTemplateId || ''}`
+    )
+    : undefined;
+  const seededRankedMovements = applySeededMovementRotation(rankedMovements, weeklyDiversitySeed);
   const historicalRoundTemplates = buildHistoricalRoundTemplates(candidateWorkouts);
   const actualSessionsPerWeek = getActualSessionsPerWeek(candidateWorkouts);
   const shouldIncludeDecisionTrace = Boolean(input.includeDecisionTrace);
@@ -2582,7 +2656,7 @@ export function buildWorkoutDraftFromHistory(input: {
             (item) => item.signal === 'pain' || item.signal === 'poor_tolerance'
           ).length,
         },
-        topRankedMovements: rankedMovements.slice(0, 12).map((movement) => ({
+        topRankedMovements: seededRankedMovements.slice(0, 12).map((movement) => ({
           movementId: movement.movementId,
           count: movement.count,
           latestWorkoutIndex: movement.latestWorkoutIndex,
@@ -2600,6 +2674,7 @@ export function buildWorkoutDraftFromHistory(input: {
     input.clientContext?.goals,
     input.clientContext?.eventGoals?.map((goal) => goal.description).filter(Boolean).join(' '),
     input.clientContext?.trainingPhases?.map((phase) => phase.periodName).filter(Boolean).join(' '),
+    input.targetDateKey,
   ]);
 
   const categoryBiasKeywords = Array.from(
@@ -2673,7 +2748,7 @@ export function buildWorkoutDraftFromHistory(input: {
     const rounds = buildRoundsFromStructure(
       sectionsWithDuration,
       historicalRoundTemplates,
-      rankedMovements,
+      seededRankedMovements,
       input.categoryContextById,
       input.movementContextById,
       {
@@ -2685,6 +2760,8 @@ export function buildWorkoutDraftFromHistory(input: {
         goalPreferredStructures: goalInfluence.preferredStructures,
         goalBiasKeywords: goalInfluence.biasKeywords,
         movementProfile: input.movementProfile,
+        weeklyDiversitySeed,
+        avoidMovementIds: input.avoidMovementIds,
       }
     );
     return {

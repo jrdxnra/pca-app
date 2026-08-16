@@ -108,6 +108,21 @@ interface WorkoutType {
   name: string;
   color: string;
   description: string;
+  daySplits?: Array<{
+    id: string;
+    label: string;
+    daysPerWeek: number;
+    dayAssignments: Array<{
+      dayIndex: number;
+      focusKey: string;
+      structureTemplateIds: string[];
+      optionalTags?: string[];
+    }>;
+    notes?: string;
+    active: boolean;
+  }>;
+  defaultDaySplitId?: string;
+  schemaVersion?: number;
   order?: number;
 }
 
@@ -1876,6 +1891,7 @@ export default function ConfigurePage() {
   const [editingCategory, setEditingCategory] = useState<WorkoutCategory | null>(null);
   const [editingWorkoutType, setEditingWorkoutType] = useState<WorkoutType | null>(null);
   const [editingWorkoutIntent, setEditingWorkoutIntent] = useState<WorkoutIntent | null>(null);
+  const [showWorkoutTypeSplitAdvanced, setShowWorkoutTypeSplitAdvanced] = useState(false);
 
   // Calendar configuration state
   const [showTestEventForm, setShowTestEventForm] = useState(false);
@@ -2121,20 +2137,167 @@ export default function ConfigurePage() {
   };
 
   // Workout Type handlers
+  const createDefaultDaySplit = (daysPerWeek = 3) => {
+    const splitId = `split_${Date.now()}`;
+    return {
+      id: splitId,
+      label: 'Default Split',
+      daysPerWeek,
+      dayAssignments: Array.from({ length: daysPerWeek }, (_, idx) => ({
+        dayIndex: idx + 1,
+        focusKey: `day-${idx + 1}`,
+        structureTemplateIds: [] as string[],
+      })),
+      active: true,
+    };
+  };
+
+  const normalizeWorkoutTypeDaySplit = (workoutType: WorkoutType): WorkoutType => {
+    if (Array.isArray(workoutType.daySplits) && workoutType.daySplits.length > 0) {
+      return {
+        ...workoutType,
+        defaultDaySplitId: workoutType.defaultDaySplitId || workoutType.daySplits[0].id,
+        schemaVersion: workoutType.schemaVersion || 1,
+      };
+    }
+
+    const defaultSplit = createDefaultDaySplit();
+    return {
+      ...workoutType,
+      daySplits: [defaultSplit],
+      defaultDaySplitId: defaultSplit.id,
+      schemaVersion: 1,
+    };
+  };
+
+  const updatePrimaryDaySplit = (updates: { label?: string; daysPerWeek?: number }) => {
+    setEditingWorkoutType((prev) => {
+      if (!prev) return null;
+      const normalized = normalizeWorkoutTypeDaySplit(prev);
+      const currentSplit = normalized.daySplits?.find((split) => split.id === normalized.defaultDaySplitId) || normalized.daySplits?.[0];
+      if (!currentSplit) return normalized;
+
+      const nextDaysPerWeek = updates.daysPerWeek || currentSplit.daysPerWeek;
+      const nextAssignments = Array.from({ length: nextDaysPerWeek }, (_, idx) => {
+        const existing = currentSplit.dayAssignments[idx];
+        return existing || {
+          dayIndex: idx + 1,
+          focusKey: `day-${idx + 1}`,
+          structureTemplateIds: [],
+        };
+      }).map((assignment, idx) => ({
+        ...assignment,
+        dayIndex: idx + 1,
+      }));
+
+      const nextSplit = {
+        ...currentSplit,
+        label: updates.label ?? currentSplit.label,
+        daysPerWeek: nextDaysPerWeek,
+        dayAssignments: nextAssignments,
+      };
+
+      return {
+        ...normalized,
+        daySplits: [nextSplit, ...(normalized.daySplits || []).filter((split) => split.id !== nextSplit.id)],
+        defaultDaySplitId: nextSplit.id,
+      };
+    });
+  };
+
+  const updatePrimaryDayAssignment = (
+    dayIndex: number,
+    updates: Partial<{ focusKey: string; structureTemplateIds: string[] }>
+  ) => {
+    setEditingWorkoutType((prev) => {
+      if (!prev) return null;
+      const normalized = normalizeWorkoutTypeDaySplit(prev);
+      const currentSplit = normalized.daySplits?.find((split) => split.id === normalized.defaultDaySplitId) || normalized.daySplits?.[0];
+      if (!currentSplit) return normalized;
+
+      const nextAssignments = currentSplit.dayAssignments.map((assignment) =>
+        assignment.dayIndex === dayIndex
+          ? {
+              ...assignment,
+              ...updates,
+            }
+          : assignment
+      );
+
+      const nextSplit = {
+        ...currentSplit,
+        dayAssignments: nextAssignments,
+      };
+
+      return {
+        ...normalized,
+        daySplits: [nextSplit, ...(normalized.daySplits || []).filter((split) => split.id !== nextSplit.id)],
+        defaultDaySplitId: nextSplit.id,
+      };
+    });
+  };
+
+  const addDaySplitVariant = () => {
+    setEditingWorkoutType((prev) => {
+      if (!prev) return null;
+      const normalized = normalizeWorkoutTypeDaySplit(prev);
+      const source = normalized.daySplits?.find((split) => split.id === normalized.defaultDaySplitId) || normalized.daySplits?.[0];
+      const splitId = `split_${Date.now()}`;
+
+      const variant = source
+        ? {
+            ...source,
+            id: splitId,
+            label: `${source.label} Copy`,
+            dayAssignments: source.dayAssignments.map((assignment) => ({
+              ...assignment,
+              structureTemplateIds: [...(assignment.structureTemplateIds || [])],
+              optionalTags: assignment.optionalTags ? [...assignment.optionalTags] : undefined,
+            })),
+          }
+        : createDefaultDaySplit();
+
+      variant.id = splitId;
+
+      return {
+        ...normalized,
+        daySplits: [...(normalized.daySplits || []), variant],
+        defaultDaySplitId: variant.id,
+      };
+    });
+  };
+
+  const setDefaultDaySplit = (splitId: string) => {
+    setEditingWorkoutType((prev) => {
+      if (!prev) return null;
+      const normalized = normalizeWorkoutTypeDaySplit(prev);
+      const hasSplit = (normalized.daySplits || []).some((split) => split.id === splitId);
+      if (!hasSplit) return normalized;
+      return {
+        ...normalized,
+        defaultDaySplitId: splitId,
+      };
+    });
+  };
+
   const handleAddWorkoutType = () => {
     const tempId = `temp_${Date.now()}`;
+    const defaultSplit = createDefaultDaySplit();
     setEditingWorkoutType({
       id: tempId,
       name: '',
       color: '#8b5cf6',
       description: '',
+      daySplits: [defaultSplit],
+      defaultDaySplitId: defaultSplit.id,
+      schemaVersion: 1,
       order: workoutTypes.length
     });
     setShowNewWorkoutTypeForm(true);
   };
 
   const handleEditWorkoutType = (workoutType: WorkoutType) => {
-    setEditingWorkoutType({ ...workoutType });
+    setEditingWorkoutType(normalizeWorkoutTypeDaySplit({ ...workoutType }));
     setEditingWorkoutTypeId(workoutType.id);
   };
 
@@ -2149,6 +2312,9 @@ export default function ConfigurePage() {
             name: editingWorkoutType.name,
             color: editingWorkoutType.color,
             description,
+            daySplits: editingWorkoutType.daySplits || [],
+            defaultDaySplitId: editingWorkoutType.defaultDaySplitId,
+            schemaVersion: editingWorkoutType.schemaVersion || 1,
             order: editingWorkoutType.order || 0
           });
           setShowNewWorkoutTypeForm(false);
@@ -2158,6 +2324,9 @@ export default function ConfigurePage() {
             name: editingWorkoutType.name,
             color: editingWorkoutType.color,
             description,
+            daySplits: editingWorkoutType.daySplits || [],
+            defaultDaySplitId: editingWorkoutType.defaultDaySplitId,
+            schemaVersion: editingWorkoutType.schemaVersion || 1,
             order: editingWorkoutType.order
           });
           setEditingWorkoutTypeId(null);
@@ -3227,6 +3396,106 @@ export default function ConfigurePage() {
                           onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, description: e.target.value } : null)}
                         />
                       </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          placeholder="Base schedule name"
+                          value={editingWorkoutType.daySplits?.[0]?.label || ''}
+                          onChange={(e) => updatePrimaryDaySplit({ label: e.target.value })}
+                        />
+                        <Input
+                          type="number"
+                          min={1}
+                          max={7}
+                          placeholder="Days per week"
+                          value={editingWorkoutType.daySplits?.[0]?.daysPerWeek || 3}
+                          onChange={(e) => {
+                            const parsed = Number.parseInt(e.target.value, 10);
+                            if (!Number.isNaN(parsed)) {
+                              updatePrimaryDaySplit({ daysPerWeek: Math.min(7, Math.max(1, parsed)) });
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 items-end">
+                        <div className="space-y-2">
+                          <label className="text-xs font-medium text-gray-600">Active schedule option</label>
+                          <Select
+                            value={editingWorkoutType.defaultDaySplitId || editingWorkoutType.daySplits?.[0]?.id || 'none'}
+                            onValueChange={(value) => {
+                              if (value !== 'none') setDefaultDaySplit(value);
+                            }}
+                          >
+                            <SelectTrigger className="h-9 text-xs">
+                              <SelectValue placeholder="Select split" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(editingWorkoutType.daySplits || []).map((split) => (
+                                <SelectItem key={split.id} value={split.id}>
+                                  {split.label} ({split.daysPerWeek}d)
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button type="button" variant="outline" onClick={addDaySplitVariant} className="h-9">
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Schedule Option
+                        </Button>
+                      </div>
+                      <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
+                        <button
+                          type="button"
+                          onClick={() => setShowWorkoutTypeSplitAdvanced((prev) => !prev)}
+                          className="flex items-center justify-between w-full text-left"
+                        >
+                          <span className="text-sm font-medium text-gray-800">Advanced Session Routing</span>
+                          {showWorkoutTypeSplitAdvanced ? (
+                            <ChevronDown className="h-4 w-4 text-gray-500" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-gray-500" />
+                          )}
+                        </button>
+                        {showWorkoutTypeSplitAdvanced && (
+                          <div className="space-y-2">
+                            <p className="text-[11px] text-gray-500">Map each session in this schedule to a focus tag and default structure template.</p>
+                            {(editingWorkoutType.daySplits?.[0]?.dayAssignments || []).map((assignment) => (
+                              <div key={assignment.dayIndex} className="grid grid-cols-3 gap-2 items-center">
+                                <div className="text-xs font-medium text-gray-600">Session {assignment.dayIndex}</div>
+                                <Input
+                                  placeholder="Focus tag"
+                                  value={assignment.focusKey || ''}
+                                  onChange={(e) =>
+                                    updatePrimaryDayAssignment(assignment.dayIndex, {
+                                      focusKey: e.target.value,
+                                    })
+                                  }
+                                  className="text-xs h-8"
+                                />
+                                <Select
+                                  value={assignment.structureTemplateIds?.[0] || 'none'}
+                                  onValueChange={(value) =>
+                                    updatePrimaryDayAssignment(assignment.dayIndex, {
+                                      structureTemplateIds: value === 'none' ? [] : [value],
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="text-xs h-8">
+                                    <SelectValue placeholder="Template" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No template</SelectItem>
+                                    {workoutStructureTemplates.map((template) => (
+                                      <SelectItem key={template.id} value={template.id}>
+                                        {template.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <div className="flex items-center gap-4">
                         <label className="text-sm font-medium">Color:</label>
                         <div className="flex gap-2">
@@ -3278,6 +3547,106 @@ export default function ConfigurePage() {
                                   value={editingWorkoutType.description}
                                   onChange={(e) => setEditingWorkoutType(prev => prev ? { ...prev, description: e.target.value } : null)}
                                 />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <Input
+                                          placeholder="Base schedule name"
+                                  value={editingWorkoutType.daySplits?.[0]?.label || ''}
+                                  onChange={(e) => updatePrimaryDaySplit({ label: e.target.value })}
+                                />
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={7}
+                                  placeholder="Days per week"
+                                  value={editingWorkoutType.daySplits?.[0]?.daysPerWeek || 3}
+                                  onChange={(e) => {
+                                    const parsed = Number.parseInt(e.target.value, 10);
+                                    if (!Number.isNaN(parsed)) {
+                                      updatePrimaryDaySplit({ daysPerWeek: Math.min(7, Math.max(1, parsed)) });
+                                    }
+                                  }}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4 items-end">
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium text-gray-600">Active schedule option</label>
+                                  <Select
+                                    value={editingWorkoutType.defaultDaySplitId || editingWorkoutType.daySplits?.[0]?.id || 'none'}
+                                    onValueChange={(value) => {
+                                      if (value !== 'none') setDefaultDaySplit(value);
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-9 text-xs">
+                                      <SelectValue placeholder="Select split" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {(editingWorkoutType.daySplits || []).map((split) => (
+                                        <SelectItem key={split.id} value={split.id}>
+                                          {split.label} ({split.daysPerWeek}d)
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <Button type="button" variant="outline" onClick={addDaySplitVariant} className="h-9">
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  Add Schedule Option
+                                </Button>
+                              </div>
+                              <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowWorkoutTypeSplitAdvanced((prev) => !prev)}
+                                  className="flex items-center justify-between w-full text-left"
+                                >
+                                  <span className="text-sm font-medium text-gray-800">Advanced Session Routing</span>
+                                  {showWorkoutTypeSplitAdvanced ? (
+                                    <ChevronDown className="h-4 w-4 text-gray-500" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4 text-gray-500" />
+                                  )}
+                                </button>
+                                {showWorkoutTypeSplitAdvanced && (
+                                  <div className="space-y-2">
+                                    <p className="text-[11px] text-gray-500">Map each session in this schedule to a focus tag and default structure template.</p>
+                                    {(editingWorkoutType.daySplits?.[0]?.dayAssignments || []).map((assignment) => (
+                                      <div key={assignment.dayIndex} className="grid grid-cols-3 gap-2 items-center">
+                                        <div className="text-xs font-medium text-gray-600">Session {assignment.dayIndex}</div>
+                                        <Input
+                                          placeholder="Focus tag"
+                                          value={assignment.focusKey || ''}
+                                          onChange={(e) =>
+                                            updatePrimaryDayAssignment(assignment.dayIndex, {
+                                              focusKey: e.target.value,
+                                            })
+                                          }
+                                          className="text-xs h-8"
+                                        />
+                                        <Select
+                                          value={assignment.structureTemplateIds?.[0] || 'none'}
+                                          onValueChange={(value) =>
+                                            updatePrimaryDayAssignment(assignment.dayIndex, {
+                                              structureTemplateIds: value === 'none' ? [] : [value],
+                                            })
+                                          }
+                                        >
+                                          <SelectTrigger className="text-xs h-8">
+                                            <SelectValue placeholder="Template" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">No template</SelectItem>
+                                            {workoutStructureTemplates.map((template) => (
+                                              <SelectItem key={template.id} value={template.id}>
+                                                {template.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                               <div className="flex items-center gap-4">
                                 <label className="text-sm font-medium">Color:</label>

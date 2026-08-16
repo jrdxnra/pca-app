@@ -30,6 +30,7 @@ import { getDateKey, safeToDate } from '@/lib/utils/dateHelpers';
 import { Separator } from '@/components/ui/separator';
 import { fetchWorkoutsByDateRange } from '@/lib/firebase/services/clientWorkouts';
 import { PROGRAM_PLANNING_DIALOG_CONTENT_CLASS } from '@/components/programs/dialogSizing';
+import { useConfigurationStore } from '@/lib/stores/useConfigurationStore';
 
 interface WeekTemplate {
     id: string;
@@ -50,6 +51,16 @@ interface WorkoutCategoryOption {
 interface WorkoutStructureTemplateOption {
     id: string;
     name: string;
+}
+
+interface WorkoutTypeSplitOption {
+    id: string;
+    name: string;
+    daySplits?: Array<{
+        id: string;
+        label: string;
+        active: boolean;
+    }>;
 }
 
 interface WeekSessionPreview {
@@ -269,6 +280,7 @@ function getTemplateDayRows(template?: WeekTemplate): Array<{ dayLabel: string; 
 
 function extractTemplateIdFromSelection(value?: string): string | undefined {
     if (!value || value === 'none') return undefined;
+    if (value.startsWith('split-fill:')) return undefined;
     if (value.startsWith('structure-fill:')) return value.replace('structure-fill:', '');
     if (value.startsWith('structure:')) return value.replace('structure:', '');
     return value;
@@ -279,11 +291,12 @@ function toStructureSelectionValue(templateId?: string): string {
 }
 
 function isFillSelection(value?: string): boolean {
-    return Boolean(value && value.startsWith('structure-fill:'));
+    return Boolean(value && (value.startsWith('structure-fill:') || value.startsWith('split-fill:')));
 }
 
 function toFillSelectionValue(value: string): string {
     if (value === 'none') return value;
+    if (value.startsWith('split-fill:')) return value;
     if (value.startsWith('structure-fill:')) return value;
     if (value.startsWith('structure:')) return value.replace('structure:', 'structure-fill:');
     return `structure-fill:${value}`;
@@ -291,6 +304,7 @@ function toFillSelectionValue(value: string): string {
 
 function toBaseSelectionValue(value: string): string {
     if (value === 'none') return value;
+    if (value.startsWith('split-fill:')) return 'none';
     if (value.startsWith('structure:')) return value;
     if (value.startsWith('structure-fill:')) return value.replace('structure-fill:', 'structure:');
     return `structure:${value}`;
@@ -330,6 +344,7 @@ export function ManageWeekDialog({
     loading = false,
 }: ManageWeekDialogProps) {
     const [open, setOpen] = useState(false);
+    const workoutTypes = useConfigurationStore(state => state.workoutTypes) as WorkoutTypeSplitOption[];
     
     // Calculate smart defaults based on existing assignments
     const smartDefaults = useMemo(() => {
@@ -510,6 +525,20 @@ export function ManageWeekDialog({
         return lookup;
     }, [workoutCategories]);
 
+    const splitFillOptions = useMemo(() => {
+        const options: Array<{ value: string; label: string }> = [];
+        for (const workoutType of workoutTypes || []) {
+            const activeSplits = (workoutType.daySplits || []).filter((split) => split.active !== false);
+            for (const split of activeSplits) {
+                options.push({
+                    value: `split-fill:${workoutType.id}:${split.id}`,
+                    label: `${workoutType.name} - ${split.label}`,
+                });
+            }
+        }
+        return options;
+    }, [workoutTypes]);
+
     const getDefaultTemplateIdForCategory = (category: string): string | undefined => {
         const key = toCategoryKey(category);
         if (!key || key === 'rest') return undefined;
@@ -540,7 +569,7 @@ export function ManageWeekDialog({
         const override = templateOverrides[session.dateKey];
         if (override) {
             if (override === 'none') return 'none';
-            if (override.startsWith('structure:') || override.startsWith('structure-fill:')) return override;
+            if (override.startsWith('structure:') || override.startsWith('structure-fill:') || override.startsWith('split-fill:')) return override;
             return toStructureSelectionValue(override);
         }
         return toStructureSelectionValue(getDefaultTemplateIdForCategory(session.workoutCategory));
@@ -1168,6 +1197,19 @@ export function ManageWeekDialog({
                                                                         </div>
                                                                     </SelectItem>
                                                                 ))}
+                                                                    {splitFillOptions.length > 0 && (
+                                                                        <>
+                                                                            <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 mt-1 pt-1 border-t">Workout Type Splits + Fill</div>
+                                                                            {splitFillOptions.map((option) => (
+                                                                                <SelectItem key={option.value} value={option.value}>
+                                                                                    <div className="flex items-center gap-2 w-full">
+                                                                                        <Sparkles className="h-3.5 w-3.5 text-orange-600 shrink-0" />
+                                                                                        <span className="truncate">{option.label}</span>
+                                                                                    </div>
+                                                                                </SelectItem>
+                                                                            ))}
+                                                                        </>
+                                                                    )}
                                                                 <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 mt-1 pt-1 border-t">Structure Templates</div>
                                                                 {workoutStructureTemplates.map((template) => (
                                                                     <SelectItem key={`session-structure-${template.id}`} value={`structure:${template.id}`}>

@@ -57,6 +57,8 @@ if [[ -d "${FITSHIFT_DIR}" ]]; then
   else
     echo "[dev] Starting Fit-Shift on http://localhost:4173"
     (
+      # Prevent child process from inheriting the wrapper lock FD.
+      exec 9>&-
       cd "${FITSHIFT_DIR}"
       python3 -m fitshift
     ) &

@@ -16,10 +16,30 @@ import { WorkoutType } from '../../types';
 
 export type { WorkoutType };
 
+const normalizeDaySplitFields = <T extends Partial<WorkoutType>>(payload: T): T => {
+  const normalized: T = { ...payload };
+
+  if ('daySplits' in normalized) {
+    normalized.daySplits = Array.isArray(normalized.daySplits) ? normalized.daySplits : [];
+  }
+
+  if ('defaultDaySplitId' in normalized) {
+    const value = typeof normalized.defaultDaySplitId === 'string' ? normalized.defaultDaySplitId.trim() : '';
+    normalized.defaultDaySplitId = value || undefined;
+  }
+
+  if (normalized.daySplits && normalized.daySplits.length > 0 && !normalized.defaultDaySplitId) {
+    normalized.defaultDaySplitId = normalized.daySplits[0].id;
+  }
+
+  return normalized;
+};
+
 export const createWorkoutType = async (workoutType: Omit<WorkoutType, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<string> => {
   try {
+    const normalizedWorkoutType = normalizeDaySplitFields(workoutType);
     const docRef = await addDoc(collection(getDb(), 'workoutTypes'), {
-      ...workoutType,
+      ...normalizedWorkoutType,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
       ownerId: await resolveActiveAccountId()
@@ -33,9 +53,10 @@ export const createWorkoutType = async (workoutType: Omit<WorkoutType, 'id' | 'c
 
 export const updateWorkoutType = async (id: string, updates: Partial<Omit<WorkoutType, 'id' | 'createdAt' | 'createdBy'>>): Promise<void> => {
   try {
+    const normalizedUpdates = normalizeDaySplitFields(updates);
     const workoutTypeRef = doc(getDb(), 'workoutTypes', id);
     await updateDoc(workoutTypeRef, {
-      ...updates,
+      ...normalizedUpdates,
       updatedAt: Timestamp.now()
     });
   } catch (error) {

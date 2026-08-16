@@ -146,6 +146,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
     const configPeriods = useConfigurationStore(state => state.periods);
     const weekTemplates = useConfigurationStore(state => state.weekTemplates);
     const workoutCategories = useConfigurationStore(state => state.workoutCategories);
+    const workoutTypes = useConfigurationStore(state => state.workoutTypes);
     const clients = useClientStore(state => state.clients);
     // Only subscribe to calendar store functions we actually use
     const createTestEvent = useCalendarStore(state => state.createTestEvent);
@@ -189,7 +190,10 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
         clientId: string,
         categoryName: string,
         structureTemplateId: string,
-        fallbackTitle: string
+        fallbackTitle: string,
+        targetDateKey?: string,
+        weeklySequenceIndex?: number,
+        avoidMovementIds?: string[],
     ): Promise<GenerateWorkoutDraftResponse> => {
         const configState = useConfigurationStore.getState();
 
@@ -283,6 +287,9 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
             structureSections,
             recentWorkouts,
             fallbackTitle,
+            targetDateKey,
+            weeklySequenceIndex,
+            avoidMovementIds,
             categoryContextById,
             movementContextById,
             sessionDurationMinutes: 60,
@@ -816,8 +823,59 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                 plannedCategoryByDateKey.set(getDateKey(safeToDate(day.date)), day.workoutCategory);
             }
 
+            const plannedSequenceIndexByDateKey = new Map<string, number>();
+            Array.from(plannedCategoryByDateKey.keys())
+                .sort((left, right) => left.localeCompare(right))
+                .forEach((dateKey, index) => {
+                    plannedSequenceIndexByDateKey.set(dateKey, index);
+                });
+
+            const resolveStructureTemplateFromSelection = (
+                selection: string,
+                dateKey: string,
+            ): string | null => {
+                if (/^structure-fill:/.test(selection) || /^structure-ai:/.test(selection)) {
+                    const directTemplateId = selection.replace(/^structure-(fill|ai):/, '').trim();
+                    return directTemplateId || null;
+                }
+
+                if (!/^split-fill:/.test(selection)) {
+                    return null;
+                }
+
+                const payload = selection.replace(/^split-fill:/, '').trim();
+                if (!payload) return null;
+
+                const [workoutTypeId, requestedSplitId] = payload.split(':').map((part) => part?.trim()).filter(Boolean);
+                if (!workoutTypeId) return null;
+
+                const workoutType = workoutTypes.find((type) => type.id === workoutTypeId);
+                if (!workoutType || !Array.isArray(workoutType.daySplits) || workoutType.daySplits.length === 0) {
+                    return null;
+                }
+
+                const selectedSplit = workoutType.daySplits.find((split) => split.id === requestedSplitId)
+                    || workoutType.daySplits.find((split) => split.id === workoutType.defaultDaySplitId)
+                    || workoutType.daySplits[0];
+                if (!selectedSplit || !Array.isArray(selectedSplit.dayAssignments) || selectedSplit.dayAssignments.length === 0) {
+                    return null;
+                }
+
+                const sequenceIndex = plannedSequenceIndexByDateKey.get(dateKey) || 0;
+                const dayIndex = (sequenceIndex % Math.max(1, selectedSplit.daysPerWeek || selectedSplit.dayAssignments.length || 1)) + 1;
+                const assignment = selectedSplit.dayAssignments.find((day) => day.dayIndex === dayIndex)
+                    || selectedSplit.dayAssignments[(dayIndex - 1) % selectedSplit.dayAssignments.length];
+
+                if (!assignment || !Array.isArray(assignment.structureTemplateIds) || assignment.structureTemplateIds.length === 0) {
+                    return null;
+                }
+
+                return assignment.structureTemplateIds[0] || null;
+            };
+
             const fillTargets = Array.from(scheduledSelectionByDateKey.entries())
-                .filter(([dateKey, selection]) => /^structure-fill:/.test(selection) && plannedCategoryByDateKey.has(dateKey));
+                .filter(([dateKey, selection]) => (/^structure-fill:/.test(selection) || /^split-fill:/.test(selection)) && plannedCategoryByDateKey.has(dateKey))
+                .sort(([leftDateKey], [rightDateKey]) => leftDateKey.localeCompare(rightDateKey));
             const fillDraftByDateKey = new Map<string, {
                 title?: string;
                 notes?: string;
@@ -831,6 +889,19 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
             const preflightStartMs = Date.now();
             debugFlow('preflight_begin', { fillTargets: fillTargets.length });
             const fillAuthToken = await auth.currentUser?.getIdToken();
+            const weeklyAvoidMovementIds = new Set<string>();
+
+            const addDraftMovementIdsToAvoidSet = (rounds: ClientWorkoutRound[] | undefined): void => {
+                if (!Array.isArray(rounds)) return;
+                for (const round of rounds) {
+                    const movementUsages = Array.isArray(round?.movementUsages) ? round.movementUsages : [];
+                    for (const usage of movementUsages) {
+                        if (typeof usage?.movementId === 'string' && usage.movementId.trim()) {
+                            weeklyAvoidMovementIds.add(usage.movementId.trim());
+                        }
+                    }
+                }
+            };
 
             const recordPreflightFailure = (reason: string): void => {
                 const normalized = reason.toLowerCase();
@@ -868,14 +939,20 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
 
             for (let i = 0; i < fillTargets.length; i += 1) {
                 const [dateKey, selection] = fillTargets[i];
-                const structureTemplateId = selection.replace(/^structure-(fill|ai):/, '').trim();
-                if (!structureTemplateId) continue;
+                const structureTemplateId = resolveStructureTemplateFromSelection(selection, dateKey);
+                if (!structureTemplateId) {
+                    const reason = `No structure template resolved for selection: ${selection}`;
+                    preflightFillFailures.push({ dateKey, reason });
+                    recordPreflightFailure(reason);
+                    continue;
+                }
 
                 if (preflightFillFailures.length > 0) {
                     break;
                 }
 
                 const categoryName = plannedCategoryByDateKey.get(dateKey) || 'Workout';
+                const avoidMovementIds = Array.from(weeklyAvoidMovementIds).slice(0, 200);
 
                 try {
                     const draftRequestStartMs = Date.now();
@@ -894,6 +971,9 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                             categoryName,
                             structureTemplateId,
                             sessionDurationMinutes: 60,
+                            targetDateKey: dateKey,
+                            weeklySequenceIndex: i,
+                            avoidMovementIds,
                             currentTitle: `${categoryName} Draft`,
                             includeDecisionTrace: true,
                         }),
@@ -933,7 +1013,10 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                         assignment.clientId,
                                         remainingCategoryName,
                                         remainingTemplateId,
-                                        `${remainingCategoryName} Draft`
+                                        `${remainingCategoryName} Draft`,
+                                        remainingDateKey,
+                                        targetIndex,
+                                        Array.from(weeklyAvoidMovementIds).slice(0, 200),
                                     );
 
                                     if (!fallbackDraft?.draft?.rounds || !Array.isArray(fallbackDraft.draft.rounds)) {
@@ -951,6 +1034,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                         rounds: fallbackDraft.draft.rounds,
                                         appliedTemplateId: remainingTemplateId,
                                     });
+                                    addDraftMovementIdsToAvoidSet(fallbackDraft.draft.rounds);
                                     preflightFallbackDraftCount += 1;
                                 } catch (fallbackErr) {
                                     const fallbackReason = fallbackErr instanceof Error
@@ -969,7 +1053,10 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                     assignment.clientId,
                                     categoryName,
                                     structureTemplateId,
-                                    `${categoryName} Draft`
+                                    `${categoryName} Draft`,
+                                    dateKey,
+                                    i,
+                                    avoidMovementIds,
                                 );
 
                                 if (!fallbackDraft?.draft?.rounds || !Array.isArray(fallbackDraft.draft.rounds)) {
@@ -987,6 +1074,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                     rounds: fallbackDraft.draft.rounds,
                                     appliedTemplateId: structureTemplateId,
                                 });
+                                addDraftMovementIdsToAvoidSet(fallbackDraft.draft.rounds);
                                 preflightFallbackDraftCount += 1;
                                 continue;
                             } catch (fallbackErr) {
@@ -1030,6 +1118,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                         rounds: payload.draft.rounds,
                         appliedTemplateId: structureTemplateId,
                     });
+                    addDraftMovementIdsToAvoidSet(payload.draft.rounds);
                     preflightApiDraftCount += 1;
                 } catch (fillErr) {
                     const isTimeoutAbort = fillErr instanceof DOMException && fillErr.name === 'AbortError';
@@ -1040,7 +1129,10 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                 assignment.clientId,
                                 categoryName,
                                 structureTemplateId,
-                                `${categoryName} Draft`
+                                `${categoryName} Draft`,
+                                dateKey,
+                                i,
+                                avoidMovementIds,
                             );
 
                             if (!fallbackDraft?.draft?.rounds || !Array.isArray(fallbackDraft.draft.rounds)) {
@@ -1058,6 +1150,7 @@ export function useClientPrograms(selectedClientId?: string | null): UseClientPr
                                 rounds: fallbackDraft.draft.rounds,
                                 appliedTemplateId: structureTemplateId,
                             });
+                            addDraftMovementIdsToAvoidSet(fallbackDraft.draft.rounds);
                             preflightFallbackDraftCount += 1;
                             debugFlow('preflight_timeout_fallback_ok', { dateKey });
                             continue;

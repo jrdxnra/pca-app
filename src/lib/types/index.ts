@@ -632,10 +632,29 @@ export interface WorkoutType {
   name: string;
   color: string;
   description: string;
+  daySplits?: DaySplit[];
+  defaultDaySplitId?: string;
+  schemaVersion?: number;
   order?: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy?: string;
+}
+
+export interface DayAssignment {
+  dayIndex: number;
+  focusKey: string;
+  structureTemplateIds: string[];
+  optionalTags?: string[];
+}
+
+export interface DaySplit {
+  id: string;
+  label: string;
+  daysPerWeek: number;
+  dayAssignments: DayAssignment[];
+  notes?: string;
+  active: boolean;
 }
 
 export interface WorkoutIntent {

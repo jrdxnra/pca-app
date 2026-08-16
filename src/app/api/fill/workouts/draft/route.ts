@@ -133,6 +133,9 @@ const RequestSchema = z.object({
 	categoryName: z.string().optional(),
 	structureTemplateId: z.string().optional(),
 	sessionDurationMinutes: z.number().int().positive().max(300).optional(),
+	targetDateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+	weeklySequenceIndex: z.number().int().min(0).max(400).optional(),
+	avoidMovementIds: z.array(z.string().min(1)).max(400).optional(),
 	currentTitle: z.string().optional(),
 	currentNotes: z.string().optional(),
 	goals: z.string().optional(),
@@ -585,6 +588,9 @@ export async function POST(request: NextRequest) {
 		}
 
 		const payload: GenerateWorkoutDraftRequest = parsed.data;
+		const avoidMovementIds = Array.isArray(payload.avoidMovementIds)
+			? Array.from(new Set(payload.avoidMovementIds.map((id) => id.trim()).filter(Boolean))).slice(0, 400)
+			: undefined;
 		if (!isFlowEnabled(flow)) {
 			logFillDraftTelemetry('error', {
 				flow,
@@ -669,6 +675,9 @@ export async function POST(request: NextRequest) {
 			recentWorkouts,
 			fallbackTitle,
 			currentNotes: isBaselineEngine ? undefined : payload.currentNotes,
+			targetDateKey: payload.targetDateKey,
+			weeklySequenceIndex: payload.weeklySequenceIndex,
+			avoidMovementIds,
 			includeDecisionTrace: payload.includeDecisionTrace,
 			categoryContextById: movementCategoryContextMap,
 			movementContextById: movementContextMap,

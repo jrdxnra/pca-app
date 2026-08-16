@@ -1,0 +1,1224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PCA Flowboard - + Fill Visual Atlas</title>
+  <style>
+    :root {
+      --bg-a: #f6f1e8;
+      --bg-b: #edf4ef;
+      --ink: #152029;
+      --muted: #5d6971;
+      --line: #ccd5cf;
+      --panel: rgba(255, 255, 255, 0.86);
+      --shadow: 0 20px 44px rgba(21, 32, 41, 0.1);
+      --green: #0e7a69;
+      --green-soft: #dcf3ec;
+      --blue: #266fcb;
+      --blue-soft: #dceaff;
+      --amber: #c66b00;
+      --amber-soft: #fff0d8;
+      --brown: #8a6334;
+      --brown-soft: #f6e7cf;
+      --r-xl: 28px;
+      --r-lg: 20px;
+      --r-md: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--ink);
+      font-family: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(1000px 420px at 12% 0%, rgba(14, 122, 105, 0.12), transparent 68%),
+        radial-gradient(900px 480px at 100% 8%, rgba(38, 111, 203, 0.13), transparent 66%),
+        linear-gradient(155deg, var(--bg-a), var(--bg-b));
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(21, 32, 41, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(21, 32, 41, 0.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: 0.4;
+      mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.08));
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .intro {
+      border-radius: var(--r-xl);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.78));
+      box-shadow: var(--shadow);
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .badge {
+      width: fit-content;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.74rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .intro-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .intro h1 {
+      margin: 0;
+      font-size: clamp(1.8rem, 3.2vw, 3rem);
+      line-height: 0.98;
+      max-width: 12ch;
+      letter-spacing: -0.04em;
+    }
+
+    .intro p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.98rem;
+      line-height: 1.55;
+      max-width: 62ch;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .context-note {
+      border-left: 3px solid var(--green);
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: var(--green-soft);
+      color: var(--ink);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .pill {
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 6px 10px;
+      font-size: 0.74rem;
+      font-weight: 700;
+    }
+
+    .pill.fill { background: var(--blue-soft); border-color: #c3d9f6; }
+    .pill.warn { background: var(--amber-soft); border-color: #efd09a; }
+    .pill.fallback { background: var(--brown-soft); border-color: #dfc6a0; }
+
+    .hero-map {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .canvas {
+      position: relative;
+      overflow: hidden;
+      min-height: 560px;
+      border-radius: var(--r-xl);
+      border: 1px solid rgba(255, 255, 255, 0.88);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.82));
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .canvas::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 18% 16%, rgba(14, 122, 105, 0.07), transparent 18%),
+        radial-gradient(circle at 80% 22%, rgba(38, 111, 203, 0.07), transparent 16%),
+        radial-gradient(circle at 70% 78%, rgba(198, 107, 0, 0.06), transparent 20%);
+      pointer-events: none;
+    }
+
+    .route-title {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .route-title h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .route-title p {
+      margin: 0;
+      font-size: 0.84rem;
+      color: var(--muted);
+      max-width: 60ch;
+    }
+
+    .orbit {
+      position: relative;
+      z-index: 1;
+      width: min(100%, 680px);
+      aspect-ratio: 1 / 1;
+      margin: 0 auto;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at center, rgba(14, 122, 105, 0.1), transparent 14%),
+        radial-gradient(circle at center, rgba(38, 111, 203, 0.08), transparent 28%),
+        radial-gradient(circle at center, rgba(0, 0, 0, 0.02), transparent 52%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.35));
+      border: 1px solid rgba(21, 32, 41, 0.08);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+      display: grid;
+      place-items: center;
+    }
+
+    .ring {
+      position: absolute;
+      inset: 9%;
+      border-radius: 50%;
+      border: 1px dashed rgba(21, 32, 41, 0.12);
+    }
+
+    .hub {
+      position: relative;
+      z-index: 2;
+      width: 210px;
+      height: 210px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 22px;
+      background: linear-gradient(180deg, #ffffff, #f4fbf9);
+      border: 1px solid rgba(14, 122, 105, 0.18);
+      box-shadow: 0 18px 44px rgba(14, 122, 105, 0.12);
+    }
+
+    .hub .mini {
+      width: fit-content;
+      margin: 0 auto 8px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .hub h3 {
+      margin: 0;
+      font-size: 1.18rem;
+      line-height: 1.05;
+    }
+
+    .hub p {
+      margin: 8px 0 0;
+      font-size: 0.83rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .node {
+      position: absolute;
+      width: 176px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: 0 10px 24px rgba(21, 32, 41, 0.08);
+      padding: 12px;
+      display: grid;
+      gap: 6px;
+      text-align: left;
+    }
+
+    .node::before {
+      content: "";
+      position: absolute;
+      inset: auto auto -12px 50%;
+      width: 14px;
+      height: 14px;
+      transform: translateX(-50%) rotate(45deg);
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .node h4 {
+      margin: 0;
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #48606b;
+    }
+
+    .node p {
+      margin: 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .node .step {
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    .node.template { top: 20px; left: 50%; transform: translateX(-50%); }
+    .node.arm { top: 50%; right: 14px; transform: translateY(-50%); }
+    .node.request { bottom: 20px; left: 50%; transform: translateX(-50%); }
+    .node.api { top: 50%; left: 14px; transform: translateY(-50%); }
+    .node.result { top: 138px; left: 50%; transform: translateX(-50%); }
+
+    .track {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.95;
+    }
+
+    .track line,
+    .track path {
+      stroke: rgba(21, 32, 41, 0.16);
+      stroke-width: 6;
+      stroke-linecap: round;
+      fill: none;
+    }
+
+    .track .fill {
+      stroke: rgba(38, 111, 203, 0.8);
+      stroke-width: 8;
+      stroke-dasharray: 14 10;
+      animation: drift 2s linear infinite;
+    }
+
+    .track .green {
+      stroke: rgba(14, 122, 105, 0.8);
+      stroke-width: 8;
+    }
+
+    @keyframes drift {
+      from { stroke-dashoffset: 0; }
+      to { stroke-dashoffset: -48; }
+    }
+
+    .side {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .panel {
+      border-radius: var(--r-xl);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 0.98rem;
+    }
+
+    .panel p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.5;
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .stack-row {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .stack-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    .stack-card {
+      border-radius: var(--r-lg);
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 12px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .stack-card h3 {
+      margin: 0;
+      font-size: 0.9rem;
+    }
+
+    .stack-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+
+    .stack-card.green { background: linear-gradient(180deg, #ffffff, #f3fbf8); }
+    .stack-card.blue { background: linear-gradient(180deg, #ffffff, #f4f8ff); }
+    .stack-card.amber { background: linear-gradient(180deg, #ffffff, #fff9f0); }
+    .stack-card.brown { background: linear-gradient(180deg, #ffffff, #fbf4ea); }
+
+    .flow-strip {
+      border-radius: var(--r-xl);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .flow-strip h2 {
+      margin: 0;
+      font-size: 0.98rem;
+    }
+
+    .bands {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .band {
+      border-radius: var(--r-lg);
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 12px;
+      min-height: 132px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      position: relative;
+    }
+
+    .band::after {
+      content: "";
+      position: absolute;
+      inset: auto 14px 14px auto;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: rgba(21, 32, 41, 0.04);
+    }
+
+    .band .kicker {
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    .band h3 {
+      margin: 0;
+      font-size: 0.88rem;
+    }
+
+    .band p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .band.green { background: linear-gradient(180deg, #ffffff, #f4fbf8); }
+    .band.blue { background: linear-gradient(180deg, #ffffff, #f4f8ff); }
+    .band.amber { background: linear-gradient(180deg, #ffffff, #fff9ef); }
+    .band.brown { background: linear-gradient(180deg, #ffffff, #fcf6ee); }
+    .band.gray { background: linear-gradient(180deg, #ffffff, #fafafa); }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .inside {
+      border-radius: var(--r-xl);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .inside-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .inside-head h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .inside-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.84rem;
+      max-width: 72ch;
+      line-height: 1.45;
+    }
+
+    .inside-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 12px;
+    }
+
+    .weights {
+      border-radius: var(--r-lg);
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .weights h3 {
+      margin: 0;
+      font-size: 0.88rem;
+    }
+
+    .weight-row {
+      display: grid;
+      grid-template-columns: 128px 1fr 48px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .weight-row .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #3d515d;
+    }
+
+    .bar {
+      height: 12px;
+      border-radius: 999px;
+      background: #eef2f0;
+      overflow: hidden;
+      border: 1px solid #e1e8e4;
+    }
+
+    .fillbar {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--blue), #5aa0f0);
+    }
+
+    .pct {
+      text-align: right;
+      font-size: 0.74rem;
+      font-weight: 800;
+      color: var(--blue);
+    }
+
+    .inside-notes {
+      border-radius: var(--r-lg);
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff, #f8fbfa);
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .inside-notes h3 {
+      margin: 0;
+      font-size: 0.88rem;
+    }
+
+    .mini-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .mini-item {
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 9px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .mini-item b {
+      font-size: 0.78rem;
+    }
+
+    .mini-item span {
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .variants {
+      border-radius: var(--r-xl);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .variants-head h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .variants-head p {
+      margin: 6px 0 0;
+      font-size: 0.84rem;
+      color: var(--muted);
+      line-height: 1.45;
+      max-width: 76ch;
+    }
+
+    .funnel {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr)) 80px minmax(0, 1.2fr);
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .variant-card {
+      border-radius: var(--r-lg);
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 12px;
+      display: grid;
+      gap: 7px;
+      align-content: start;
+    }
+
+    .variant-card h3 {
+      margin: 0;
+      font-size: 0.86rem;
+    }
+
+    .variant-card p {
+      margin: 0;
+      font-size: 0.76rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .variant-tag {
+      width: fit-content;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 4px 8px;
+      font-size: 0.66rem;
+      font-weight: 800;
+      color: #41545f;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .variant-card.single { background: linear-gradient(180deg, #ffffff, #f4f9ff); }
+    .variant-card.monthly { background: linear-gradient(180deg, #ffffff, #f3fbf7); }
+    .variant-card.weekly { background: linear-gradient(180deg, #ffffff, #fff8ef); }
+
+    .funnel-arrow {
+      display: grid;
+      place-items: center;
+      color: #5b6b74;
+      font-size: 1.6rem;
+      font-weight: 900;
+      animation: drift-arrow 1.8s ease-in-out infinite;
+    }
+
+    @keyframes drift-arrow {
+      0% { opacity: 0.35; transform: translateX(0); }
+      50% { opacity: 1; transform: translateX(4px); }
+      100% { opacity: 0.35; transform: translateX(0); }
+    }
+
+    .engine-card {
+      border-radius: var(--r-lg);
+      border: 1px solid var(--line);
+      background: linear-gradient(160deg, #ffffff, #f4fbf8);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .engine-card h3 {
+      margin: 0;
+      font-size: 0.9rem;
+    }
+
+    .engine-card p {
+      margin: 0;
+      font-size: 0.77rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .engine-list {
+      display: grid;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .engine-item {
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 7px 8px;
+      font-size: 0.74rem;
+      color: #41545f;
+    }
+
+    .engine-item b {
+      color: var(--green);
+    }
+
+    .rules {
+      border-radius: var(--r-xl);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .rules-head h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .rules-head p {
+      margin: 6px 0 0;
+      font-size: 0.84rem;
+      color: var(--muted);
+      line-height: 1.45;
+      max-width: 78ch;
+    }
+
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .rule-card {
+      border-radius: var(--r-lg);
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      min-height: 184px;
+    }
+
+    .rule-card h3 {
+      margin: 0;
+      font-size: 0.88rem;
+    }
+
+    .rule-card p {
+      margin: 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .rule-pill {
+      width: fit-content;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 4px 8px;
+      font-size: 0.66rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #435761;
+    }
+
+    .rule-card.single { background: linear-gradient(180deg, #ffffff, #f4f8ff); }
+    .rule-card.weekly { background: linear-gradient(180deg, #ffffff, #f4fbf8); }
+    .rule-card.period { background: linear-gradient(180deg, #ffffff, #fff8ef); }
+
+    .detail {
+      border-radius: var(--r-lg);
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 12px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .detail h3 {
+      margin: 0;
+      font-size: 0.84rem;
+    }
+
+    .detail p {
+      margin: 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .detail .meta {
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .footer {
+      border-radius: var(--r-lg);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.74);
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.5;
+    }
+
+    .accent { color: var(--green); font-weight: 800; }
+    .fill-text { color: var(--blue); font-weight: 800; }
+    .warn-text { color: var(--amber); font-weight: 800; }
+    .fallback-text { color: var(--brown); font-weight: 800; }
+
+    @media (max-width: 1180px) {
+      .intro-grid,
+      .hero-map,
+      .bands,
+      .detail-grid,
+      .inside-grid,
+      .rules-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .funnel {
+        grid-template-columns: 1fr;
+      }
+
+      .funnel-arrow {
+        transform: rotate(90deg);
+        min-height: 34px;
+      }
+
+      .orbit {
+        width: min(100%, 620px);
+      }
+
+      .node.template { top: 12px; }
+      .node.arm { right: 10px; }
+      .node.request { bottom: 12px; }
+      .node.api { left: 10px; }
+      .node.result { top: 128px; }
+    }
+
+    @media (max-width: 760px) {
+      .page { padding: 14px; }
+      .intro, .canvas, .panel, .flow-strip, .footer { border-radius: 20px; }
+      .hub { width: 180px; height: 180px; }
+      .node {
+        width: 150px;
+        padding: 10px;
+      }
+      .weight-row {
+        grid-template-columns: 1fr;
+        gap: 5px;
+      }
+      .pct {
+        text-align: left;
+      }
+      .node h4 { font-size: 0.74rem; }
+      .node p { font-size: 0.74rem; }
+      .track .fill,
+      .track .green { stroke-width: 6; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro">
+      <div class="badge">Current flow only</div>
+      <div class="intro-grid">
+        <div>
+          <h1>How + Fill Works Right Now</h1>
+        </div>
+        <p>
+          Think of it like a route on a map: pick a template, turn on <span class="fill-text">+ Fill</span>, send the draft request, and the server either draws from recent history or drops into a fallback draft.
+        </p>
+      </div>
+      <div class="context-note">
+        <strong>Simple version:</strong> I’m inside your project, reading the files you’re working with, and then I explain what I see in a short, clear way.
+      </div>
+      <div class="legend" aria-label="Legend">
+        <span class="pill">Pick</span>
+        <span class="pill fill">Fill mode</span>
+        <span class="pill">Request</span>
+        <span class="pill warn">Server gate</span>
+        <span class="pill fallback">Fallback</span>
+      </div>
+    </section>
+
+    <section class="hero-map" aria-label="Visual flow map">
+      <div class="canvas">
+        <div class="route-title">
+          <div>
+            <h2>Main route</h2>
+            <p>Different UI entry points feed the same engine: each + Fill entry arms a context-specific fill mode, then generates a draft from template and history.</p>
+          </div>
+        </div>
+
+        <div class="orbit" aria-hidden="true">
+          <svg class="track" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path d="M50 18 C76 18, 82 24, 82 50" class="green" />
+            <path d="M82 50 C82 76, 76 82, 50 82" class="fill" />
+            <path d="M50 82 C24 82, 18 76, 18 50" class="green" />
+            <path d="M18 50 C18 24, 24 18, 50 18" class="fill" />
+          </svg>
+
+          <div class="ring"></div>
+
+          <article class="hub">
+            <div>
+              <div class="mini">Core idea</div>
+              <h3>Template + Fill</h3>
+              <p>The selected template defines the shape. Fill decides whether the app asks for a generated draft.</p>
+            </div>
+          </article>
+
+          <article class="node template">
+            <div class="step">Step 1</div>
+            <h4>Choose template</h4>
+            <p>The selector offers plain templates and <span class="fill-text">+ Fill</span> variants.</p>
+          </article>
+
+          <article class="node arm">
+            <div class="step">Step 2</div>
+            <h4>Arm fill state</h4>
+            <p>Either a + Fill selector value (<span class="fill-text">structure-fill:...</span>) or a planner toggle enables fill mode. Same engine, specialized path for that selection context.</p>
+          </article>
+
+          <article class="node request">
+            <div class="step">Step 3</div>
+            <h4>Send request</h4>
+            <p>The app posts client, category, goals, and template id to the fill draft API.</p>
+          </article>
+
+          <article class="node api">
+            <div class="step">Step 4</div>
+            <h4>Server gates + loads</h4>
+            <p>Auth, account access, Firebase Admin, and recent workout context are checked before drafting.</p>
+          </article>
+
+          <article class="node result">
+            <div class="step">Step 5</div>
+            <h4>Return result</h4>
+            <p>The server returns a structure-aware draft or a <span class="fallback-text">fallback</span> draft if the template cannot be resolved.</p>
+          </article>
+        </div>
+      </div>
+
+      <aside class="side">
+        <section class="panel">
+          <h2>What your eye should follow</h2>
+          <p>Not a comparison. Not a spec. Just the actual chain of cause and effect, with the fill state shown as a visual switch.</p>
+
+          <div class="stack">
+            <div class="stack-row">
+              <div class="stack-mark">A</div>
+              <div class="stack-card green">
+                <h3>Selection</h3>
+                <p>You can enter + Fill from multiple places (template dropdown, planner toggles, or flow-specific actions). Each entry activates an optimized + Fill variant for that exact selection type.</p>
+              </div>
+            </div>
+            <div class="stack-row">
+              <div class="stack-mark">B</div>
+              <div class="stack-card blue">
+                <h3>Generation</h3>
+                <p>The app sends the draft request and the server tries to build a structure-aware workout from recent history.</p>
+              </div>
+            </div>
+            <div class="stack-row">
+              <div class="stack-mark">C</div>
+              <div class="stack-card amber">
+                <h3>Fallback</h3>
+                <p>If the template is unavailable, the server does not guess a new structure. It falls back to a usable draft path.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="flow-strip">
+          <h2>Inputs that matter most</h2>
+          <div class="bands">
+            <article class="band green">
+              <div class="kicker">Input</div>
+              <h3>Selected template</h3>
+              <p>Controls the shape of the workout and whether structure sections can be built.</p>
+            </article>
+            <article class="band blue">
+              <div class="kicker">Input</div>
+              <h3>Recent history</h3>
+              <p>Used to rank movements, choose structure-aware content, and create the filled draft.</p>
+            </article>
+            <article class="band amber">
+              <div class="kicker">Gate</div>
+              <h3>Auth and access</h3>
+              <p>If auth, account lookup, or Firebase Admin access fails, the request stops before drafting.</p>
+            </article>
+            <article class="band brown">
+              <div class="kicker">Fallback</div>
+              <h3>No usable template</h3>
+              <p>Clones the latest usable workout or returns a minimal blank draft if there is no history.</p>
+            </article>
+            <article class="band gray">
+              <div class="kicker">Output</div>
+              <h3>Saved workout</h3>
+              <p>The final result is a draft response, with a source strategy telling you which path won.</p>
+            </article>
+          </div>
+        </section>
+      </aside>
+    </section>
+
+    <section class="inside" aria-label="Inside plus fill logic">
+      <div class="inside-head">
+        <div>
+          <h2>Inside + Fill: what gets prioritized</h2>
+          <p>This is the core weighting used when + Fill is building a structure-aware draft from history.</p>
+        </div>
+      </div>
+
+      <div class="inside-grid">
+        <article class="weights">
+          <h3>Scoring priority mix</h3>
+
+          <div class="weight-row">
+            <span class="label">Goal intent fit</span>
+            <div class="bar"><div class="fillbar" style="width: 38%;"></div></div>
+            <span class="pct">38%</span>
+          </div>
+
+          <div class="weight-row">
+            <span class="label">Section fit</span>
+            <div class="bar"><div class="fillbar" style="width: 22%;"></div></div>
+            <span class="pct">22%</span>
+          </div>
+
+          <div class="weight-row">
+            <span class="label">Client profile fit</span>
+            <div class="bar"><div class="fillbar" style="width: 22%;"></div></div>
+            <span class="pct">22%</span>
+          </div>
+
+          <div class="weight-row">
+            <span class="label">Progression continuity</span>
+            <div class="bar"><div class="fillbar" style="width: 12%;"></div></div>
+            <span class="pct">12%</span>
+          </div>
+
+          <div class="weight-row">
+            <span class="label">History frequency</span>
+            <div class="bar"><div class="fillbar" style="width: 6%;"></div></div>
+            <span class="pct">6%</span>
+          </div>
+        </article>
+
+        <article class="inside-notes">
+          <h3>Other things that can override the score</h3>
+
+          <div class="mini-list">
+            <div class="mini-item">
+              <b>How notes are weighted</b>
+              <span>There is no direct "notes %" weight. Notes feed keyword/context signals, so they mostly influence the 38% goal-intent bucket and can indirectly affect section matching.</span>
+            </div>
+            <div class="mini-item">
+              <b>Hard blocks</b>
+              <span>Auth/account/env gates and blocked movements stop or filter candidates before scoring.</span>
+            </div>
+            <div class="mini-item">
+              <b>Penalties</b>
+              <span>Avoid list, repeated movement reuse, and recent repetition can push otherwise good candidates down.</span>
+            </div>
+            <div class="mini-item">
+              <b>Fallback trigger</b>
+              <span>If structure sections are unavailable or history is not usable, + Fill falls back to clone/minimal draft paths.</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="rules" aria-label="Proposed explicit DDS flow rules">
+      <div class="rules-head">
+        <h2>Next step: explicit + Fill flow rules</h2>
+        <p>These rules align the generator with training intent: one-off sessions prioritize variety, while weekly/monthly/period planning prioritizes controlled repetition and progression anchors.</p>
+      </div>
+
+      <div class="rules-grid">
+        <article class="rule-card single">
+          <span class="rule-pill">Single flow rule</span>
+          <h3>High diversity bias</h3>
+          <p>Prefer novelty inside the workout and reduce same-family repeats unless a movement is strongly supported by goals and profile fit.</p>
+          <p><b>Good for:</b> one-off sessions where freshness matters more than long-block progression.</p>
+        </article>
+
+        <article class="rule-card weekly">
+          <span class="rule-pill">Weekly flow rule</span>
+          <h3>Repeat key lifts when planned</h3>
+          <p>Allow repeat for anchor movements or movement families when the plan demands continuity, but block or reduce repetition under pain/fatigue/poor-tolerance signals.</p>
+          <p><b>Good for:</b> 3-6 workout sequencing where performance trend matters.</p>
+        </article>
+
+        <article class="rule-card period">
+          <span class="rule-pill">Monthly/period rule</span>
+          <h3>Progression lanes</h3>
+          <p>Keep anchor lifts consistent across the block, rotate accessories with intent, and use progression continuity as a stronger signal than short-term novelty.</p>
+          <p><b>Good for:</b> block planning, skill carryover, and measurable progress over time.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="variants" aria-label="Plus fill variants mapped to one backend">
+      <div class="variants-head">
+        <h2>One backend engine, multiple + Fill variants</h2>
+        <p>
+          "Multiple + Fill versions" means multiple entry flows and selection formats, not separate engines. The UI variant changes the context and inputs, then all routes converge on the same fill draft backend.
+        </p>
+      </div>
+
+      <div class="funnel">
+        <article class="variant-card single">
+          <span class="variant-tag">Single flow</span>
+          <h3>Workout editor + Fill</h3>
+          <p>Best for one workout at a time. Uses current workout context and defaults to single flow behavior.</p>
+        </article>
+
+        <article class="variant-card monthly">
+          <span class="variant-tag">Monthly flow</span>
+          <h3>Month planner + Fill</h3>
+          <p>Optimized for batch month creation. Sends monthly flow header and month/session goals context.</p>
+        </article>
+
+        <article class="variant-card weekly">
+          <span class="variant-tag">Weekly flow</span>
+          <h3>Week assignment + Fill</h3>
+          <p>Optimized for weekly sequences. Sends weekly flow header, sequence index, and avoid lists.</p>
+        </article>
+
+        <div class="funnel-arrow" aria-hidden="true">→</div>
+
+        <article class="engine-card">
+          <h3>Shared Fill Draft Backend</h3>
+          <p>All variants call the same backend route. The backend reads flow as single/monthly/weekly and tunes behavior with that context.</p>
+          <div class="engine-list">
+            <div class="engine-item"><b>Same core scoring:</b> goal, section fit, client profile, progression, history.</div>
+            <div class="engine-item"><b>Flow-specific tuning:</b> headers and payload shape (single vs monthly vs weekly).</div>
+            <div class="engine-item"><b>Same fallback safety net:</b> clone/minimal draft when required inputs are unavailable.</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>How to read the page</h2>
+      <div class="detail-grid">
+        <article class="detail">
+          <div class="meta">Focus 1</div>
+          <h3>Top left is the idea</h3>
+          <p>The circle is the whole concept: one template becomes a draft when <span class="fill-text">+ Fill</span> is active.</p>
+        </article>
+        <article class="detail">
+          <div class="meta">Focus 2</div>
+          <h3>Right side is the branch</h3>
+          <p>The branch shows the one risky spot: template lookup can fail, which sends the flow to fallback instead of a normal structure-aware draft.</p>
+        </article>
+        <article class="detail">
+          <div class="meta">Focus 3</div>
+          <h3>Bottom is the checklist</h3>
+          <p>Those boxes are the inputs worth testing: selected template, history, auth, and whether the draft returns as expected.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="footer">
+      In one sentence: the template gives the workout its shape, <span class="fill-text">+ Fill</span> turns on generation, the server checks access and history, and then it returns either a filled draft or a fallback draft.
+    </section>
+  </main>
+</body>
+</html>
