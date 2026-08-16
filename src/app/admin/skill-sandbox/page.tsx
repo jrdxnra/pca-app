@@ -88,23 +88,32 @@ function IssueList({ title, items }: { title: string; items: string[] }) {
 }
 
 export default function SkillSandboxPage() {
-	const { user, idToken } = useAuth();
+	const { user, idToken, loading } = useAuth();
 	const router = useRouter();
 	const [request, setRequest] = useState<SkillSandboxRequest>(defaultSkillSandboxRequest);
 	const [result, setResult] = useState<SkillSandboxResponse | null>(null);
 	const [role, setRole] = useState<MembershipRole>(null);
+	const [accountId, setAccountId] = useState<string | null>(null);
 	const [loadingAccess, setLoadingAccess] = useState(true);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState('');
 
 	useEffect(() => {
 		const checkAccess = async () => {
-			if (!user) return;
+			if (loading) {
+				return;
+			}
+			if (!user) {
+				setLoadingAccess(false);
+				router.push('/login');
+				return;
+			}
 
 			try {
 				const membership = await getActiveMembership(user.uid);
 				const membershipRole: MembershipRole = membership?.role ?? null;
 				setRole(membershipRole);
+				setAccountId(membership?.accountId ?? null);
 				if (membershipRole !== 'owner' && membershipRole !== 'coach') {
 					router.push('/dashboard');
 				}
@@ -117,7 +126,7 @@ export default function SkillSandboxPage() {
 		};
 
 		void checkAccess();
-	}, [router, user]);
+	}, [loading, router, user]);
 
 	const requestPreview = useMemo(() => JSON.stringify(request, null, 2), [request]);
 	const skillOutputCards: SkillOutputCard[] = result
@@ -137,6 +146,10 @@ export default function SkillSandboxPage() {
 			setError('You must be signed in to run the skill sandbox.');
 			return;
 		}
+		if (!accountId) {
+			setError('No active account found for the skill sandbox.');
+			return;
+		}
 
 		setSubmitting(true);
 		setError('');
@@ -146,7 +159,8 @@ export default function SkillSandboxPage() {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					authorization: bearerToken,
+					Authorization: bearerToken,
+					'x-account-id': accountId,
 				},
 				body: JSON.stringify(request),
 			});
@@ -169,7 +183,7 @@ export default function SkillSandboxPage() {
 	}
 
 	if (role !== 'owner' && role !== 'coach') {
-		return <div className="mx-auto max-w-7xl px-4 py-8 text-sm text-slate-600">Checking access…</div>;
+		return <div className="mx-auto max-w-7xl px-4 py-8 text-sm text-slate-600">Redirecting to dashboard…</div>;
 	}
 
 	return (

@@ -214,7 +214,7 @@ export const skillSandboxApiContract = {
 	defaultRequest: defaultSkillSandboxRequest,
 	responseNotes: {
 		skillOutputs:
-			'Includes step-by-step outputs for Skills 1, 2, 7, 3, 4, 5, and 6 so the UI can inspect intermediate reasoning.',
+			'Includes step-by-step outputs in execution order (Skills 1 → 2 → 7 → 3 → 4 → 5 → 6), with Skill 7 intentionally preceding Skill 3 so progression guidance is produced before movement selection.',
 		finalWorkout: 'Contains the generated workout separate from intermediate skill outputs.',
 		qaSummary: 'Aggregates warnings plus safety, progression, and sequencing issues for QA visibility.',
 	},

@@ -9,18 +9,24 @@ import {
 } from '@/lib/skills/sandbox-contract';
 import { runSkillSandbox } from '@/lib/skills/sandbox-runner';
 
-async function userHasSandboxAccess(userId: string): Promise<boolean> {
+async function userHasSandboxAccess(userId: string, accountId: string | null): Promise<boolean> {
 	if (userId === MASTER_UID) {
 		return true;
 	}
+	if (!accountId) {
+		return false;
+	}
 
 	const db = getAdminDb();
-	const membershipSnapshot = await db.collection('memberships').where('userId', '==', userId).limit(5).get();
-
-	return membershipSnapshot.docs.some((doc) => {
-		const role = doc.data().role;
-		return role === 'owner' || role === 'coach' || role === 'trainer';
-	});
+	const membershipSnapshot = await db
+		.collection('memberships')
+		.where('userId', '==', userId)
+		.where('accountId', '==', accountId)
+		.limit(1)
+		.get();
+	const membership = membershipSnapshot.docs[0]?.data();
+	const role = membership?.role;
+	return role === 'owner' || role === 'coach';
 }
 
 async function authorize(request: NextRequest): Promise<string | NextResponse> {
@@ -29,7 +35,8 @@ async function authorize(request: NextRequest): Promise<string | NextResponse> {
 		return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
-	const hasAccess = await userHasSandboxAccess(userId);
+	const accountId = request.headers.get('x-account-id');
+	const hasAccess = await userHasSandboxAccess(userId, accountId);
 	if (!hasAccess) {
 		return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 	}

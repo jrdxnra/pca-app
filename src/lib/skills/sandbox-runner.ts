@@ -75,7 +75,7 @@ function normalize(values: string[]): string {
 }
 
 function createId(prefix: string): string {
-	return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+	return `${prefix}-${globalThis.crypto.randomUUID()}`;
 }
 
 function hasKeyword(values: string[], keywords: string[]): boolean {
@@ -92,20 +92,32 @@ function pickMovement(
 	return options[index % options.length];
 }
 
-function applyRestrictions(movement: string, combinedRestrictions: string): string {
-	if (combinedRestrictions.includes('shoulder') && /push press|handstand|overhead/i.test(movement)) {
-		return 'Landmine Press';
+function applyRestrictions(
+	movement: string,
+	combinedRestrictions: string
+): { movement: string; adjustment?: string } {
+	if (combinedRestrictions.includes('shoulder') && /push press|handstand|overhead|bench press/i.test(movement)) {
+		return {
+			movement: 'Cable Row',
+			adjustment: `Restriction adjustment: swapped ${movement} for Cable Row because the context mentions shoulder sensitivity.`,
+		};
 	}
 
 	if (combinedRestrictions.includes('back') && /deadlift|swing/i.test(movement)) {
-		return 'Hip Thrust';
+		return {
+			movement: 'Hip Thrust',
+			adjustment: `Restriction adjustment: swapped ${movement} for Hip Thrust because the context mentions back sensitivity.`,
+		};
 	}
 
 	if (combinedRestrictions.includes('knee') && /squat|lunge/i.test(movement)) {
-		return 'Box Squat';
+		return {
+			movement: 'Box Squat',
+			adjustment: `Restriction adjustment: swapped ${movement} for Box Squat because the context mentions knee sensitivity.`,
+		};
 	}
 
-	return movement;
+	return { movement };
 }
 
 function isLoadedShoulderPress(movement: string): boolean {
@@ -167,6 +179,10 @@ function buildBlocks(
 	const finisherDuration = request.trainingStyle === 'strength' ? 6 : 8;
 	const accessoryDuration = Math.max(10, Math.round(duration * 0.2));
 	const mainDuration = Math.max(20, duration - warmUpDuration - finisherDuration - accessoryDuration);
+	const warmUpMovement = applyRestrictions(pickMovement(request.trainingStyle, 'accessory', 0), restrictionText);
+	const primaryMovement = applyRestrictions(pickMovement(request.trainingStyle, 'primary', 0), restrictionText);
+	const secondaryMovement = applyRestrictions(pickMovement(request.trainingStyle, 'secondary', 0), restrictionText);
+	const accessoryMovement = applyRestrictions(pickMovement(request.trainingStyle, 'accessory', 1), restrictionText);
 
 	return [
 		{
@@ -175,9 +191,10 @@ function buildBlocks(
 			movements: [
 				{
 					slot: 'Warm-Up',
-					movement: applyRestrictions(pickMovement(request.trainingStyle, 'accessory', 0), restrictionText),
+					movement: warmUpMovement.movement,
 					prescription: buildPrescription(progressionMode, request.trainingStyle, 'Warm-Up', isDeload),
 					intent: 'Prep the main pattern and check tolerance before loading.',
+					notes: warmUpMovement.adjustment,
 				},
 			],
 		},
@@ -187,15 +204,17 @@ function buildBlocks(
 			movements: [
 				{
 					slot: 'Primary',
-					movement: applyRestrictions(pickMovement(request.trainingStyle, 'primary', 0), restrictionText),
+					movement: primaryMovement.movement,
 					prescription: buildPrescription(progressionMode, request.trainingStyle, 'Primary', isDeload),
 					intent: 'Drive the primary adaptation for this session.',
+					notes: primaryMovement.adjustment,
 				},
 				{
 					slot: 'Secondary',
-					movement: applyRestrictions(pickMovement(request.trainingStyle, 'secondary', 0), restrictionText),
+					movement: secondaryMovement.movement,
 					prescription: buildPrescription(progressionMode, request.trainingStyle, 'Secondary', isDeload),
 					intent: 'Support the primary lift without duplicating fatigue.',
+					notes: secondaryMovement.adjustment,
 				},
 			],
 		},
@@ -205,9 +224,10 @@ function buildBlocks(
 			movements: [
 				{
 					slot: 'Accessory',
-					movement: applyRestrictions(pickMovement(request.trainingStyle, 'accessory', 1), restrictionText),
+					movement: accessoryMovement.movement,
 					prescription: buildPrescription(progressionMode, request.trainingStyle, 'Accessory', isDeload),
 					intent: 'Build tissue tolerance and fill the most useful gap for the block.',
+					notes: accessoryMovement.adjustment,
 				},
 			],
 		},
@@ -234,6 +254,7 @@ export function runSkillSandbox(request: SkillSandboxRequest = defaultSkillSandb
 		request.calendarContext.notes,
 		...request.calendarContext.events.map((event) => `${event.type} ${event.label} ${event.notes}`),
 	];
+	const normalizedRestrictions = normalize(combinedRestrictionSources);
 
 	const hasTravel = request.calendarContext.events.some((event) => event.type === 'travel');
 	const hasDeloadWindow =
@@ -255,6 +276,9 @@ export function runSkillSandbox(request: SkillSandboxRequest = defaultSkillSandb
 
 	const blocks = buildBlocks(request, progressionMode, hasDeloadWindow);
 	const allMovements = blocks.flatMap((block) => block.movements);
+	const restrictionAdjustments = allMovements
+		.map((movement) => movement.notes)
+		.filter((note): note is string => Boolean(note));
 
 	const contextAnalyzer = {
 		skill: 'SKILL 1: Context Analyzer',
@@ -308,19 +332,19 @@ export function runSkillSandbox(request: SkillSandboxRequest = defaultSkillSandb
 	};
 
 	const safetyIssues: string[] = [];
-	if (normalize(combinedRestrictionSources).includes('shoulder') && allMovements.some((entry) => isLoadedShoulderPress(entry.movement))) {
+	if (normalizedRestrictions.includes('shoulder') && allMovements.some((entry) => isLoadedShoulderPress(entry.movement))) {
 		safetyIssues.push('Shoulder-sensitive context still contains pressing exposure that should be coach-reviewed.');
 	}
-	if (normalize(combinedRestrictionSources).includes('back') && allMovements.some((entry) => /deadlift|swing/i.test(entry.movement))) {
+	if (normalizedRestrictions.includes('back') && allMovements.some((entry) => /deadlift|swing/i.test(entry.movement))) {
 		safetyIssues.push('Back-sensitive context still contains hinge loading that should be reviewed.');
 	}
 
 	const progressionIssues: string[] = [];
-	if (hasDeloadWindow && progressionMode === 'progress') {
-		progressionIssues.push('Progression mode should not increase loading during an active deload window.');
+	if (hasDeloadWindow && request.sessionContext.durationMinutes > 75) {
+		progressionIssues.push('Deload context is paired with a long session duration — consider trimming volume further.');
 	}
-	if (tooHardFeedback && progressionMode === 'progress') {
-		progressionIssues.push('Feedback indicates fatigue, but the progression mode is still aggressive.');
+	if (tooHardFeedback && latestReadiness <= 2) {
+		progressionIssues.push('Feedback and readiness both indicate fatigue — verify whether the block should hold or deload next.');
 	}
 
 	const warnings: string[] = [];
@@ -333,6 +357,7 @@ export function runSkillSandbox(request: SkillSandboxRequest = defaultSkillSandb
 	if (request.clientProfile.preferences.length === 0) {
 		warnings.push('No client preferences supplied — generated variation may need a coach pass.');
 	}
+	warnings.push(...restrictionAdjustments);
 
 	const qualityValidator = {
 		skill: 'SKILL 4: Quality Validator',
