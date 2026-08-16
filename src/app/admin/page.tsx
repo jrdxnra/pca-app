@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { getActiveMembership } from '@/lib/firebase/services/memberships';
 import styles from './admin.module.css';
 import type { KnowledgeEntry } from '@/app/api/admin/knowledge/route';
@@ -316,6 +317,11 @@ export default function AdminPage() {
             <div className={styles.header}>
                 <h1>Admin Panel</h1>
                 <p>Manage coaches, team members, and training knowledge</p>
+                <div className={styles.headerActions}>
+                    <Link href="/admin/skill-sandbox" className={styles.primaryButton}>
+                        Open Skill Sandbox
+                    </Link>
+                </div>
             </div>
 
             {error && <div className={styles.alert + ' ' + styles.error}>{error}</div>}

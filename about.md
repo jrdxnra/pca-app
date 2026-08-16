@@ -171,6 +171,16 @@ When the skill system changes, update this file to reflect:
 - new progression or deload logic
 - updated flow order
 
+## Internal sandbox for manual QA
+
+The app now includes an internal sandbox for testing the skill chain before production integration:
+
+- **Page:** `/admin/skill-sandbox`
+- **API contract:** `/api/admin/skills/sandbox`
+- **Purpose:** enter structured workout-generation inputs, inspect each skill output, review QA flags, and compare the final generated workout against the intermediate reasoning
+
+The sandbox is intentionally modular and mock-friendly so it can render end-to-end without the full production backend. As the real skill system evolves, the sandbox contract and UI should keep matching the current responsibilities and flow described in this file.
+
 ## Current source of truth
 
 At the moment, the following files define the active system:

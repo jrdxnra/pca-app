@@ -20,6 +20,12 @@
   font-size: 1rem;
 }
 
+.headerActions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.75rem;
+}
+
 .alert {
   padding: 1rem;
   border-radius: 0.5rem;
